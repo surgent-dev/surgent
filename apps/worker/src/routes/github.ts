@@ -62,6 +62,7 @@ github.get("/callback", async (c) => {
       "/api/github/callback",
       redirectBase,
     ).toString();
+    console.log("redirectUrl", redirectUrl);
     const oauthAuth = code
       ? await githubApp.exchangeUserAccessToken(
           code,

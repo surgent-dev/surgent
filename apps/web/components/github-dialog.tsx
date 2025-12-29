@@ -90,8 +90,11 @@ export default function GitHubDialog({
 
   const handleCreate = async () => {
     if (!projectId || !repoName.trim() || !status?.oauthLinked) return;
-    const installationId =
-      selectedInstallationId ?? status?.installation?.id ?? installations[0]?.id;
+    const installationId = Number(
+      selectedInstallationId ??
+        status?.installation?.id ??
+        installations[0]?.id,
+    );
 
     try {
       const result = await createRepoMutation.mutateAsync({
@@ -107,8 +110,12 @@ export default function GitHubDialog({
       } else {
         toast.error(result.error || "Failed to create repository");
       }
-    } catch {
-      toast.error("Failed to create repository");
+    } catch (error: unknown) {
+      const err = error as { response?: Response };
+      const body = await err.response?.json().catch(() => null);
+      const message =
+        body?.error?.message || body?.error || "Failed to create repository";
+      toast.error(message);
     }
   };
 
@@ -293,7 +300,8 @@ export default function GitHubDialog({
                       <SelectContent>
                         {installations.map((item) => (
                           <SelectItem key={item.id} value={String(item.id)}>
-                            {item.account} · {accountTypeLabel(item.accountType)}
+                            {item.account} ·{" "}
+                            {accountTypeLabel(item.accountType)}
                           </SelectItem>
                         ))}
                       </SelectContent>
