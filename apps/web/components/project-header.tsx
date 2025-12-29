@@ -59,7 +59,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const [isDownloadPaywallOpen, setIsDownloadPaywallOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false);
-  const { data: githubStatus } = useGitHubStatus(projectId);
+  const { data: githubStatus } = useGitHubStatus(projectId, {
+    enabled: isGitHubDialogOpen,
+  });
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => {
@@ -381,4 +383,3 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     </>
   );
 }
-

@@ -88,6 +88,8 @@ app.route('/api/projects', projects)
 app.route('/api/agent', agent)
 app.route('/api/proxy', proxy)
 app.route('/api/upload', upload)
+app.route('/api/marketplace', marketplace)
+app.route('/api/webhooks/whop', whopWebhooks)
 app.route('/api/github', github)
 app.route('/preview', preview)
 app.route('/proxy', proxy)  // ai.surgent.dev subdomain

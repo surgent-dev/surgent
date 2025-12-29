@@ -61,8 +61,11 @@ upload.post('/', requireAuth, async (c) => {
   })
 
   // Local dev: serve through worker; production: use public R2 URL
-  const publicUrl = c.env.DEV
-    ? `http://localhost:4000/api/upload/${key}`
+  const requestOrigin = new URL(c.req.url).origin
+  const isLocal =
+    requestOrigin.includes('localhost') || requestOrigin.includes('127.0.0.1')
+  const publicUrl = isLocal
+    ? `${requestOrigin}/api/upload/${key}`
     : `${c.env.UPLOADS_PUBLIC_URL.replace(/\/$/, '')}/${key}`
 
   return c.json({
@@ -75,6 +78,5 @@ upload.post('/', requireAuth, async (c) => {
 })
 
 export default upload
-
 
 
