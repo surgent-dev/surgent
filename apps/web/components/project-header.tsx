@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import { ArrowLeft, Users, Rocket, CreditCard, Pencil, ExternalLink, Download, Loader2, AlertTriangle, X } from "lucide-react";
+import { ArrowLeft, Users, Rocket, CreditCard, Pencil, ExternalLink, Download, Loader2, AlertTriangle, X, DollarSign, Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -20,8 +20,9 @@ import { useDeployProject, useRenameProject } from "@/queries/projects";
 import { http } from "@/lib/http";
 import DeployDialog from "@/components/deploy-dialog";
 import PaywallDialog from "@/components/autumn/paywall-dialog";
+import GitHubDialog from "@/components/github-dialog";
 import { useCustomer } from "autumn-js/react";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { useGitHubStatus } from "@/queries/github";
 
 interface User {
   id: string;
@@ -57,6 +58,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const [downloading, setDownloading] = useState(false);
   const [isDownloadPaywallOpen, setIsDownloadPaywallOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false);
+  const { data: githubStatus } = useGitHubStatus(projectId);
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => {
@@ -82,15 +85,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         onError: () => toast.error("Failed to rename"),
       }
     );
-  };
-
-  const handleShare = () => {
-    const url = window.location.href;
-    navigator.clipboard?.writeText(url).then(() => {
-      toast.success("Link copied to clipboard!");
-    }).catch(() => {
-      toast.error("Failed to copy link");
-    });
   };
 
   const handleConfirmDeploy = useCallback(async (name: string) => {
@@ -284,6 +278,28 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
+                variant={githubStatus?.connected ? "default" : "outline"}
+                size="sm"
+                className={githubStatus?.connected ? "bg-[#24292f] hover:bg-[#24292f]/90 text-white" : ""}
+                onClick={() => setIsGitHubDialogOpen(true)}
+                disabled={!projectId}
+              >
+                <Github className="h-4 w-4" />
+                {githubStatus?.connected ? "Synced" : "GitHub"}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {githubStatus?.connected
+                ? `Connected to ${githubStatus.repo?.fullName}`
+                : githubStatus?.installed
+                  ? "Connect to a GitHub repository"
+                  : "Push code to GitHub"}
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
                 size="sm"
                 className="bg-brand hover:bg-brand/90 text-brand-foreground"
                 onClick={handlePublishClick}
@@ -295,8 +311,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             </TooltipTrigger>
             {errorMsg && <TooltipContent>{errorMsg}</TooltipContent>}
           </Tooltip>
-
-          <ThemeToggle />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -357,6 +371,12 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         open={isDownloadPaywallOpen}
         setOpen={setIsDownloadPaywallOpen}
         featureId="download_code"
+      />
+
+      <GitHubDialog
+        open={isGitHubDialogOpen}
+        onOpenChange={setIsGitHubDialogOpen}
+        projectId={projectId}
       />
     </>
   );

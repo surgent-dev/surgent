@@ -8,4 +8,10 @@ export type {
   VerificationTable,
   ProjectTable,
   ChatsTable,
+  MerchantsTable,
+  ProductsTable,
+  ProductPricesTable,
+  OrdersTable,
+  WhopTransfersTable,
+  WhopWebhookEventsTable,
 } from './src/types'

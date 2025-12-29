@@ -41,6 +41,7 @@
     }
   ],
   "vars": {
+    "DEV": "",
     "CLIENT_ORIGIN": "https://surgent.dev",
     "DISPATCH_NAMESPACE_NAME": "default-surgent-namespace",
     "CLOUDFLARE_ACCOUNT_ID": "44756fda18d37b7accae2ce6baf0ac6a",
@@ -54,5 +55,22 @@
       "binding": "UPLOADS",
       "bucket_name": "surgent-uploads"
     }
-  ]
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "WHOP_WEBHOOK_QUEUE",
+        "queue": "whop-webhooks"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "whop-webhooks",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "whop-webhooks-dlq"
+      }
+    ]
+  }
 }

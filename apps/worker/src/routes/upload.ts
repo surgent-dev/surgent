@@ -4,6 +4,22 @@ import { requireAuth } from '../middleware/auth'
 
 const upload = new Hono<AppContext>()
 
+// GET /api/upload/* - Serve file from R2 (for local dev)
+upload.get('/*', async (c) => {
+  const key = c.req.path.replace('/api/upload/', '')
+  if (!key) return c.json({ error: 'No key provided' }, 400)
+
+  const object = await c.env.UPLOADS.get(key)
+  if (!object) return c.json({ error: 'File not found' }, 404)
+
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
+      'Cache-Control': 'public, max-age=31536000',
+    },
+  })
+})
+
 // POST /api/upload - Upload file to R2
 upload.post('/', requireAuth, async (c) => {
   const user = c.get('user')!
@@ -44,9 +60,10 @@ upload.post('/', requireAuth, async (c) => {
     uploadsPublicUrl: c.env.UPLOADS_PUBLIC_URL,
   })
 
-  // Public R2 URL (bucket has public access enabled)
-  const publicBase = c.env.UPLOADS_PUBLIC_URL.replace(/\/$/, '')
-  const publicUrl = `${publicBase}/${key}`
+  // Local dev: serve through worker; production: use public R2 URL
+  const publicUrl = c.env.DEV
+    ? `http://localhost:4000/api/upload/${key}`
+    : `${c.env.UPLOADS_PUBLIC_URL.replace(/\/$/, '')}/${key}`
 
   return c.json({
     url: publicUrl,

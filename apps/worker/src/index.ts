@@ -7,9 +7,12 @@ import agent from './routes/agent'
 import dispatch from './routes/dispatch'
 import proxy from './routes/proxy'
 import upload from './routes/upload'
+import marketplace from './routes/marketplace'
+import whopWebhooks from './routes/whop-webhooks'
+import github from './routes/github'
 import { auth } from './lib/auth'
 import type { AppContext } from '@/types/application'
-import { requireAuth } from './middleware/auth'
+import { processWebhookBatch } from './queues/webhook-consumer'
 export { Server } from './containers/Server'
 
 const app = new Hono<AppContext>({
@@ -85,6 +88,7 @@ app.route('/api/projects', projects)
 app.route('/api/agent', agent)
 app.route('/api/proxy', proxy)
 app.route('/api/upload', upload)
+app.route('/api/github', github)
 app.route('/preview', preview)
 app.route('/proxy', proxy)  // ai.surgent.dev subdomain
 
@@ -107,4 +111,9 @@ function isPreviewSubdomain(sub: string): boolean {
   return /^\d+$/.test(maybeNumeric)
 }
 
-export default app
+export default {
+  fetch: app.fetch,
+  async queue(batch: MessageBatch, env: Env, ctx: ExecutionContext) {
+    await processWebhookBatch(batch as MessageBatch<{ webhookId: string }>, env, ctx)
+  },
+} satisfies ExportedHandler<Env>

@@ -4,10 +4,10 @@
  */
 
 import { Octokit, RestEndpointMethodTypes } from '@octokit/rest';
-import { createLogger } from '../../logger';
 import {
     GitHubRepository,
     CreateRepositoryOptions,
+    CreateOrganizationRepositoryOptions,
     CreateRepositoryResult,
     GitHubServiceError,
 } from './types';
@@ -16,6 +16,7 @@ import { GitHubPushRequest, GitHubPushResponse } from './types';
 interface FileContent {
     filePath: string;
     fileContents: string;
+    isBinary?: boolean;
 }
 
 interface LocalCommit {
@@ -37,11 +38,12 @@ interface RemoteCommit {
 
 type GitHubTree = NonNullable<RestEndpointMethodTypes['git']['createTree']['parameters']['tree']>[number];
 
+const log = (msg: string, data?: unknown) => console.log(`[GitHubService] ${msg}`, data ?? '')
+
 export class GitHubService {
-    private static readonly logger = createLogger('GitHubService');
-    private static readonly DEFAULT_BOT_NAME = 'vibesdk-bot';
-    private static readonly DEFAULT_BOT_EMAIL = 'noreply@vibesdk.com';
-    private static readonly README_CONTENT = '# Generated App\n\nGenerated with vibesdk';
+    private static readonly DEFAULT_BOT_NAME = 'surgent-bot';
+    private static readonly DEFAULT_BOT_EMAIL = 'noreply@surgent.dev';
+    private static readonly README_CONTENT = '# Generated App\n\nGenerated with Surgent';
 
     private static createAuthorInfo(request: GitHubPushRequest, timestamp?: string) {
         return {
@@ -79,7 +81,7 @@ export class GitHubService {
     ): Promise<CreateRepositoryResult> {
         const autoInit = options.auto_init ?? true;
         
-        GitHubService.logger.info('Creating GitHub repository', {
+        log('Creating GitHub repository', {
             name: options.name,
             private: options.private,
             auto_init: autoInit,
@@ -100,7 +102,7 @@ export class GitHubService {
 
             if (!response.ok) {
                 const error = await response.text();
-                GitHubService.logger.error('Repository creation failed', {
+                log('Repository creation failed', {
                     status: response.status,
                     statusText: response.statusText,
                     error: error,
@@ -110,7 +112,7 @@ export class GitHubService {
                 if (response.status === 403) {
                     return {
                         success: false,
-                        error: 'GitHub App lacks required permissions. Please ensure the app has Contents: Write and Metadata: Read permissions, then re-install it.'
+                        error: 'GitHub App user authorization required. Please authorize the GitHub App and try again.'
                     };
                 }
                 
@@ -121,14 +123,80 @@ export class GitHubService {
             }
 
             const repository = (await response.json()) as GitHubRepository;
-            GitHubService.logger.info(`Successfully created repository: ${repository.html_url}`);
+            log(`Successfully created repository: ${repository.html_url}`);
 
             return {
                 success: true,
                 repository
             };
         } catch (error) {
-            GitHubService.logger.error('Failed to create user repository', error);
+            log('Failed to create user repository', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
+
+    /**
+     * Creates a new GitHub repository under an organization
+     */
+    static async createOrganizationRepository(
+        options: CreateOrganizationRepositoryOptions
+    ): Promise<CreateRepositoryResult> {
+        const autoInit = options.auto_init ?? true;
+
+        log('Creating GitHub organization repository', {
+            org: options.org,
+            name: options.name,
+            private: options.private,
+            auto_init: autoInit,
+            description: options.description ? 'provided' : 'none'
+        });
+
+        try {
+            const response = await fetch(`https://api.github.com/orgs/${options.org}/repos`, {
+                method: 'POST',
+                headers: GitHubService.createHeaders(options.token, true),
+                body: JSON.stringify({
+                    name: options.name,
+                    description: options.description,
+                    private: options.private,
+                    auto_init: autoInit,
+                }),
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                log('Organization repository creation failed', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    error: error,
+                    endpoint: `https://api.github.com/orgs/${options.org}/repos`
+                });
+
+                if (response.status === 403) {
+                    return {
+                        success: false,
+                        error: 'GitHub App authorization or org permission required. Please authorize and try again.'
+                    };
+                }
+
+                return {
+                    success: false,
+                    error: `Failed to create repository: ${error}`
+                };
+            }
+
+            const repository = (await response.json()) as GitHubRepository;
+            log(`Successfully created repository: ${repository.html_url}`);
+
+            return {
+                success: true,
+                repository
+            };
+        } catch (error) {
+            log('Failed to create organization repository', error);
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown error'
@@ -145,7 +213,7 @@ export class GitHubService {
         gitContext?: GitContext
     ): Promise<GitHubPushResponse> {
         try {
-            GitHubService.logger.info('Initiating GitHub push operation', {
+            log('Initiating GitHub push operation', {
                 repositoryUrl: request.repositoryHtmlUrl,
                 fileCount: files.length,
                 localCommitCount: gitContext?.localCommits?.length || 0,
@@ -172,7 +240,7 @@ export class GitHubService {
             // Determine base commit SHA - handle both auto-initialized and empty repositories
             const parentCommitSha = remoteCommits.length > 0 ? remoteCommits[0].sha : '';
             
-            GitHubService.logger.info('Repository state analyzed', {
+            log('Repository state analyzed', {
                 defaultBranch,
                 remoteCommitCount: remoteCommits.length,
                 hasParentCommit: !!parentCommitSha,
@@ -182,19 +250,19 @@ export class GitHubService {
             // Plan commit strategy
             const commitStrategy = GitHubService.planCommitStrategy(gitContext, remoteCommits, files);
             
-            GitHubService.logger.info('Commit strategy planned', {
+            log('Commit strategy planned', {
                 strategy: commitStrategy.type,
                 commitsToCreate: commitStrategy.commits.length,
                 remoteCommitCount: remoteCommits.length
             });
             
             if (files.length === 0) {
-                GitHubService.logger.warn('No files to commit');
+                log('No files to commit');
                 return { success: true, commitSha: parentCommitSha };
             }
 
             if (commitStrategy.commits.length === 0) {
-                GitHubService.logger.info('No commits needed - repository is already in sync');
+                log('No commits needed - repository is already in sync');
                 return { success: true, commitSha: parentCommitSha };
             }
 
@@ -203,7 +271,7 @@ export class GitHubService {
                 octokit, owner, repo, defaultBranch, commitStrategy, parentCommitSha, request
             );
 
-            GitHubService.logger.info('GitHub push completed', {
+            log('GitHub push completed', {
                 repositoryUrl: request.repositoryHtmlUrl,
                 finalCommitSha,
                 strategy: commitStrategy.type,
@@ -217,7 +285,8 @@ export class GitHubService {
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            GitHubService.logger.error('Failed to push files to GitHub', {
+            const githubError = error as { status?: number };
+            log('Failed to push files to GitHub', {
                 error: errorMessage,
                 repositoryUrl: request.repositoryHtmlUrl,
                 fileCount: files.length
@@ -226,6 +295,7 @@ export class GitHubService {
             return {
                 success: false,
                 error: `GitHub push failed: ${errorMessage}`,
+                status: githubError.status,
                 details: {
                     operation: 'intelligent_push',
                     stderr: errorMessage
@@ -260,7 +330,7 @@ export class GitHubService {
             const githubError = error as { status?: number };
             if (githubError.status === 409 || githubError.status === 404) {
                 // Empty repository or branch doesn't exist
-                GitHubService.logger.info('Remote repository is empty or branch does not exist');
+                log('Remote repository is empty or branch does not exist');
                 return [];
             }
             throw error;
@@ -360,7 +430,7 @@ export class GitHubService {
         for (const commitPlan of strategy.commits) {
             if (!parentCommitSha) {
                 // Empty repository - create README to bootstrap, then use normal flow
-                GitHubService.logger.info('Bootstrapping empty repository with README', { 
+                log('Bootstrapping empty repository with README', { 
                     owner, repo, branch
                 });
                 
@@ -380,7 +450,7 @@ export class GitHubService {
                 }
                 parentCommitSha = readmeCommit.commit.sha;
                 
-                GitHubService.logger.info('Repository bootstrapped successfully', { 
+                log('Repository bootstrapped successfully', { 
                     owner, repo,
                     bootstrapCommitSha: parentCommitSha 
                 });
@@ -389,25 +459,53 @@ export class GitHubService {
             }
             
             // Repository has commits (either existing or just bootstrapped) - use tree-based approach
-            GitHubService.logger.info('Creating tree-based commit', { 
+            let baseTreeSha: string | undefined;
+            if (parentCommitSha) {
+                const { data: parentCommit } = await octokit.rest.git.getCommit({
+                    owner,
+                    repo,
+                    commit_sha: parentCommitSha
+                });
+                baseTreeSha = parentCommit.tree.sha;
+            }
+            log('Creating tree-based commit', { 
                 owner, repo, 
-                baseTreeSha: parentCommitSha,
+                baseTreeSha,
                 fileCount: commitPlan.files.length 
             });
             
             // Create tree entries for all files
-            const treeEntries: GitHubTree[] = commitPlan.files.map(file => ({
-                path: file.filePath,
-                mode: '100644',
-                type: 'blob',
-                content: file.fileContents
-            }));
+            const treeEntries: GitHubTree[] = [];
+            for (const file of commitPlan.files) {
+                if (file.isBinary) {
+                    const { data } = await octokit.rest.git.createBlob({
+                        owner,
+                        repo,
+                        content: file.fileContents,
+                        encoding: 'base64'
+                    });
+                    treeEntries.push({
+                        path: file.filePath,
+                        mode: '100644',
+                        type: 'blob',
+                        sha: data.sha
+                    });
+                    continue;
+                }
+
+                treeEntries.push({
+                    path: file.filePath,
+                    mode: '100644',
+                    type: 'blob',
+                    content: file.fileContents
+                });
+            }
 
             const { data: tree } = await octokit.rest.git.createTree({
                 owner,
                 repo,
                 tree: treeEntries,
-                base_tree: parentCommitSha
+                base_tree: baseTreeSha
             });
 
             const { data: commit } = await octokit.rest.git.createCommit({
@@ -458,7 +556,7 @@ export class GitHubService {
             
             return null;
         } catch (error) {
-            GitHubService.logger.error('Failed to parse repository URL', { url, error });
+            log('Failed to parse repository URL', { url, error });
             return null;
         }
     }

@@ -35,6 +35,10 @@ export interface CreateRepositoryOptions {
     token: string;
 }
 
+export interface CreateOrganizationRepositoryOptions extends CreateRepositoryOptions {
+    org: string;
+}
+
 // Service result interfaces
 export interface CreateRepositoryResult {
     success: boolean;
@@ -95,6 +99,7 @@ export interface GitHubPushResponse {
     success: boolean;
     commitSha?: string;
     error?: string;
+    status?: number;
     details?: {
         operation: string;
         stderr?: string;
