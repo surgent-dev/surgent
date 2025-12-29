@@ -14,6 +14,7 @@ declare namespace Cloudflare {
 		DAYTONA_API_KEY: string;
 		DAYTONA_API_URL: string;
 		DAYTONA_ORG_ID: string;
+		DAYTONA_SNAPSHOT: string;
 		GOOGLE_CLIENT_ID: string;
 		GOOGLE_CLIENT_SECRET: string;
 		BETTER_AUTH_SECRET: string;
