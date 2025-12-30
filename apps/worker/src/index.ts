@@ -6,12 +6,9 @@ import agent from './routes/agent'
 import dispatch from './routes/dispatch'
 import proxy from './routes/proxy'
 import upload from './routes/upload'
-import marketplace from './routes/marketplace'
-import whopWebhooks from './routes/whop-webhooks'
 import github from './routes/github'
 import { auth } from './lib/auth'
 import type { AppContext } from '@/types/application'
-import { processWebhookBatch } from './queues/webhook-consumer'
 
 const app = new Hono<AppContext>({
   getPath: (req) => {
@@ -102,6 +99,5 @@ function isPreviewSubdomain(sub: string): boolean {
 export default {
   fetch: app.fetch,
   async queue(batch: MessageBatch, env: Env, ctx: ExecutionContext) {
-    await processWebhookBatch(batch as MessageBatch<{ webhookId: string }>, env, ctx)
   },
 } satisfies ExportedHandler<Env>
