@@ -1,6 +1,5 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { getContainer } from '@cloudflare/containers'
 import projects from './routes/projects'
 import preview from './routes/preview'
 import agent from './routes/agent'
@@ -13,7 +12,6 @@ import github from './routes/github'
 import { auth } from './lib/auth'
 import type { AppContext } from '@/types/application'
 import { processWebhookBatch } from './queues/webhook-consumer'
-export { Server } from './containers/Server'
 
 const app = new Hono<AppContext>({
   getPath: (req) => {
@@ -93,16 +91,6 @@ app.route('/preview', preview)
 app.route('/proxy', proxy)  // ai.surgent.dev subdomain
 
 
-// Forward to Server durable object
-app.all('/server/*', async (c) => {
-  console.log("server route:", c.req.url)
-  const container = getContainer(c.env.SERVER)
-  if (!container) return c.text('Server not found', 500)
-
-  const url = new URL(c.req.url)
-  url.pathname = url.pathname.replace(/^\/server/, '')
-  return container.fetch(new Request(url, c.req.raw))
-})
 app.route('/', dispatch)
 
 function isPreviewSubdomain(sub: string): boolean {
