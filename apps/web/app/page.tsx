@@ -253,37 +253,7 @@ export default function Index() {
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ duration: 0.6, delay: 0.1 }}
                 >
-                  Build something people want.
-                </motion.h1>
-                <motion.h1 
-                  className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-brand inline-flex flex-wrap items-center justify-center gap-3"
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.6, delay: 0.2 }}
-                >
-                  Monetize it instantly
-                  <motion.span
-                    className="inline-block"
-                    animate={{
-                      y: [0, -6, 0],
-                    }}
-                    transition={{
-                      duration: 2.5,
-                      repeat: Number.POSITIVE_INFINITY,
-                      ease: "easeInOut",
-                    }}
-                    style={{
-                      filter: 'drop-shadow(0 0 12px rgba(99, 102, 241, 0.6))',
-                    }}
-                  >
-                    <Image
-                      src="/surgent-coin.svg"
-                      alt="Coin"
-                      width={56}
-                      height={56}
-                      className="h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14"
-                    />
-                  </motion.span>
+                  Build your dream app.
                 </motion.h1>
               </div>
 
