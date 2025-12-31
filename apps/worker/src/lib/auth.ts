@@ -14,7 +14,11 @@ export const auth = betterAuth({
     apiKey({
       rateLimit: {
         enabled: false // handled by Worker DO or upstream
-      }
+      },
+      // Enable session creation from API keys
+      enableSessionForAPIKeys: true,
+      // Headers to check for API key (used by getSession with enableSessionForAPIKeys)
+      apiKeyHeaders: ['x-api-key', 'authorization'],
     })
   ],
   database: {

@@ -27,6 +27,8 @@
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/lang-python": "^6.2.1",
+    "@hono/mcp": "^0.2.3",
+    "@modelcontextprotocol/sdk": "^1.25.1",
     "@opencode-ai/plugin": "^0.15.14",
     "@opencode-ai/sdk": "^0.15.14",
     "@stripe/ui-extension-sdk": "^9.1.0",

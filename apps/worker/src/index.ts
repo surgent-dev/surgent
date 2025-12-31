@@ -7,6 +7,7 @@ import dispatch from './routes/dispatch'
 import proxy from './routes/proxy'
 import upload from './routes/upload'
 import github from './routes/github'
+import mcp from './routes/mcp'
 import { auth } from './lib/auth'
 import type { AppContext } from '@/types/application'
 
@@ -84,6 +85,7 @@ app.route('/api/agent', agent)
 app.route('/api/proxy', proxy)
 app.route('/api/upload', upload)
 app.route('/api/github', github)
+app.route('/api/mcp', mcp)
 app.route('/preview', preview)
 app.route('/proxy', proxy)  // ai.surgent.dev subdomain
 

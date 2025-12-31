@@ -122,3 +122,105 @@ export function buildDashboardCredentials(args: {
     deploymentName: args.deploymentName,
   }
 }
+
+/**
+ * Delete a Convex project
+ */
+export async function deleteProject(projectId: string): Promise<void> {
+  await convexApi(`/projects/${encodeURIComponent(projectId)}`, {
+    method: 'DELETE',
+  })
+}
+
+// Types for Convex function calls
+export type ConvexValue =
+  | null
+  | boolean
+  | number
+  | string
+  | ArrayBuffer
+  | ConvexValue[]
+  | { [key: string]: ConvexValue }
+
+export interface ConvexFunctionSuccess {
+  status: 'success'
+  value: ConvexValue
+}
+
+export interface ConvexFunctionError {
+  status: 'error'
+  errorMessage: string
+  errorData?: ConvexValue
+}
+
+export type ConvexFunctionResult = ConvexFunctionSuccess | ConvexFunctionError
+
+/**
+ * Call a Convex query function
+ * @param deploymentUrl - The deployment URL (e.g., https://xyz.convex.cloud)
+ * @param deployKey - The deploy key for authentication
+ * @param path - Function path in format "file:functionName" (e.g., "messages:list")
+ * @param args - Arguments to pass to the function
+ */
+export async function callQuery(
+  deploymentUrl: string,
+  deployKey: string,
+  path: string,
+  args: Record<string, ConvexValue> = {}
+): Promise<ConvexFunctionResult> {
+  const res = await fetch(`${deploymentUrl}/api/query`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Convex ${deployKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path, args, format: 'json' }),
+  })
+
+  const body: { value?: ConvexValue; message?: string; errorMessage?: string; errorData?: ConvexValue } = await res.json()
+
+  if (!res.ok) {
+    return {
+      status: 'error',
+      errorMessage: body.message || body.errorMessage || `Query failed: ${res.status}`,
+      errorData: body.errorData,
+    }
+  }
+
+  return { status: 'success', value: body.value ?? null }
+}
+
+/**
+ * Call a Convex mutation function
+ * @param deploymentUrl - The deployment URL (e.g., https://xyz.convex.cloud)
+ * @param deployKey - The deploy key for authentication
+ * @param path - Function path in format "file:functionName" (e.g., "messages:send")
+ * @param args - Arguments to pass to the function
+ */
+export async function callMutation(
+  deploymentUrl: string,
+  deployKey: string,
+  path: string,
+  args: Record<string, ConvexValue> = {}
+): Promise<ConvexFunctionResult> {
+  const res = await fetch(`${deploymentUrl}/api/mutation`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Convex ${deployKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path, args, format: 'json' }),
+  })
+
+  const body: { value?: ConvexValue; message?: string; errorMessage?: string; errorData?: ConvexValue } = await res.json()
+
+  if (!res.ok) {
+    return {
+      status: 'error',
+      errorMessage: body.message || body.errorMessage || `Mutation failed: ${res.status}`,
+      errorData: body.errorData,
+    }
+  }
+
+  return { status: 'success', value: body.value ?? null }
+}
