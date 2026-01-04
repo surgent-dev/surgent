@@ -1,0 +1,10 @@
+node_modules
+dist/***
+.dev.vars
+.env
+.wrangler
+CLAUDE.md
+set-secrets.sh
+.env.prod
+.env.local
+worker-configuration.d.ts

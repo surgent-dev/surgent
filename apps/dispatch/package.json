@@ -1,0 +1,22 @@
+{
+  "name": "dispatch",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.54.0"
+  },
+  "dependencies": {
+    "hono": "^4.10.3"
+  },
+  "scripts": {
+    "dev": "wrangler dev --port 4001",
+    "start": "wrangler dev --verbose --port 4001",
+    "deploy": "wrangler deploy",
+    "generate-types": "wrangler types"
+  }
+}
