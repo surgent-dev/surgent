@@ -158,10 +158,12 @@ export function createDaytonaSandbox(opts: DaytonaSandboxOptions): Sandbox {
     let timedOut = false
     let aborted = false
 
+    const cwd = o.cwd ? resolve(o.cwd) : undefined
+    const baseCommand = shell(cmd, o.stdin)
+    const sessionCommand = cwd ? `cd ${JSON.stringify(cwd)} && ${baseCommand}` : baseCommand
     const command = await proc.executeSessionCommand(sessionId, {
-      command: shell(cmd, o.stdin),
+      command: sessionCommand,
       runAsync: true,
-      ...(o.cwd && { cwd: resolve(o.cwd) }),
       ...(o.env && { env: cleanEnv(o.env) }),
       ...(o.timeoutMs && { timeoutSeconds: Math.ceil(o.timeoutMs / 1000) }),
     })
