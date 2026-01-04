@@ -63,13 +63,15 @@ function groupTurns(messages: Message[]): Turn[] {
   return turns;
 }
 
-function getTodosFromToolPart(part: ToolPart): unknown[] {
+type TodoItem = { id?: string; content?: string; status?: string };
+
+function getTodosFromToolPart(part: ToolPart): TodoItem[] {
   const input = part.state.status !== "pending" ? (part.state.input as Record<string, unknown>) : {};
-  if (Array.isArray(input?.todos)) return input.todos;
+  if (Array.isArray(input?.todos)) return input.todos as TodoItem[];
   if (part.state.status !== "completed") return [];
   try {
     const val = typeof part.state.output === "string" ? JSON.parse(part.state.output) : part.state.output;
-    return Array.isArray(val) ? val : [];
+    return Array.isArray(val) ? val as TodoItem[] : [];
   } catch {
     return [];
   }
@@ -211,7 +213,7 @@ function Todos({ part }: { part: ToolPart }) {
   const loading = part.state.status === "running" || part.state.status === "pending";
   const todos = useMemo(() => getTodosFromToolPart(part), [part.state]);
 
-  const done = todos.filter((t: { status?: string }) => t.status === "completed").length;
+  const done = todos.filter(t => t.status === "completed").length;
 
   return (
     <div className="my-1.5 sm:my-2 p-2 sm:p-3 rounded-xl bg-muted/50 border w-full min-w-0">
@@ -222,7 +224,7 @@ function Todos({ part }: { part: ToolPart }) {
       </div>
       {todos.length > 0 ? (
         <div className="space-y-1 sm:space-y-1.5">
-          {todos.map((t: { id?: string; content?: string; status?: string }, i: number) => {
+          {todos.map((t, i) => {
             const isDone = t.status === "completed";
             return (
               <div key={t.id || i} className={`flex items-start gap-1 sm:gap-2 text-[11px] sm:text-sm ${isDone ? "opacity-50" : ""}`}>
