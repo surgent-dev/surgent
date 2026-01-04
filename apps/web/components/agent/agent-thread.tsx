@@ -11,7 +11,6 @@ import { useRespondPermission } from "@/queries/chats";
 
 type PermissionResponse = "once" | "always" | "reject";
 
-// Tool configs
 const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: string }> = {
   read: { icon: Eye, done: "Read", doing: "Reading..." },
   write: { icon: FileText, done: "Created", doing: "Creating..." },
@@ -36,15 +35,47 @@ function getTarget(part: ToolPart): string | undefined {
   if (part.tool === "grep") return String(input.pattern || "");
   if (part.tool === "glob") return String(input.pattern || "");
   if (part.tool === "list") return String(input.path || "/");
-  if (part.tool === "webfetch") try { return new URL(String(input.url)).hostname; } catch { return String(input.url); }
+  if (part.tool === "webfetch") {
+    try { return new URL(String(input.url)).hostname; }
+    catch { return String(input.url); }
+  }
 }
 
-function PermissionPrompt({
-  permission,
-  onRespond,
-  responding,
-  error,
-}: {
+function formatValue(val: unknown): string {
+  if (val === undefined || val === null) return "";
+  if (typeof val === "string") return val;
+  return JSON.stringify(val, null, 2);
+}
+
+type Turn = { user: Message; assistants: Message[] };
+
+function groupTurns(messages: Message[]): Turn[] {
+  const turns: Turn[] = [];
+  let current: Turn | undefined;
+  messages.forEach(m => {
+    if (m.role === "user") {
+      current = { user: m, assistants: [] };
+      turns.push(current);
+      return;
+    }
+    if (m.role === "assistant" && current) current.assistants.push(m);
+  });
+  return turns;
+}
+
+function getTodosFromToolPart(part: ToolPart): unknown[] {
+  const input = part.state.status !== "pending" ? (part.state.input as Record<string, unknown>) : {};
+  if (Array.isArray(input?.todos)) return input.todos;
+  if (part.state.status !== "completed") return [];
+  try {
+    const val = typeof part.state.output === "string" ? JSON.parse(part.state.output) : part.state.output;
+    return Array.isArray(val) ? val : [];
+  } catch {
+    return [];
+  }
+}
+
+function PermissionPrompt({ permission, onRespond, responding, error }: {
   permission: Permission;
   onRespond: (response: PermissionResponse) => void;
   responding: boolean;
@@ -89,73 +120,96 @@ function PermissionPrompt({
   );
 }
 
-// Components
-function Tool({
-  part,
-  permission,
-  onRespondPermission,
-  responding,
-  respondError,
-}: {
+function Tool({ part, permission, onRespondPermission, responding, respondError }: {
   part: ToolPart;
   permission?: Permission;
   onRespondPermission?: (permission: Permission, response: PermissionResponse) => void;
   responding?: boolean;
   respondError?: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const cfg = TOOLS[part.tool] || { icon: FileText, done: part.tool, doing: "Working..." };
   const Icon = cfg.icon;
   const target = getTarget(part);
   const running = part.state.status === "running" || part.state.status === "pending";
-  const error = part.state.status === "error";
 
-  const status = running ? (
-    <div className="flex items-center gap-1 sm:gap-1.5 py-0.5 sm:py-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
-      <ShimmeringText text={cfg.doing} duration={0.4} className="text-[11px] sm:text-sm" />
-      {target && <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">{target}</code>}
-    </div>
-  ) : error ? (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="py-0.5 text-[11px] sm:text-xs text-muted-foreground/60 cursor-help truncate">Skipped {target || cfg.done}</div>
-      </TooltipTrigger>
-      <TooltipContent><p className="text-xs">{part.state.status === "error" ? String(part.state.error) : "Failed"}</p></TooltipContent>
-    </Tooltip>
-  ) : (
-    <div className="flex items-center gap-1 py-0.5 sm:py-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
-      <Icon className="size-2.5 sm:size-3.5 shrink-0" />
-      <span>{cfg.done}</span>
-      {target && <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">{target}</code>}
+  const header = (() => {
+    if (running) {
+      return (
+        <div className="flex items-center gap-1 sm:gap-1.5 py-0.5 sm:py-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
+          <ShimmeringText text={cfg.doing} duration={0.4} className="text-[11px] sm:text-sm" />
+          {target && <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">{target}</code>}
+        </div>
+      );
+    }
+
+    if (part.state.status === "error") {
+      return (
+        <div className="flex items-center gap-1 py-0.5 text-[11px] sm:text-xs text-muted-foreground/60">
+          <ChevronDown className={`size-2.5 sm:size-3 transition-transform shrink-0 ${expanded ? "" : "-rotate-90"}`} />
+          <span>Skipped {target || cfg.done}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-1 py-0.5 sm:py-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
+        <ChevronDown className={`size-2.5 sm:size-3 transition-transform shrink-0 ${expanded ? "" : "-rotate-90"}`} />
+        <Icon className="size-2.5 sm:size-3.5 shrink-0" />
+        <span>{cfg.done}</span>
+        {target && <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">{target}</code>}
       </div>
     );
+  })();
 
   return (
     <div className={permission ? "space-y-2" : undefined}>
-      {status}
-      {permission && onRespondPermission ? (
+      <button
+        onClick={() => setExpanded(s => !s)}
+        disabled={running}
+        className={`w-full text-left ${running ? "" : "hover:text-foreground cursor-pointer"} transition-colors`}
+      >
+        {header}
+      </button>
+
+      {expanded && !running && (
+        <div className="ml-3 sm:ml-4 pl-2 sm:pl-3 border-l-2 border-muted space-y-2 text-[11px] sm:text-xs">
+          {part.state.status !== "pending" && (
+            <div>
+              <div className="text-muted-foreground/70 font-medium mb-1">Input</div>
+              <pre className="p-2 rounded bg-muted/50 whitespace-pre-wrap wrap-break-word">{formatValue(part.state.input)}</pre>
+            </div>
+          )}
+          {part.state.status === "completed" && (
+            <div>
+              <div className="text-muted-foreground/70 font-medium mb-1">Output</div>
+              <pre className="p-2 rounded bg-muted/50 whitespace-pre-wrap wrap-break-word">{formatValue(part.state.output)}</pre>
+            </div>
+          )}
+          {part.state.status === "error" && (
+            <div>
+              <div className="text-destructive/70 font-medium mb-1">Error</div>
+              <pre className="p-2 rounded bg-destructive/10 whitespace-pre-wrap wrap-break-word text-destructive">{String(part.state.error)}</pre>
+            </div>
+          )}
+        </div>
+      )}
+
+      {permission && onRespondPermission && (
         <PermissionPrompt
           permission={permission}
           onRespond={(response) => onRespondPermission(permission, response)}
           responding={responding === true}
           error={respondError}
         />
-      ) : null}
+      )}
     </div>
   );
 }
 
 function Todos({ part }: { part: ToolPart }) {
   const loading = part.state.status === "running" || part.state.status === "pending";
-  const todos = useMemo(() => {
-    // Read from input.todos (like opencode) for todowrite, fallback to output
-    const input = part.state.status !== "pending" ? (part.state.input as Record<string, unknown>) : {};
-    if (Array.isArray(input?.todos)) return input.todos;
-    if (part.state.status !== "completed") return [];
-    try {
-      const val = typeof part.state.output === "string" ? JSON.parse(part.state.output) : part.state.output;
-      return Array.isArray(val) ? val : [];
-    } catch { return []; }
-  }, [part.state]);
+  const todos = useMemo(() => getTodosFromToolPart(part), [part.state]);
 
   const done = todos.filter((t: { status?: string }) => t.status === "completed").length;
 
@@ -170,16 +224,16 @@ function Todos({ part }: { part: ToolPart }) {
         <div className="space-y-1 sm:space-y-1.5">
           {todos.map((t: { id?: string; content?: string; status?: string }, i: number) => {
             const isDone = t.status === "completed";
-              return (
+            return (
               <div key={t.id || i} className={`flex items-start gap-1 sm:gap-2 text-[11px] sm:text-sm ${isDone ? "opacity-50" : ""}`}>
                 <div className={`size-3 sm:size-4 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 ${isDone ? "bg-primary border-primary" : "border-muted-foreground/30"}`}>
                   {isDone && <CheckCircle2 className="size-1.5 sm:size-2.5 text-primary-foreground" />}
                 </div>
-                <span className={`break-words min-w-0 ${isDone ? "line-through text-muted-foreground" : ""}`}>{t.content}</span>
-                </div>
-              );
-            })}
-          </div>
+                <span className={`wrap-break-word min-w-0 ${isDone ? "line-through text-muted-foreground" : ""}`}>{t.content}</span>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <p className="text-[11px] sm:text-xs text-muted-foreground">No tasks yet</p>
       )}
@@ -195,12 +249,15 @@ function Thinking({ text, streaming, open, toggle }: { text: string; streaming: 
         <span className="font-medium">{streaming ? "Thinking..." : "Thoughts"}</span>
       </button>
       {open && (
-        <div className="pl-2 sm:pl-5 pt-1 sm:pt-1.5 text-[11px] sm:text-sm text-muted-foreground border-l-2 border-muted ml-1 sm:ml-1.5 overflow-x-auto min-w-0">
-          {text ? <Markdown className="prose prose-sm max-w-none prose-muted [&_*]:text-[11px] sm:[&_*]:text-sm">{text}</Markdown>
-            : streaming ? <ShimmeringText text="Thinking..." duration={0.3} /> : null}
+        <div className="pl-2 sm:pl-5 pt-1 sm:pt-1.5 text-[11px] sm:text-sm text-muted-foreground border-l-2 border-muted ml-1 sm:ml-1.5 min-w-0">
+          {text ? (
+            <Markdown className="prose prose-sm max-w-none prose-muted **:text-[11px] sm:**:text-sm">{text}</Markdown>
+          ) : streaming ? (
+            <ShimmeringText text="Thinking..." duration={0.3} />
+          ) : null}
         </div>
       )}
-        </div>
+    </div>
   );
 }
 
@@ -235,7 +292,7 @@ function Changes({ diffs, onView }: { diffs: FileDiff[]; onView: () => void }) {
   );
 }
 
-function ApiError({ error }: { error: any }) {
+function ApiError({ error }: { error: { code?: string; data?: { code?: string; message?: string }; message?: string; name?: string } }) {
   const code = error?.code || error?.data?.code;
   const msg = error?.data?.message || error?.message || error?.name || "Request failed";
   const isContext = code === "context_length_exceeded" || msg.includes("context");
@@ -248,7 +305,6 @@ function ApiError({ error }: { error: any }) {
   );
 }
 
-// Main
 export function AgentThread({ projectId, sessionId, messages, partsMap, permissions, onRevert, revertMessageId, reverting, revertingMessageId, onViewChanges, isWorking }: {
   projectId?: string;
   sessionId: string;
@@ -267,42 +323,46 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
   const respondPermission = useRespondPermission(projectId, sessionId);
 
   const visible = revertMessageId ? messages.filter(m => m.id < revertMessageId) : messages;
-  const userMessages = visible.filter(m => m.role === "user");
+  const turns = useMemo(() => groupTurns(visible), [visible]);
 
   const permissionByCallId = useMemo(() => {
     const map = new Map<string, Permission>();
-    (permissions ?? []).forEach((p) => {
+    (permissions ?? []).forEach(p => {
       if (p.callID) map.set(p.callID, p);
     });
     return map;
   }, [permissions]);
 
-  const unmatchedPermissions = useMemo(() => {
-    if (!permissions?.length) return [];
-    const callIds = new Set<string>();
-    visible.forEach((m) => {
-      (partsMap[m.id] ?? []).forEach((p) => {
+  const toolCallIds = useMemo(() => {
+    const ids = new Set<string>();
+    visible.forEach(m => {
+      (partsMap[m.id] ?? []).forEach(p => {
         if (p.type !== "tool") return;
         const toolPart = p as ToolPart;
         if (toolPart.tool === "todoread") return;
-        if (toolPart.callID) callIds.add(toolPart.callID);
+        if (toolPart.callID) ids.add(toolPart.callID);
       });
     });
-    return permissions.filter((p) => !p.callID || !callIds.has(p.callID));
-  }, [partsMap, permissions, visible]);
+    return ids;
+  }, [partsMap, visible]);
+
+  const unmatchedPermissions = useMemo(() => {
+    if (!permissions?.length) return [];
+    return permissions.filter(p => !p.callID || !toolCallIds.has(p.callID));
+  }, [permissions, toolCallIds]);
 
   const respondToPermission = (permission: Permission, response: PermissionResponse) => {
     if (!projectId) return;
-    setPermissionErrors((s) => {
+    setPermissionErrors(s => {
       if (!s[permission.id]) return s;
-      const { [permission.id]: _ignored, ...rest } = s;
+      const { [permission.id]: _, ...rest } = s;
       return rest;
     });
     respondPermission.mutate(
       { permissionId: permission.id, response },
       {
         onError: (err) => {
-          setPermissionErrors((s) => ({
+          setPermissionErrors(s => ({
             ...s,
             [permission.id]: err instanceof Error ? err.message : String(err),
           }));
@@ -312,45 +372,38 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
   };
 
   const getText = (m: Message) => {
-    let text = "";
     const fromParts = partsMap[m.id]?.filter((p): p is TextPart => p.type === "text").map(p => p.text).join("\n") ?? "";
-    if (fromParts) {
-      text = fromParts;
-    } else {
-      const summary = m.summary;
-      if (summary && typeof summary === "object") {
-        text = summary.body || summary.title || "";
-      }
-    }
-    // Strip markdown image links from user messages (images shown via FileThumb)
+    const summary = m.summary;
+    const fromSummary = summary && typeof summary === "object" ? (summary.body || summary.title || "") : "";
+    const text = fromParts || fromSummary;
     if (m.role === "user") {
-      text = text.replace(/!\[[^\]]*\]\([^)]+\)\n*/g, "").trim();
+      return text.replace(/!\[[^\]]*\]\([^)]+\)\n*/g, "").trim();
     }
     return text;
   };
+
   const getFiles = (m: Message) => partsMap[m.id]?.filter((p): p is FilePart => p.type === "file") ?? [];
+
   const renderPart = (p: Part) => {
     if (p.type === "reasoning") {
       const text = (p as ReasoningPart).text?.replace("[REDACTED]", "").trim() || "";
       const streaming = !(p as ReasoningPart).time?.end;
       if (!text && !streaming) return null;
-      const key = p.id;
       return (
         <Thinking
-          key={key}
+          key={p.id}
           text={text}
           streaming={streaming}
-          open={openThoughts[key] ?? streaming}
-          toggle={() => setOpenThoughts(s => ({ ...s, [key]: !s[key] }))}
+          open={openThoughts[p.id] ?? streaming}
+          toggle={() => setOpenThoughts(s => ({ ...s, [p.id]: !s[p.id] }))}
         />
       );
     }
+
     if (p.type === "tool") {
       const toolPart = p as ToolPart;
       const permission = toolPart.callID ? permissionByCallId.get(toolPart.callID) : undefined;
-      // Hide todoread like opencode does
       if (toolPart.tool === "todoread") return null;
-      // Render todowrite with Todos component
       if (toolPart.tool === "todowrite") {
         if (!permission) return <Todos key={p.id} part={toolPart} />;
         return (
@@ -358,7 +411,7 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
             <Todos part={toolPart} />
             <PermissionPrompt
               permission={permission}
-              onRespond={(response) => respondToPermission(permission, response)}
+              onRespond={response => respondToPermission(permission, response)}
               responding={respondPermission.isPending && respondPermission.variables?.permissionId === permission.id}
               error={permissionErrors[permission.id]}
             />
@@ -376,41 +429,38 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
         />
       );
     }
+
     if (p.type === "file") return <div key={p.id} className="flex gap-1 py-1"><FileThumb file={p as FilePart} /></div>;
-    if (p.type === "step-start" || p.type === "step-finish") return null;
-    if (p.type === "patch") return null;
+    if (p.type === "step-start" || p.type === "step-finish" || p.type === "patch") return null;
+
     if (p.type === "text") {
       const content = (p as TextPart).text?.trim();
       if (!content) return null;
       return <Markdown key={p.id} className="[&_p]:text-[13px] [&_p]:sm:text-sm [&_li]:text-[13px] [&_li]:sm:text-sm">{content}</Markdown>;
     }
+
     return null;
   };
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {userMessages.map((userMsg, idx) => {
-        // Get assistant responses for this user message (use visible to respect revert)
-        const msgIdx = visible.findIndex(m => m.id === userMsg.id);
-        const nextUserIdx = visible.slice(msgIdx + 1).findIndex(m => m.role === "user");
-        const assistants = visible.slice(msgIdx + 1, nextUserIdx === -1 ? undefined : msgIdx + 1 + nextUserIdx).filter(m => m.role === "assistant");
-        const timeline = assistants.flatMap(m => partsMap[m.id] || []);
+      {turns.map((turn, idx) => {
+        const timeline = turn.assistants.flatMap(m => partsMap[m.id] || []);
 
-        const text = getText(userMsg);
-        const userFiles = getFiles(userMsg);
-        const diffs = userMsg.summary?.diffs;
-        const isLast = idx === userMessages.length - 1;
-        const lastAssistant = assistants[assistants.length - 1];
-        const working = isLast && isWorking !== undefined ? isWorking : (lastAssistant && !lastAssistant.time?.completed);
+        const text = getText(turn.user);
+        const userFiles = getFiles(turn.user);
+        const diffs = turn.user.summary?.diffs;
+        const isLast = idx === turns.length - 1;
+        const lastAssistant = turn.assistants[turn.assistants.length - 1];
+        const working = isLast ? (isWorking ?? !!(lastAssistant && !lastAssistant.time?.completed)) : false;
         const showPlanning = isLast && !!working;
 
         return (
-          <div key={userMsg.id} className="space-y-2 sm:space-y-3">
-            {/* User bubble */}
+          <div key={turn.user.id} className="space-y-2 sm:space-y-3">
             <div className="flex flex-col items-end gap-1">
               {userFiles.length > 0 && (
                 <div className="flex gap-1 flex-wrap justify-end">
-                  {userFiles.map((fp) => <FileThumb key={fp.id} file={fp} />)}
+                  {userFiles.map(fp => <FileThumb key={fp.id} file={fp} />)}
                 </div>
               )}
               <div className="relative max-w-[90%] sm:max-w-[80%] md:max-w-[70%] rounded-xl bg-muted/50 border px-2.5 sm:px-3 py-2 overflow-hidden">
@@ -420,8 +470,8 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
                 {onRevert && text && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" className="absolute top-1 sm:top-1.5 right-1 sm:right-1.5 size-5 sm:size-6 text-muted-foreground/40 hover:text-muted-foreground" onClick={() => onRevert(userMsg.id)} disabled={reverting}>
-                        {reverting && revertingMessageId === userMsg.id ? <Loader2 className="size-3 sm:size-3.5 animate-spin" /> : <Undo2 className="size-3 sm:size-3.5" />}
+                      <Button size="icon" variant="ghost" className="absolute top-1 sm:top-1.5 right-1 sm:right-1.5 size-5 sm:size-6 text-muted-foreground/40 hover:text-muted-foreground" onClick={() => onRevert(turn.user.id)} disabled={reverting}>
+                        {reverting && revertingMessageId === turn.user.id ? <Loader2 className="size-3 sm:size-3.5 animate-spin" /> : <Undo2 className="size-3 sm:size-3.5" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Undo</TooltipContent>
@@ -430,11 +480,9 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
               </div>
             </div>
 
-            {/* Assistant content */}
-            <div className="space-y-1 overflow-x-hidden">
-              {/* API errors (skip abort errors - user initiated) */}
-              {assistants.map((m) => {
-                const err = (m as any).error || (m as any).info?.error;
+            <div className="space-y-1">
+              {turn.assistants.map(m => {
+                const err = (m as Message & { error?: { data?: { message?: string }; message?: string; name?: string }; info?: { error?: { data?: { message?: string }; message?: string; name?: string } } }).error || (m as Message & { info?: { error?: { data?: { message?: string }; message?: string; name?: string } } }).info?.error;
                 if (!err) return null;
                 const msg = err.data?.message || err.message || err.name || "Request failed";
                 if (msg.toLowerCase().includes("abort")) return null;
@@ -443,11 +491,11 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
 
               {timeline.map(renderPart)}
 
-              {isLast && unmatchedPermissions.map((permission) => (
+              {isLast && unmatchedPermissions.map(permission => (
                 <PermissionPrompt
                   key={permission.id}
                   permission={permission}
-                  onRespond={(response) => respondToPermission(permission, response)}
+                  onRespond={response => respondToPermission(permission, response)}
                   responding={respondPermission.isPending && respondPermission.variables?.permissionId === permission.id}
                   error={permissionErrors[permission.id]}
                 />
@@ -458,12 +506,11 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
               )}
             </div>
 
-            {/* Diffs */}
             {diffs?.length ? (
               isLast && working ? (
                 <p className="text-xs text-muted-foreground py-1">{diffs.length} file{diffs.length > 1 ? "s" : ""} changed</p>
               ) : (
-                <Changes diffs={diffs} onView={() => onViewChanges?.(diffs, userMsg.id)} />
+                <Changes diffs={diffs} onView={() => onViewChanges?.(diffs, turn.user.id)} />
               )
             ) : null}
           </div>

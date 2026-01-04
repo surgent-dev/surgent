@@ -33,7 +33,7 @@ export default function DeployDialog({ open, onOpenChange, defaultName, onConfir
 
   const previewDomain = useMemo(() => {
     const sanitized = sanitize(deployName || '');
-    return sanitized ? `${sanitized}.surgent.dev` : 'your-app.surgent.dev';
+    return sanitized ? `${sanitized}.surgent.site` : 'your-app.surgent.site';
   }, [deployName]);
 
   const handleConfirm = async () => {
@@ -65,7 +65,7 @@ export default function DeployDialog({ open, onOpenChange, defaultName, onConfir
               onBlur={() => setDeployName(sanitize(deployName))}
               disabled={Boolean(isSubmitting)}
             />
-            <div className="h-9 px-3 flex items-center border border-input border-l-0 rounded-r-md bg-muted text-sm text-muted-foreground whitespace-nowrap">.surgent.dev</div>
+            <div className="h-9 px-3 flex items-center border border-input border-l-0 rounded-r-md bg-muted text-sm text-muted-foreground whitespace-nowrap">.surgent.site</div>
           </div>
           <div className="text-xs text-muted-foreground">Will be published as: {previewDomain}</div>
           {nameError ? <div className="text-xs text-danger">{nameError}</div> : null}
@@ -80,5 +80,3 @@ export default function DeployDialog({ open, onOpenChange, defaultName, onConfir
     </Dialog>
   );
 }
-
-

@@ -16,11 +16,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { http } from "@/lib/http";
-import { MessageCircle, Loader2, RotateCcw, MessagesSquare, Terminal, Plus, History, Check, AlertCircle, X, Zap } from "lucide-react";
+import { MessageCircle, Loader2, RotateCcw, MessagesSquare, Terminal, Plus, History, Check, AlertCircle, X, RefreshCw } from "lucide-react";
 import ChatInput, { type FilePart, type ProviderModel } from "./chat-input";
 import TerminalWidget from "./terminal/terminal-widget";
 import { useSandbox } from "@/hooks/use-sandbox";
-import useAgentStream from "@/lib/use-agent-stream";
+import useAgentStream, { type SessionStatusRetry } from "@/lib/use-agent-stream";
 import { AgentThread } from "@/components/agent/agent-thread";
 import { useSessionsQuery, useCreateSession, useSendMessage, useAbortSession, useRevertMessage, useUnrevert } from "@/queries/chats";
 import SessionDiffDialog from "@/components/diff/session-diff-dialog";
@@ -83,6 +83,29 @@ function ActionButton({ onClick, disabled, children }: { onClick: () => void; di
   );
 }
 
+function RetryCountdown({ retryInfo }: { retryInfo: SessionStatusRetry }) {
+  const [remaining, setRemaining] = useState(() => Math.max(0, Math.ceil((retryInfo.next - Date.now()) / 1000)));
+
+  useEffect(() => {
+    const updateRemaining = () => {
+      const diff = Math.max(0, Math.ceil((retryInfo.next - Date.now()) / 1000));
+      setRemaining(diff);
+    };
+    updateRemaining();
+    const interval = setInterval(updateRemaining, 1000);
+    return () => clearInterval(interval);
+  }, [retryInfo.next]);
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-warning">
+      <RefreshCw className="size-3 animate-spin" />
+      <span>Retry #{retryInfo.attempt}</span>
+      <span className="text-muted-foreground">·</span>
+      <span className="tabular-nums">{remaining}s</span>
+    </div>
+  );
+}
+
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] text-center px-4">
@@ -132,7 +155,7 @@ export default function Conversation({ projectId, initialPrompt, onViewChanges }
     ? storedSessionId
     : sessions[0]?.id;
   const busy = revert.isPending || unrevert.isPending;
-  const { messages, parts, permissions, session, connected, status, loading, compacting, error: sessionError, dismissError } = useAgentStream({ projectId, sessionId: activeId });
+  const { messages, parts, permissions, session, connected, status, loading, compacting, error: sessionError, dismissError, isRetrying, retryInfo } = useAgentStream({ projectId, sessionId: activeId });
   const working = status?.type !== undefined && status.type !== "idle";
 
   // Auto-scroll setup
@@ -334,15 +357,6 @@ export default function Conversation({ projectId, initialPrompt, onViewChanges }
 
           <div className="flex-1" />
 
-          <button
-            onClick={() => setProviderOpen(true)}
-            className="flex items-center gap-1 px-2.5 text-sm border-l transition-colors shrink-0 text-brand hover:bg-brand/10 @md/conversation:gap-2 @md/conversation:px-4"
-          >
-            <Zap className="size-4" />
-            <span className="hidden @md/conversation:inline @lg/conversation:hidden">AI</span>
-            <span className="hidden @lg/conversation:inline">AI Connect</span>
-          </button>
-
           <ActionButton onClick={handleCreate} disabled={create.isPending}>
             {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
             <span className="hidden @md/conversation:inline">New session</span>
@@ -376,9 +390,14 @@ export default function Conversation({ projectId, initialPrompt, onViewChanges }
         <div className="h-8 flex items-center px-3 gap-2 min-w-0 text-xs">
           {connected ? (
             <>
-              <span className={`size-2 rounded-full ${connected ? "bg-success" : "bg-warning"}`} title={connected ? "Agent connected" : "Reconnecting..."} />
+              <span className={`size-2 rounded-full ${isRetrying ? "bg-warning" : "bg-success"}`} title={isRetrying ? "Retrying..." : "Agent connected"} />
               <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">{sessionName}</span>
-              {compacting || session?.time?.compacting ? (
+              {isRetrying && retryInfo ? (
+                <>
+                  <span className="text-muted-foreground">·</span>
+                  <RetryCountdown retryInfo={retryInfo} />
+                </>
+              ) : compacting || session?.time?.compacting ? (
                 <>
                   <span className="text-muted-foreground">·</span>
                   <span className="flex items-center gap-1 text-muted-foreground">
@@ -404,11 +423,6 @@ export default function Conversation({ projectId, initialPrompt, onViewChanges }
                 </>
               )}
             </>
-          ) : projectId ? (
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <Loader2 className="size-3 animate-spin" />
-              Connecting...
-            </span>
           ) : null}
         </div>
 

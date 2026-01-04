@@ -252,7 +252,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             <Button
               size="sm"
               variant="outline"
-              onClick={() => window.open(`https://${deploymentName}.surgent.dev`, "_blank")}
+              onClick={() => window.open(`https://${deploymentName}.surgent.site`, "_blank")}
             >
               <ExternalLink className="h-4 w-4" />
               Open
