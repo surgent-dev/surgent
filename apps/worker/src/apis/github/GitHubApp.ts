@@ -5,6 +5,7 @@
 import { createAppAuth } from '@octokit/auth-app'
 import { Octokit } from '@octokit/rest'
 import { createPrivateKey } from 'node:crypto'
+import { config } from '@/lib/config'
 
 const log = (msg: string, data?: unknown) => console.log(`[GitHubApp] ${msg}`, data ?? '')
 
@@ -12,22 +13,14 @@ const log = (msg: string, data?: unknown) => console.log(`[GitHubApp] ${msg}`, d
  * Convert PKCS#1 key to PKCS#8 format (GitHub generates PKCS#1, but octokit needs PKCS#8)
  */
 function ensurePkcs8(privateKey: string): string {
-  // Already PKCS#8
-  if (privateKey.includes('BEGIN PRIVATE KEY')) {
-    return privateKey
-  }
-
-  // Convert PKCS#1 to PKCS#8 using Node's crypto
+  if (privateKey.includes('BEGIN PRIVATE KEY')) return privateKey
   if (privateKey.includes('BEGIN RSA PRIVATE KEY')) {
-    const keyObject = createPrivateKey(privateKey)
-    return keyObject.export({ type: 'pkcs8', format: 'pem' }) as string
+    return createPrivateKey(privateKey).export({ type: 'pkcs8', format: 'pem' }) as string
   }
-
-  // Unknown format, return as-is and let it fail with a clear error
   return privateKey
 }
 
-interface GitHubAppConfig {
+interface AppConfig {
   appId: string
   privateKey: string
   appSlug: string
@@ -42,27 +35,15 @@ interface StatePayload {
   exp: number
 }
 
-interface InstallationAccount {
-  login: string
-  type: string
-}
-
-interface InstallationResponse {
-  id: number
-  account: InstallationAccount
-}
-
 export class GitHubApp {
-  private config: GitHubAppConfig
+  private config: AppConfig
   private appAuth: ReturnType<typeof createAppAuth>
 
-  constructor(config: GitHubAppConfig) {
+  constructor(config: AppConfig) {
     this.config = config
-    // Convert PKCS#1 to PKCS#8 if needed (GitHub generates PKCS#1 by default)
-    const privateKey = ensurePkcs8(config.privateKey)
     this.appAuth = createAppAuth({
       appId: config.appId,
-      privateKey,
+      privateKey: ensurePkcs8(config.privateKey),
       clientId: config.clientId,
       clientSecret: config.clientSecret,
     })
@@ -174,31 +155,19 @@ export class GitHubApp {
   /**
    * Get installation details from GitHub
    */
-  async getInstallation(installationId: number): Promise<InstallationResponse> {
+  async getInstallation(installationId: number) {
     const octokit = await this.getAppOctokit()
     const { data } = await octokit.rest.apps.getInstallation({ installation_id: installationId })
-    return {
-      id: data.id,
-      account: {
-        login: (data.account as { login: string }).login,
-        type: (data.account as { type: string }).type,
-      },
-    }
+    const account = data.account as { login: string; type: string }
+    return { id: data.id, account: { login: account.login, type: account.type } }
   }
 
   /**
    * List repositories accessible to an installation
    */
-  async listInstallationRepos(installationId: number): Promise<Array<{
-    id: number
-    name: string
-    full_name: string
-    private: boolean
-    default_branch: string
-  }>> {
+  async listInstallationRepos(installationId: number) {
     const octokit = await this.getInstallationOctokit(installationId)
     const { data } = await octokit.rest.apps.listReposAccessibleToInstallation({ per_page: 100 })
-
     return data.repositories.map((repo) => ({
       id: repo.id,
       name: repo.name,
@@ -224,29 +193,20 @@ export class GitHubApp {
   }
 }
 
-/**
- * Create a GitHubApp instance from environment variables
- */
-export function createGitHubApp(env: any): GitHubApp | null {
-  const {
-    GITHUB_APP_ID,
-    GITHUB_APP_PRIVATE_KEY,
-    GITHUB_APP_SLUG,
-    GITHUB_STATE_SECRET,
-    GITHUB_CLIENT_ID,
-    GITHUB_CLIENT_SECRET,
-  } = env
+export function createGitHubApp(): GitHubApp | null {
+  const cfg = config.github
 
-  if (!GITHUB_APP_ID || !GITHUB_APP_PRIVATE_KEY || !GITHUB_APP_SLUG || !GITHUB_STATE_SECRET) {
+  if (!cfg.appId || !cfg.appPrivateKey || !cfg.appSlug || !cfg.stateSecret) {
     log('GitHub App not configured - missing environment variables')
     return null
   }
+
   return new GitHubApp({
-    appId: GITHUB_APP_ID,
-    privateKey: GITHUB_APP_PRIVATE_KEY,
-    appSlug: GITHUB_APP_SLUG,
-    stateSecret: GITHUB_STATE_SECRET,
-    clientId: GITHUB_CLIENT_ID,
-    clientSecret: GITHUB_CLIENT_SECRET,
+    appId: cfg.appId,
+    privateKey: cfg.appPrivateKey,
+    appSlug: cfg.appSlug,
+    stateSecret: cfg.stateSecret,
+    clientId: cfg.clientId,
+    clientSecret: cfg.clientSecret,
   })
 }

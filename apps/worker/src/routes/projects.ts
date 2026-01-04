@@ -185,7 +185,7 @@ projects.post(
         return c.json({ error: "Forbidden" }, 403);
 
       const name = deployName ? sanitizeDeployName(deployName) : undefined;
-      const previewUrl = name ? `https://${name}.surgent.dev` : undefined;
+      const previewUrl = name ? `https://${name}.surgent.site` : undefined;
 
       await db
         .updateTable("project")
@@ -201,14 +201,12 @@ projects.post(
         .where("id", "=", id)
         .execute();
 
-      c.executionCtx.waitUntil(
-        deployProject({ projectId: id, deployName: name }).catch((err) => {
-          console.error("[deploy] background failed", {
-            projectId: id,
-            error: err?.stack ?? err?.message ?? String(err),
-          });
-        }),
-      );
+      deployProject({ projectId: id, deployName: name }).catch((err) => {
+        console.error("[deploy] background failed", {
+          projectId: id,
+          error: err?.stack ?? err?.message ?? String(err),
+        });
+      });
 
       console.log("[deploy] scheduled", { projectId: id });
       return c.json({ scheduled: true });
@@ -237,9 +235,7 @@ projects.post("/:id/activate", zValidator("param", idParam), async (c) => {
   const sandboxId = row.sandbox?.id;
   if (!sandboxId) return c.json({ error: "Sandbox not found" }, 400);
 
-  c.executionCtx.waitUntil(
-    resumeProject({ projectId: id, sandboxId }).catch(() => {}),
-  );
+  resumeProject({ projectId: id, sandboxId }).catch(() => {});
 
   return c.json({ scheduled: true });
 });
@@ -256,7 +252,7 @@ projects.get("/:id/download", zValidator("param", idParam), async (c) => {
   try {
     const { buffer, filename } = await downloadProject(id);
 
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/gzip",
         "Content-Disposition": `attachment; filename="${filename}"`,
@@ -468,7 +464,7 @@ projects.get(
       return c.json({ error: result.error }, result.status);
     }
 
-    const githubApp = createGitHubApp(c.env);
+    const githubApp = createGitHubApp();
     if (!githubApp) {
       return c.json({ error: "GitHub App not configured" }, 500);
     }
@@ -498,7 +494,7 @@ projects.get("/:id/github/repos", zValidator("param", idParam), async (c) => {
     return c.json({ error: "No GitHub installation found" }, 400);
   }
 
-  const githubApp = createGitHubApp(c.env);
+  const githubApp = createGitHubApp();
   if (!githubApp) {
     return c.json({ error: "GitHub App not configured" }, 500);
   }
@@ -748,7 +744,7 @@ projects.post("/:id/github/push", zValidator("param", idParam), async (c) => {
     return c.json({ error: "No GitHub repo connected" }, 400);
   }
 
-  const githubApp = createGitHubApp(c.env);
+  const githubApp = createGitHubApp();
   if (!githubApp) {
     return c.json({ error: "GitHub App not configured" }, 500);
   }

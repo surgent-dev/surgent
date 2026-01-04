@@ -6,14 +6,13 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "@types/bun": "^1.2.19",
     "@types/node": "^18.0.0",
     "@types/pako": "^2.0.3",
     "tsx": "^4.20.4",
-    "typescript": "^5.9.2",
-    "wrangler": "^4.54.0"
+    "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@cloudflare/containers": "^0.0.29",
     "@daytonaio/api-client": "^0.108.0",
     "@daytonaio/sdk": "^0.108.0",
     "@hono/mcp": "^0.2.3",
@@ -40,9 +39,7 @@
     "zod": "^4.1.12"
   },
   "scripts": {
-    "dev": "wrangler dev --port 4000",
-    "start": "wrangler dev --verbose --port 4000",
-    "deploy": "wrangler deploy",
-    "generate-types": "wrangler types"
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts"
   }
 }

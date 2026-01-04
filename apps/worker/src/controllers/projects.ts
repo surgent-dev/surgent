@@ -200,10 +200,10 @@ async function getOrCreateSandbox(opts: { port: number; workingDirectory: string
     try {
       sandbox = await provider.resume(opts.sandboxId);
     } catch {
-      sandbox = await provider.create(opts.env, opts.workingDirectory, opts.name);
+      sandbox = await provider.create(opts.env, opts.name);
     }
   } else {
-    sandbox = await provider.create(opts.env, opts.workingDirectory, opts.name);
+    sandbox = await provider.create(opts.env, opts.name);
   }
 
   return { sandbox, previewUrl: await sandbox.getHost(opts.port) };

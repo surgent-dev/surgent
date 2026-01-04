@@ -7,4 +7,3 @@ CLAUDE.md
 set-secrets.sh
 .env.prod
 .env.local
-worker-configuration.d.ts

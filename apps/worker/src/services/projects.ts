@@ -1,7 +1,7 @@
 import { db } from "@repo/db";
 
-export async function getProjectById(projectId: string) {
-  return await db
+export function getProjectById(projectId: string) {
+  return db
     .selectFrom("project")
     .selectAll()
     .where("id", "=", projectId)
@@ -14,6 +14,7 @@ export async function countProjectsByUserId(userId: string): Promise<number> {
     .select(db.fn.countAll().as("count"))
     .where("userId", "=", userId)
     .executeTakeFirst();
+
   return Number(result?.count ?? 0);
 }
 
@@ -23,23 +24,24 @@ export async function createProject(args: {
   githubUrl?: string;
 }): Promise<{ id: string }> {
   const now = new Date();
-  const created = await db
+
+  const row = await db
     .insertInto("project")
     .values({
       userId: args.userId,
       name: args.name,
-      github: ({ url: args.githubUrl } as any),
+      github: { url: args.githubUrl } as any,
       settings: null,
       metadata: null,
       deployment: null,
-      sandbox: ({ status: "pending", isInitialized: false } as any),
+      sandbox: { status: "pending", isInitialized: false } as any,
       createdAt: now,
       updatedAt: now,
     })
     .returning(["id"])
     .executeTakeFirstOrThrow();
 
-  return { id: created.id as string };
+  return { id: row.id as string };
 }
 
 export async function updateProject(
@@ -73,5 +75,4 @@ export async function updateDeploymentStatus(
     },
   });
 }
-
 

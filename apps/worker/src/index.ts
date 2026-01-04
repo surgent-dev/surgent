@@ -3,13 +3,16 @@ import { cors } from 'hono/cors'
 import projects from './routes/projects'
 import preview from './routes/preview'
 import agent from './routes/agent'
-import dispatch from './routes/dispatch'
-import proxy from './routes/proxy'
 import upload from './routes/upload'
 import github from './routes/github'
 import mcp from './routes/mcp'
 import { auth } from './lib/auth'
+import { config } from './lib/config'
 import type { AppContext } from '@/types/application'
+
+function isPreviewSubdomain(sub: string): boolean {
+  return sub.startsWith('preview-') || /^\d+-/.test(sub)
+}
 
 const app = new Hono<AppContext>({
   getPath: (req) => {
@@ -17,32 +20,31 @@ const app = new Hono<AppContext>({
     const path = url.pathname
     const [subdomain] = url.hostname.split('.')
 
-    // Never rewrite server container routes
-    if (path.startsWith('/server')) return path
-
-    // AI proxy subdomain (ai.surgent.dev)
-    if (subdomain === 'ai') {
-      return `/proxy${path}`
+    if (path.startsWith('/server') || path.startsWith('/preview')) {
+      return path
     }
 
     if (subdomain && isPreviewSubdomain(subdomain)) {
       return `/preview${path}`
     }
+
     return path
   },
 })
 
-// CORS for Better Auth endpoints
 app.use(
   '/*',
   cors({
-    origin: (origin, c) => {
+    origin: (origin) => {
       const trustedOrigins = [
-        c.env.CLIENT_ORIGIN ,
+        config.server.clientOrigin,
         'http://localhost:3000',
         'http://localhost:3001',
       ]
-      return origin && trustedOrigins.includes(origin) ? origin : trustedOrigins[0]
+      if (origin && trustedOrigins.includes(origin)) {
+        return origin
+      }
+      return trustedOrigins[0]
     },
     allowHeaders: ['Content-Type', 'Authorization'],
     allowMethods: ['POST', 'GET', 'OPTIONS', 'PATCH', 'DELETE'],
@@ -55,51 +57,50 @@ app.use(
 // Better Auth handler
 app.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw))
 
-// Session middleware - adds user and session to context
+// Session middleware
 app.use('*', async (c, next) => {
   const session = await auth.api.getSession({ headers: c.req.raw.headers })
 
-  if (!session) {
+  if (session) {
+    c.set('user', session.user)
+    c.set('session', session.session)
+  } else {
     c.set('user', null)
     c.set('session', null)
-    return next()
   }
 
-  c.set('user', session.user)
-  c.set('session', session.session)
   return next()
 })
 
 app.get('/health', (c) => c.text('ok'))
 
-// Example session endpoint
 app.get('/api/session', (c) => {
   const user = c.get('user')
   const session = c.get('session')
-  if (!user) return c.json({ error: 'Unauthorized' }, 401)
+
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+
   return c.json({ session, user })
 })
 
+// Routes
 app.route('/api/projects', projects)
 app.route('/api/agent', agent)
-app.route('/api/proxy', proxy)
 app.route('/api/upload', upload)
 app.route('/api/github', github)
 app.route('/api/mcp', mcp)
 app.route('/preview', preview)
-app.route('/proxy', proxy)  // ai.surgent.dev subdomain
 
+// Start server
+const port = Number(config.server.port)
 
-app.route('/', dispatch)
+Bun.serve({
+  port,
+  fetch: (req) => app.fetch(req),
+})
 
-function isPreviewSubdomain(sub: string): boolean {
-  if (sub.startsWith('preview-')) return true
-  const [maybeNumeric] = sub.split('-')
-  return /^\d+$/.test(maybeNumeric)
-}
+console.log(`[worker] listening on http://localhost:${port}`)
 
-export default {
-  fetch: app.fetch,
-  async queue(batch: MessageBatch, env: Env, ctx: ExecutionContext) {
-  },
-} satisfies ExportedHandler<Env>
+export default app
