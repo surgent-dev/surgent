@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   curl \
   jq \
   unzip \
+  ripgrep \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install bun
@@ -23,7 +24,7 @@ RUN git config --global user.name "Surgent Dev" \
   && git config --global user.email "bot@surgent.dev"
 
 # Set up workspace directory
-WORKDIR /workspace
+WORKDIR /home/user/workspace
 
 CMD ["claude", "--version"]
 ENTRYPOINT ["sleep", "infinity"]

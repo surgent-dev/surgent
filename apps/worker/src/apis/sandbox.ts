@@ -49,7 +49,7 @@ export class DaytonaSandboxProvider {
 
   async create(envs?: Record<string, string>, name?: string) {
     const sandbox = await this.getClient().create({
-      snapshot: this.config.snapshot || "default-env:1.0.2",
+      snapshot: this.config.snapshot,
       envVars: envs ?? {},
       public: true,
       autoStopInterval: 15,

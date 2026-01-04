@@ -6,7 +6,6 @@ import path from "path";
 import { createHash } from "crypto";
 import stripJsonComments from "strip-json-comments";
 import * as ProjectService from "@/services/projects";
-import ky from "ky";
 
 const MAX_PROJECTS_PER_USER = 2;
 
@@ -20,6 +19,7 @@ import { createProjectOnTeam, createDeployKey, setDeploymentEnvVars } from "@/ap
 import { exportJWK, exportPKCS8, generateKeyPair } from "jose";
 import { parse as parseDotEnv } from "dotenv";
 import { auth } from "@/lib/auth";
+import { localWorkspacePath } from "@/lib/workspace";
 
 // ============================================================================
 // Types
@@ -62,10 +62,6 @@ export interface DeleteProjectArgs {
 // ============================================================================
 
 const posix = path.posix;
-
-function localWorkspacePath(projectId: string): string {
-  return posix.join("/tmp", projectId.replace(/[^a-zA-Z0-9_-]+/g, "-") || "project");
-}
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\"'\"'")}'`;
@@ -173,17 +169,6 @@ async function isPm2Online(sandbox: SandboxInstance, cwd: string, name: string):
   return list.find(p => p?.name === name)?.pm2_env?.status === "online";
 }
 
-async function waitForServer(url: string, maxAttempts = 10, delayMs = 200): Promise<boolean> {
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      const res = await fetch(url);
-      if (res.ok || res.status < 500) return true;
-    } catch {}
-    await new Promise(r => setTimeout(r, delayMs));
-  }
-  return false;
-}
-
 async function ensurePm2Process(sandbox: SandboxInstance, cwd: string, name: string, command: string, forceRestart = false) {
   if (await isPm2Online(sandbox, cwd, name)) {
     if (forceRestart) await sandbox.exec(`pm2 restart ${name} --update-env`, { timeoutSeconds: 60, cwd });
@@ -209,34 +194,6 @@ async function getOrCreateSandbox(opts: { port: number; workingDirectory: string
   return { sandbox, previewUrl: await sandbox.getHost(opts.port) };
 }
 
-async function configureOpencode(sandbox: SandboxInstance, cwd: string) {
-  const openaiKey = config.llms.openaiKey;
-  const googleKey = config.llms.googleKey;
-  
-  if (!openaiKey && !googleKey) return;
-
-  try {
-    const url = await sandbox.getHost(4096);
-    await waitForServer(url);
-
-    const requests = [];
-    const opts = (key: string) => ({
-      searchParams: { directory: cwd },
-      json: { type: "api", key },
-      retry: { limit: 3, methods: ["put"] },
-    });
-
-    if (openaiKey) {
-      requests.push(ky.put(`${url}/auth/openai`, opts(openaiKey)).catch(() => {}));
-    }
-    if (googleKey) {
-      requests.push(ky.put(`${url}/auth/google`, opts(googleKey)).catch(() => {}));
-    }
-    await Promise.all(requests);
-  } catch (err) {
-    console.log("[opencode] auth configuration failed", err);
-  }
-}
 
 async function generateJwks(): Promise<{ jwks: string; privateKey: string }> {
   const keys = await generateKeyPair('RS256', { extractable: true });
@@ -421,9 +378,6 @@ export async function initializeProject(args: InitializeProjectArgs): Promise<{ 
 
   if (devScript) {
     await ensurePm2Process(sandbox, workingDirectory, processName, devScript);
-    await sandbox.exec("bun install -g opencode-ai@latest", { timeoutSeconds: 120 });
-    await ensurePm2Process(sandbox, workingDirectory, "agent-opencode-server", "opencode serve --hostname 0.0.0.0 --port 4096");
-    await configureOpencode(sandbox, workingDirectory);
   }
 
   await ProjectService.updateProject(projectId, {
@@ -446,10 +400,6 @@ export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxI
     if (startCommand && processName) {
       await ensurePm2Process(sandbox, workingDirectory, processName, startCommand);
     }
-
-    await sandbox.exec("bun update -g opencode-ai@latest", { timeoutSeconds: 120 });
-    await ensurePm2Process(sandbox, workingDirectory, "agent-opencode-server", "opencode serve --hostname 0.0.0.0 --port 4096", true);
-    await configureOpencode(sandbox, workingDirectory);
   } catch (err) {
     console.log("[resume] pm2 start error", err);
   }

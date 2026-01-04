@@ -17,7 +17,7 @@ export const config = {
     apiKey: env.DAYTONA_API_KEY,
     apiUrl: env.DAYTONA_API_URL,
     serverUrl: env.DAYTONA_SERVER_URL,
-    snapshot: env.DAYTONA_SNAPSHOT || "default-env:1.0.2",
+    snapshot: env.DAYTONA_SNAPSHOT || "default-env:1.0.3",
     defaultPort: env.DEFAULT_SANDBOX_PORT || "3000",
     orgId: env.DAYTONA_ORG_ID,
   },
@@ -67,5 +67,8 @@ export const config = {
   },
   db: {
     url: env.DATABASE_URL,
+  },
+  opencode: {
+    url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
   },
 } as const
