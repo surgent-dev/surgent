@@ -38,11 +38,12 @@ export namespace Project {
     Updated: BusEvent.define("project.updated", Info),
   }
 
-  export async function fromDirectory(directory: string, options?: { sandbox?: Sandbox }) {
-    log.info("fromDirectory", { directory })
+  export async function fromDirectory(directory: string, options?: { sandbox?: Sandbox; sandboxId?: string }) {
+    log.info("fromDirectory", { directory, sandboxId: options?.sandboxId })
 
     const directoryPath = directory
-    const id = `dir_${Bun.hash.xxHash32(directoryPath).toString(16)}`
+    const idSeed = options?.sandboxId ? `${directoryPath}::${options.sandboxId}` : directoryPath
+    const id = `dir_${Bun.hash.xxHash32(idSeed).toString(16)}`
 
     let existing = await Storage.read<Info>(["project", id]).catch(() => undefined)
     if (!existing) {

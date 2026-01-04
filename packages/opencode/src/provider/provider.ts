@@ -37,7 +37,7 @@ import { createPerplexity } from "@ai-sdk/perplexity"
 export namespace Provider {
   const log = Log.create({ service: "provider" })
 
-  const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
+  const BUNDLED_PROVIDERS: Record<string, (options: any) => unknown> = {
     "@ai-sdk/amazon-bedrock": createAmazonBedrock,
     "@ai-sdk/anthropic": createAnthropic,
     "@ai-sdk/azure": createAzure,
@@ -825,9 +825,9 @@ export namespace Provider {
         const loaded = bundledFn({
           name: model.providerID,
           ...options,
-        })
+        }) as SDK
         s.sdk.set(key, loaded)
-        return loaded as SDK
+        return loaded
       }
 
       let installedPath: string
@@ -933,7 +933,6 @@ export namespace Provider {
         "claude-haiku-4.5",
         "3-5-haiku",
         "3.5-haiku",
-        "gemini-2.5-flash",
         "gpt-5-nano",
       ]
       // claude-haiku-4.5 is considered a premium model in github copilot, we shouldn't use premium requests for title gen

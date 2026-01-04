@@ -42,7 +42,10 @@ export const Instance = {
           ? createDaytonaSandbox({ sandboxId: input.sandboxId, root: input.directory })
           : createSandbox(input.directory)
 
-        const project = await Project.fromDirectory(input.directory, { sandbox })
+        const project = await Project.fromDirectory(input.directory, {
+          sandbox,
+          sandboxId: input.sandboxId,
+        })
 
         const ctx: InstanceContext = {
           directory: input.directory,

@@ -270,7 +270,9 @@ export namespace ProviderTransform {
       result["promptCacheKey"] = sessionID
     }
 
-    if (model.api.npm === "@ai-sdk/google" || model.api.npm === "@ai-sdk/google-vertex") {
+    if (
+      (model.api.npm === "@ai-sdk/google" || model.api.npm === "@ai-sdk/google-vertex")
+    ) {
       result["thinkingConfig"] = {
         includeThoughts: true,
       }
