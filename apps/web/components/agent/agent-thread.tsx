@@ -434,7 +434,7 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
         const userFiles = getFiles(turn.user);
         const isLast = idx === turns.length - 1;
         const lastAssistant = turn.assistants[turn.assistants.length - 1];
-        const working = isLast ? (isWorking ?? !!(lastAssistant && !lastAssistant.time?.completed)) : false;
+        const working = isLast ? (isWorking ?? !!(lastAssistant && lastAssistant.role === "assistant" && !lastAssistant.time.completed)) : false;
         const showPlanning = isLast && !!working;
 
         return (
