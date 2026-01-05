@@ -5,7 +5,7 @@
 
 import z from "zod"
 import { Tool } from "./tool"
-import { createTwoFilesPatch, diffLines } from "diff"
+import { createTwoFilesPatch } from "diff"
 import { Permission } from "../permission"
 import DESCRIPTION from "./edit.txt"
 import { File } from "../file"
@@ -39,7 +39,7 @@ export const EditTool = Tool.define("edit", {
     const sandbox = Instance.sandbox
     const path = sandbox.path
 
-    const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.resolve(params.filePath)
+    const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
     if (!sandbox.contains(filePath)) {
       const parentDir = path.dirname(filePath)
       if (agent.permission.external_directory === "ask") {
@@ -72,6 +72,7 @@ export const EditTool = Tool.define("edit", {
     let diff = ""
     let contentOld = ""
     let contentNew = ""
+    const diagnostics = {}
     await FileTime.withLock(filePath, async () => {
       if (params.oldString === "") {
         contentNew = params.newString
@@ -97,7 +98,7 @@ export const EditTool = Tool.define("edit", {
         return
       }
 
-      const stats = await sandbox.fs.stat(filePath).catch(() => {})
+      const stats = await sandbox.fs.stat(filePath).catch(() => null)
       if (!stats) throw new Error(`File ${filePath} not found`)
       if (stats.isDir) throw new Error(`Path is a directory, not a file: ${filePath}`)
       await FileTime.assert(ctx.sessionID, filePath)
@@ -132,25 +133,15 @@ export const EditTool = Tool.define("edit", {
       FileTime.read(ctx.sessionID, filePath)
     })
 
-    const filediff = {
-      file: filePath,
-      before: contentOld,
-      after: contentNew,
-      additions: 0,
-      deletions: 0,
-    }
-    for (const change of diffLines(contentOld, contentNew)) {
-      if (change.added) filediff.additions += change.count || 0
-      if (change.removed) filediff.deletions += change.count || 0
-    }
+    const output = ""
 
     return {
       metadata: {
+        diagnostics,
         diff,
-        filediff,
       },
       title: `${path.relative(Instance.directory, filePath)}`,
-      output: "",
+      output,
     }
   },
 })

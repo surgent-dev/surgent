@@ -16,13 +16,16 @@ export const WriteTool = Tool.define("write", {
   }),
   async execute(params, ctx) {
     const agent = await Agent.get(ctx.agent)
-    const filepath = Instance.sandbox.path.isAbsolute(params.filePath) ? params.filePath : Instance.sandbox.path.resolve(params.filePath)
-    if (!Instance.sandbox.contains(filepath)) {
-      const parentDir = Instance.sandbox.path.dirname(filepath)
+    const sandbox = Instance.sandbox
+    const path = sandbox.path
+
+    const filepath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
+    if (!sandbox.contains(filepath)) {
+      const parentDir = path.dirname(filepath)
       if (agent.permission.external_directory === "ask") {
         await Permission.ask({
           type: "external_directory",
-          pattern: [parentDir, Instance.sandbox.path.join(parentDir, "*")],
+          pattern: [parentDir, path.join(parentDir, "*")],
           sessionID: ctx.sessionID,
           messageID: ctx.messageID,
           callID: ctx.callID,
@@ -46,7 +49,7 @@ export const WriteTool = Tool.define("write", {
       }
     }
 
-    const exists = await Instance.sandbox.fs.exists(filepath)
+    const exists = await sandbox.fs.exists(filepath)
     if (exists) await FileTime.assert(ctx.sessionID, filepath)
 
     if (agent.permission.edit === "ask")
@@ -63,19 +66,23 @@ export const WriteTool = Tool.define("write", {
         },
       })
 
-    await Instance.sandbox.fs.writeText(filepath, params.content)
+    await sandbox.fs.writeText(filepath, params.content)
     await Bus.publish(File.Event.Edited, {
       file: filepath,
     })
     FileTime.read(ctx.sessionID, filepath)
 
+    const diagnostics = {}
+    const output = ""
+
     return {
-      title: Instance.sandbox.path.relative(Instance.directory, filepath),
+      title: path.relative(Instance.directory, filepath),
       metadata: {
+        diagnostics,
         filepath,
         exists: exists,
       },
-      output: "",
+      output,
     }
   },
 })

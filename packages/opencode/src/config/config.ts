@@ -237,6 +237,7 @@ export namespace Config {
       agent_list: z.string().optional().default("<leader>a").describe("List agents"),
       agent_cycle: z.string().optional().default("tab").describe("Next agent"),
       agent_cycle_reverse: z.string().optional().default("shift+tab").describe("Previous agent"),
+      variant_cycle: z.string().optional().default("ctrl+t").describe("Cycle model variants"),
       input_clear: z.string().optional().default("ctrl+c").describe("Clear input field"),
       input_paste: z.string().optional().default("ctrl+v").describe("Paste from clipboard"),
       input_submit: z.string().optional().default("return").describe("Submit input"),
@@ -346,6 +347,17 @@ export namespace Config {
       .describe("Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column"),
   })
 
+  export const Server = z
+    .object({
+      port: z.number().int().positive().optional().describe("Port to listen on"),
+      hostname: z.string().optional().describe("Hostname to listen on"),
+      mdns: z.boolean().optional().describe("Enable mDNS service discovery"),
+    })
+    .strict()
+    .meta({
+      ref: "ServerConfig",
+    })
+
   export const Layout = z.enum(["auto", "stretch"]).meta({
     ref: "LayoutConfig",
   })
@@ -355,7 +367,24 @@ export namespace Config {
     .extend({
       whitelist: z.array(z.string()).optional(),
       blacklist: z.array(z.string()).optional(),
-      models: z.record(z.string(), ModelsDev.Model.partial()).optional(),
+      models: z
+        .record(
+          z.string(),
+          ModelsDev.Model.partial().extend({
+            variants: z
+              .record(
+                z.string(),
+                z
+                  .object({
+                    disabled: z.boolean().optional().describe("Disable this variant for the model"),
+                  })
+                  .catchall(z.any()),
+              )
+              .optional()
+              .describe("Variant-specific configuration"),
+          }),
+        )
+        .optional(),
       options: z
         .object({
           apiKey: z.string().optional(),
@@ -394,6 +423,7 @@ export namespace Config {
       keybinds: Keybinds.optional().describe("Custom keybind configurations"),
       logLevel: Log.Level.optional().describe("Log level"),
       tui: TUI.optional().describe("TUI specific settings"),
+      server: Server.optional().describe("Server configuration for opencode serve and web commands"),
       command: z
         .record(z.string(), Command)
         .optional()

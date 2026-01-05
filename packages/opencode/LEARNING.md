@@ -53,3 +53,7 @@ This document is a concise, repo-specific guide to how the agent loop works.
 10) Return to caller
 - The loop returns the most recent assistant message to the request.
 - See: `packages/opencode/src/session/prompt.ts`
+
+## Notes
+
+- `EditTool`/`WriteTool`: use `Instance.sandbox.path` + `Instance.sandbox.fs`; LSP diagnostics removed (no `../lsp` module in this repo). Files: `packages/opencode/src/tool/edit.ts`, `packages/opencode/src/tool/write.ts`.

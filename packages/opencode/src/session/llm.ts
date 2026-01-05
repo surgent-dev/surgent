@@ -1,6 +1,14 @@
 import { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
-import { streamText, wrapLanguageModel, type ModelMessage, type StreamTextResult, type Tool, type ToolSet } from "ai"
+import {
+  streamText,
+  wrapLanguageModel,
+  type ModelMessage,
+  type StreamTextResult,
+  type Tool,
+  type ToolSet,
+  extractReasoningMiddleware,
+} from "ai"
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
@@ -60,6 +68,15 @@ export namespace LLM {
     )
 
     const provider = await Provider.getProvider(input.model.providerID)
+    const small = input.small ? ProviderTransform.smallOptions(input.model) : {}
+    const variant = input.model.variants && input.user.variant ? input.model.variants[input.user.variant] : {}
+    const options = pipe(
+      ProviderTransform.options(input.model, input.sessionID, provider.options),
+      mergeDeep(small),
+      mergeDeep(input.model.options),
+      mergeDeep(input.agent.options),
+      mergeDeep(variant),
+    )
 
     const params = {
       temperature: input.model.capabilities.temperature
@@ -67,13 +84,7 @@ export namespace LLM {
         : undefined,
       topP: input.agent.topP ?? ProviderTransform.topP(input.model),
       topK: ProviderTransform.topK(input.model),
-      options: pipe(
-        {},
-        mergeDeep(ProviderTransform.options(input.model, input.sessionID, provider.options)),
-        input.small ? mergeDeep(ProviderTransform.smallOptions(input.model)) : mergeDeep({}),
-        mergeDeep(input.model.options),
-        mergeDeep(input.agent.options),
-      ),
+      options,
     }
 
     l.info("params", {
@@ -157,6 +168,7 @@ export namespace LLM {
               return args.params
             },
           },
+          extractReasoningMiddleware({ tagName: "think", startWithReasoning: false }),
         ],
       }),
       experimental_telemetry: { isEnabled: cfg.experimental?.openTelemetry },
