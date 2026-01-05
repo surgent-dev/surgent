@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import type { Message, Part, ToolPart, TextPart, ReasoningPart, FileDiff, FilePart, Permission } from "@opencode-ai/sdk";
+import type { Message, Part, ToolPart, TextPart, ReasoningPart, FilePart, Permission } from "@opencode-ai/sdk";
 import { ChevronDown, Undo2, CheckCircle2, Eye, FileText, FilePenLine, Trash2, Terminal, Search, Globe, ListTodo, Play, Loader2, AlertCircle } from "lucide-react";
 import { ShimmeringText } from "@/components/ui/shimmer-text";
 import { Button } from "@/components/ui/button";
@@ -276,24 +276,6 @@ function FileThumb({ file }: { file: FilePart }) {
   );
 }
 
-function Changes({ diffs, onView }: { diffs: FileDiff[]; onView: () => void }) {
-  return (
-    <div className="mt-1.5 sm:mt-3 p-1.5 sm:p-3 rounded-lg border bg-muted/30 w-full min-w-0">
-      <div className="font-medium text-[11px] sm:text-sm mb-1.5 sm:mb-2">Changes</div>
-      <div className="space-y-0.5 sm:space-y-1 mb-1.5 sm:mb-3">
-        {diffs.map(d => (
-          <div key={d.file} className="flex items-center gap-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
-            <div className="size-1 sm:size-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
-            <span className="shrink-0">{!d.deletions ? "Created" : !d.additions ? "Deleted" : "Edited"}</span>
-            <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-[50%] sm:max-w-[60%]">{d.file.split(/[/\\]/).pop()}</code>
-          </div>
-        ))}
-      </div>
-      <Button size="sm" variant="outline" onClick={onView} className="text-[11px] sm:text-sm h-7 sm:h-8 px-2 sm:px-3">View Diff</Button>
-    </div>
-  );
-}
-
 function ApiError({ error }: { error: { code?: string; data?: { code?: string; message?: string }; message?: string; name?: string } }) {
   const code = error?.code || error?.data?.code;
   const msg = error?.data?.message || error?.message || error?.name || "Request failed";
@@ -307,7 +289,7 @@ function ApiError({ error }: { error: { code?: string; data?: { code?: string; m
   );
 }
 
-export function AgentThread({ projectId, sessionId, messages, partsMap, permissions, onRevert, revertMessageId, reverting, revertingMessageId, onViewChanges, isWorking }: {
+export function AgentThread({ projectId, sessionId, messages, partsMap, permissions, onRevert, revertMessageId, reverting, revertingMessageId, isWorking }: {
   projectId?: string;
   sessionId: string;
   messages: Message[];
@@ -317,7 +299,6 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
   revertMessageId?: string;
   reverting?: boolean;
   revertingMessageId?: string;
-  onViewChanges?: (diffs: FileDiff[], messageId?: string) => void;
   isWorking?: boolean;
 }) {
   const [openThoughts, setOpenThoughts] = useState<Record<string, boolean>>({});
@@ -451,7 +432,6 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
 
         const text = getText(turn.user);
         const userFiles = getFiles(turn.user);
-        const diffs = turn.user.summary?.diffs;
         const isLast = idx === turns.length - 1;
         const lastAssistant = turn.assistants[turn.assistants.length - 1];
         const working = isLast ? (isWorking ?? !!(lastAssistant && !lastAssistant.time?.completed)) : false;
@@ -507,14 +487,6 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
                 <ShimmeringText text="Working..." duration={0.4} className="text-xs sm:text-sm text-muted-foreground py-1" />
               )}
             </div>
-
-            {diffs?.length ? (
-              isLast && working ? (
-                <p className="text-xs text-muted-foreground py-1">{diffs.length} file{diffs.length > 1 ? "s" : ""} changed</p>
-              ) : (
-                <Changes diffs={diffs} onView={() => onViewChanges?.(diffs, turn.user.id)} />
-              )
-            ) : null}
           </div>
         );
       })}

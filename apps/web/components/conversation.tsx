@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import type { FileDiff } from "@opencode-ai/sdk";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -23,13 +22,11 @@ import { useSandbox } from "@/hooks/use-sandbox";
 import useAgentStream, { type SessionStatusRetry } from "@/lib/use-agent-stream";
 import { AgentThread } from "@/components/agent/agent-thread";
 import { useSessionsQuery, useCreateSession, useSendMessage, useAbortSession, useRevertMessage, useUnrevert } from "@/queries/chats";
-import SessionDiffDialog from "@/components/diff/session-diff-dialog";
 import ProviderDialog from "@/components/provider-dialog";
 
 export interface ConversationProps {
   projectId?: string;
   initialPrompt?: string;
-  onViewChanges?: (diffs: FileDiff[], messageId?: string) => void;
 }
 
 type ProviderList = {
@@ -133,7 +130,6 @@ export default function Conversation({ projectId, initialPrompt, onViewChanges }
   const showTerminal = searchParams?.get("terminal") === "true";
   const [tab, setTab] = useState<"chat" | "terminal">("chat");
   const [mode, setMode] = useState<"plan" | "build">("build");
-  const [diffOpen, setDiffOpen] = useState(false);
   const [providerOpen, setProviderOpen] = useState(false);
   const [revertingId, setRevertingId] = useState<string>();
   const [inputValue, setInputValue] = useState("");
@@ -378,13 +374,6 @@ export default function Conversation({ projectId, initialPrompt, onViewChanges }
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {session?.summary?.diffs?.length ? (
-            <div className="flex items-center px-2 @md/conversation:px-4">
-              <Button size="sm" variant="outline" onClick={() => setDiffOpen(true)} className="text-xs px-2 @md/conversation:text-sm @md/conversation:px-3">
-                <span className="hidden @md/conversation:inline">View </span>Diff
-              </Button>
-            </div>
-          ) : null}
         </div>
         {/* Context stats */}
         <div className="h-8 flex items-center px-3 gap-2 min-w-0 text-xs">
@@ -534,7 +523,6 @@ export default function Conversation({ projectId, initialPrompt, onViewChanges }
       </div>
       )}
 
-      <SessionDiffDialog open={diffOpen} onOpenChange={setDiffOpen} diffs={session?.summary?.diffs} />
       <ProviderDialog open={providerOpen} onOpenChange={setProviderOpen} projectId={projectId} />
     </div>
   );
