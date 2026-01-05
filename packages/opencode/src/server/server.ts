@@ -44,6 +44,7 @@ globalThis.AI_SDK_LOG_WARNINGS = false
 
 export namespace Server {
   const log = Log.create({ service: "server" })
+  let _corsWhitelist: string[] = []
 
   export const Event = {
     Connected: BusEvent.define("server.connected", z.object({})),
@@ -86,7 +87,19 @@ export namespace Server {
           timer.stop()
         }
       })
-      .use(cors())
+      .use(
+        cors({
+          origin: (input) => {
+            if (/^https:\/\/([a-z0-9-]+\.)*opencode\.ai$/.test(input)) {
+              return input
+            }
+            if (_corsWhitelist.includes(input)) {
+              return input
+            }
+            return
+          },
+        }),
+      )
       .get(
         "/global/health",
         describeRoute({
@@ -1785,7 +1798,8 @@ export namespace Server {
       }),
   )
 
-  export function listen(opts: { port: number; hostname: string }) {
+  export function listen(opts: { port: number; hostname: string; cors?: string[] }) {
+    _corsWhitelist = opts.cors ?? []
     const args = {
       hostname: opts.hostname,
       idleTimeout: 0,

@@ -352,6 +352,7 @@ export namespace Config {
       port: z.number().int().positive().optional().describe("Port to listen on"),
       hostname: z.string().optional().describe("Hostname to listen on"),
       mdns: z.boolean().optional().describe("Enable mDNS service discovery"),
+      cors: z.array(z.string()).optional().describe("Additional domains to allow for CORS"),
     })
     .strict()
     .meta({
@@ -534,16 +535,22 @@ export namespace Config {
           chatMaxRetries: z.number().optional().describe("Number of retries for chat completions on failure"),
           disable_paste_summary: z.boolean().optional(),
           batch_tool: z.boolean().optional().describe("Enable the batch tool"),
-          openTelemetry: z
-            .boolean()
-            .optional()
-            .describe("Enable OpenTelemetry spans for AI SDK calls (using the 'experimental_telemetry' flag)"),
-          primary_tools: z
-            .array(z.string())
-            .optional()
-            .describe("Tools that should only be available to primary agents."),
-          continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
-        })
+      openTelemetry: z
+        .boolean()
+        .optional()
+        .describe("Enable OpenTelemetry spans for AI SDK calls (using the 'experimental_telemetry' flag)"),
+      primary_tools: z
+        .array(z.string())
+        .optional()
+        .describe("Tools that should only be available to primary agents."),
+      continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
+      mcp_timeout: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
+    })
         .optional(),
     })
     .strict()
