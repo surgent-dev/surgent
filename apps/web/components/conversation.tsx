@@ -115,7 +115,7 @@ function EmptyState() {
   );
 }
 
-export default function Conversation({ projectId, initialPrompt, onViewChanges }: ConversationProps) {
+export default function Conversation({ projectId, initialPrompt }: ConversationProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -453,7 +453,6 @@ export default function Conversation({ projectId, initialPrompt, onViewChanges }
                   revertMessageId={session?.revert?.messageID}
                   reverting={busy}
                   revertingMessageId={revertingId}
-                  onViewChanges={onViewChanges}
                   isWorking={working}
                 />
               ) : (
