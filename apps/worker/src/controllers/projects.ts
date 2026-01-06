@@ -19,7 +19,6 @@ import { createProjectOnTeam, createDeployKey, setDeploymentEnvVars } from "@/ap
 import { exportJWK, exportPKCS8, generateKeyPair } from "jose";
 import { parse as parseDotEnv } from "dotenv";
 import { auth } from "@/lib/auth";
-import { localWorkspacePath } from "@/lib/workspace";
 
 // ============================================================================
 // Types
@@ -62,6 +61,10 @@ export interface DeleteProjectArgs {
 // ============================================================================
 
 const posix = path.posix;
+
+function localWorkspacePath(projectId: string): string {
+  return posix.join("/home/user/workspace", projectId.replace(/[^a-zA-Z0-9_-]+/g, "-") || "project");
+}
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\"'\"'")}'`;
