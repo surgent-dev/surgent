@@ -11,6 +11,7 @@ import { SessionStatus } from "./status"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
 import { Config } from "@/config/config"
+import { SessionCompaction } from "./compaction"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -28,6 +29,7 @@ export namespace SessionProcessor {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     let blocked = false
     let attempt = 0
+    let needsCompaction = false
 
     const result = {
       get message() {
@@ -38,6 +40,7 @@ export namespace SessionProcessor {
       },
       async process(streamInput: LLM.StreamInput) {
         log.info("process")
+        needsCompaction = false
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
         while (true) {
           try {
@@ -236,7 +239,7 @@ export namespace SessionProcessor {
                   })
                   break
 
-                case "finish-step":
+                case "finish-step": {
                   const usage = Session.getUsage({
                     model: input.model,
                     usage: value.usage,
@@ -259,7 +262,11 @@ export namespace SessionProcessor {
                     sessionID: input.sessionID,
                     messageID: input.assistantMessage.parentID,
                   })
+                  if (await SessionCompaction.isOverflow({ tokens: usage.tokens, model: input.model })) {
+                    needsCompaction = true
+                  }
                   break
+                }
 
                 case "text-start":
                   currentText = {
@@ -309,6 +316,7 @@ export namespace SessionProcessor {
                   })
                   continue
               }
+              if (needsCompaction) break
             }
           } catch (e: any) {
             log.error("process", {
@@ -354,6 +362,7 @@ export namespace SessionProcessor {
           }
           input.assistantMessage.time.completed = Date.now()
           await Session.updateMessage(input.assistantMessage)
+          if (needsCompaction) return "compact"
           if (blocked) return "stop"
           if (input.assistantMessage.error) return "stop"
           return "continue"
