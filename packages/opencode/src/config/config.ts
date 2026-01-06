@@ -3,7 +3,7 @@ import path from "path"
 import os from "os"
 import z from "zod"
 import { ModelsDev } from "../provider/models"
-import { mergeDeep, pipe } from "remeda"
+import { mergeDeep } from "remeda"
 import { Global } from "../global"
 import fs from "fs/promises"
 import { lazy } from "../util/lazy"
@@ -15,21 +15,29 @@ import { Instance } from "../project/instance"
 export namespace Config {
   const log = Log.create({ service: "config" })
 
+  function mergeConfig(target: Info, source: Info): Info {
+    const merged = mergeDeep(target, source)
+    if (target.instructions && source.instructions) {
+      merged.instructions = Array.from(new Set([...target.instructions, ...source.instructions]))
+    }
+    return merged
+  }
+
   export const state = Instance.state(async () => {
     let result = await global()
 
     // Override with custom config if provided
     if (Flag.OPENCODE_CONFIG) {
-      result = mergeDeep(result, await loadFile(Flag.OPENCODE_CONFIG))
+      result = mergeConfig(result, await loadFile(Flag.OPENCODE_CONFIG))
       log.debug("loaded custom config", { path: Flag.OPENCODE_CONFIG })
     }
 
     for (const file of ["opencode.jsonc", "opencode.json"]) {
-      result = mergeDeep(result, await loadFile(path.join(Instance.directory, file)))
+      result = mergeConfig(result, await loadFile(path.join(Instance.directory, file)))
     }
 
     if (Flag.OPENCODE_CONFIG_CONTENT) {
-      result = mergeDeep(result, JSON.parse(Flag.OPENCODE_CONFIG_CONTENT))
+      result = mergeConfig(result, JSON.parse(Flag.OPENCODE_CONFIG_CONTENT))
       log.debug("loaded custom config from OPENCODE_CONFIG_CONTENT")
     }
 
@@ -483,7 +491,20 @@ export namespace Config {
         .record(z.string(), Provider)
         .optional()
         .describe("Custom provider configurations and model overrides"),
-      mcp: z.record(z.string(), Mcp).optional().describe("MCP (Model Context Protocol) server configurations"),
+      mcp: z
+        .record(
+          z.string(),
+          z.union([
+            Mcp,
+            z
+              .object({
+                enabled: z.boolean(),
+              })
+              .strict(),
+          ]),
+        )
+        .optional()
+        .describe("MCP (Model Context Protocol) server configurations"),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
       layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
       permission: z
@@ -561,12 +582,10 @@ export namespace Config {
   export type Info = z.output<typeof Info>
 
   export const global = lazy(async () => {
-    let result: Info = pipe(
-      {},
-      mergeDeep(await loadFile(path.join(Global.Path.config, "config.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "opencode.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "opencode.jsonc"))),
-    )
+    let result: Info = {}
+    result = mergeConfig(result, await loadFile(path.join(Global.Path.config, "config.json")))
+    result = mergeConfig(result, await loadFile(path.join(Global.Path.config, "opencode.json")))
+    result = mergeConfig(result, await loadFile(path.join(Global.Path.config, "opencode.jsonc")))
 
     await import(path.join(Global.Path.config, "config"), {
       with: {
@@ -577,7 +596,7 @@ export namespace Config {
         const { provider, model, ...rest } = mod.default
         if (provider && model) result.model = `${provider}/${model}`
         result["$schema"] = "https://opencode.ai/config.json"
-        result = mergeDeep(result, rest)
+        result = mergeConfig(result, rest)
         await Bun.write(path.join(Global.Path.config, "config.json"), JSON.stringify(result, null, 2))
         await fs.unlink(path.join(Global.Path.config, "config"))
       })

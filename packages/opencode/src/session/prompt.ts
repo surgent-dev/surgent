@@ -501,7 +501,28 @@ export namespace SessionPrompt {
         })
       }
 
-      const sessionMessages = msgs
+      const sessionMessages = msgs.map((msg) => ({
+        info: msg.info,
+        parts: msg.parts.map((part) => ({ ...part })),
+      }))
+
+      if (step > 1 && lastFinished) {
+        for (const msg of sessionMessages) {
+          if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
+          for (const part of msg.parts) {
+            if (part.type !== "text" || part.ignored || part.synthetic) continue
+            if (!part.text.trim()) continue
+            part.text = [
+              "<system-reminder>",
+              "The user sent the following message:",
+              part.text,
+              "",
+              "Please address this message and continue with your tasks.",
+              "</system-reminder>",
+            ].join("\n")
+          }
+        }
+      }
 
       const result = await processor.process({
         user: lastUser,
