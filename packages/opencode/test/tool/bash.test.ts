@@ -386,6 +386,39 @@ describe("tool.bash permissions", () => {
     })
   })
 
+  test("allows rm inside project when external_directory is deny", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "opencode.json"),
+          JSON.stringify({
+            permission: {
+              external_directory: "deny",
+              bash: {
+                "*": "allow",
+              },
+            },
+          }),
+        )
+        await Bun.write(path.join(dir, "delete-me.txt"), "ok")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          {
+            command: "rm delete-me.txt",
+            description: "Remove temp file",
+          },
+          ctx,
+        )
+        expect(result.metadata.exit).toBe(0)
+      },
+    })
+  })
+
   test("handles multiple commands in sequence", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

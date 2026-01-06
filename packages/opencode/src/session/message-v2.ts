@@ -478,7 +478,7 @@ export namespace MessageV2 {
           role: "assistant",
           parts: [],
         }
-        result.push(assistantMessage)
+        const attachmentMessages: UIMessage[] = []
         for (const part of msg.parts) {
           if (part.type === "text")
             assistantMessage.parts.push({
@@ -493,7 +493,7 @@ export namespace MessageV2 {
           if (part.type === "tool") {
             if (part.state.status === "completed") {
               if (part.state.attachments?.length) {
-                result.push({
+                attachmentMessages.push({
                   id: Identifier.ascending("message"),
                   role: "user",
                   parts: [
@@ -536,6 +536,12 @@ export namespace MessageV2 {
               providerMetadata: part.metadata,
             })
           }
+        }
+        if (attachmentMessages.length > 0) {
+          result.push(...attachmentMessages)
+        }
+        if (assistantMessage.parts.length > 0) {
+          result.push(assistantMessage)
         }
       }
     }
