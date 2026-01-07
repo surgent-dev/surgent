@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import type { Message, Part, ToolPart, TextPart, ReasoningPart, FilePart, Permission } from "@opencode-ai/sdk";
-import { ChevronDown, Undo2, CheckCircle2, Eye, FileText, FilePenLine, Trash2, Terminal, Search, Globe, ListTodo, Play, Loader2, AlertCircle } from "lucide-react";
+import { Undo2, CheckCircle2, Eye, FileText, FilePenLine, Trash2, Terminal, Search, Globe, ListTodo, Play, Loader2, AlertCircle } from "lucide-react";
 import { ShimmeringText } from "@/components/ui/shimmer-text";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -148,18 +148,18 @@ function Tool({ part, permission, onRespondPermission, responding, respondError 
     if (part.state.status === "error") {
       return (
         <div className="flex items-center gap-1 py-0.5 text-[11px] sm:text-xs text-muted-foreground/60">
-          <ChevronDown className={`size-2.5 sm:size-3 transition-transform shrink-0 ${expanded ? "" : "-rotate-90"}`} />
+          <Icon className="size-2.5 sm:size-3 shrink-0" />
           <span>Skipped {target || cfg.done}</span>
         </div>
       );
     }
 
     return (
-      <div className="flex items-center gap-1 py-0.5 sm:py-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
-        <ChevronDown className={`size-2.5 sm:size-3 transition-transform shrink-0 ${expanded ? "" : "-rotate-90"}`} />
-        <Icon className="size-2.5 sm:size-3.5 shrink-0" />
+      <div className="group flex items-center gap-1 py-0.5 sm:py-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
+        <Icon className={`size-2.5 sm:size-3.5 shrink-0 ${expanded ? "text-foreground" : ""}`} />
         <span>{cfg.done}</span>
         {target && <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">{target}</code>}
+        <span className={`text-[10px] transition-opacity ${expanded ? "opacity-60" : "opacity-0 group-hover:opacity-60"}`}>{expanded ? "▾" : "▸"}</span>
       </div>
     );
   })();
@@ -247,8 +247,8 @@ function Thinking({ text, streaming, open, toggle }: { text: string; streaming: 
   return (
     <div className="my-1">
       <button onClick={toggle} className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ChevronDown className={`size-2.5 sm:size-3.5 transition-transform shrink-0 ${open ? "" : "-rotate-90"}`} />
-        <span className="font-medium">{streaming ? "Thinking..." : "Thoughts"}</span>
+        <span className={`font-medium ${open ? "text-foreground" : ""}`}>{streaming ? "Thinking..." : "Thoughts"}</span>
+        {!streaming && <span className="text-[10px] opacity-60">{open ? "▾" : "▸"}</span>}
       </button>
       {open && (
         <div className="pl-2 sm:pl-5 pt-1 sm:pt-1.5 text-[11px] sm:text-sm text-muted-foreground border-l-2 border-muted ml-1 sm:ml-1.5 min-w-0">

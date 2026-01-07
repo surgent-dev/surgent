@@ -15,8 +15,6 @@ export class HttpError extends Error {
   }
 }
 import { buildDeploymentConfig, parseWranglerConfig, deployToDispatch } from "@/apis/deploy";
-import { createProjectOnTeam, createDeployKey, setDeploymentEnvVars } from "@/apis/convex";
-import { exportJWK, exportPKCS8, generateKeyPair } from "jose";
 import { parse as parseDotEnv } from "dotenv";
 import { auth } from "@/lib/auth";
 
@@ -198,16 +196,6 @@ async function getOrCreateSandbox(opts: { port: number; workingDirectory: string
 }
 
 
-async function generateJwks(): Promise<{ jwks: string; privateKey: string }> {
-  const keys = await generateKeyPair('RS256', { extractable: true });
-  const privateKey = await exportPKCS8(keys.privateKey);
-  const publicKey = await exportJWK(keys.publicKey);
-  return {
-    jwks: JSON.stringify({ keys: [{ use: 'sig', ...publicKey }] }),
-    privateKey: privateKey.trimEnd().replace(/\n/g, ' '),
-  };
-}
-
 // ============================================================================
 // Main Functions
 // ============================================================================
@@ -345,46 +333,12 @@ export async function initializeProject(args: InitializeProjectArgs): Promise<{ 
 
   if (initScript) await sandbox.exec(buildBashCommand(workingDirectory, initScript), { timeoutSeconds: 1800 });
 
-  let convexMetadata: any;
-  if (args.initConvex) {
-    const convexProject = await createProjectOnTeam({ name: args.name || "app", deploymentType: "dev" });
-    const deployKey = await createDeployKey(convexProject.deploymentName);
-    
-    const envContent = [
-      `CONVEX_DEPLOYMENT=${convexProject.deploymentName}`,
-      `CONVEX_URL=${convexProject.deploymentUrl}`,
-      `CONVEX_DEPLOY_KEY=${deployKey}`,
-      `VITE_CONVEX_URL=${convexProject.deploymentUrl}`,
-      `VITE_APP_URL=${previewUrl}`,
-    ].join("\n") + "\n";
-    
-    await sandbox.exec(buildBashCommand(workingDirectory, `printf %s ${shellQuote(envContent)} > .env.local`), { timeoutSeconds: 30 });
-
-    try {
-      const { jwks, privateKey } = await generateJwks();
-      await setDeploymentEnvVars(convexProject.deploymentUrl, deployKey, { JWKS: jwks, JWT_PRIVATE_KEY: privateKey, SANDBOX_PREVIEW_URL: previewUrl });
-    } catch (err) {
-      console.error('[convex] env bootstrap failed', err);
-    }
-
-    await sandbox.exec("bun run convex:codegen", { cwd: workingDirectory, timeoutSeconds: 120 });
-    await sandbox.exec("bun run convex:once", { cwd: workingDirectory, timeoutSeconds: 180 });
-
-    convexMetadata = {
-      projectId: convexProject.projectId,
-      projectSlug: convexProject.projectSlug,
-      deploymentName: convexProject.deploymentName,
-      deploymentUrl: convexProject.deploymentUrl,
-      deployKey,
-    };
-  }
-
   if (devScript) {
     await ensurePm2Process(sandbox, workingDirectory, processName, devScript);
   }
 
   await ProjectService.updateProject(projectId, {
-    metadata: { workingDirectory, processName, startCommand: devScript, ...(convexMetadata ? { convex: convexMetadata } : {}) },
+    metadata: { workingDirectory, processName, startCommand: devScript },
     sandbox: { id: sandbox.sandboxId, previewUrl, status: "started", isInitialized: true },
   });
 
