@@ -1,5 +1,4 @@
 import { realpathSync } from "fs"
-import { exists } from "fs/promises"
 import { dirname, join, relative } from "path"
 
 export namespace Filesystem {
@@ -31,7 +30,7 @@ export namespace Filesystem {
     const result = []
     while (true) {
       const search = join(current, target)
-      if (await exists(search)) result.push(search)
+      if (await Bun.file(search).exists()) result.push(search)
       if (stop === current) break
       const parent = dirname(current)
       if (parent === current) break
@@ -46,7 +45,7 @@ export namespace Filesystem {
     while (true) {
       for (const target of targets) {
         const search = join(current, target)
-        if (await exists(search)) yield search
+        if (await Bun.file(search).exists()) yield search
       }
       if (stop === current) break
       const parent = dirname(current)
