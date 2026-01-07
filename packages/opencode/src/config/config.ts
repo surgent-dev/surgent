@@ -15,6 +15,10 @@ import { Instance } from "../project/instance"
 export namespace Config {
   const log = Log.create({ service: "config" })
 
+  function cwdConfigRoot() {
+    return path.join(process.cwd(), ".config", "opencode")
+  }
+
   function mergeConfig(target: Info, source: Info): Info {
     const merged = mergeDeep(target, source)
     if (target.instructions && source.instructions) {
@@ -44,7 +48,7 @@ export namespace Config {
     result.agent = result.agent || {}
     result.mode = result.mode || {}
 
-    const directories = [Global.Path.config, Instance.directory]
+    const directories = [Global.Path.config, cwdConfigRoot()]
 
     // Migrate deprecated mode field to agent field
     for (const [name, mode] of Object.entries(result.mode)) {
@@ -583,11 +587,30 @@ export namespace Config {
 
   export const global = lazy(async () => {
     let result: Info = {}
+    const cwdRoot = cwdConfigRoot()
     result = mergeConfig(result, await loadFile(path.join(Global.Path.config, "config.json")))
     result = mergeConfig(result, await loadFile(path.join(Global.Path.config, "opencode.json")))
     result = mergeConfig(result, await loadFile(path.join(Global.Path.config, "opencode.jsonc")))
+    result = mergeConfig(result, await loadFile(path.join(cwdRoot, "config.json")))
+    result = mergeConfig(result, await loadFile(path.join(cwdRoot, "opencode.json")))
+    result = mergeConfig(result, await loadFile(path.join(cwdRoot, "opencode.jsonc")))
 
     await import(path.join(Global.Path.config, "config"), {
+      with: {
+        type: "toml",
+      },
+    })
+      .then(async (mod) => {
+        const { provider, model, ...rest } = mod.default
+        if (provider && model) result.model = `${provider}/${model}`
+        result["$schema"] = "https://opencode.ai/config.json"
+        result = mergeConfig(result, rest)
+        await Bun.write(path.join(Global.Path.config, "config.json"), JSON.stringify(result, null, 2))
+        await fs.unlink(path.join(Global.Path.config, "config"))
+      })
+      .catch(() => {})
+
+    await import(path.join(cwdRoot, "config"), {
       with: {
         type: "toml",
       },
