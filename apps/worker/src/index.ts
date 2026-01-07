@@ -102,5 +102,3 @@ Bun.serve({
 })
 
 console.log(`[worker] listening on http://localhost:${port}`)
-
-export default app
