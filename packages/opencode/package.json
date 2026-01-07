@@ -22,6 +22,7 @@
     "@babel/core": "7.28.4",
     "@octokit/webhooks-types": "7.6.1",
     "@standard-schema/spec": "1.0.0",
+    "@tsconfig/bun": "catalog:",
     "@types/babel__core": "7.20.5",
     "@types/bun": "catalog:",
     "@types/turndown": "5.0.5",
