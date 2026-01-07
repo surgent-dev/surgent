@@ -1,5 +1,6 @@
 import { realpathSync } from "fs"
-import { relative } from "path"
+import { exists } from "fs/promises"
+import { dirname, join, relative } from "path"
 
 export namespace Filesystem {
   /**
@@ -25,4 +26,32 @@ export namespace Filesystem {
     return !relative(parent, child).startsWith("..")
   }
 
+  export async function findUp(target: string, start: string, stop?: string) {
+    let current = start
+    const result = []
+    while (true) {
+      const search = join(current, target)
+      if (await exists(search)) result.push(search)
+      if (stop === current) break
+      const parent = dirname(current)
+      if (parent === current) break
+      current = parent
+    }
+    return result
+  }
+
+  export async function* up(options: { targets: string[]; start: string; stop?: string }) {
+    const { targets, start, stop } = options
+    let current = start
+    while (true) {
+      for (const target of targets) {
+        const search = join(current, target)
+        if (await exists(search)) yield search
+      }
+      if (stop === current) break
+      const parent = dirname(current)
+      if (parent === current) break
+      current = parent
+    }
+  }
 }

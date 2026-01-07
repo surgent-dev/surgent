@@ -1,0 +1,26 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // "plugin": ["opencode-openai-codex-auth"],
+  // "enterprise": {
+  //   "url": "https://enterprise.dev.opencode.ai",
+  // },
+  "instructions": ["STYLE_GUIDE.md"],
+  "provider": {
+    "opencode": {
+      "options": {}
+    }
+  },
+  // "mcp": {
+  //   "convex": {
+  //     "type": "remote",
+  //     "url": "http://localhost:4000/api/mcp/convex",
+  //     "oauth": false,
+  //     "headers": {
+  //       "x-api-key": "{env:SURGENT_API_KEY}"
+  //     }
+  //   }
+  // },
+  "tools": {
+    // "convex_*": false
+  }
+}

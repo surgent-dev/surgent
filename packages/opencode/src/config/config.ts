@@ -3,21 +3,20 @@ import path from "path"
 import os from "os"
 import z from "zod"
 import { ModelsDev } from "../provider/models"
-import { mergeDeep } from "remeda"
+import { mergeDeep, unique } from "remeda"
 import { Global } from "../global"
 import fs from "fs/promises"
 import { lazy } from "../util/lazy"
 import { NamedError } from "@opencode-ai/util/error"
 import { Flag } from "../flag/flag"
+import { Auth } from "../auth"
 import { type ParseError as JsoncParseError, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import { Instance } from "../project/instance"
+import { Filesystem } from "../util/filesystem"
+import { ConfigMarkdown } from "./markdown"
 
 export namespace Config {
   const log = Log.create({ service: "config" })
-
-  function cwdConfigRoot() {
-    return path.join(process.cwd(), ".config", "opencode")
-  }
 
   function mergeConfig(target: Info, source: Info): Info {
     const merged = mergeDeep(target, source)
@@ -27,7 +26,115 @@ export namespace Config {
     return merged
   }
 
+  const COMMAND_GLOB = new Bun.Glob("{command,commands}/**/*.md")
+  async function loadCommand(dir: string) {
+    const result: Record<string, Command> = {}
+    for await (const item of COMMAND_GLOB.scan({
+      absolute: true,
+      followSymlinks: true,
+      dot: true,
+      cwd: dir,
+    })) {
+      const md = await ConfigMarkdown.parse(item)
+      if (!md.data) continue
+
+      const name = (() => {
+        const patterns = ["/.opencode/command/", "/command/"]
+        const pattern = patterns.find((p) => item.includes(p))
+
+        if (pattern) {
+          const index = item.indexOf(pattern)
+          return item.slice(index + pattern.length, -3)
+        }
+        return path.basename(item, ".md")
+      })()
+
+      const config = {
+        name,
+        ...md.data,
+        template: md.content.trim(),
+      }
+      const parsed = Command.safeParse(config)
+      if (parsed.success) {
+        result[config.name] = parsed.data
+        continue
+      }
+      throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
+    }
+    return result
+  }
+
+  const AGENT_GLOB = new Bun.Glob("{agent,agents}/**/*.md")
+  async function loadAgent(dir: string) {
+    const result: Record<string, Agent> = {}
+    for await (const item of AGENT_GLOB.scan({
+      absolute: true,
+      followSymlinks: true,
+      dot: true,
+      cwd: dir,
+    })) {
+      const md = await ConfigMarkdown.parse(item)
+      if (!md.data) continue
+
+      let agentName = path.basename(item, ".md")
+      const agentFolderPath = item.includes("/.opencode/agent/")
+        ? item.split("/.opencode/agent/")[1]
+        : item.includes("/agent/")
+          ? item.split("/agent/")[1]
+          : agentName + ".md"
+
+      if (agentFolderPath.includes("/")) {
+        const relativePath = agentFolderPath.replace(".md", "")
+        const pathParts = relativePath.split("/")
+        agentName = pathParts.slice(0, -1).join("/") + "/" + pathParts[pathParts.length - 1]
+      }
+
+      const config = {
+        name: agentName,
+        ...md.data,
+        prompt: md.content.trim(),
+      }
+      const parsed = Agent.safeParse(config)
+      if (parsed.success) {
+        result[config.name] = parsed.data
+        continue
+      }
+      throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
+    }
+    return result
+  }
+
+  const MODE_GLOB = new Bun.Glob("{mode,modes}/*.md")
+  async function loadMode(dir: string) {
+    const result: Record<string, Agent> = {}
+    for await (const item of MODE_GLOB.scan({
+      absolute: true,
+      followSymlinks: true,
+      dot: true,
+      cwd: dir,
+    })) {
+      const md = await ConfigMarkdown.parse(item)
+      if (!md.data) continue
+
+      const config = {
+        name: path.basename(item, ".md"),
+        ...md.data,
+        prompt: md.content.trim(),
+      }
+      const parsed = Agent.safeParse(config)
+      if (parsed.success) {
+        result[config.name] = {
+          ...parsed.data,
+          mode: "primary" as const,
+        }
+        continue
+      }
+    }
+    return result
+  }
+
   export const state = Instance.state(async () => {
+    const auth = await Auth.all()
     let result = await global()
 
     // Override with custom config if provided
@@ -37,7 +144,10 @@ export namespace Config {
     }
 
     for (const file of ["opencode.jsonc", "opencode.json"]) {
-      result = mergeConfig(result, await loadFile(path.join(Instance.directory, file)))
+      const found = await Filesystem.findUp(file, Instance.directory, Global.Path.home)
+      for (const resolved of found.toReversed()) {
+        result = mergeConfig(result, await loadFile(resolved))
+      }
     }
 
     if (Flag.OPENCODE_CONFIG_CONTENT) {
@@ -45,10 +155,53 @@ export namespace Config {
       log.debug("loaded custom config from OPENCODE_CONFIG_CONTENT")
     }
 
+    for (const [key, value] of Object.entries(auth)) {
+      if (value.type === "wellknown") {
+        process.env[value.key] = value.token
+        const wellknown = (await fetch(`${key}/.well-known/opencode`).then((x) => x.json())) as any
+        result = mergeConfig(result, await load(JSON.stringify(wellknown.config ?? {}), process.cwd()))
+      }
+    }
+
     result.agent = result.agent || {}
     result.mode = result.mode || {}
 
-    const directories = [Global.Path.config, cwdConfigRoot()]
+    const directories = [
+      Global.Path.config,
+      ...(await Array.fromAsync(
+        Filesystem.up({
+          targets: [".opencode"],
+          start: Instance.directory,
+          stop: Global.Path.home,
+        }),
+      )),
+      ...(await Array.fromAsync(
+        Filesystem.up({
+          targets: [".opencode"],
+          start: Global.Path.home,
+          stop: Global.Path.home,
+        }),
+      )),
+    ]
+
+    if (Flag.OPENCODE_CONFIG_DIR) {
+      directories.push(Flag.OPENCODE_CONFIG_DIR)
+      log.debug("loading config from OPENCODE_CONFIG_DIR", { path: Flag.OPENCODE_CONFIG_DIR })
+    }
+
+    for (const dir of unique(directories)) {
+      if (dir.endsWith(".opencode") || dir === Flag.OPENCODE_CONFIG_DIR) {
+        for (const file of ["opencode.jsonc", "opencode.json"]) {
+          log.debug(`loading config from ${path.join(dir, file)}`)
+          result = mergeConfig(result, await loadFile(path.join(dir, file)))
+        }
+        result.agent ??= {}
+        result.mode ??= {}
+      }
+      result.command = mergeDeep(result.command ?? {}, await loadCommand(dir))
+      result.agent = mergeDeep(result.agent ?? {}, await loadAgent(dir))
+      result.agent = mergeDeep(result.agent ?? {}, await loadMode(dir))
+    }
 
     // Migrate deprecated mode field to agent field
     for (const [name, mode] of Object.entries(result.mode)) {
@@ -587,30 +740,11 @@ export namespace Config {
 
   export const global = lazy(async () => {
     let result: Info = {}
-    const cwdRoot = cwdConfigRoot()
     result = mergeConfig(result, await loadFile(path.join(Global.Path.config, "config.json")))
     result = mergeConfig(result, await loadFile(path.join(Global.Path.config, "opencode.json")))
     result = mergeConfig(result, await loadFile(path.join(Global.Path.config, "opencode.jsonc")))
-    result = mergeConfig(result, await loadFile(path.join(cwdRoot, "config.json")))
-    result = mergeConfig(result, await loadFile(path.join(cwdRoot, "opencode.json")))
-    result = mergeConfig(result, await loadFile(path.join(cwdRoot, "opencode.jsonc")))
 
     await import(path.join(Global.Path.config, "config"), {
-      with: {
-        type: "toml",
-      },
-    })
-      .then(async (mod) => {
-        const { provider, model, ...rest } = mod.default
-        if (provider && model) result.model = `${provider}/${model}`
-        result["$schema"] = "https://opencode.ai/config.json"
-        result = mergeConfig(result, rest)
-        await Bun.write(path.join(Global.Path.config, "config.json"), JSON.stringify(result, null, 2))
-        await fs.unlink(path.join(Global.Path.config, "config"))
-      })
-      .catch(() => {})
-
-    await import(path.join(cwdRoot, "config"), {
       with: {
         type: "toml",
       },
