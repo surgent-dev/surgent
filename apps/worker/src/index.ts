@@ -37,7 +37,7 @@ app.use(
   cors({
     origin: (origin) => {
       const trustedOrigins = [
-        config.server.clientOrigin,
+        ...config.server.clientOrigins,
         'http://localhost:3000',
         'http://localhost:3001',
       ]
