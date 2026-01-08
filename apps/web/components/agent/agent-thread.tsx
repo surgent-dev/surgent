@@ -3,10 +3,8 @@
 import React, { useState, useMemo } from "react";
 import type { Permission as PermissionNamespace } from "opencode/permission";
 import type { MessageV2 } from "opencode/session/message-v2";
-import { Undo2, CheckCircle2, Eye, FileText, FilePenLine, Trash2, Terminal, Search, Globe, ListTodo, Play, Loader2, AlertCircle } from "lucide-react";
+import { CheckCircle2, Eye, FileText, FilePenLine, Trash2, Terminal, Search, Globe, ListTodo, Play, Loader2, AlertCircle } from "lucide-react";
 import { ShimmeringText } from "@/components/ui/shimmer-text";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Markdown } from "@/components/ui/markdown";
 import { useRespondPermission } from "@/queries/chats";
 
@@ -298,24 +296,19 @@ function ApiError({ error }: { error: { code?: string; data?: { code?: string; m
   );
 }
 
-export function AgentThread({ projectId, sessionId, messages, partsMap, permissions, onRevert, revertMessageId, reverting, revertingMessageId, isWorking }: {
+export function AgentThread({ projectId, sessionId, messages, partsMap, permissions, isWorking }: {
   projectId?: string;
   sessionId: string;
   messages: Message[];
   partsMap: Record<string, Part[]>;
   permissions?: Permission[];
-  onRevert?: (id: string) => void;
-  revertMessageId?: string;
-  reverting?: boolean;
-  revertingMessageId?: string;
   isWorking?: boolean;
 }) {
   const [openThoughts, setOpenThoughts] = useState<Record<string, boolean>>({});
   const [permissionErrors, setPermissionErrors] = useState<Record<string, string>>({});
   const respondPermission = useRespondPermission(projectId, sessionId);
 
-  const visible = revertMessageId ? messages.filter(m => m.id < revertMessageId) : messages;
-  const turns = useMemo(() => groupTurns(visible), [visible]);
+  const turns = useMemo(() => groupTurns(messages), [messages]);
 
   const permissionByCallId = useMemo(() => {
     const map = new Map<string, Permission>();
@@ -327,7 +320,7 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
 
   const toolCallIds = useMemo(() => {
     const ids = new Set<string>();
-    visible.forEach(m => {
+    messages.forEach(m => {
       (partsMap[m.id] ?? []).forEach(p => {
         if (p.type !== "tool") return;
         const toolPart = p as ToolPart;
@@ -336,7 +329,7 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
       });
     });
     return ids;
-  }, [partsMap, visible]);
+  }, [partsMap, messages]);
 
   const unmatchedPermissions = useMemo(() => {
     if (!permissions?.length) return [];
@@ -455,19 +448,9 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
                 </div>
               )}
               <div className="relative max-w-[90%] sm:max-w-[80%] md:max-w-[70%] rounded-xl bg-muted/50 border px-2.5 sm:px-3 py-2 overflow-hidden">
-                <div className="whitespace-pre-wrap text-sm sm:text-[15px] pr-5 sm:pr-6 break-all">
+                <div className="whitespace-pre-wrap text-sm sm:text-[15px] break-all">
                   {text || <span className="text-muted-foreground italic">Sending...</span>}
                 </div>
-                {onRevert && text && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" className="absolute top-1 sm:top-1.5 right-1 sm:right-1.5 size-5 sm:size-6 text-muted-foreground/40 hover:text-muted-foreground" onClick={() => onRevert(turn.user.id)} disabled={reverting}>
-                        {reverting && revertingMessageId === turn.user.id ? <Loader2 className="size-3 sm:size-3.5 animate-spin" /> : <Undo2 className="size-3 sm:size-3.5" />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Undo</TooltipContent>
-                  </Tooltip>
-                )}
               </div>
             </div>
 

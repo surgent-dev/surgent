@@ -15,13 +15,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { http } from "@/lib/http";
-import { MessageCircle, Loader2, RotateCcw, MessagesSquare, Terminal, Plus, History, Check, AlertCircle, X, RefreshCw } from "lucide-react";
+import { MessageCircle, Loader2, MessagesSquare, Terminal, Plus, History, Check, AlertCircle, X, RefreshCw } from "lucide-react";
 import ChatInput, { type FilePart, type ProviderModel } from "./chat-input";
 import TerminalWidget from "./terminal/terminal-widget";
 import { useSandbox } from "@/hooks/use-sandbox";
 import useAgentStream, { type SessionStatusRetry } from "@/lib/use-agent-stream";
 import { AgentThread } from "@/components/agent/agent-thread";
-import { useSessionsQuery, useCreateSession, useSendMessage, useAbortSession, useRevertMessage, useUnrevert } from "@/queries/chats";
+import { useSessionsQuery, useCreateSession, useSendMessage, useAbortSession } from "@/queries/chats";
 import ProviderDialog from "@/components/provider-dialog";
 
 export interface ConversationProps {
@@ -131,7 +131,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const [tab, setTab] = useState<"chat" | "terminal">("chat");
   const [mode, setMode] = useState<"plan" | "build">("build");
   const [providerOpen, setProviderOpen] = useState(false);
-  const [revertingId, setRevertingId] = useState<string>();
   const [inputValue, setInputValue] = useState("");
   const [selectedModel, setSelectedModel] = useState<{ modelId: string; providerId: string }>({ modelId: "gemini-3-flash-preview", providerId: "google" });
   const lastSentRef = useRef<string>("");
@@ -144,13 +143,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const create = useCreateSession(projectId);
   const send = useSendMessage(projectId);
   const abort = useAbortSession();
-  const revert = useRevertMessage(projectId);
-  const unrevert = useUnrevert(projectId);
 
   const activeId = (storedSessionId && sessions.some(s => s.id === storedSessionId))
     ? storedSessionId
     : sessions[0]?.id;
-  const busy = revert.isPending || unrevert.isPending;
   const { messages, parts, permissions, session, connected, status, loading, compacting, error: sessionError, dismissError, isRetrying, retryInfo } = useAgentStream({ projectId, sessionId: activeId });
   const working = status?.type !== undefined && status.type !== "idle";
 
@@ -202,13 +198,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       setInputValue(lastSentRef.current);
       lastSentRef.current = "";
     }
-  };
-
-  const handleRevert = async (messageId: string) => {
-    if (!activeId || busy) return;
-    setRevertingId(messageId);
-    try { await revert.mutateAsync({ sessionId: activeId, messageId }); }
-    finally { setRevertingId(undefined); }
   };
 
   const handleCreate = () =>
@@ -449,10 +438,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                   messages={messages}
                   partsMap={parts}
                   permissions={permissions}
-                  onRevert={handleRevert}
-                  revertMessageId={session?.revert?.messageID}
-                  reverting={busy}
-                  revertingMessageId={revertingId}
                   isWorking={working}
                 />
               ) : (
@@ -464,23 +449,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
         {/* Input */}
         <div className="px-2 py-2 shrink-0 relative @md/conversation:px-4 @md/conversation:py-4">
-          {session?.revert?.messageID && (
-            <div className="absolute -top-10 right-2 sm:right-4 z-10">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => unrevert.mutate({ sessionId: activeId! })}
-                disabled={unrevert.isPending}
-                className="bg-background/90 backdrop-blur-sm shadow-sm text-xs @md/conversation:text-sm"
-              >
-                {unrevert.isPending ? (
-                  <><Loader2 className="size-3 sm:size-3.5 mr-1 sm:mr-2 animate-spin" />Restoring...</>
-                ) : (
-                  <><RotateCcw className="size-3 sm:size-3.5 mr-1 sm:mr-2" />Restore</>
-                )}
-              </Button>
-            </div>
-          )}
           <div className="max-w-3xl mx-auto">
             {lastAssistantError && (
               <div className={cn("mb-2 px-3 py-2 rounded-lg border text-xs", lastAssistantError.isContext ? "bg-warning/10 border-warning/20 text-warning" : "bg-muted/50 text-muted-foreground")}>
@@ -492,12 +460,11 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                     <span>New session</span>
                   </button>
                 </div>
-                {!lastAssistantError.isContext && <p className="text-muted-foreground/50 mt-1 pl-5">or revert your last message</p>}
               </div>
             )}
             <ChatInput
               onSubmit={handleSend}
-              disabled={!connected || working || busy}
+              disabled={!connected || working}
               placeholder={!connected ? "Connecting..." : working ? "Working..." : "Ask anything..."}
               mode={mode}
               onToggleMode={() => setMode(m => m === "plan" ? "build" : "plan")}

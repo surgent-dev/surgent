@@ -125,38 +125,6 @@ export function useAbortSession() {
   })
 }
 
-async function revertMessage(projectId: string, sessionId: string, messageId: string): Promise<boolean> {
-  const data = await http
-    .post(`api/agent/${projectId}/session/${sessionId}/revert`, { json: { messageID: messageId } })
-    .json()
-  return data as boolean
-}
-
-async function unrevertSession(projectId: string, sessionId: string): Promise<boolean> {
-  const data = await http.post(`api/agent/${projectId}/session/${sessionId}/unrevert`).json()
-  return data as boolean
-}
-
-export function useRevertMessage(projectId?: string) {
-  const queryClient = useQueryClient()
-  return useMutation<boolean, unknown, { sessionId: string; messageId: string }>({
-    mutationFn: ({ sessionId, messageId }) => revertMessage(projectId as string, sessionId, messageId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sessions', projectId] })
-    },
-  })
-}
-
-export function useUnrevert(projectId?: string) {
-  const queryClient = useQueryClient()
-  return useMutation<boolean, unknown, { sessionId: string }>({
-    mutationFn: ({ sessionId }) => unrevertSession(projectId as string, sessionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sessions', projectId] })
-    },
-  })
-}
-
 // --- Delete session ---
 
 async function deleteSession(projectId: string, sessionId: string): Promise<boolean> {
