@@ -16,6 +16,14 @@ import { Command } from "../command"
 
 import type { Provider } from "@/provider/provider"
 
+export type FileDiff = {
+  file: string
+  before: string
+  after: string
+  additions: number
+  deletions: number
+}
+
 export namespace Session {
   const log = Log.create({ service: "session" })
 

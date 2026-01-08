@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import type { FileDiff } from "@opencode-ai/sdk";
+import type { FileDiff } from "opencode/session";
 import DiffView from "@/components/diff/diff-view";
 import { cn } from "@/lib/utils";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -95,4 +95,3 @@ export default function DiffViewerWithSidebar({ diffs, className, collapseUnchan
     </ResizablePanelGroup>
   );
 }
-

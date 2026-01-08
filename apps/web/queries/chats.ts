@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { Session as SessionNamespace, FileDiff } from 'opencode/session'
+import type { MessageV2 } from 'opencode/session/message-v2'
 import { http } from '@/lib/http'
-import type { Session, Message, FileDiff } from '@opencode-ai/sdk'
+
+type Session = SessionNamespace.Info
+type Message = MessageV2.Info
 
 // --- Session list & create ---
 

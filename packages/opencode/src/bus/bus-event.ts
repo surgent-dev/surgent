@@ -40,4 +40,6 @@ export namespace BusEvent {
         ref: "Event",
       })
   }
+
+  export type Event = z.infer<ReturnType<typeof payloads>>
 }
