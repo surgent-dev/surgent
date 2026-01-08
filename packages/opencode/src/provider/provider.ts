@@ -1009,10 +1009,7 @@ export namespace Provider {
 
   export function parseModel(model: string) {
     const [providerID, ...rest] = model.split("/")
-    return {
-      providerID: providerID,
-      modelID: rest.join("/"),
-    }
+    return { providerID: providerID!, modelID: rest.join("/") }
   }
 
   export const ModelNotFoundError = NamedError.create(
