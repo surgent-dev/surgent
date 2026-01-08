@@ -30,7 +30,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: surgent-worker
+  IMAGE_NAME: ${{ github.repository }}-worker
 
 jobs:
   build-and-push:
