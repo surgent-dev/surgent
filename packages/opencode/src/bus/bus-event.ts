@@ -22,23 +22,16 @@ export namespace BusEvent {
     return z
       .discriminatedUnion(
         "type",
-        registry
-          .entries()
-          .map(([type, def]) => {
-            return z
-              .object({
-                type: z.literal(type),
-                properties: def.properties,
-              })
-              .meta({
-                ref: "Event" + "." + def.type,
-              })
-          })
-          .toArray() as any,
+        [...registry.entries()].map(([type, def]) =>
+          z
+            .object({
+              type: z.literal(type),
+              properties: def.properties,
+            })
+            .meta({ ref: "Event." + def.type })
+        ) as any,
       )
-      .meta({
-        ref: "Event",
-      })
+      .meta({ ref: "Event" })
   }
 
   export type Event = z.infer<ReturnType<typeof payloads>>
