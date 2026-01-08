@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   coder:
-    image: ghcr.io/foreveranapple/surgent-coder:latest
+    image: ghcr.io/surgent-dev/surgent-coder:latest
     container_name: surgent-coder
     env_file: packages/opencode/.env
     ports:
@@ -18,7 +18,7 @@ services:
       - surgent-network
 
   worker:
-    image: ghcr.io/foreveranapple/surgent-worker:latest
+    image: ghcr.io/surgent-dev/surgent-worker:latest
     container_name: surgent-worker
     env_file: apps/worker/.env
     environment:
