@@ -39,6 +39,8 @@ ENV PORT=4096
 # OCI labels
 LABEL org.opencontainers.image.source="https://github.com/daaaaa/surgent" \
       org.opencontainers.image.description="Surgent OpenCode - AI-powered headless coding agent"
+# Install tini for proper signal handling
+RUN apt-get update && apt-get install -y tini && rm -rf /var/lib/apt/lists/*
 # Switch to non-root user
 USER bun
 # Expose port
@@ -47,5 +49,7 @@ EXPOSE 4096
 HEALTHCHECK --interval=5s --retries=2 CMD ["httpcheck", "http://127.0.0.1:4096/global/health"]
 # Set working directory to opencode package
 WORKDIR /app/packages/opencode
+# Use tini as init to handle signals properly
+ENTRYPOINT ["/usr/bin/tini", "--"]
 # Run application
 CMD ["bun", "src/index.ts"]
