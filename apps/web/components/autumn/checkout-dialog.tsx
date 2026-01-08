@@ -394,7 +394,7 @@ const PrepaidItem = ({
 						<div className="flex justify-between items-end">
 							<div className="flex gap-2 items-center">
 								<Input
-									className="h-7 w-16 focus:!ring-2"
+									className="h-7 w-16 focus:ring-2!"
 									value={quantityInput}
 									onChange={(e) => setQuantityInput(e.target.value)}
 								/>
@@ -406,11 +406,11 @@ const PrepaidItem = ({
 
 							<Button
 								onClick={handleSave}
-								className="w-14 !h-7 text-sm items-center bg-background text-foreground shadow-sm border border-border hover:bg-muted"
+								className="w-14 h-7! text-sm items-center bg-background text-foreground shadow-sm border border-border hover:bg-muted"
 								disabled={loading}
 							>
 								{loading ? (
-									<Loader2 className="text-muted-foreground animate-spin !w-4 !h-4" />
+									<Loader2 className="text-muted-foreground animate-spin w-4! h-4!" />
 								) : (
 									"Save"
 								)}
@@ -468,7 +468,7 @@ export const PricingDialogButton = ({
 			className={cn(className, "shadow-sm shadow-stone-400")}
 		>
 			{children}
-			<ArrowRight className="!h-3" />
+			<ArrowRight className="h-3!" />
 		</Button>
 	);
 };

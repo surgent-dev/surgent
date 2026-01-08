@@ -41,7 +41,7 @@ function CodeBlockCode({
     <div
       className={cn(
         "w-full overflow-x-auto font-mono",
-        "[&>pre]:p-3 [&_pre]:font-mono [&_pre]:!text-[inherit] [&_code]:!text-[inherit]",
+        "[&>pre]:p-3 [&_pre]:font-mono [&_pre]:text-inherit! [&_code]:text-inherit!",
         className,
       )}
       style={{

@@ -68,7 +68,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   }, [project, setSandboxId]);
 
   return (
-    <div className="h-[100dvh] w-full bg-background flex flex-col overflow-hidden">
+    <div className="h-dvh w-full bg-background flex flex-col overflow-hidden">
       <ProjectHeader projectId={projectId} project={project} />
       <div className="flex-1 min-h-0">
         {isMobile ? (

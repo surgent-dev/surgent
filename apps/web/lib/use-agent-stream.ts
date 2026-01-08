@@ -1,10 +1,17 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useCallback } from "react";
-import type { Event, Message, Part, Permission, Session, ApiError, ProviderAuthError, UnknownError, MessageOutputLengthError, MessageAbortedError } from "@opencode-ai/sdk";
+import type { BusEvent } from "opencode/bus";
+import type { Permission as PermissionNamespace } from "opencode/permission";
+import type { Session as SessionNamespace } from "opencode/session";
+import type { MessageV2 } from "opencode/session/message-v2";
 import { backendBaseUrl, http } from "@/lib/http";
 
-type AgentError = ProviderAuthError | UnknownError | MessageOutputLengthError | MessageAbortedError | ApiError;
+type Permission = PermissionNamespace.Info;
+type Session = SessionNamespace.Info;
+type Message = MessageV2.Info;
+type Part = MessageV2.Part;
+type AgentError = MessageV2.Assistant["error"];
 
 // Session status types matching backend SessionStatus.Info
 type SessionStatusIdle = { type: "idle" };

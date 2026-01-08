@@ -149,7 +149,7 @@ export const PricingTableContainer = ({
       <div
         className={cn(
           "flex items-center flex-col",
-          hasRecommended && "!py-10"
+          hasRecommended && "py-10!"
         )}
       >
         {multiInterval && (
@@ -227,7 +227,7 @@ export const PricingCard = ({
       )}
       <div
         className={cn(
-          "flex flex-col h-full flex-grow",
+          "flex flex-col h-full grow",
           isRecommended && "lg:translate-y-6"
         )}
       >
@@ -259,7 +259,7 @@ export const PricingCard = ({
             </div>
           </div>
           {showFeatures && featureItems.length > 0 && (
-            <div className="flex-grow px-6 mb-6">
+            <div className="grow px-6 mb-6">
               <PricingFeatureList
                 items={featureItems}
                 everythingFrom={product.display?.everything_from}
@@ -293,7 +293,7 @@ export const PricingFeatureList = ({
   className?: string;
 }) => {
   return (
-    <div className={cn("flex-grow", className)}>
+    <div className={cn("grow", className)}>
       {everythingFrom && (
         <p className="text-sm mb-4">
           Everything from {everythingFrom}, plus:
@@ -400,7 +400,7 @@ export const AnnualSwitch = ({
 
 export const RecommendedBadge = ({ recommended }: { recommended: string }) => {
   return (
-    <div className="bg-secondary absolute border text-muted-foreground text-sm font-medium lg:rounded-full px-3 lg:py-0.5 lg:top-4 lg:right-4 top-[-1px] right-[-1px] rounded-bl-lg">
+    <div className="bg-secondary absolute border text-muted-foreground text-sm font-medium lg:rounded-full px-3 lg:py-0.5 lg:top-4 lg:right-4 -top-px -right-px rounded-bl-lg">
       {recommended}
     </div>
   );
