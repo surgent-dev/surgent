@@ -1,6 +1,7 @@
 services:
   coder:
     image: ghcr.io/surgent-dev/surgent-coder:latest
+    pull-policy: always
     container_name: surgent-coder
     env_file: packages/opencode/.env
     expose:
@@ -9,6 +10,7 @@ services:
 
   worker:
     image: ghcr.io/surgent-dev/surgent-worker:latest
+    pull-policy: always
     container_name: surgent-worker
     env_file: apps/worker/.env
     environment:
