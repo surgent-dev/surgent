@@ -8,7 +8,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   jq \
   unzip \
   ripgrep \
+  fd-find \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Create fd symlink (Debian names it fdfind)
+RUN ln -s $(which fdfind) /usr/local/bin/fd
+
+# Install ast-grep CLI
+RUN bun add -g @ast-grep/cli
 
 # Install bun
 RUN curl -fsSL https://bun.sh/install | bash

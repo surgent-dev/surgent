@@ -10,6 +10,11 @@ import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
+import { DevTool } from "./dev"
+import { DevLogsTool } from "./dev-logs"
+import { DownloadToRepoTool } from "./download-to-repo"
+import { WriteToLocalEnvTool } from "./write-to-local-env"
+import { PromptEnvVariableTool } from "./prompt-env-variable"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
 import { Instance } from "../project/instance"
@@ -108,6 +113,11 @@ export namespace ToolRegistry {
       WebSearchTool,
       CodeSearchTool,
       SkillTool,
+      DevTool,
+      DevLogsTool,
+      DownloadToRepoTool,
+      WriteToLocalEnvTool,
+      PromptEnvVariableTool,
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,
     ]
