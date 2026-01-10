@@ -36,15 +36,11 @@ app.use(
   '/*',
   cors({
     origin: (origin) => {
-      const trustedOrigins = [
-        ...config.server.clientOrigins,
-        'http://localhost:3000',
-        'http://localhost:3001',
-      ]
+      const trustedOrigins = config.server.trustedOrigins
       if (origin && trustedOrigins.includes(origin)) {
         return origin
       }
-      return trustedOrigins[0]
+      return null
     },
     allowHeaders: ['Content-Type', 'Authorization'],
     allowMethods: ['POST', 'GET', 'OPTIONS', 'PATCH', 'DELETE'],
