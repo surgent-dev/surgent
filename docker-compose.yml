@@ -13,6 +13,7 @@ services:
     pull_policy: always
     container_name: surgent-worker
     env_file: apps/worker/.env
+    network_mode: host
     environment:
       OPENCODE_URL: http://coder:4096
     ports:
