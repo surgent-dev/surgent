@@ -4,7 +4,7 @@ import type { Database as DatabaseInterface } from './types'
 function createDialect(): Dialect {
   const type = process.env.POSTGRES_TYPE || 'neon'
   const url = process.env.DATABASE_URL!
-
+  console.log('CONFIG KYSELY DB', type, url)
   if (type === 'neon') {
     const { neon } = require('@neondatabase/serverless')
     const { NeonDialect } = require('kysely-neon')

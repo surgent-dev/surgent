@@ -66,9 +66,6 @@ export const config = {
     platformFeeBps: env.PLATFORM_FEE_BPS,
     platformFeeFixed: env.PLATFORM_FEE_FIXED,
   },
-  db: {
-    url: env.DATABASE_URL,
-  },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
   },
