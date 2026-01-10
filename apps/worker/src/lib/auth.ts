@@ -7,7 +7,7 @@ import { config } from './config'
 export const auth = betterAuth({
   secret: config.auth.secret,
   baseURL: config.auth.baseUrl,
-  trustedOrigins: config.server.clientOrigins,
+  trustedOrigins: config.server.trustedOrigins,
 
   plugins: [
     autumn(),

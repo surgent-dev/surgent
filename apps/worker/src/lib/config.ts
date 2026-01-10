@@ -6,7 +6,7 @@ export const config = {
   server: {
     port: env.PORT || "4000",
     clientOrigin: env.CLIENT_ORIGIN || "http://localhost:3000",
-    clientOrigins: (env.CLIENT_ORIGINS || env.CLIENT_ORIGIN || "http://localhost:3000").split(","),
+    trustedOrigins: (env.TRUSTED_ORIGINS || env.CLIENT_ORIGIN || "http://localhost:3000").split(","),
   },
   auth: {
     secret: env.BETTER_AUTH_SECRET,
