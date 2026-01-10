@@ -14,7 +14,7 @@ services:
     container_name: surgent-worker
     env_file: apps/worker/.env
     environment:
-      - OPENCODE_URL=http://coder:4096
+      OPENCODE_URL: http://coder:4096
     ports:
       - "4000:4000"
     restart: unless-stopped
