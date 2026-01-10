@@ -1,0 +1,12 @@
+.git
+node_modules
+**/node_modules
+.next
+.turbo
+dist
+coverage
+.wrangler
+.DS_Store
+.env
+.env.*
+
