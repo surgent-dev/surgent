@@ -1,6 +1,6 @@
-import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
-import { Instance } from "@/project/instance"
+import { BusEvent } from "../bus/bus-event"
+import { Bus } from "../bus"
+import { Instance } from "../project/instance"
 import z from "zod"
 
 export namespace SessionStatus {

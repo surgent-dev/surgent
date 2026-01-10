@@ -1,4 +1,4 @@
-import { BusEvent } from "@/bus/bus-event"
+import { BusEvent } from "../bus/bus-event"
 import z from "zod"
 import ignore from "ignore"
 import { Log } from "../util/log"

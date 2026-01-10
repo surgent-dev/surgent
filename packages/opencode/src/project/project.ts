@@ -1,14 +1,14 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { Log } from "../util/log"
-import { Flag } from "@/flag/flag"
+import { Flag } from "../flag/flag"
 import { Session } from "../session"
 import { work } from "../util/queue"
 import { fn } from "@opencode-ai/util/fn"
-import { BusEvent } from "@/bus/bus-event"
-import { GlobalBus } from "@/bus/global"
-import { create as createSandbox } from "@/sandbox"
-import type { Sandbox } from "@/sandbox"
+import { BusEvent } from "../bus/bus-event"
+import { GlobalBus } from "../bus/global"
+import { create as createSandbox } from "../sandbox"
+import type { Sandbox } from "../sandbox"
 
 export namespace Project {
   const log = Log.create({ service: "project" })

@@ -1,5 +1,5 @@
-import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
+import { BusEvent } from "../bus/bus-event"
+import { Bus } from "../bus"
 import { Session } from "."
 import { Identifier } from "../id/id"
 import { Instance } from "../project/instance"
@@ -10,9 +10,9 @@ import { SessionPrompt } from "./prompt"
 import { Token } from "../util/token"
 import { Log } from "../util/log"
 import { SessionProcessor } from "./processor"
-import { fn } from "@/util/fn"
-import { Agent } from "@/agent/agent"
-import { Config } from "@/config/config"
+import { fn } from "../util/fn"
+import { Agent } from "../agent/agent"
+import { Config } from "../config/config"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })

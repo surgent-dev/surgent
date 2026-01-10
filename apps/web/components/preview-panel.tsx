@@ -3,7 +3,7 @@
 import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from '@/components/agent/web-preview';
 import { useEffect, useState } from 'react';
 import { X, Database, Monitor, CreditCard, GitCompare } from 'lucide-react';
-import type { FileDiff } from 'opencode/session';
+import type { FileDiff } from '@opencode-ai/sdk';
 import { useConvexDashboardQuery, type ConvexDashboardCredentials } from '@/queries/projects';
 import DiffView from '@/components/diff/diff-view';
 import { ScrollArea } from '@/components/ui/scroll-area';

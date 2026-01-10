@@ -5,8 +5,8 @@ import DESCRIPTION from "./read.txt"
 import { Instance } from "../project/instance"
 import { Identifier } from "../id/id"
 import { Permission } from "../permission"
-import { Agent } from "@/agent/agent"
-import { iife } from "@/util/iife"
+import { Agent } from "../agent/agent"
+import { iife } from "../util/iife"
 
 const DEFAULT_READ_LIMIT = 2000
 const MAX_LINE_LENGTH = 2000

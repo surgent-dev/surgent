@@ -1,20 +1,19 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import type { Permission as PermissionNamespace } from "opencode/permission";
-import type { MessageV2 } from "opencode/session/message-v2";
+import type { 
+  Message, 
+  Part, 
+  Permission,
+  TextPart,
+  ToolPart,
+  ReasoningPart,
+  FilePart 
+} from "@opencode-ai/sdk";
 import { CheckCircle2, Eye, FileText, FilePenLine, Trash2, Terminal, Search, Globe, ListTodo, Play, Loader2, AlertCircle } from "lucide-react";
 import { ShimmeringText } from "@/components/ui/shimmer-text";
 import { Markdown } from "@/components/ui/markdown";
 import { useRespondPermission } from "@/queries/chats";
-
-type Message = MessageV2.Info;
-type Part = MessageV2.Part;
-type ToolPart = MessageV2.ToolPart;
-type TextPart = MessageV2.TextPart;
-type ReasoningPart = MessageV2.ReasoningPart;
-type FilePart = MessageV2.FilePart;
-type Permission = PermissionNamespace.Info;
 
 type PermissionResponse = "once" | "always" | "reject";
 

@@ -1,17 +1,16 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useCallback } from "react";
-import type { BusEvent } from "opencode/bus";
-import type { Permission as PermissionNamespace } from "opencode/permission";
-import type { Session as SessionNamespace } from "opencode/session";
-import type { MessageV2 } from "opencode/session/message-v2";
+import type { 
+  Session, 
+  Message, 
+  Part, 
+  Permission,
+  AssistantMessage 
+} from "@opencode-ai/sdk";
 import { backendBaseUrl, http } from "@/lib/http";
 
-type Permission = PermissionNamespace.Info;
-type Session = SessionNamespace.Info;
-type Message = MessageV2.Info;
-type Part = MessageV2.Part;
-type AgentError = MessageV2.Assistant["error"];
+type AgentError = AssistantMessage["error"];
 
 // Session status types matching backend SessionStatus.Info
 type SessionStatusIdle = { type: "idle" };

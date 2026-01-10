@@ -29,13 +29,13 @@ import { fileURLToPath } from "bun"
 import { ConfigMarkdown } from "../config/markdown"
 import { SessionSummary } from "./summary"
 import { NamedError } from "@opencode-ai/util/error"
-import { fn } from "@/util/fn"
+import { fn } from "../util/fn"
 import { SessionProcessor } from "./processor"
-import { TaskTool } from "@/tool/task"
+import { TaskTool } from "../tool/task"
 import { SessionStatus } from "./status"
 import { LLM } from "./llm"
-import { iife } from "@/util/iife"
-import { Shell } from "@/shell/shell"
+import { iife } from "../util/iife"
+import { Shell } from "../shell/shell"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { FileDiff } from "opencode/session";
+import type { FileDiff } from "@opencode-ai/sdk";
 import { cn } from "@/lib/utils";
 
 type Props = {

@@ -23,8 +23,17 @@ import path from "path"
 import z from "zod"
 import { WebSearchTool } from "./websearch"
 import { CodeSearchTool } from "./codesearch"
-import { Flag } from "@/flag/flag"
-import { Log } from "@/util/log"
+import { Flag } from "../flag/flag"
+import { Log } from "../util/log"
+// TODO: Convex tools are WIP
+// import {
+//   ConvexCreateProjectTool,
+//   ConvexDeleteProjectTool,
+//   ConvexSetEnvVarsTool,
+//   ConvexListEnvVarsTool,
+//   ConvexCallQueryTool,
+//   ConvexCallMutationTool,
+// } from "./convex"
 
 type ToolContext = Pick<Tool.Context, "sessionID" | "messageID" | "agent" | "abort">
 
@@ -118,6 +127,13 @@ export namespace ToolRegistry {
       DownloadToRepoTool,
       WriteToLocalEnvTool,
       PromptEnvVariableTool,
+      // TODO: Convex tools are WIP
+      // ConvexCreateProjectTool,
+      // ConvexDeleteProjectTool,
+      // ConvexSetEnvVarsTool,
+      // ConvexListEnvVarsTool,
+      // ConvexCallQueryTool,
+      // ConvexCallMutationTool,
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,
     ]

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { FileDiff } from "opencode/session";
+import type { FileDiff } from "@opencode-ai/sdk";
 import DiffViewerWithSidebar from "@/components/diff/diff-viewer-with-sidebar";
 
 type Props = {

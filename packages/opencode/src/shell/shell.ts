@@ -1,5 +1,5 @@
-import { Flag } from "@/flag/flag"
-import { lazy } from "@/util/lazy"
+import { Flag } from "../flag/flag"
+import { lazy } from "../util/lazy"
 import path from "path"
 
 const SIGKILL_TIMEOUT_MS = 200

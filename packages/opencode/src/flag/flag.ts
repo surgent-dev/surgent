@@ -24,6 +24,11 @@ export const OPENCODE_EXPERIMENTAL = truthy("OPENCODE_EXPERIMENTAL")
   export const OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX = number("OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX")
 export const OPENCODE_EXPERIMENTAL_OXFMT = OPENCODE_EXPERIMENTAL || truthy("OPENCODE_EXPERIMENTAL_OXFMT")
 
+  // Convex
+  export const CONVEX_TEAM_TOKEN = process.env["CONVEX_TEAM_TOKEN"]
+  export const CONVEX_TEAM_ID = process.env["CONVEX_TEAM_ID"]
+  export const CONVEX_HOST = process.env["CONVEX_HOST"]
+
   function truthy(key: string) {
     const value = process.env[key]?.toLowerCase()
     return value === "true" || value === "1"

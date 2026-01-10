@@ -1,5 +1,5 @@
-import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
+import { BusEvent } from "../bus/bus-event"
+import { Bus } from "../bus"
 import { Decimal } from "decimal.js"
 import z from "zod"
 import { type LanguageModelUsage, type ProviderMetadata } from "ai"
@@ -11,10 +11,10 @@ import { Log } from "../util/log"
 import { MessageV2 } from "./message-v2"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
-import { fn } from "@/util/fn"
+import { fn } from "../util/fn"
 import { Command } from "../command"
 
-import type { Provider } from "@/provider/provider"
+import type { Provider } from "../provider/provider"
 
 export type FileDiff = {
   file: string

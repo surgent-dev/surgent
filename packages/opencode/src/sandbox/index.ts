@@ -1,7 +1,7 @@
 import * as nodepath from "path"
 import * as os from "os"
 import fs from "fs/promises"
-import { Shell } from "@/shell/shell"
+import { Shell } from "../shell/shell"
 
 export interface Sandbox {
   root: string

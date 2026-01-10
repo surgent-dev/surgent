@@ -7,8 +7,8 @@ import { NamedError } from "@opencode-ai/util/error"
 import { lazy } from "../util/lazy"
 
 import { ZipReader, BlobReader, BlobWriter } from "@zip.js/zip.js"
-import { Log } from "@/util/log"
-import { Instance } from "@/project/instance"
+import { Log } from "../util/log"
+import { Instance } from "../project/instance"
 
 export namespace Ripgrep {
   const log = Log.create({ service: "ripgrep" })

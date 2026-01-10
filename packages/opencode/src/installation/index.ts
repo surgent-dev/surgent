@@ -1,10 +1,10 @@
-import { BusEvent } from "@/bus/bus-event"
+import { BusEvent } from "../bus/bus-event"
 import path from "path"
 import { $ } from "bun"
 import z from "zod"
 import { NamedError } from "@opencode-ai/util/error"
 import { Log } from "../util/log"
-import { iife } from "@/util/iife"
+import { iife } from "../util/iife"
 import { Flag } from "../flag/flag"
 
 declare global {

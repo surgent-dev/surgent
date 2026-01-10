@@ -9,7 +9,7 @@ import PROMPT_GEMINI from "./prompt/gemini.txt"
 import PROMPT_ANTHROPIC_SPOOF from "./prompt/anthropic_spoof.txt"
 
 import PROMPT_CODEX from "./prompt/codex.txt"
-import type { Provider } from "@/provider/provider"
+import type { Provider } from "../provider/provider"
 
 export namespace SystemPrompt {
   export function header(providerID: string) {

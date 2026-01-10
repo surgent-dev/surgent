@@ -1,7 +1,7 @@
 import z from "zod"
 import { Log } from "../util/log"
 import { Instance } from "../project/instance"
-import { create as createSandbox } from "@/sandbox"
+import { create as createSandbox } from "../sandbox"
 
 export namespace Patch {
   const log = Log.create({ service: "patch" })

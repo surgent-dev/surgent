@@ -1,14 +1,14 @@
-import { Provider } from "@/provider/provider"
+import { Provider } from "../provider/provider"
 
-import { fn } from "@/util/fn"
+import { fn } from "../util/fn"
 import z from "zod"
 import { Session } from "."
 
 import { MessageV2 } from "./message-v2"
-import { Log } from "@/util/log"
+import { Log } from "../util/log"
 
 import { LLM } from "./llm"
-import { Agent } from "@/agent/agent"
+import { Agent } from "../agent/agent"
 
 export namespace SessionSummary {
   const log = Log.create({ service: "session.summary" })

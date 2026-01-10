@@ -1,5 +1,5 @@
-import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
+import { BusEvent } from "../bus/bus-event"
+import { Bus } from "../bus"
 import z from "zod"
 import { Storage } from "../storage/storage"
 

@@ -1,5 +1,5 @@
-import { Provider } from "@/provider/provider"
-import { Log } from "@/util/log"
+import { Provider } from "../provider/provider"
+import { Log } from "../util/log"
 import {
   streamText,
   wrapLanguageModel,
@@ -10,14 +10,14 @@ import {
   extractReasoningMiddleware,
 } from "ai"
 import { mergeDeep, pipe } from "remeda"
-import { ProviderTransform } from "@/provider/transform"
-import { Config } from "@/config/config"
-import { Instance } from "@/project/instance"
-import type { Agent } from "@/agent/agent"
+import { ProviderTransform } from "../provider/transform"
+import { Config } from "../config/config"
+import { Instance } from "../project/instance"
+import type { Agent } from "../agent/agent"
 import type { MessageV2 } from "./message-v2"
 import { SystemPrompt } from "./system"
-import { ToolRegistry } from "@/tool/registry"
-import { Flag } from "@/flag/flag"
+import { ToolRegistry } from "../tool/registry"
+import { Flag } from "../flag/flag"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })

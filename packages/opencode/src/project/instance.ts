@@ -1,11 +1,11 @@
-import { Log } from "@/util/log"
+import { Log } from "../util/log"
 import { Context } from "../util/context"
 import { Project } from "./project"
 import { State } from "./state"
-import { iife } from "@/util/iife"
-import { GlobalBus } from "@/bus/global"
-import { create as createSandbox, createDaytonaSandbox } from "@/sandbox"
-import type { Sandbox } from "@/sandbox"
+import { iife } from "../util/iife"
+import { GlobalBus } from "../bus/global"
+import { create as createSandbox, createDaytonaSandbox } from "../sandbox"
+import type { Sandbox } from "../sandbox"
 
 interface InstanceContext {
   directory: string

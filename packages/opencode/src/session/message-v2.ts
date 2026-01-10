@@ -1,13 +1,13 @@
-import { BusEvent } from "@/bus/bus-event"
+import { BusEvent } from "../bus/bus-event"
 import z from "zod"
 import { NamedError } from "@opencode-ai/util/error"
 import { APICallError, convertToModelMessages, LoadAPIKeyError, type ModelMessage, type UIMessage } from "ai"
 import { Identifier } from "../id/id"
-import { fn } from "@/util/fn"
-import { Storage } from "@/storage/storage"
-import { ProviderTransform } from "@/provider/transform"
+import { fn } from "../util/fn"
+import { Storage } from "../storage/storage"
+import { ProviderTransform } from "../provider/transform"
 import { STATUS_CODES } from "http"
-import { iife } from "@/util/iife"
+import { iife } from "../util/iife"
 import { type SystemError } from "bun"
 
 export namespace MessageV2 {
