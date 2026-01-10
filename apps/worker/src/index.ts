@@ -33,22 +33,38 @@ const app = new Hono<AppContext>({
 })
 
 app.use(
-  '/*',
+  '*',
   cors({
     origin: (origin) => {
-      const trustedOrigins = config.server.trustedOrigins
-      if (origin && trustedOrigins.includes(origin)) {
+      if (origin && config.server.trustedOrigins.includes(origin)) {
         return origin
       }
       return null
     },
-    allowHeaders: ['Content-Type', 'Authorization'],
-    allowMethods: ['POST', 'GET', 'OPTIONS', 'PATCH', 'DELETE'],
+    allowMethods: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'PATCH', 'OPTIONS'],
     exposeHeaders: ['Content-Length', 'Content-Disposition'],
     maxAge: 600,
     credentials: true,
   })
 )
+
+// Ensure CORS headers are present even if downstream returns a raw Response (e.g. Better Auth)
+app.use('*', async (c, next) => {
+  await next()
+
+  const origin = c.req.header('origin')
+  if (!origin) {
+    return
+  }
+  if (!config.server.trustedOrigins.includes(origin)) {
+    return
+  }
+
+  c.res.headers.set('Access-Control-Allow-Origin', origin)
+  c.res.headers.set('Access-Control-Allow-Credentials', 'true')
+  c.res.headers.set('Access-Control-Expose-Headers', 'Content-Length, Content-Disposition')
+  c.header('Vary', 'Origin', { append: true })
+})
 
 // Better Auth handler
 app.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw))
