@@ -2,10 +2,11 @@ services:
   coder:
     image: ghcr.io/surgent-dev/surgent-coder:latest
     pull_policy: always
+    network_mode: host
     container_name: surgent-coder
     env_file: packages/opencode/.env
-    expose:
-      - "4096"
+    ports:
+      - "4096:4096"
     restart: unless-stopped
 
   worker:
@@ -15,9 +16,10 @@ services:
     env_file: apps/worker/.env
     network_mode: host
     environment:
-      OPENCODE_URL: http://coder:4096
+      OPENCODE_URL: http://localhost:4096
     ports:
       - "4000:4000"
     restart: unless-stopped
     depends_on:
       - coder
+
