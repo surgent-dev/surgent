@@ -135,7 +135,7 @@ export namespace Config {
 
   export const state = Instance.state(async () => {
     const auth = await Auth.all()
-    let result = await global()
+    let result: Info = {}
 
     // Override with custom config if provided
     if (Flag.OPENCODE_CONFIG) {
@@ -167,18 +167,10 @@ export namespace Config {
     result.mode = result.mode || {}
 
     const directories = [
-      Global.Path.config,
       ...(await Array.fromAsync(
         Filesystem.up({
           targets: [".opencode"],
           start: Instance.directory,
-          stop: Global.Path.home,
-        }),
-      )),
-      ...(await Array.fromAsync(
-        Filesystem.up({
-          targets: [".opencode"],
-          start: Global.Path.home,
           stop: Global.Path.home,
         }),
       )),
