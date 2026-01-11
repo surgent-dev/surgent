@@ -9,7 +9,6 @@ COPY apps/worker/package.json ./apps/worker/
 COPY packages/db/package.json ./packages/db/
 COPY packages/opencode/package.json ./packages/opencode/
 COPY packages/util/package.json ./packages/util/
-COPY packages/typescript-config/package.json ./packages/typescript-config/
 RUN HUSKY=0 bun install --frozen-lockfile
 
 FROM oven/bun:1-slim AS production
