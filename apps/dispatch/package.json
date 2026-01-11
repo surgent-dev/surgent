@@ -14,8 +14,8 @@
     "hono": "^4.10.3"
   },
   "scripts": {
-    "dev": "wrangler dev --port 4001",
-    "start": "wrangler dev --verbose --port 4001",
+    "dev": "wrangler dev --port 8000",
+    "start": "wrangler dev --verbose --port 8000",
     "deploy": "wrangler deploy",
     "generate-types": "wrangler types"
   }

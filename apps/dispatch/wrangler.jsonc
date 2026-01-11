@@ -1,6 +1,7 @@
 {
   "name": "dispatch",
   "main": "src/index.ts",
+  "tsconfig": "./tsconfig.json",
   "compatibility_date": "2025-10-21",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
