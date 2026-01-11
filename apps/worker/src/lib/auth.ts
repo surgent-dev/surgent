@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { autumn } from "autumn-js/better-auth";
 import { apiKey } from "better-auth/plugins";
-import { dialect } from '@repo/db';
+import { dialect } from "@/lib/db";
 import { config } from './config'
 
 export const auth = betterAuth({

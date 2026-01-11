@@ -1,10 +1,7 @@
 import { Kysely, PostgresDialect, type Dialect } from 'kysely'
 import type { Database as DatabaseInterface } from './types'
 
-function createDialect(): Dialect {
-  const type = process.env.POSTGRES_TYPE || 'neon'
-  const url = process.env.DATABASE_URL!
-  console.log('CONFIG KYSELY DB', type, url)
+export function createDialect(url: string, type = 'neon'): Dialect {
   if (type === 'neon') {
     const { neon } = require('@neondatabase/serverless')
     const { NeonDialect } = require('kysely-neon')
@@ -22,16 +19,16 @@ function createDialect(): Dialect {
   })
 }
 
-export const dialect = createDialect()
+export function createDbFromDialect(dialect: Dialect) {
+  return new Kysely<DatabaseInterface>({ dialect })
+}
 
-export const db = new Kysely<DatabaseInterface>({ dialect })
+export function createClient(url: string, type?: string) {
+  const dialect = createDialect(url, type)
+  const db = createDbFromDialect(dialect)
+  return { db, dialect }
+}
 
-process.on('SIGINT', async () => {
-  await db.destroy()
-  process.exit(0)
-})
-
-process.on('SIGTERM', async () => {
-  await db.destroy()
-  process.exit(0)
-}) 
+export function createDb(url: string, type?: string) {
+  return createClient(url, type).db
+}

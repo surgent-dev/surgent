@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppContext } from "@/types/application";
-import { db } from "@repo/db";
+import { db } from "@/lib/db";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { requireAuth } from "../middleware/auth";

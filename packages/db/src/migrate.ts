@@ -1,11 +1,15 @@
 import * as path from 'path'
 import { promises as fs } from 'fs'
 import { Migrator, FileMigrationProvider } from 'kysely'
-import { db } from './kysely_db'
+import { createClient } from './kysely_db'
 
 export async function runMigrations() {
+  const url = process.env.DATABASE_URL
+  if (!url) throw new Error('DATABASE_URL not set')
+
+  const client = createClient(url, process.env.POSTGRES_TYPE)
   const migrator = new Migrator({
-    db,
+    db: client.db,
     provider: new FileMigrationProvider({
       fs,
       path,
@@ -41,7 +45,7 @@ export async function runMigrations() {
     process.exit(1)
   }
 
-  await db.destroy()
+  await client.db.destroy()
   console.log('🎉 Migration completed successfully')
 }
 

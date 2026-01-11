@@ -8,6 +8,10 @@ export const config = {
     clientOrigin: env.CLIENT_ORIGIN || "http://localhost:3000",
     trustedOrigins: (env.TRUSTED_ORIGINS || env.CLIENT_ORIGIN || "http://localhost:3000").split(","),
   },
+  database: {
+    url: env.DATABASE_URL,
+    type: env.POSTGRES_TYPE,
+  },
   auth: {
     secret: env.BETTER_AUTH_SECRET,
     baseUrl: env.BETTER_AUTH_URL,

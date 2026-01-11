@@ -1,4 +1,4 @@
-export { db, dialect } from './src/kysely_db'
+export { createClient, createDb, createDbFromDialect, createDialect } from './src/kysely_db'
 
 export type {
   Database,

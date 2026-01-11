@@ -4,7 +4,7 @@
 
 import { Hono } from "hono";
 import { Webhooks } from "@octokit/webhooks";
-import { db } from "@repo/db";
+import { db } from "@/lib/db";
 import type { AppContext } from "@/types/application";
 import { createGitHubApp } from "@/apis/github";
 import { config } from "@/lib/config";

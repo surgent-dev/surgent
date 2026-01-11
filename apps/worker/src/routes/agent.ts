@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { db } from '@repo/db'
+import { db } from '@/lib/db'
 import { requireAuth } from '../middleware/auth'
 import type { AppContext } from '@/types/application'
 import { config } from '@/lib/config'
