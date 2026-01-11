@@ -10,10 +10,11 @@ import type {
   ReasoningPart,
   FilePart 
 } from "@opencode-ai/sdk";
-import { CheckCircle2, Eye, FileText, FilePenLine, Trash2, Terminal, Search, Globe, ListTodo, Play, Loader2, AlertCircle } from "lucide-react";
+import { AlertCircle, Bot, CheckCircle2, Eye, FilePenLine, FileText, Globe, ListTodo, Loader2, Play, Search, Terminal, Trash2 } from "lucide-react";
 import { ShimmeringText } from "@/components/ui/shimmer-text";
 import { Markdown } from "@/components/ui/markdown";
 import { useRespondPermission } from "@/queries/chats";
+import useAgentStream from "@/lib/use-agent-stream";
 
 type PermissionResponse = "once" | "always" | "reject";
 
@@ -29,6 +30,7 @@ const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: stri
   webfetch: { icon: Globe, done: "Fetched", doing: "Fetching..." },
   todowrite: { icon: ListTodo, done: "Todos", doing: "Updating..." },
   todoread: { icon: ListTodo, done: "Todos", doing: "Loading..." },
+  task: { icon: Bot, done: "Subagent", doing: "Subagent..." },
   dev: { icon: Play, done: "Started", doing: "Starting..." },
   devLogs: { icon: Terminal, done: "Logs", doing: "Loading..." },
 };
@@ -38,6 +40,7 @@ function getTarget(part: ToolPart): string | undefined {
   const input = part.state.input as Record<string, unknown>;
   if (["read", "write", "edit"].includes(part.tool)) return String(input.filePath || "").split(/[/\\]/).pop();
   if (["bash", "dev"].includes(part.tool)) return String(input.command || "");
+  if (part.tool === "task") return String(input.description || input.subagent_type || "");
   if (part.tool === "grep") return String(input.pattern || "");
   if (part.tool === "glob") return String(input.pattern || "");
   if (part.tool === "list") return String(input.path || "/");
@@ -128,8 +131,9 @@ function PermissionPrompt({ permission, onRespond, responding, error }: {
   );
 }
 
-function Tool({ part, permission, onRespondPermission, responding, respondError }: {
+function Tool({ part, projectId, permission, onRespondPermission, responding, respondError }: {
   part: ToolPart;
+  projectId?: string;
   permission?: Permission;
   onRespondPermission?: (permission: Permission, response: PermissionResponse) => void;
   responding?: boolean;
@@ -140,6 +144,8 @@ function Tool({ part, permission, onRespondPermission, responding, respondError 
   const Icon = cfg.icon;
   const target = getTarget(part);
   const running = part.state.status === "running" || part.state.status === "pending";
+  const meta = part.state.status === "pending" ? undefined : part.state.metadata;
+  const subSessionId = part.tool === "task" && typeof meta?.sessionId === "string" ? meta.sessionId : undefined;
 
   const header = (() => {
     if (running) {
@@ -174,27 +180,30 @@ function Tool({ part, permission, onRespondPermission, responding, respondError 
     <div className={permission ? "space-y-2" : undefined}>
       <button
         onClick={() => setExpanded(s => !s)}
-        disabled={running}
-        className={`w-full text-left ${running ? "" : "hover:text-foreground cursor-pointer"} transition-colors`}
+        className="w-full text-left hover:text-foreground cursor-pointer transition-colors"
       >
         {header}
       </button>
 
-      {expanded && !running && (
+      {expanded && (
         <div className="ml-3 sm:ml-4 pl-2 sm:pl-3 border-l-2 border-muted space-y-2 text-[11px] sm:text-xs">
-          {part.state.status !== "pending" && (
+          {part.tool === "task" && projectId && subSessionId && (
+            <SubagentStream projectId={projectId} sessionId={subSessionId} />
+          )}
+
+          {part.tool !== "task" && part.state.status !== "pending" && (
             <div>
               <div className="text-muted-foreground/70 font-medium mb-1">Input</div>
               <pre className="p-2 rounded bg-muted/50 whitespace-pre-wrap wrap-break-word">{formatValue(part.state.input)}</pre>
             </div>
           )}
-          {part.state.status === "completed" && (
+          {part.tool !== "task" && part.state.status === "completed" && (
             <div>
               <div className="text-muted-foreground/70 font-medium mb-1">Output</div>
               <pre className="p-2 rounded bg-muted/50 whitespace-pre-wrap wrap-break-word">{formatValue(part.state.output)}</pre>
             </div>
           )}
-          {part.state.status === "error" && (
+          {part.tool !== "task" && part.state.status === "error" && (
             <div>
               <div className="text-destructive/70 font-medium mb-1">Error</div>
               <pre className="p-2 rounded bg-destructive/10 whitespace-pre-wrap wrap-break-word text-destructive">{String(part.state.error)}</pre>
@@ -211,6 +220,27 @@ function Tool({ part, permission, onRespondPermission, responding, respondError 
           error={respondError}
         />
       )}
+    </div>
+  );
+}
+
+function SubagentStream({ projectId, sessionId }: { projectId: string; sessionId: string }) {
+  const { messages, parts, permissions, loading, connected } = useAgentStream({ projectId, sessionId });
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <span className={`size-1.5 rounded-full ${connected ? "bg-success" : "bg-muted-foreground/40"}`} />
+        <code className="text-[10px]">session:{sessionId.slice(0, 8)}</code>
+        {loading && <Loader2 className="size-3 animate-spin" />}
+      </div>
+      <AgentThread
+        projectId={projectId}
+        sessionId={sessionId}
+        messages={messages}
+        partsMap={parts}
+        permissions={permissions}
+      />
     </div>
   );
 }
@@ -356,7 +386,11 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
   };
 
   const getText = (m: Message) => {
-    const fromParts = partsMap[m.id]?.filter((p): p is TextPart => p.type === "text").map(p => p.text).join("\n") ?? "";
+    const fromParts = (partsMap[m.id] ?? [])
+      .filter((p): p is TextPart => p.type === "text")
+      .filter((p) => !p.synthetic && !p.ignored)
+      .map((p) => p.text)
+      .join("\n");
     const summary = m.summary;
     const fromSummary = summary && typeof summary === "object" ? (summary.body || summary.title || "") : "";
     const text = fromParts || fromSummary;
@@ -369,6 +403,17 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
   const getFiles = (m: Message) => partsMap[m.id]?.filter((p): p is FilePart => p.type === "file") ?? [];
 
   const renderPart = (p: Part) => {
+    if (p.type === "subtask") {
+      const description = p.description ? ` — ${p.description}` : "";
+      return (
+        <div key={p.id} className="my-1.5 sm:my-2 px-3 py-2 rounded-lg border bg-muted/30 text-[11px] sm:text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Subagent requested</span>{" "}
+          <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs">@{p.agent}</code>
+          {description}
+        </div>
+      );
+    }
+
     if (p.type === "reasoning") {
       const text = (p as ReasoningPart).text?.replace("[REDACTED]", "").trim() || "";
       const streaming = !(p as ReasoningPart).time?.end;
@@ -406,6 +451,7 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
         <Tool
           key={p.id}
           part={toolPart}
+          projectId={projectId}
           permission={permission}
           onRespondPermission={respondToPermission}
           responding={respondPermission.isPending && respondPermission.variables?.permissionId === permission?.id}
@@ -415,7 +461,11 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
     }
 
     if (p.type === "file") return <div key={p.id} className="flex gap-1 py-1"><FileThumb file={p as FilePart} /></div>;
-    if (p.type === "step-start" || p.type === "step-finish" || p.type === "patch") return null;
+
+    // Hide step markers - these are internal and noisy
+    if (p.type === "step-start" || p.type === "step-finish" || p.type === "patch") {
+      return null;
+    }
 
     if (p.type === "text") {
       const content = (p as TextPart).text?.trim();
@@ -433,25 +483,31 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
 
         const text = getText(turn.user);
         const userFiles = getFiles(turn.user);
+        const userParts = partsMap[turn.user.id] ?? [];
+        const isSyntheticUser = userParts.some((p) => p.type === "text" && (p as TextPart).synthetic);
         const isLast = idx === turns.length - 1;
         const lastAssistant = turn.assistants[turn.assistants.length - 1];
         const working = isLast ? (isWorking ?? !!(lastAssistant && lastAssistant.role === "assistant" && !lastAssistant.time.completed)) : false;
         const showPlanning = isLast && !!working;
+        const showSending = isLast && userParts.length === 0 && !text && userFiles.length === 0;
+        const showUser = !isSyntheticUser && (userFiles.length > 0 || !!text || showSending);
 
         return (
           <div key={turn.user.id} className="space-y-2 sm:space-y-3">
-            <div className="flex flex-col items-end gap-1">
-              {userFiles.length > 0 && (
-                <div className="flex gap-1 flex-wrap justify-end">
-                  {userFiles.map(fp => <FileThumb key={fp.id} file={fp} />)}
-                </div>
-              )}
-              <div className="relative max-w-[90%] sm:max-w-[80%] md:max-w-[70%] rounded-xl bg-muted/50 border px-2.5 sm:px-3 py-2 overflow-hidden">
-                <div className="whitespace-pre-wrap text-sm sm:text-[15px] break-all">
-                  {text || <span className="text-muted-foreground italic">Sending...</span>}
+            {showUser && (
+              <div className="flex flex-col items-end gap-1">
+                {userFiles.length > 0 && (
+                  <div className="flex gap-1 flex-wrap justify-end">
+                    {userFiles.map(fp => <FileThumb key={fp.id} file={fp} />)}
+                  </div>
+                )}
+                <div className="relative max-w-[90%] sm:max-w-[80%] md:max-w-[70%] rounded-xl bg-muted/50 border px-2.5 sm:px-3 py-2 overflow-hidden">
+                  <div className="whitespace-pre-wrap text-sm sm:text-[15px] break-all">
+                    {text ? text : showSending ? <span className="text-muted-foreground italic">Sending...</span> : userFiles.length ? <span className="text-muted-foreground italic">Sent attachment</span> : null}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="space-y-1">
               {turn.assistants.map(m => {
