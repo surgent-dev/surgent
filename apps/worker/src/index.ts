@@ -6,6 +6,7 @@ import agent from './routes/agent'
 import upload from './routes/upload'
 import github from './routes/github'
 import mcp from './routes/mcp'
+import admin from './routes/admin'
 import { auth } from './lib/auth'
 import { config } from './lib/config'
 import type { AppContext } from '@/types/application'
@@ -103,6 +104,7 @@ app.route('/api/agent', agent)
 app.route('/api/upload', upload)
 app.route('/api/github', github)
 app.route('/api/mcp', mcp)
+app.route('/api/admin', admin)
 app.route('/preview', preview)
 
 // Start server

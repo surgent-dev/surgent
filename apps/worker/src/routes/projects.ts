@@ -54,7 +54,7 @@ function sanitizeDeployName(input: string): string {
     .slice(0, 63);
 }
 
-// removed unused Daytona sandbox client helper
+// removed unused sandbox client helper
 
 // GET /projects - List all projects for user
 projects.get("/", requireAuth, async (c) => {
