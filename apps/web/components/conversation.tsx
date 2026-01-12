@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { format, parseISO } from "date-fns"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -150,6 +151,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const [tab, setTab] = useState<"chat" | "terminal">("chat")
   const [mode, setMode] = useState<"plan" | "build">("build")
   const [providerOpen, setProviderOpen] = useState(false)
+  const [chatWindowOpen, setChatWindowOpen] = useState(false)
   const [inputValue, setInputValue] = useState("")
   const [selectedModel, setSelectedModel] = useState<{ modelId: string; providerId: string }>({
     modelId: "gemini-3-flash-preview",
@@ -370,6 +372,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
             <MessagesSquare className="size-4" />
             <span className="hidden @md/conversation:inline">Chat</span>
           </TabButton>
+          <TabButton active={chatWindowOpen} onClick={() => setChatWindowOpen((open) => !open)}>
+            <MessageCircle className="size-4" />
+            <span className="hidden @md/conversation:inline">Window</span>
+          </TabButton>
           {showTerminal && (
             <TabButton active={tab === "terminal"} onClick={() => setTab("terminal")}>
               <Terminal className="size-4" />
@@ -406,8 +412,13 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         </div>
         {/* Context stats */}
         <div className="h-8 flex items-center px-3 gap-2 min-w-0 text-xs">
-          <span className={`size-2 rounded-full ${!connected ? "bg-muted-foreground/40" : isRetrying ? "bg-warning" : "bg-success"}`} title={!connected ? "Connecting..." : isRetrying ? "Retrying..." : "Agent connected"} />
-          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">{connected ? sessionName : "Connecting..."}</span>
+          <span
+            className={`size-2 rounded-full ${!connected ? "bg-muted-foreground/40" : isRetrying ? "bg-warning" : "bg-success"}`}
+            title={!connected ? "Connecting..." : isRetrying ? "Retrying..." : "Agent connected"}
+          />
+          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">
+            {connected ? sessionName : "Connecting..."}
+          </span>
           {connected && (
             <>
               {isRetrying && retryInfo ? (
@@ -549,6 +560,81 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
           <TerminalWidget sandboxId={sandboxId} className="size-full rounded-lg" />
         </div>
       )}
+
+      <Sheet open={chatWindowOpen} onOpenChange={setChatWindowOpen}>
+        <SheetContent className="p-0">
+          <div className="flex flex-col h-full min-h-0">
+            <SheetHeader className="border-b bg-muted/30">
+              <SheetTitle className="flex items-center gap-2 text-sm">
+                <MessageCircle className="size-4" />
+                <span>Chat</span>
+              </SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 min-h-0">
+              <ScrollArea className="h-full">
+                <div className="px-3 py-4">
+                  {loading ? (
+                    <div className="flex items-center justify-center min-h-[200px]">
+                      <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : messages.length ? (
+                    <AgentThread
+                      projectId={projectId}
+                      sessionId={activeId!}
+                      messages={messages}
+                      partsMap={parts}
+                      permissions={permissions}
+                      isWorking={working}
+                    />
+                  ) : (
+                    <EmptyState />
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+            <div className="px-3 py-3 border-t">
+              {lastAssistantError && (
+                <div
+                  className={cn(
+                    "mb-2 px-3 py-2 rounded-lg border text-xs",
+                    lastAssistantError.isContext
+                      ? "bg-warning/10 border-warning/20 text-warning"
+                      : "bg-muted/50 text-muted-foreground",
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="size-3.5 shrink-0" />
+                    <p className="flex-1 min-w-0 wrap-break-word line-clamp-2">{lastAssistantError.message}</p>
+                    <button
+                      onClick={handleCreate}
+                      disabled={create.isPending}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors shrink-0 hover:bg-muted"
+                    >
+                      {create.isPending ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
+                      <span>New session</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+              <ChatInput
+                onSubmit={handleSend}
+                disabled={!connected || working}
+                placeholder={!connected ? "Connecting..." : working ? "Working..." : "Ask anything..."}
+                mode={mode}
+                onToggleMode={() => setMode((m) => (m === "plan" ? "build" : "plan"))}
+                isWorking={working}
+                onStop={handleAbort}
+                isStopping={abort.isPending}
+                value={inputValue}
+                onValueChange={setInputValue}
+                models={availableModels}
+                selectedModel={selectedModel}
+                onModelChange={handleModelChange}
+              />
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <ProviderDialog open={providerOpen} onOpenChange={setProviderOpen} projectId={projectId} />
     </div>
