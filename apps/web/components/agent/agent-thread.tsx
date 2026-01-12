@@ -24,19 +24,6 @@ import useAgentStream from "@/lib/use-agent-stream"
 
 type PermissionResponse = "once" | "always" | "reject"
 
-export function getToolOnlyCount(messages: Message[], partsMap: Record<string, Part[]>) {
-  return messages.reduce((total, message) => {
-    const parts = partsMap[message.id] ?? []
-    const toolCount = parts.reduce((count, part) => {
-      if (part.type !== "tool") return count
-      const toolPart = part as ToolPart
-      if (toolPart.tool === "todoread") return count
-      return count + 1
-    }, 0)
-    return total + toolCount
-  }, 0)
-}
-
 const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: string }> = {
   read: { icon: Eye, done: "Read", doing: "Reading..." },
   write: { icon: FileText, done: "Created", doing: "Creating..." },
@@ -425,7 +412,6 @@ export function AgentThread({
   partsMap,
   permissions,
   isWorking,
-  toolOnly,
 }: {
   projectId?: string
   sessionId: string
@@ -433,7 +419,6 @@ export function AgentThread({
   partsMap: Record<string, Part[]>
   permissions?: Permission[]
   isWorking?: boolean
-  toolOnly?: boolean
 }) {
   const [openThoughts, setOpenThoughts] = useState<Record<string, boolean>>({})
   const [permissionErrors, setPermissionErrors] = useState<Record<string, string>>({})
@@ -505,8 +490,6 @@ export function AgentThread({
   const getFiles = (m: Message) => partsMap[m.id]?.filter((p): p is FilePart => p.type === "file") ?? []
 
   const renderPart = (p: Part) => {
-    if (toolOnly && p.type !== "tool") return null
-
     if (p.type === "subtask") {
       const description = p.description ? ` — ${p.description}` : ""
       return (
@@ -608,7 +591,7 @@ export function AgentThread({
           : false
         const showPlanning = isLast && !!working
         const showSending = isLast && userParts.length === 0 && !text && userFiles.length === 0
-        const showUser = !toolOnly && !isSyntheticUser && (userFiles.length > 0 || !!text || showSending)
+        const showUser = !isSyntheticUser && (userFiles.length > 0 || !!text || showSending)
 
         return (
           <div key={turn.user.id} className="space-y-2 sm:space-y-3">
@@ -636,25 +619,24 @@ export function AgentThread({
             )}
 
             <div className="space-y-1">
-              {!toolOnly &&
-                turn.assistants.map((m) => {
-                  const err =
-                    (
-                      m as Message & {
-                        error?: { data?: { message?: string }; message?: string; name?: string }
-                        info?: { error?: { data?: { message?: string }; message?: string; name?: string } }
-                      }
-                    ).error ||
-                    (
-                      m as Message & {
-                        info?: { error?: { data?: { message?: string }; message?: string; name?: string } }
-                      }
-                    ).info?.error
-                  if (!err) return null
-                  const msg = err.data?.message || err.message || err.name || "Request failed"
-                  if (msg.toLowerCase().includes("abort")) return null
-                  return <ApiError key={m.id} error={err} />
-                })}
+              {turn.assistants.map((m) => {
+                const err =
+                  (
+                    m as Message & {
+                      error?: { data?: { message?: string }; message?: string; name?: string }
+                      info?: { error?: { data?: { message?: string }; message?: string; name?: string } }
+                    }
+                  ).error ||
+                  (
+                    m as Message & {
+                      info?: { error?: { data?: { message?: string }; message?: string; name?: string } }
+                    }
+                  ).info?.error
+                if (!err) return null
+                const msg = err.data?.message || err.message || err.name || "Request failed"
+                if (msg.toLowerCase().includes("abort")) return null
+                return <ApiError key={m.id} error={err} />
+              })}
 
               {timeline.map(renderPart)}
 
@@ -671,7 +653,7 @@ export function AgentThread({
                   />
                 ))}
 
-              {!toolOnly && showPlanning && (
+              {showPlanning && (
                 <ShimmeringText
                   text="Working..."
                   duration={0.4}

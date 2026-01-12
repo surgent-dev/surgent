@@ -22,12 +22,13 @@ import {
   AlertCircle,
   X,
   RefreshCw,
+  ScrollText,
 } from "lucide-react"
 import ChatInput, { type FilePart, type ProviderModel } from "./chat-input"
 import TerminalWidget from "./terminal/terminal-widget"
 import { useSandbox } from "@/hooks/use-sandbox"
 import useAgentStream, { type SessionStatusRetry } from "@/lib/use-agent-stream"
-import { AgentThread, getToolOnlyCount } from "@/components/agent/agent-thread"
+import { AgentThread } from "@/components/agent/agent-thread"
 import { useSessionsQuery, useCreateSession, useSendMessage, useAbortSession } from "@/queries/chats"
 import ProviderDialog from "@/components/provider-dialog"
 
@@ -40,6 +41,10 @@ type ProviderList = {
   all: Array<{ id: string; models: Record<string, { name?: string; limit?: { context: number } }> }>
   connected: string[]
 }
+
+type McpStatusValue = { status?: string } | string
+
+type McpStatus = Record<string, McpStatusValue>
 
 const PROVIDER_LABELS: Record<string, string> = {
   anthropic: "Claude",
@@ -56,6 +61,24 @@ const formatTitle = (title: string) => {
   } catch {
     return title
   }
+}
+
+const formatStatus = (status: string) => status.replace(/[_-]/g, " ")
+
+const getStatusTone = (status: string) => {
+  const value = status.toLowerCase()
+  if (["ready", "running", "connected", "online", "ok", "healthy"].includes(value)) return "text-success"
+  if (["warning", "degraded"].includes(value)) return "text-warning"
+  if (["error", "failed", "offline", "disconnected", "down"].includes(value)) return "text-destructive"
+  return "text-muted-foreground"
+}
+
+const getStatusDot = (status: string) => {
+  const value = status.toLowerCase()
+  if (["ready", "running", "connected", "online", "ok", "healthy"].includes(value)) return "bg-success"
+  if (["warning", "degraded"].includes(value)) return "bg-warning"
+  if (["error", "failed", "offline", "disconnected", "down"].includes(value)) return "bg-destructive"
+  return "bg-muted-foreground/40"
 }
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -251,7 +274,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const sessionName = formatTitle(session?.title || activeSession?.title || "Untitled")
 
   const assistantMessages = messages.filter((m) => m.role === "assistant")
-  const toolOnlyCount = useMemo(() => getToolOnlyCount(messages, parts), [messages, parts])
 
   const isContextLengthExceeded = (err: any) => {
     if (!err) return false
@@ -297,6 +319,22 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     staleTime: 60_000,
     queryFn: async () => (await http.get(`api/agent/${projectId}/provider`).json()) as ProviderList,
   })
+
+  const { data: mcpStatus, isLoading: mcpLoading } = useQuery<McpStatus>({
+    queryKey: ["mcp-status"],
+    enabled: chatWindowOpen,
+    queryFn: async () => (await http.get("mcp").json()) as McpStatus,
+  })
+
+  const mcpEntries = useMemo(() => {
+    if (!mcpStatus) return []
+    return Object.entries(mcpStatus).map((entry) => {
+      const name = entry[0]
+      const value = entry[1]
+      const status = typeof value === "string" ? value : value?.status || "unknown"
+      return { name, status }
+    })
+  }, [mcpStatus])
 
   // Transform providers into a flat list of models from connected providers only
   const availableModels = useMemo<ProviderModel[]>(() => {
@@ -384,6 +422,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
           <TabButton active={chatWindowOpen} onClick={() => setChatWindowOpen((open) => !open)}>
             <MessageCircle className="size-4" />
             <span className="hidden @md/conversation:inline">MCP</span>
+          </TabButton>
+          <TabButton active={false} onClick={() => {}}>
+            <ScrollText className="size-4" />
+            <span className="hidden @md/conversation:inline">Logs</span>
           </TabButton>
           {showTerminal && (
             <TabButton active={tab === "terminal"} onClick={() => setTab("terminal")}>
@@ -571,7 +613,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       )}
 
       <Sheet open={chatWindowOpen} onOpenChange={setChatWindowOpen}>
-        <SheetContent side="left" className="p-0 w-[640px]">
+        <SheetContent side="left" className="p-0 w-[840px]">
           <div className="flex flex-col h-full min-h-0">
             <SheetHeader className="border-b bg-muted/30">
               <SheetTitle className="flex items-center gap-2 text-sm">
@@ -582,24 +624,31 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
             <div className="flex-1 min-h-0">
               <ScrollArea className="h-full">
                 <div className="px-3 py-4">
-                  {loading ? (
+                  {mcpLoading ? (
                     <div className="flex items-center justify-center min-h-[200px]">
                       <Loader2 className="size-5 animate-spin text-muted-foreground" />
                     </div>
-                  ) : toolOnlyCount > 0 ? (
-                    <AgentThread
-                      projectId={projectId}
-                      sessionId={activeId!}
-                      messages={messages}
-                      partsMap={parts}
-                      permissions={permissions}
-                      isWorking={working}
-                      toolOnly
-                    />
+                  ) : mcpEntries.length ? (
+                    <div className="space-y-2">
+                      {mcpEntries.map((entry) => (
+                        <div
+                          key={entry.name}
+                          className="flex items-center justify-between rounded-lg border bg-background/60 px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={cn("size-2 rounded-full", getStatusDot(entry.status))} />
+                            <span className="font-medium text-sm truncate">{entry.name}</span>
+                          </div>
+                          <span className={cn("text-xs font-medium capitalize", getStatusTone(entry.status))}>
+                            {formatStatus(entry.status)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
                     <EmptyState
-                      title="No tool calls yet"
-                      description="Tool activity will show up here"
+                      title="No MCP servers"
+                      description="Connect an MCP server to see status"
                       icon={Terminal}
                     />
                   )}
