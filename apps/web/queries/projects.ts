@@ -77,6 +77,7 @@ export function useActivateProject() {
     onSuccess: (_res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['sandbox-health', vars.id] })
     },
   })
 }
@@ -126,6 +127,23 @@ export function useDeleteProject() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
+  })
+}
+
+// Sandbox health check
+type SandboxStatus = 'running' | 'paused' | 'no_sandbox' | 'not_found' | 'forbidden'
+
+async function fetchSandboxHealth(id: string): Promise<{ status: SandboxStatus }> {
+  return http.get(`api/projects/${id}/health`).json()
+}
+
+export function useSandboxHealthQuery(id?: string, enabled = true) {
+  return useQuery({
+    queryKey: ['sandbox-health', id],
+    queryFn: () => fetchSandboxHealth(id!),
+    enabled: Boolean(id) && enabled,
+    refetchInterval: 5000,
+    staleTime: 2000,
   })
 }
 

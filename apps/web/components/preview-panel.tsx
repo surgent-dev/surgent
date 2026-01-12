@@ -2,13 +2,14 @@
 
 import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from '@/components/agent/web-preview';
 import { useEffect, useState } from 'react';
-import { X, Database, Monitor, CreditCard, GitCompare } from 'lucide-react';
+import { X, Database, Monitor, CreditCard, GitCompare, Power, RefreshCw } from 'lucide-react';
 import type { FileDiff } from '@opencode-ai/sdk';
-import { useConvexDashboardQuery, type ConvexDashboardCredentials } from '@/queries/projects';
+import { useConvexDashboardQuery, useActivateProject, useSandboxHealthQuery, type ConvexDashboardCredentials } from '@/queries/projects';
 import DiffView from '@/components/diff/diff-view';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { EmbeddedDashboard } from '@/components/agent/convex-dashboard';
+import { Button } from '@/components/ui/button';
 
 export interface PreviewTab {
   id: string;
@@ -109,6 +110,43 @@ function PaymentsContent() {
   );
 }
 
+function SandboxPausedContent({ 
+  onActivate, 
+  isActivating 
+}: { 
+  onActivate: () => void; 
+  isActivating: boolean;
+}) {
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4 text-center max-w-sm">
+        <div className="rounded-full bg-muted p-4">
+          <Power className="size-8 text-muted-foreground" strokeWidth={1.5} />
+        </div>
+        <div className="space-y-1">
+          <p className="font-medium">Sandbox Paused</p>
+          <p className="text-sm text-muted-foreground">
+            Your sandbox is paused to save resources. Activate it to resume your preview.
+          </p>
+        </div>
+        <Button onClick={onActivate} disabled={isActivating} className="gap-2">
+          {isActivating ? (
+            <>
+              <RefreshCw className="size-4 animate-spin" />
+              Activating...
+            </>
+          ) : (
+            <>
+              <Power className="size-4" />
+              Activate Sandbox
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // Get icon for tab type
 function getTabIcon(type: PreviewTab['type']) {
   switch (type) {
@@ -180,11 +218,17 @@ export default function PreviewPanel({ projectId, project, onPreviewUrl, tabs = 
 
   const proxyHost = process.env.NEXT_PUBLIC_PROXY_URL;
   const sandboxId = project?.sandbox?.id;
-  // Preview availability should not depend on SSE connectivity.
-  const isReady = Boolean(sandboxId && proxyHost);
-  const previewUrl = isReady ? `https://3000-${sandboxId}.${proxyHost}` : undefined;
+  const storedPreviewUrl = project?.sandbox?.previewUrl;
+  const fallbackPreviewUrl = sandboxId && proxyHost ? `https://3000-${sandboxId}.${proxyHost}` : undefined;
+  const previewUrl = storedPreviewUrl || fallbackPreviewUrl;
+  const isReady = Boolean(previewUrl);
 
   const [currentUrl, setCurrentUrl] = useState('');
+
+  const { data: health } = useSandboxHealthQuery(projectId, isPreviewTabActive);
+  const sandboxDown = health && health.status !== 'running';
+
+  const { mutate: activate, isPending: activating } = useActivateProject();
 
   useEffect(() => {
     onPreviewUrl?.(previewUrl ?? null);
@@ -217,8 +261,8 @@ export default function PreviewPanel({ projectId, project, onPreviewUrl, tabs = 
             />
           ))}
         </div>
-        {/* Nav controls on the right - only when preview tab is active and ready */}
-        {isPreviewTabActive && isReady && previewUrl && (
+        {/* Nav controls on the right - only when preview tab is active, ready, and sandbox is up */}
+        {isPreviewTabActive && isReady && previewUrl && !sandboxDown && (
           <div className="flex items-center pr-2">
             <PreviewNavControls />
           </div>
@@ -228,7 +272,9 @@ export default function PreviewPanel({ projectId, project, onPreviewUrl, tabs = 
       {/* Tab content */}
       <div className="flex-1 min-h-0 flex flex-col">
         {isPreviewTabActive && (
-          isReady && previewUrl ? (
+          sandboxDown ? (
+            <SandboxPausedContent onActivate={() => projectId && activate({ id: projectId })} isActivating={activating} />
+          ) : isReady && previewUrl ? (
             <WebPreviewBody className="w-full h-full border-0" />
           ) : (
             <LoadingState message="Starting sandbox..." />
@@ -252,8 +298,8 @@ export default function PreviewPanel({ projectId, project, onPreviewUrl, tabs = 
     </div>
   );
 
-  // Wrap in WebPreview context when preview is ready
-  if (isPreviewTabActive && isReady && previewUrl) {
+  // Wrap in WebPreview context when preview is ready and sandbox is up
+  if (isPreviewTabActive && isReady && previewUrl && !sandboxDown) {
     return (
       <WebPreview
         key={previewUrl}

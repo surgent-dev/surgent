@@ -240,6 +240,31 @@ projects.post("/:id/activate", zValidator("param", idParam), async (c) => {
   return c.json({ scheduled: true });
 });
 
+// GET /projects/:id/health - Check if sandbox preview is reachable
+projects.get("/:id/health", zValidator("param", idParam), async (c) => {
+  const { id } = c.req.valid("param");
+  const row = await db
+    .selectFrom("project")
+    .selectAll()
+    .where("id", "=", id)
+    .executeTakeFirst();
+  if (!row) return c.json({ status: "not_found" }, 404);
+  if (row.userId !== c.get("user")!.id) return c.json({ status: "forbidden" }, 403);
+
+  const previewUrl = row.sandbox?.previewUrl;
+  if (!previewUrl) return c.json({ status: "no_sandbox" });
+
+  try {
+    const res = await fetch(previewUrl, { method: "HEAD" });
+    if (res.status === 502 || res.status === 503) {
+      return c.json({ status: "paused" });
+    }
+    return c.json({ status: "running" });
+  } catch {
+    return c.json({ status: "paused" });
+  }
+});
+
 // GET /projects/:id/download - Download project as tar.gz
 projects.get("/:id/download", zValidator("param", idParam), async (c) => {
   const { id } = c.req.valid("param");
