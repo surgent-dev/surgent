@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ElementType } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { format, parseISO } from "date-fns"
@@ -27,7 +27,7 @@ import ChatInput, { type FilePart, type ProviderModel } from "./chat-input"
 import TerminalWidget from "./terminal/terminal-widget"
 import { useSandbox } from "@/hooks/use-sandbox"
 import useAgentStream, { type SessionStatusRetry } from "@/lib/use-agent-stream"
-import { AgentThread } from "@/components/agent/agent-thread"
+import { AgentThread, getToolOnlyCount } from "@/components/agent/agent-thread"
 import { useSessionsQuery, useCreateSession, useSendMessage, useAbortSession } from "@/queries/chats"
 import ProviderDialog from "@/components/provider-dialog"
 
@@ -118,14 +118,22 @@ function RetryCountdown({ retryInfo }: { retryInfo: SessionStatusRetry }) {
   )
 }
 
-function EmptyState() {
+function EmptyState({
+  title = "No messages yet",
+  description = "Start a conversation",
+  icon: Icon = MessageCircle,
+}: {
+  title?: string
+  description?: string
+  icon?: ElementType
+}) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] text-center px-4">
       <div className="rounded-full bg-muted p-3 sm:p-4 mb-3 sm:mb-4">
-        <MessageCircle className="size-6 sm:size-8 text-muted-foreground" strokeWidth={1.5} />
+        <Icon className="size-6 sm:size-8 text-muted-foreground" strokeWidth={1.5} />
       </div>
-      <p className="font-medium text-sm sm:text-base">No messages yet</p>
-      <p className="text-xs sm:text-sm text-muted-foreground">Start a conversation</p>
+      <p className="font-medium text-sm sm:text-base">{title}</p>
+      <p className="text-xs sm:text-sm text-muted-foreground">{description}</p>
     </div>
   )
 }
@@ -243,6 +251,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const sessionName = formatTitle(session?.title || activeSession?.title || "Untitled")
 
   const assistantMessages = messages.filter((m) => m.role === "assistant")
+  const toolOnlyCount = useMemo(() => getToolOnlyCount(messages, parts), [messages, parts])
 
   const isContextLengthExceeded = (err: any) => {
     if (!err) return false
@@ -374,7 +383,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
           </TabButton>
           <TabButton active={chatWindowOpen} onClick={() => setChatWindowOpen((open) => !open)}>
             <MessageCircle className="size-4" />
-            <span className="hidden @md/conversation:inline">Window</span>
+            <span className="hidden @md/conversation:inline">MCP</span>
           </TabButton>
           {showTerminal && (
             <TabButton active={tab === "terminal"} onClick={() => setTab("terminal")}>
@@ -562,12 +571,12 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       )}
 
       <Sheet open={chatWindowOpen} onOpenChange={setChatWindowOpen}>
-        <SheetContent className="p-0">
+        <SheetContent side="left" className="p-0 w-[640px]">
           <div className="flex flex-col h-full min-h-0">
             <SheetHeader className="border-b bg-muted/30">
               <SheetTitle className="flex items-center gap-2 text-sm">
                 <MessageCircle className="size-4" />
-                <span>Chat</span>
+                <span>MCP</span>
               </SheetTitle>
             </SheetHeader>
             <div className="flex-1 min-h-0">
@@ -577,7 +586,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                     <div className="flex items-center justify-center min-h-[200px]">
                       <Loader2 className="size-5 animate-spin text-muted-foreground" />
                     </div>
-                  ) : messages.length ? (
+                  ) : toolOnlyCount > 0 ? (
                     <AgentThread
                       projectId={projectId}
                       sessionId={activeId!}
@@ -585,52 +594,17 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                       partsMap={parts}
                       permissions={permissions}
                       isWorking={working}
+                      toolOnly
                     />
                   ) : (
-                    <EmptyState />
+                    <EmptyState
+                      title="No tool calls yet"
+                      description="Tool activity will show up here"
+                      icon={Terminal}
+                    />
                   )}
                 </div>
               </ScrollArea>
-            </div>
-            <div className="px-3 py-3 border-t">
-              {lastAssistantError && (
-                <div
-                  className={cn(
-                    "mb-2 px-3 py-2 rounded-lg border text-xs",
-                    lastAssistantError.isContext
-                      ? "bg-warning/10 border-warning/20 text-warning"
-                      : "bg-muted/50 text-muted-foreground",
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="size-3.5 shrink-0" />
-                    <p className="flex-1 min-w-0 wrap-break-word line-clamp-2">{lastAssistantError.message}</p>
-                    <button
-                      onClick={handleCreate}
-                      disabled={create.isPending}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors shrink-0 hover:bg-muted"
-                    >
-                      {create.isPending ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
-                      <span>New session</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-              <ChatInput
-                onSubmit={handleSend}
-                disabled={!connected || working}
-                placeholder={!connected ? "Connecting..." : working ? "Working..." : "Ask anything..."}
-                mode={mode}
-                onToggleMode={() => setMode((m) => (m === "plan" ? "build" : "plan"))}
-                isWorking={working}
-                onStop={handleAbort}
-                isStopping={abort.isPending}
-                value={inputValue}
-                onValueChange={setInputValue}
-                models={availableModels}
-                selectedModel={selectedModel}
-                onModelChange={handleModelChange}
-              />
             </div>
           </div>
         </SheetContent>
