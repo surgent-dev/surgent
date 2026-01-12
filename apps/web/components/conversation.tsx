@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ElementType } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { format, parseISO } from "date-fns"
+import type { ToolPart } from "@opencode-ai/sdk"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
@@ -179,7 +180,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const prefilledRef = useRef(false)
 
   const showTerminal = searchParams?.get("terminal") === "true"
-  const [tab, setTab] = useState<"chat" | "terminal">("chat")
+  const [tab, setTab] = useState<"chat" | "terminal" | "logs">("chat")
   const [mode, setMode] = useState<"plan" | "build">("build")
   const [providerOpen, setProviderOpen] = useState(false)
   const [chatWindowOpen, setChatWindowOpen] = useState(false)
@@ -274,6 +275,27 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const sessionName = formatTitle(session?.title || activeSession?.title || "Untitled")
 
   const assistantMessages = messages.filter((m) => m.role === "assistant")
+
+  const isCompletedDevLog = (
+    part: ToolPart,
+  ): part is ToolPart & { tool: "dev-logs"; state: { status: "completed"; output: string; title: string } } =>
+    part.tool === "dev-logs" &&
+    part.state.status === "completed" &&
+    typeof part.state.output === "string" &&
+    typeof part.state.title === "string"
+
+  const devLogsText = useMemo(() => {
+    const toolParts = messages
+      .flatMap((message) => parts[message.id] ?? [])
+      .filter((part): part is ToolPart => part.type === "tool")
+    const latest = [...toolParts].reverse().find(isCompletedDevLog)
+    if (!latest) return ""
+    const text = latest.state.output.trim()
+    const title = latest.state.title.trim()
+    if (!title) return text
+    if (!text) return title
+    return `${title}\n${text}`.trim()
+  }, [messages, parts])
 
   const isContextLengthExceeded = (err: any) => {
     if (!err) return false
@@ -415,7 +437,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       <header className="flex flex-col border-b bg-muted/30 shrink-0">
         {/* Tabs + Session + Actions */}
         <div className="flex h-10 items-stretch border-b min-w-0">
-          <TabButton active={tab === "chat" || !showTerminal} onClick={() => setTab("chat")}>
+          <TabButton active={tab === "chat"} onClick={() => setTab("chat")}>
             <MessagesSquare className="size-4" />
             <span className="hidden @md/conversation:inline">Chat</span>
           </TabButton>
@@ -423,7 +445,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
             <MessageCircle className="size-4" />
             <span className="hidden @md/conversation:inline">MCP</span>
           </TabButton>
-          <TabButton active={false} onClick={() => {}}>
+          <TabButton active={tab === "logs"} onClick={() => setTab("logs")}>
             <ScrollText className="size-4" />
             <span className="hidden @md/conversation:inline">Logs</span>
           </TabButton>
@@ -534,7 +556,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       </header>
 
       {/* Chat */}
-      {(tab === "chat" || !showTerminal) && (
+      {tab === "chat" && (
         <div className="flex flex-col flex-1 min-h-0">
           <div ref={scrollRef} className="flex-1 min-h-0">
             <ScrollArea className="h-full">
@@ -601,6 +623,25 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                 onModelChange={handleModelChange}
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logs */}
+      {tab === "logs" && (
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 min-h-0">
+            <ScrollArea className="h-full">
+              <div className="max-w-3xl mx-auto px-2 py-4 @md/conversation:px-4 @md/conversation:py-6">
+                {devLogsText ? (
+                  <pre className="text-xs sm:text-sm font-mono whitespace-pre-wrap break-words text-foreground/90">
+                    {devLogsText}
+                  </pre>
+                ) : (
+                  <EmptyState title="No logs yet" description="Run a dev-logs tool to see output" icon={ScrollText} />
+                )}
+              </div>
+            </ScrollArea>
           </div>
         </div>
       )}
