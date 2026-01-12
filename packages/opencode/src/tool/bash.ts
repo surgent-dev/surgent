@@ -221,7 +221,7 @@ export const BashTool = Tool.define("bash", async () => {
         }
       }
 
-      // For Daytona sandboxes, use simple -c execution (complex bashrc sourcing gets mangled)
+      // For remote sandboxes, use simple -c execution (complex bashrc sourcing gets mangled)
       const args = Instance.sandboxId ? ["-c", params.command] : Shell.commandArgs(shell, params.command)
       const result = await sandbox.proc.spawn([shell, ...args], {
         cwd,

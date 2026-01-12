@@ -54,7 +54,7 @@
     "@ai-sdk/provider-utils": "3.0.19",
     "@ai-sdk/togetherai": "1.0.30",
     "@ai-sdk/xai": "2.0.42",
-    "@daytonaio/sdk": "0.128.1",
+    "e2b": "^2.8.4",
     "@hono/standard-validator": "0.1.5",
     "@hono/zod-validator": "catalog:",
     "@modelcontextprotocol/sdk": "1.15.1",

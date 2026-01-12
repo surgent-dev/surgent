@@ -4,7 +4,7 @@ import { Project } from "./project"
 import { State } from "./state"
 import { iife } from "../util/iife"
 import { GlobalBus } from "../bus/global"
-import { create as createSandbox, createDaytonaSandbox } from "../sandbox"
+import { create as createSandbox, createRemoteSandbox } from "../sandbox"
 import type { Sandbox } from "../sandbox"
 
 interface InstanceContext {
@@ -39,7 +39,7 @@ export const Instance = {
 
       existing = iife(async () => {
         const sandbox = input.sandboxId
-          ? createDaytonaSandbox({ sandboxId: input.sandboxId, root: input.directory })
+          ? await createRemoteSandbox(input.sandboxId, input.directory)
           : createSandbox(input.directory)
 
         const project = await Project.fromDirectory(input.directory, {
