@@ -18,8 +18,8 @@ function MarkdownComponent({ children, className, isAnimating }: MarkdownProps) 
   return (
     <Streamdown
       className={cn(
-        "prose prose-sm dark:prose-invert max-w-none break-all [&_pre]:overflow-x-auto",
-        className
+        "prose prose-sm dark:prose-invert max-w-none break-normal [overflow-wrap:break-word] [&_pre]:overflow-x-auto",
+        className,
       )}
       isAnimating={isAnimating}
       shikiTheme={shikiTheme}
