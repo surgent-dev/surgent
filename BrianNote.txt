@@ -1,0 +1,17 @@
+github setup
+telgram setup
+opencode setup
+-source ~/.bashrc
+-opencode auth login (have to login otherwise it won't be able to find agents)
+-opencode models
+-opencode connect
+setup too-many-cooks
+setup llm apis 
+-run a ping test
+install bun
+run bun install (1200 installs)
+bun run dev
+-install a local db as the websites needs to access it (Brian used postgresql)
+export DATABASE_URL="postgres://surgent:putpasswordhere@localhost:5432/surgent"
+export POSTGRES_TYPE="pg"
+bun db:migrate
