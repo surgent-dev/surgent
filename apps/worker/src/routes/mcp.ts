@@ -29,6 +29,9 @@ const transport = new StreamableHTTPTransport()
  * }
  */
 mcp.get("/", async (c) => {
+  if (!mcpServer.isConnected()) {
+    await mcpServer.connect(transport)
+  }
   const connected = mcpServer.isConnected()
   return c.json({
     convex: connected ? { status: "connected" } : { status: "failed", error: "Not connected" },
