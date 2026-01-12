@@ -4,11 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ElementType } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { format, parseISO } from "date-fns"
-import type { ToolPart } from "@opencode-ai/sdk"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { http } from "@/lib/http"
@@ -23,7 +19,6 @@ import {
   AlertCircle,
   X,
   RefreshCw,
-  ScrollText,
 } from "lucide-react"
 import ChatInput, { type FilePart, type ProviderModel } from "./chat-input"
 import TerminalWidget from "./terminal/terminal-widget"
@@ -43,10 +38,6 @@ type ProviderList = {
   connected: string[]
 }
 
-type McpStatusValue = { status?: string } | string
-
-type McpStatus = Record<string, McpStatusValue>
-
 const PROVIDER_LABELS: Record<string, string> = {
   anthropic: "Claude",
   openai: "OpenAI",
@@ -62,24 +53,6 @@ const formatTitle = (title: string) => {
   } catch {
     return title
   }
-}
-
-const formatStatus = (status: string) => status.replace(/[_-]/g, " ")
-
-const getStatusTone = (status: string) => {
-  const value = status.toLowerCase()
-  if (["ready", "running", "connected", "online", "ok", "healthy"].includes(value)) return "text-success"
-  if (["warning", "degraded"].includes(value)) return "text-warning"
-  if (["error", "failed", "offline", "disconnected", "down"].includes(value)) return "text-destructive"
-  return "text-muted-foreground"
-}
-
-const getStatusDot = (status: string) => {
-  const value = status.toLowerCase()
-  if (["ready", "running", "connected", "online", "ok", "healthy"].includes(value)) return "bg-success"
-  if (["warning", "degraded"].includes(value)) return "bg-warning"
-  if (["error", "failed", "offline", "disconnected", "down"].includes(value)) return "bg-destructive"
-  return "bg-muted-foreground/40"
 }
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -180,10 +153,9 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const prefilledRef = useRef(false)
 
   const showTerminal = searchParams?.get("terminal") === "true"
-  const [tab, setTab] = useState<"chat" | "terminal" | "logs">("chat")
+  const [tab, setTab] = useState<"chat" | "terminal">("chat")
   const [mode, setMode] = useState<"plan" | "build">("build")
   const [providerOpen, setProviderOpen] = useState(false)
-  const [chatWindowOpen, setChatWindowOpen] = useState(false)
   const [inputValue, setInputValue] = useState("")
   const [selectedModel, setSelectedModel] = useState<{ modelId: string; providerId: string }>({
     modelId: "gemini-3-flash-preview",
@@ -276,27 +248,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
   const assistantMessages = messages.filter((m) => m.role === "assistant")
 
-  const isCompletedDevLog = (
-    part: ToolPart,
-  ): part is ToolPart & { tool: "dev-logs"; state: { status: "completed"; output: string; title: string } } =>
-    part.tool === "dev-logs" &&
-    part.state.status === "completed" &&
-    typeof part.state.output === "string" &&
-    typeof part.state.title === "string"
-
-  const devLogsText = useMemo(() => {
-    const toolParts = messages
-      .flatMap((message) => parts[message.id] ?? [])
-      .filter((part): part is ToolPart => part.type === "tool")
-    const latest = [...toolParts].reverse().find(isCompletedDevLog)
-    if (!latest) return ""
-    const text = latest.state.output.trim()
-    const title = latest.state.title.trim()
-    if (!title) return text
-    if (!text) return title
-    return `${title}\n${text}`.trim()
-  }, [messages, parts])
-
   const isContextLengthExceeded = (err: any) => {
     if (!err) return false
     const directCode = err.code || err.data?.code
@@ -341,22 +292,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     staleTime: 60_000,
     queryFn: async () => (await http.get(`api/agent/${projectId}/provider`).json()) as ProviderList,
   })
-
-  const { data: mcpStatus, isLoading: mcpLoading } = useQuery<McpStatus>({
-    queryKey: ["mcp-status"],
-    enabled: chatWindowOpen,
-    queryFn: async () => (await http.get("mcp").json()) as McpStatus,
-  })
-
-  const mcpEntries = useMemo(() => {
-    if (!mcpStatus) return []
-    return Object.entries(mcpStatus).map((entry) => {
-      const name = entry[0]
-      const value = entry[1]
-      const status = typeof value === "string" ? value : value?.status || "unknown"
-      return { name, status }
-    })
-  }, [mcpStatus])
 
   // Transform providers into a flat list of models from connected providers only
   const availableModels = useMemo<ProviderModel[]>(() => {
@@ -440,14 +375,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
           <TabButton active={tab === "chat"} onClick={() => setTab("chat")}>
             <MessagesSquare className="size-4" />
             <span className="hidden @md/conversation:inline">Chat</span>
-          </TabButton>
-          <TabButton active={chatWindowOpen} onClick={() => setChatWindowOpen((open) => !open)}>
-            <MessageCircle className="size-4" />
-            <span className="hidden @md/conversation:inline">MCP</span>
-          </TabButton>
-          <TabButton active={tab === "logs"} onClick={() => setTab("logs")}>
-            <ScrollText className="size-4" />
-            <span className="hidden @md/conversation:inline">Logs</span>
           </TabButton>
           {showTerminal && (
             <TabButton active={tab === "terminal"} onClick={() => setTab("terminal")}>
@@ -627,78 +554,12 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         </div>
       )}
 
-      {/* Logs */}
-      {tab === "logs" && (
-        <div className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 min-h-0">
-            <ScrollArea className="h-full">
-              <div className="max-w-3xl mx-auto px-2 py-4 @md/conversation:px-4 @md/conversation:py-6">
-                {devLogsText ? (
-                  <pre className="text-xs sm:text-sm font-mono whitespace-pre-wrap break-words text-foreground/90">
-                    {devLogsText}
-                  </pre>
-                ) : (
-                  <EmptyState title="No logs yet" description="Run a dev-logs tool to see output" icon={ScrollText} />
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-        </div>
-      )}
-
       {/* Terminal */}
       {showTerminal && tab === "terminal" && (
         <div className="flex-1 min-h-0 p-3">
           <TerminalWidget sandboxId={sandboxId} className="size-full rounded-lg" />
         </div>
       )}
-
-      <Sheet open={chatWindowOpen} onOpenChange={setChatWindowOpen}>
-        <SheetContent side="left" className="p-0 w-[840px]">
-          <div className="flex flex-col h-full min-h-0">
-            <SheetHeader className="border-b bg-muted/30">
-              <SheetTitle className="flex items-center gap-2 text-sm">
-                <MessageCircle className="size-4" />
-                <span>MCP</span>
-              </SheetTitle>
-            </SheetHeader>
-            <div className="flex-1 min-h-0">
-              <ScrollArea className="h-full">
-                <div className="px-3 py-4">
-                  {mcpLoading ? (
-                    <div className="flex items-center justify-center min-h-[200px]">
-                      <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : mcpEntries.length ? (
-                    <div className="space-y-2">
-                      {mcpEntries.map((entry) => (
-                        <div
-                          key={entry.name}
-                          className="flex items-center justify-between rounded-lg border bg-background/60 px-3 py-2"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className={cn("size-2 rounded-full", getStatusDot(entry.status))} />
-                            <span className="font-medium text-sm truncate">{entry.name}</span>
-                          </div>
-                          <span className={cn("text-xs font-medium capitalize", getStatusTone(entry.status))}>
-                            {formatStatus(entry.status)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      title="No MCP servers"
-                      description="Connect an MCP server to see status"
-                      icon={Terminal}
-                    />
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
 
       <ProviderDialog open={providerOpen} onOpenChange={setProviderOpen} projectId={projectId} />
     </div>
