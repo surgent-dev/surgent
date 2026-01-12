@@ -366,10 +366,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         </div>
         {/* Context stats */}
         <div className="h-8 flex items-center px-3 gap-2 min-w-0 text-xs">
-          {connected ? (
+          <span className={`size-2 rounded-full ${!connected ? "bg-muted-foreground/40" : isRetrying ? "bg-warning" : "bg-success"}`} title={!connected ? "Connecting..." : isRetrying ? "Retrying..." : "Agent connected"} />
+          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">{connected ? sessionName : "Connecting..."}</span>
+          {connected && (
             <>
-              <span className={`size-2 rounded-full ${isRetrying ? "bg-warning" : "bg-success"}`} title={isRetrying ? "Retrying..." : "Agent connected"} />
-              <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">{sessionName}</span>
               {isRetrying && retryInfo ? (
                 <>
                   <span className="text-muted-foreground">·</span>
@@ -401,7 +401,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                 </>
               )}
             </>
-          ) : null}
+          )}
         </div>
 
         {(() => {
