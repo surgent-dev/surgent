@@ -14,7 +14,7 @@
   "dispatch_namespaces": [
     {
       "binding": "dispatcher",
-      "namespace": "default-surgent-namespace",
+      "namespace": "surgent-apps-prod",
       "remote": true
     }
   ]
