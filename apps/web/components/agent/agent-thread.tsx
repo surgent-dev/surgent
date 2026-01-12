@@ -1,22 +1,28 @@
-"use client";
+"use client"
 
-import React, { useState, useMemo } from "react";
-import type { 
-  Message, 
-  Part, 
-  Permission,
-  TextPart,
-  ToolPart,
-  ReasoningPart,
-  FilePart 
-} from "@opencode-ai/sdk";
-import { AlertCircle, Bot, CheckCircle2, Eye, FilePenLine, FileText, Globe, ListTodo, Loader2, Play, Search, Terminal, Trash2 } from "lucide-react";
-import { ShimmeringText } from "@/components/ui/shimmer-text";
-import { Markdown } from "@/components/ui/markdown";
-import { useRespondPermission } from "@/queries/chats";
-import useAgentStream from "@/lib/use-agent-stream";
+import React, { useState, useMemo } from "react"
+import type { Message, Part, Permission, TextPart, ToolPart, ReasoningPart, FilePart } from "@opencode-ai/sdk"
+import {
+  AlertCircle,
+  Bot,
+  CheckCircle2,
+  Eye,
+  FilePenLine,
+  FileText,
+  Globe,
+  ListTodo,
+  Loader2,
+  Play,
+  Search,
+  Terminal,
+  Trash2,
+} from "lucide-react"
+import { ShimmeringText } from "@/components/ui/shimmer-text"
+import { Markdown } from "@/components/ui/markdown"
+import { useRespondPermission } from "@/queries/chats"
+import useAgentStream from "@/lib/use-agent-stream"
 
-type PermissionResponse = "once" | "always" | "reject";
+type PermissionResponse = "once" | "always" | "reject"
 
 const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: string }> = {
   read: { icon: Eye, done: "Read", doing: "Reading..." },
@@ -33,64 +39,75 @@ const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: stri
   task: { icon: Bot, done: "Subagent", doing: "Subagent..." },
   dev: { icon: Play, done: "Started", doing: "Starting..." },
   devLogs: { icon: Terminal, done: "Logs", doing: "Loading..." },
-};
+}
 
 function getTarget(part: ToolPart): string | undefined {
-  if (part.state.status === "pending") return;
-  const input = part.state.input as Record<string, unknown>;
-  if (["read", "write", "edit"].includes(part.tool)) return String(input.filePath || "").split(/[/\\]/).pop();
-  if (["bash", "dev"].includes(part.tool)) return String(input.command || "");
-  if (part.tool === "task") return String(input.description || input.subagent_type || "");
-  if (part.tool === "grep") return String(input.pattern || "");
-  if (part.tool === "glob") return String(input.pattern || "");
-  if (part.tool === "list") return String(input.path || "/");
+  if (part.state.status === "pending") return
+  const input = part.state.input as Record<string, unknown>
+  if (["read", "write", "edit"].includes(part.tool))
+    return String(input.filePath || "")
+      .split(/[/\\]/)
+      .pop()
+  if (["bash", "dev"].includes(part.tool)) return String(input.command || "")
+  if (part.tool === "task") return String(input.description || input.subagent_type || "")
+  if (part.tool === "grep") return String(input.pattern || "")
+  if (part.tool === "glob") return String(input.pattern || "")
+  if (part.tool === "list") return String(input.path || "/")
   if (part.tool === "webfetch") {
-    try { return new URL(String(input.url)).hostname; }
-    catch { return String(input.url); }
+    try {
+      return new URL(String(input.url)).hostname
+    } catch {
+      return String(input.url)
+    }
   }
 }
 
 function formatValue(val: unknown): string {
-  if (val === undefined || val === null) return "";
-  if (typeof val === "string") return val;
-  return JSON.stringify(val, null, 2);
+  if (val === undefined || val === null) return ""
+  if (typeof val === "string") return val
+  return JSON.stringify(val, null, 2)
 }
 
-type Turn = { user: Message; assistants: Message[] };
+type Turn = { user: Message; assistants: Message[] }
 
 function groupTurns(messages: Message[]): Turn[] {
-  const turns: Turn[] = [];
-  let current: Turn | undefined;
-  messages.forEach(m => {
+  const turns: Turn[] = []
+  let current: Turn | undefined
+  messages.forEach((m) => {
     if (m.role === "user") {
-      current = { user: m, assistants: [] };
-      turns.push(current);
-      return;
+      current = { user: m, assistants: [] }
+      turns.push(current)
+      return
     }
-    if (m.role === "assistant" && current) current.assistants.push(m);
-  });
-  return turns;
+    if (m.role === "assistant" && current) current.assistants.push(m)
+  })
+  return turns
 }
 
-type TodoItem = { id?: string; content?: string; status?: string };
+type TodoItem = { id?: string; content?: string; status?: string }
 
 function getTodosFromToolPart(part: ToolPart): TodoItem[] {
-  const input = part.state.status !== "pending" ? (part.state.input as Record<string, unknown>) : {};
-  if (Array.isArray(input?.todos)) return input.todos as TodoItem[];
-  if (part.state.status !== "completed") return [];
+  const input = part.state.status !== "pending" ? (part.state.input as Record<string, unknown>) : {}
+  if (Array.isArray(input?.todos)) return input.todos as TodoItem[]
+  if (part.state.status !== "completed") return []
   try {
-    const val = typeof part.state.output === "string" ? JSON.parse(part.state.output) : part.state.output;
-    return Array.isArray(val) ? val as TodoItem[] : [];
+    const val = typeof part.state.output === "string" ? JSON.parse(part.state.output) : part.state.output
+    return Array.isArray(val) ? (val as TodoItem[]) : []
   } catch {
-    return [];
+    return []
   }
 }
 
-function PermissionPrompt({ permission, onRespond, responding, error }: {
-  permission: Permission;
-  onRespond: (response: PermissionResponse) => void;
-  responding: boolean;
-  error?: string;
+function PermissionPrompt({
+  permission,
+  onRespond,
+  responding,
+  error,
+}: {
+  permission: Permission
+  onRespond: (response: PermissionResponse) => void
+  responding: boolean
+  error?: string
 }) {
   return (
     <div className="rounded-lg border overflow-hidden bg-muted/30">
@@ -98,7 +115,7 @@ function PermissionPrompt({ permission, onRespond, responding, error }: {
         <AlertCircle className="size-3 text-primary shrink-0" />
         <span className="text-xs font-medium">Permission required</span>
       </div>
-      <div className="px-3 py-2 text-[11px] text-muted-foreground break-all">
+      <div className="px-3 py-2 text-[11px] text-muted-foreground break-normal [overflow-wrap:break-word]">
         {permission.title}
       </div>
       <div className="flex items-stretch h-8 border-t bg-muted/40">
@@ -128,33 +145,44 @@ function PermissionPrompt({ permission, onRespond, responding, error }: {
       </div>
       {error && <div className="px-3 py-1.5 text-[11px] text-destructive border-t">{error}</div>}
     </div>
-  );
+  )
 }
 
-function Tool({ part, projectId, permission, onRespondPermission, responding, respondError }: {
-  part: ToolPart;
-  projectId?: string;
-  permission?: Permission;
-  onRespondPermission?: (permission: Permission, response: PermissionResponse) => void;
-  responding?: boolean;
-  respondError?: string;
+function Tool({
+  part,
+  projectId,
+  permission,
+  onRespondPermission,
+  responding,
+  respondError,
+}: {
+  part: ToolPart
+  projectId?: string
+  permission?: Permission
+  onRespondPermission?: (permission: Permission, response: PermissionResponse) => void
+  responding?: boolean
+  respondError?: string
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const cfg = TOOLS[part.tool] || { icon: FileText, done: part.tool, doing: "Working..." };
-  const Icon = cfg.icon;
-  const target = getTarget(part);
-  const running = part.state.status === "running" || part.state.status === "pending";
-  const meta = part.state.status === "pending" ? undefined : part.state.metadata;
-  const subSessionId = part.tool === "task" && typeof meta?.sessionId === "string" ? meta.sessionId : undefined;
+  const [expanded, setExpanded] = useState(false)
+  const cfg = TOOLS[part.tool] || { icon: FileText, done: part.tool, doing: "Working..." }
+  const Icon = cfg.icon
+  const target = getTarget(part)
+  const running = part.state.status === "running" || part.state.status === "pending"
+  const meta = part.state.status === "pending" ? undefined : part.state.metadata
+  const subSessionId = part.tool === "task" && typeof meta?.sessionId === "string" ? meta.sessionId : undefined
 
   const header = (() => {
     if (running) {
       return (
         <div className="flex items-center gap-1 sm:gap-1.5 py-0.5 sm:py-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
           <ShimmeringText text={cfg.doing} duration={0.4} className="text-[11px] sm:text-sm" />
-          {target && <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">{target}</code>}
+          {target && (
+            <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">
+              {target}
+            </code>
+          )}
         </div>
-      );
+      )
     }
 
     if (part.state.status === "error") {
@@ -163,23 +191,31 @@ function Tool({ part, projectId, permission, onRespondPermission, responding, re
           <Icon className="size-2.5 sm:size-3 shrink-0" />
           <span>Skipped {target || cfg.done}</span>
         </div>
-      );
+      )
     }
 
     return (
       <div className="group flex items-center gap-1 py-0.5 sm:py-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
         <Icon className={`size-2.5 sm:size-3.5 shrink-0 ${expanded ? "text-foreground" : ""}`} />
         <span>{cfg.done}</span>
-        {target && <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">{target}</code>}
-        <span className={`text-[10px] transition-opacity ${expanded ? "opacity-60" : "opacity-0 group-hover:opacity-60"}`}>{expanded ? "▾" : "▸"}</span>
+        {target && (
+          <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">
+            {target}
+          </code>
+        )}
+        <span
+          className={`text-[10px] transition-opacity ${expanded ? "opacity-60" : "opacity-0 group-hover:opacity-60"}`}
+        >
+          {expanded ? "▾" : "▸"}
+        </span>
       </div>
-    );
-  })();
+    )
+  })()
 
   return (
     <div className={permission ? "space-y-2" : undefined}>
       <button
-        onClick={() => setExpanded(s => !s)}
+        onClick={() => setExpanded((s) => !s)}
         className="w-full text-left hover:text-foreground cursor-pointer transition-colors"
       >
         {header}
@@ -194,19 +230,25 @@ function Tool({ part, projectId, permission, onRespondPermission, responding, re
           {part.tool !== "task" && part.state.status !== "pending" && (
             <div>
               <div className="text-muted-foreground/70 font-medium mb-1">Input</div>
-              <pre className="p-2 rounded bg-muted/50 whitespace-pre-wrap wrap-break-word">{formatValue(part.state.input)}</pre>
+              <pre className="p-2 rounded bg-muted/50 whitespace-pre-wrap break-normal [overflow-wrap:break-word]">
+                {formatValue(part.state.input)}
+              </pre>
             </div>
           )}
           {part.tool !== "task" && part.state.status === "completed" && (
             <div>
               <div className="text-muted-foreground/70 font-medium mb-1">Output</div>
-              <pre className="p-2 rounded bg-muted/50 whitespace-pre-wrap wrap-break-word">{formatValue(part.state.output)}</pre>
+              <pre className="p-2 rounded bg-muted/50 whitespace-pre-wrap break-normal [overflow-wrap:break-word]">
+                {formatValue(part.state.output)}
+              </pre>
             </div>
           )}
           {part.tool !== "task" && part.state.status === "error" && (
             <div>
               <div className="text-destructive/70 font-medium mb-1">Error</div>
-              <pre className="p-2 rounded bg-destructive/10 whitespace-pre-wrap wrap-break-word text-destructive">{String(part.state.error)}</pre>
+              <pre className="p-2 rounded bg-destructive/10 whitespace-pre-wrap break-normal [overflow-wrap:break-word] text-destructive">
+                {String(part.state.error)}
+              </pre>
             </div>
           )}
         </div>
@@ -221,11 +263,11 @@ function Tool({ part, projectId, permission, onRespondPermission, responding, re
         />
       )}
     </div>
-  );
+  )
 }
 
 function SubagentStream({ projectId, sessionId }: { projectId: string; sessionId: string }) {
-  const { messages, parts, permissions, loading, connected } = useAgentStream({ projectId, sessionId });
+  const { messages, parts, permissions, loading, connected } = useAgentStream({ projectId, sessionId })
 
   return (
     <div className="space-y-2">
@@ -242,47 +284,71 @@ function SubagentStream({ projectId, sessionId }: { projectId: string; sessionId
         permissions={permissions}
       />
     </div>
-  );
+  )
 }
 
 function Todos({ part }: { part: ToolPart }) {
-  const loading = part.state.status === "running" || part.state.status === "pending";
-  const todos = useMemo(() => getTodosFromToolPart(part), [part.state]);
+  const loading = part.state.status === "running" || part.state.status === "pending"
+  const todos = useMemo(() => getTodosFromToolPart(part), [part.state])
 
-  const done = todos.filter(t => t.status === "completed").length;
+  const done = todos.filter((t) => t.status === "completed").length
 
   return (
     <div className="my-1.5 sm:my-2 p-2 sm:p-3 rounded-xl bg-muted/50 border w-full min-w-0">
       <div className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-sm text-muted-foreground mb-1.5 sm:mb-2">
         <ListTodo className="size-3 sm:size-4 shrink-0" />
-        <span className="font-medium">{done}/{todos.length} done</span>
+        <span className="font-medium">
+          {done}/{todos.length} done
+        </span>
         {loading && <Loader2 className="size-2.5 sm:size-3 animate-spin ml-1" />}
       </div>
       {todos.length > 0 ? (
         <div className="space-y-1 sm:space-y-1.5">
           {todos.map((t, i) => {
-            const isDone = t.status === "completed";
+            const isDone = t.status === "completed"
             return (
-              <div key={t.id || i} className={`flex items-start gap-1 sm:gap-2 text-[11px] sm:text-sm ${isDone ? "opacity-50" : ""}`}>
-                <div className={`size-3 sm:size-4 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 ${isDone ? "bg-primary border-primary" : "border-muted-foreground/30"}`}>
+              <div
+                key={t.id || i}
+                className={`flex items-start gap-1 sm:gap-2 text-[11px] sm:text-sm ${isDone ? "opacity-50" : ""}`}
+              >
+                <div
+                  className={`size-3 sm:size-4 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 ${isDone ? "bg-primary border-primary" : "border-muted-foreground/30"}`}
+                >
                   {isDone && <CheckCircle2 className="size-1.5 sm:size-2.5 text-primary-foreground" />}
                 </div>
-                <span className={`wrap-break-word min-w-0 ${isDone ? "line-through text-muted-foreground" : ""}`}>{t.content}</span>
+                <span
+                  className={`break-normal [overflow-wrap:break-word] min-w-0 ${isDone ? "line-through text-muted-foreground" : ""}`}
+                >
+                  {t.content}
+                </span>
               </div>
-            );
+            )
           })}
         </div>
       ) : (
         <p className="text-[11px] sm:text-xs text-muted-foreground">No tasks yet</p>
       )}
     </div>
-  );
+  )
 }
 
-function Thinking({ text, streaming, open, toggle }: { text: string; streaming: boolean; open: boolean; toggle: () => void }) {
+function Thinking({
+  text,
+  streaming,
+  open,
+  toggle,
+}: {
+  text: string
+  streaming: boolean
+  open: boolean
+  toggle: () => void
+}) {
   return (
     <div className="my-1">
-      <button onClick={toggle} className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-sm text-muted-foreground hover:text-foreground transition-colors">
+      <button
+        onClick={toggle}
+        className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
         <span className={`font-medium ${open ? "text-foreground" : ""}`}>{streaming ? "Thinking..." : "Thoughts"}</span>
         {!streaming && <span className="text-[10px] opacity-60">{open ? "▾" : "▸"}</span>}
       </button>
@@ -296,156 +362,182 @@ function Thinking({ text, streaming, open, toggle }: { text: string; streaming: 
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function FileThumb({ file }: { file: FilePart }) {
-  const isImage = file.mime?.startsWith("image/");
+  const isImage = file.mime?.startsWith("image/")
   return (
-    <a href={file.url} target="_blank" rel="noreferrer" download={!isImage ? file.filename : undefined} className="block size-8 sm:size-10 rounded-lg overflow-hidden bg-muted hover:opacity-80 transition-opacity shrink-0">
+    <a
+      href={file.url}
+      target="_blank"
+      rel="noreferrer"
+      download={!isImage ? file.filename : undefined}
+      className="block size-8 sm:size-10 rounded-lg overflow-hidden bg-muted hover:opacity-80 transition-opacity shrink-0"
+    >
       {isImage ? (
         <img src={file.url} alt={file.filename || "file"} className="size-full object-cover" />
       ) : (
-        <div className="size-full flex items-center justify-center"><FileText className="size-3 sm:size-4 text-muted-foreground" /></div>
+        <div className="size-full flex items-center justify-center">
+          <FileText className="size-3 sm:size-4 text-muted-foreground" />
+        </div>
       )}
     </a>
-  );
+  )
 }
 
-function ApiError({ error }: { error: { code?: string; data?: { code?: string; message?: string }; message?: string; name?: string } }) {
-  const code = error?.code || error?.data?.code;
-  const msg = error?.data?.message || error?.message || error?.name || "Request failed";
-  const isContext = code === "context_length_exceeded" || msg.includes("context");
+function ApiError({
+  error,
+}: {
+  error: { code?: string; data?: { code?: string; message?: string }; message?: string; name?: string }
+}) {
+  const code = error?.code || error?.data?.code
+  const msg = error?.data?.message || error?.message || error?.name || "Request failed"
+  const isContext = code === "context_length_exceeded" || msg.includes("context")
 
   return (
-    <div className={`flex items-start gap-2 py-2 px-3 rounded-lg border text-xs sm:text-sm ${isContext ? "bg-warning/10 border-warning/20 text-warning" : "bg-muted/50 text-muted-foreground"}`}>
+    <div
+      className={`flex items-start gap-2 py-2 px-3 rounded-lg border text-xs sm:text-sm ${isContext ? "bg-warning/10 border-warning/20 text-warning" : "bg-muted/50 text-muted-foreground"}`}
+    >
       <AlertCircle className="size-3.5 shrink-0 mt-0.5" />
-      <p className="min-w-0 break-all">{isContext ? "Context limit reached. Start a new session." : msg}</p>
+      <p className="min-w-0 break-normal [overflow-wrap:break-word]">
+        {isContext ? "Context limit reached. Start a new session." : msg}
+      </p>
     </div>
-  );
+  )
 }
 
-export function AgentThread({ projectId, sessionId, messages, partsMap, permissions, isWorking }: {
-  projectId?: string;
-  sessionId: string;
-  messages: Message[];
-  partsMap: Record<string, Part[]>;
-  permissions?: Permission[];
-  isWorking?: boolean;
+export function AgentThread({
+  projectId,
+  sessionId,
+  messages,
+  partsMap,
+  permissions,
+  isWorking,
+}: {
+  projectId?: string
+  sessionId: string
+  messages: Message[]
+  partsMap: Record<string, Part[]>
+  permissions?: Permission[]
+  isWorking?: boolean
 }) {
-  const [openThoughts, setOpenThoughts] = useState<Record<string, boolean>>({});
-  const [permissionErrors, setPermissionErrors] = useState<Record<string, string>>({});
-  const respondPermission = useRespondPermission(projectId, sessionId);
+  const [openThoughts, setOpenThoughts] = useState<Record<string, boolean>>({})
+  const [permissionErrors, setPermissionErrors] = useState<Record<string, string>>({})
+  const respondPermission = useRespondPermission(projectId, sessionId)
 
-  const turns = useMemo(() => groupTurns(messages), [messages]);
+  const turns = useMemo(() => groupTurns(messages), [messages])
 
   const permissionByCallId = useMemo(() => {
-    const map = new Map<string, Permission>();
-    (permissions ?? []).forEach(p => {
-      if (p.callID) map.set(p.callID, p);
-    });
-    return map;
-  }, [permissions]);
+    const map = new Map<string, Permission>()
+    ;(permissions ?? []).forEach((p) => {
+      if (p.callID) map.set(p.callID, p)
+    })
+    return map
+  }, [permissions])
 
   const toolCallIds = useMemo(() => {
-    const ids = new Set<string>();
-    messages.forEach(m => {
-      (partsMap[m.id] ?? []).forEach(p => {
-        if (p.type !== "tool") return;
-        const toolPart = p as ToolPart;
-        if (toolPart.tool === "todoread") return;
-        if (toolPart.callID) ids.add(toolPart.callID);
-      });
-    });
-    return ids;
-  }, [partsMap, messages]);
+    const ids = new Set<string>()
+    messages.forEach((m) => {
+      ;(partsMap[m.id] ?? []).forEach((p) => {
+        if (p.type !== "tool") return
+        const toolPart = p as ToolPart
+        if (toolPart.tool === "todoread") return
+        if (toolPart.callID) ids.add(toolPart.callID)
+      })
+    })
+    return ids
+  }, [partsMap, messages])
 
   const unmatchedPermissions = useMemo(() => {
-    if (!permissions?.length) return [];
-    return permissions.filter(p => !p.callID || !toolCallIds.has(p.callID));
-  }, [permissions, toolCallIds]);
+    if (!permissions?.length) return []
+    return permissions.filter((p) => !p.callID || !toolCallIds.has(p.callID))
+  }, [permissions, toolCallIds])
 
   const respondToPermission = (permission: Permission, response: PermissionResponse) => {
-    if (!projectId) return;
-    setPermissionErrors(s => {
-      if (!s[permission.id]) return s;
-      const { [permission.id]: _, ...rest } = s;
-      return rest;
-    });
+    if (!projectId) return
+    setPermissionErrors((s) => {
+      if (!s[permission.id]) return s
+      const { [permission.id]: _, ...rest } = s
+      return rest
+    })
     respondPermission.mutate(
       { permissionId: permission.id, response },
       {
         onError: (err) => {
-          setPermissionErrors(s => ({
+          setPermissionErrors((s) => ({
             ...s,
             [permission.id]: err instanceof Error ? err.message : String(err),
-          }));
+          }))
         },
-      }
-    );
-  };
+      },
+    )
+  }
 
   const getText = (m: Message) => {
     const fromParts = (partsMap[m.id] ?? [])
       .filter((p): p is TextPart => p.type === "text")
       .filter((p) => !p.synthetic && !p.ignored)
       .map((p) => p.text)
-      .join("\n");
-    const summary = m.summary;
-    const fromSummary = summary && typeof summary === "object" ? (summary.body || summary.title || "") : "";
-    const text = fromParts || fromSummary;
+      .join("\n")
+    const summary = m.summary
+    const fromSummary = summary && typeof summary === "object" ? summary.body || summary.title || "" : ""
+    const text = fromParts || fromSummary
     if (m.role === "user") {
-      return text.replace(/!\[[^\]]*\]\([^)]+\)\n*/g, "").trim();
+      return text.replace(/!\[[^\]]*\]\([^)]+\)\n*/g, "").trim()
     }
-    return text;
-  };
+    return text
+  }
 
-  const getFiles = (m: Message) => partsMap[m.id]?.filter((p): p is FilePart => p.type === "file") ?? [];
+  const getFiles = (m: Message) => partsMap[m.id]?.filter((p): p is FilePart => p.type === "file") ?? []
 
   const renderPart = (p: Part) => {
     if (p.type === "subtask") {
-      const description = p.description ? ` — ${p.description}` : "";
+      const description = p.description ? ` — ${p.description}` : ""
       return (
-        <div key={p.id} className="my-1.5 sm:my-2 px-3 py-2 rounded-lg border bg-muted/30 text-[11px] sm:text-xs text-muted-foreground">
+        <div
+          key={p.id}
+          className="my-1.5 sm:my-2 px-3 py-2 rounded-lg border bg-muted/30 text-[11px] sm:text-xs text-muted-foreground"
+        >
           <span className="font-medium text-foreground">Subagent requested</span>{" "}
           <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs">@{p.agent}</code>
           {description}
         </div>
-      );
+      )
     }
 
     if (p.type === "reasoning") {
-      const text = (p as ReasoningPart).text?.replace("[REDACTED]", "").trim() || "";
-      const streaming = !(p as ReasoningPart).time?.end;
-      if (!text && !streaming) return null;
+      const text = (p as ReasoningPart).text?.replace("[REDACTED]", "").trim() || ""
+      const streaming = !(p as ReasoningPart).time?.end
+      if (!text && !streaming) return null
       return (
         <Thinking
           key={p.id}
           text={text}
           streaming={streaming}
           open={openThoughts[p.id] ?? streaming}
-          toggle={() => setOpenThoughts(s => ({ ...s, [p.id]: !s[p.id] }))}
+          toggle={() => setOpenThoughts((s) => ({ ...s, [p.id]: !s[p.id] }))}
         />
-      );
+      )
     }
 
     if (p.type === "tool") {
-      const toolPart = p as ToolPart;
-      const permission = toolPart.callID ? permissionByCallId.get(toolPart.callID) : undefined;
-      if (toolPart.tool === "todoread") return null;
+      const toolPart = p as ToolPart
+      const permission = toolPart.callID ? permissionByCallId.get(toolPart.callID) : undefined
+      if (toolPart.tool === "todoread") return null
       if (toolPart.tool === "todowrite") {
-        if (!permission) return <Todos key={p.id} part={toolPart} />;
+        if (!permission) return <Todos key={p.id} part={toolPart} />
         return (
           <div key={p.id} className="space-y-2">
             <Todos part={toolPart} />
             <PermissionPrompt
               permission={permission}
-              onRespond={response => respondToPermission(permission, response)}
+              onRespond={(response) => respondToPermission(permission, response)}
               responding={respondPermission.isPending && respondPermission.variables?.permissionId === permission.id}
               error={permissionErrors[permission.id]}
             />
           </div>
-        );
+        )
       }
       return (
         <Tool
@@ -457,40 +549,51 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
           responding={respondPermission.isPending && respondPermission.variables?.permissionId === permission?.id}
           respondError={permission ? permissionErrors[permission.id] : undefined}
         />
-      );
+      )
     }
 
-    if (p.type === "file") return <div key={p.id} className="flex gap-1 py-1"><FileThumb file={p as FilePart} /></div>;
+    if (p.type === "file")
+      return (
+        <div key={p.id} className="flex gap-1 py-1">
+          <FileThumb file={p as FilePart} />
+        </div>
+      )
 
     // Hide step markers - these are internal and noisy
     if (p.type === "step-start" || p.type === "step-finish" || p.type === "patch") {
-      return null;
+      return null
     }
 
     if (p.type === "text") {
-      const content = (p as TextPart).text?.trim();
-      if (!content) return null;
-      return <Markdown key={p.id} className="[&_p]:text-[13px] [&_p]:sm:text-sm [&_li]:text-[13px] [&_li]:sm:text-sm">{content}</Markdown>;
+      const content = (p as TextPart).text?.trim()
+      if (!content) return null
+      return (
+        <Markdown key={p.id} className="[&_p]:text-[13px] [&_p]:sm:text-sm [&_li]:text-[13px] [&_li]:sm:text-sm">
+          {content}
+        </Markdown>
+      )
     }
 
-    return null;
-  };
+    return null
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6">
       {turns.map((turn, idx) => {
-        const timeline = turn.assistants.flatMap(m => partsMap[m.id] || []);
+        const timeline = turn.assistants.flatMap((m) => partsMap[m.id] || [])
 
-        const text = getText(turn.user);
-        const userFiles = getFiles(turn.user);
-        const userParts = partsMap[turn.user.id] ?? [];
-        const isSyntheticUser = userParts.some((p) => p.type === "text" && (p as TextPart).synthetic);
-        const isLast = idx === turns.length - 1;
-        const lastAssistant = turn.assistants[turn.assistants.length - 1];
-        const working = isLast ? (isWorking ?? !!(lastAssistant && lastAssistant.role === "assistant" && !lastAssistant.time.completed)) : false;
-        const showPlanning = isLast && !!working;
-        const showSending = isLast && userParts.length === 0 && !text && userFiles.length === 0;
-        const showUser = !isSyntheticUser && (userFiles.length > 0 || !!text || showSending);
+        const text = getText(turn.user)
+        const userFiles = getFiles(turn.user)
+        const userParts = partsMap[turn.user.id] ?? []
+        const isSyntheticUser = userParts.some((p) => p.type === "text" && (p as TextPart).synthetic)
+        const isLast = idx === turns.length - 1
+        const lastAssistant = turn.assistants[turn.assistants.length - 1]
+        const working = isLast
+          ? (isWorking ?? !!(lastAssistant && lastAssistant.role === "assistant" && !lastAssistant.time.completed))
+          : false
+        const showPlanning = isLast && !!working
+        const showSending = isLast && userParts.length === 0 && !text && userFiles.length === 0
+        const showUser = !isSyntheticUser && (userFiles.length > 0 || !!text || showSending)
 
         return (
           <div key={turn.user.id} className="space-y-2 sm:space-y-3">
@@ -498,45 +601,71 @@ export function AgentThread({ projectId, sessionId, messages, partsMap, permissi
               <div className="flex flex-col items-end gap-1">
                 {userFiles.length > 0 && (
                   <div className="flex gap-1 flex-wrap justify-end">
-                    {userFiles.map(fp => <FileThumb key={fp.id} file={fp} />)}
+                    {userFiles.map((fp) => (
+                      <FileThumb key={fp.id} file={fp} />
+                    ))}
                   </div>
                 )}
                 <div className="relative max-w-[90%] sm:max-w-[80%] md:max-w-[70%] rounded-xl bg-muted/50 border px-2.5 sm:px-3 py-2 overflow-hidden">
-                  <div className="whitespace-pre-wrap text-sm sm:text-[15px] break-all">
-                    {text ? text : showSending ? <span className="text-muted-foreground italic">Sending...</span> : userFiles.length ? <span className="text-muted-foreground italic">Sent attachment</span> : null}
+                  <div className="whitespace-pre-wrap text-sm sm:text-[15px] break-normal [overflow-wrap:break-word]">
+                    {text ? (
+                      text
+                    ) : showSending ? (
+                      <span className="text-muted-foreground italic">Sending...</span>
+                    ) : userFiles.length ? (
+                      <span className="text-muted-foreground italic">Sent attachment</span>
+                    ) : null}
                   </div>
                 </div>
               </div>
             )}
 
             <div className="space-y-1">
-              {turn.assistants.map(m => {
-                const err = (m as Message & { error?: { data?: { message?: string }; message?: string; name?: string }; info?: { error?: { data?: { message?: string }; message?: string; name?: string } } }).error || (m as Message & { info?: { error?: { data?: { message?: string }; message?: string; name?: string } } }).info?.error;
-                if (!err) return null;
-                const msg = err.data?.message || err.message || err.name || "Request failed";
-                if (msg.toLowerCase().includes("abort")) return null;
-                return <ApiError key={m.id} error={err} />;
+              {turn.assistants.map((m) => {
+                const err =
+                  (
+                    m as Message & {
+                      error?: { data?: { message?: string }; message?: string; name?: string }
+                      info?: { error?: { data?: { message?: string }; message?: string; name?: string } }
+                    }
+                  ).error ||
+                  (
+                    m as Message & {
+                      info?: { error?: { data?: { message?: string }; message?: string; name?: string } }
+                    }
+                  ).info?.error
+                if (!err) return null
+                const msg = err.data?.message || err.message || err.name || "Request failed"
+                if (msg.toLowerCase().includes("abort")) return null
+                return <ApiError key={m.id} error={err} />
               })}
 
               {timeline.map(renderPart)}
 
-              {isLast && unmatchedPermissions.map(permission => (
-                <PermissionPrompt
-                  key={permission.id}
-                  permission={permission}
-                  onRespond={response => respondToPermission(permission, response)}
-                  responding={respondPermission.isPending && respondPermission.variables?.permissionId === permission.id}
-                  error={permissionErrors[permission.id]}
-                />
-              ))}
+              {isLast &&
+                unmatchedPermissions.map((permission) => (
+                  <PermissionPrompt
+                    key={permission.id}
+                    permission={permission}
+                    onRespond={(response) => respondToPermission(permission, response)}
+                    responding={
+                      respondPermission.isPending && respondPermission.variables?.permissionId === permission.id
+                    }
+                    error={permissionErrors[permission.id]}
+                  />
+                ))}
 
               {showPlanning && (
-                <ShimmeringText text="Working..." duration={0.4} className="text-xs sm:text-sm text-muted-foreground py-1" />
+                <ShimmeringText
+                  text="Working..."
+                  duration={0.4}
+                  className="text-xs sm:text-sm text-muted-foreground py-1"
+                />
               )}
             </div>
           </div>
-        );
+        )
       })}
     </div>
-  );
+  )
 }

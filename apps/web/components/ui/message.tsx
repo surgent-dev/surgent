@@ -1,10 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { Markdown } from "./markdown"
 
@@ -27,19 +22,11 @@ export type MessageAvatarProps = {
   className?: string
 }
 
-const MessageAvatar = ({
-  src,
-  alt,
-  fallback,
-  delayMs,
-  className,
-}: MessageAvatarProps) => {
+const MessageAvatar = ({ src, alt, fallback, delayMs, className }: MessageAvatarProps) => {
   return (
     <Avatar className={cn("h-8 w-8 shrink-0", className)}>
       <AvatarImage src={src} alt={alt} />
-      {fallback && (
-        <AvatarFallback delayMs={delayMs}>{fallback}</AvatarFallback>
-      )}
+      {fallback && <AvatarFallback delayMs={delayMs}>{fallback}</AvatarFallback>}
     </Avatar>
   )
 }
@@ -51,16 +38,10 @@ export type MessageContentProps = {
   isAnimating?: boolean
 } & React.HTMLProps<HTMLDivElement>
 
-const MessageContent = ({
-  children,
-  markdown = false,
-  className,
-  isAnimating,
-  ...props
-}: MessageContentProps) => {
+const MessageContent = ({ children, markdown = false, className, isAnimating, ...props }: MessageContentProps) => {
   const classNames = cn(
-    "rounded-lg p-2 text-foreground bg-secondary prose break-words whitespace-normal",
-    className
+    "rounded-lg p-2 text-foreground bg-secondary prose break-normal [overflow-wrap:break-word] whitespace-normal",
+    className,
   )
 
   return markdown ? (
@@ -79,15 +60,8 @@ export type MessageActionsProps = {
   className?: string
 } & React.HTMLProps<HTMLDivElement>
 
-const MessageActions = ({
-  children,
-  className,
-  ...props
-}: MessageActionsProps) => (
-  <div
-    className={cn("text-muted-foreground flex items-center gap-2", className)}
-    {...props}
-  >
+const MessageActions = ({ children, className, ...props }: MessageActionsProps) => (
+  <div className={cn("text-muted-foreground flex items-center gap-2", className)} {...props}>
     {children}
   </div>
 )
@@ -99,13 +73,7 @@ export type MessageActionProps = {
   side?: "top" | "bottom" | "left" | "right"
 } & React.ComponentProps<typeof Tooltip>
 
-const MessageAction = ({
-  tooltip,
-  children,
-  className,
-  side = "top",
-  ...props
-}: MessageActionProps) => {
+const MessageAction = ({ tooltip, children, className, side = "top", ...props }: MessageActionProps) => {
   return (
     <TooltipProvider>
       <Tooltip {...props}>
