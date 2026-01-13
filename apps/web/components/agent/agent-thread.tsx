@@ -54,11 +54,9 @@ function getTarget(part: ToolPart): string | undefined {
   if (part.tool === "glob") return String(input.pattern || "")
   if (part.tool === "list") return String(input.path || "/")
   if (part.tool === "webfetch") {
-    try {
-      return new URL(String(input.url)).hostname
-    } catch {
-      return String(input.url)
-    }
+    const url = String(input.url || "")
+    if (typeof URL.canParse === "function" && URL.canParse(url)) return new URL(url).hostname
+    return url
   }
 }
 

@@ -1,12 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ElementType } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { format, parseISO } from "date-fns"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { http } from "@/lib/http"
@@ -117,14 +115,22 @@ function RetryCountdown({ retryInfo }: { retryInfo: SessionStatusRetry }) {
   )
 }
 
-function EmptyState() {
+function EmptyState({
+  title = "No messages yet",
+  description = "Start a conversation",
+  icon: Icon = MessageCircle,
+}: {
+  title?: string
+  description?: string
+  icon?: ElementType
+}) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] text-center px-4">
       <div className="rounded-full bg-muted p-3 sm:p-4 mb-3 sm:mb-4">
-        <MessageCircle className="size-6 sm:size-8 text-muted-foreground" strokeWidth={1.5} />
+        <Icon className="size-6 sm:size-8 text-muted-foreground" strokeWidth={1.5} />
       </div>
-      <p className="font-medium text-sm sm:text-base">No messages yet</p>
-      <p className="text-xs sm:text-sm text-muted-foreground">Start a conversation</p>
+      <p className="font-medium text-sm sm:text-base">{title}</p>
+      <p className="text-xs sm:text-sm text-muted-foreground">{description}</p>
     </div>
   )
 }
@@ -366,7 +372,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       <header className="flex flex-col border-b bg-muted/30 shrink-0">
         {/* Tabs + Session + Actions */}
         <div className="flex h-10 items-stretch border-b min-w-0">
-          <TabButton active={tab === "chat" || !showTerminal} onClick={() => setTab("chat")}>
+          <TabButton active={tab === "chat"} onClick={() => setTab("chat")}>
             <MessagesSquare className="size-4" />
             <span className="hidden @md/conversation:inline">Chat</span>
           </TabButton>
@@ -406,8 +412,13 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         </div>
         {/* Context stats */}
         <div className="h-8 flex items-center px-3 gap-2 min-w-0 text-xs">
-          <span className={`size-2 rounded-full ${!connected ? "bg-muted-foreground/40" : isRetrying ? "bg-warning" : "bg-success"}`} title={!connected ? "Connecting..." : isRetrying ? "Retrying..." : "Agent connected"} />
-          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">{connected ? sessionName : "Connecting..."}</span>
+          <span
+            className={`size-2 rounded-full ${!connected ? "bg-muted-foreground/40" : isRetrying ? "bg-warning" : "bg-success"}`}
+            title={!connected ? "Connecting..." : isRetrying ? "Retrying..." : "Agent connected"}
+          />
+          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">
+            {connected ? sessionName : "Connecting..."}
+          </span>
           {connected && (
             <>
               {isRetrying && retryInfo ? (
@@ -472,7 +483,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       </header>
 
       {/* Chat */}
-      {(tab === "chat" || !showTerminal) && (
+      {tab === "chat" && (
         <div className="flex flex-col flex-1 min-h-0">
           <div ref={scrollRef} className="flex-1 min-h-0">
             <ScrollArea className="h-full">

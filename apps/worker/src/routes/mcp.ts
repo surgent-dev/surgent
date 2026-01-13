@@ -1,7 +1,7 @@
-import { Hono } from 'hono'
-import { StreamableHTTPTransport } from '@hono/mcp'
-import { createConvexMcpServer } from '@/mcp/convex'
-import type { AppContext } from '@/types/application'
+import { Hono } from "hono"
+import { StreamableHTTPTransport } from "@hono/mcp"
+import { createConvexMcpServer } from "@/mcp/convex"
+import type { AppContext } from "@/types/application"
 
 const mcp = new Hono<AppContext>()
 
@@ -28,10 +28,20 @@ const transport = new StreamableHTTPTransport()
  *   }
  * }
  */
-mcp.all('/convex', async (c) => {
-  const user = c.get('user')
+mcp.get("/", async (c) => {
+  if (!mcpServer.isConnected()) {
+    await mcpServer.connect(transport)
+  }
+  const connected = mcpServer.isConnected()
+  return c.json({
+    convex: connected ? { status: "connected" } : { status: "failed", error: "Not connected" },
+  })
+})
+
+mcp.all("/convex", async (c) => {
+  const user = c.get("user")
   if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401)
+    return c.json({ error: "Unauthorized" }, 401)
   }
 
   if (!mcpServer.isConnected()) {
