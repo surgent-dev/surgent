@@ -1,11 +1,11 @@
-import { test, expect, mock, beforeEach } from "bun:test"
+import { test, expect, mock, beforeEach } from "bun:test";
 
 // Track what options were passed to each transport constructor
 const transportCalls: Array<{
-  type: "streamable" | "sse"
-  url: string
-  options: { authProvider?: unknown; requestInit?: RequestInit }
-}> = []
+  type: "streamable" | "sse";
+  url: string;
+  options: { authProvider?: unknown; requestInit?: RequestInit };
+}> = [];
 
 // Mock the transport constructors to capture their arguments
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
@@ -15,13 +15,13 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
         type: "streamable",
         url: url.toString(),
         options: options ?? {},
-      })
+      });
     }
     async start() {
-      throw new Error("Mock transport cannot connect")
+      throw new Error("Mock transport cannot connect");
     }
   },
-}))
+}));
 
 mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSE {
@@ -30,22 +30,22 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
         type: "sse",
         url: url.toString(),
         options: options ?? {},
-      })
+      });
     }
     async start() {
-      throw new Error("Mock transport cannot connect")
+      throw new Error("Mock transport cannot connect");
     }
   },
-}))
+}));
 
 beforeEach(() => {
-  transportCalls.length = 0
-})
+  transportCalls.length = 0;
+});
 
 // Import MCP after mocking
-const { MCP } = await import("../../src/mcp/index")
-const { Instance } = await import("../../src/project/instance")
-const { tmpdir } = await import("../fixture/fixture")
+const { MCP } = await import("../../src/mcp/index");
+const { Instance } = await import("../../src/project/instance");
+const { tmpdir } = await import("../fixture/fixture");
 
 test("headers are passed to transports when oauth is enabled (default)", async () => {
   await using tmp = await tmpdir({
@@ -65,9 +65,9 @@ test("headers are passed to transports when oauth is enabled (default)", async (
             },
           },
         }),
-      )
+      );
     },
-  })
+  });
 
   await Instance.provide({
     directory: tmp.path,
@@ -80,31 +80,31 @@ test("headers are passed to transports when oauth is enabled (default)", async (
           Authorization: "Bearer test-token",
           "X-Custom-Header": "custom-value",
         },
-      }).catch(() => {})
+      }).catch(() => {});
 
       // Both transports should have been created with headers
-      expect(transportCalls.length).toBeGreaterThanOrEqual(1)
+      expect(transportCalls.length).toBeGreaterThanOrEqual(1);
 
       for (const call of transportCalls) {
-        expect(call.options.requestInit).toBeDefined()
+        expect(call.options.requestInit).toBeDefined();
         expect(call.options.requestInit?.headers).toEqual({
           Authorization: "Bearer test-token",
           "X-Custom-Header": "custom-value",
-        })
+        });
         // OAuth should be enabled by default, so authProvider should exist
-        expect(call.options.authProvider).toBeDefined()
+        expect(call.options.authProvider).toBeDefined();
       }
     },
-  })
-})
+  });
+});
 
 test("headers are passed to transports when oauth is explicitly disabled", async () => {
-  await using tmp = await tmpdir()
+  await using tmp = await tmpdir();
 
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      transportCalls.length = 0
+      transportCalls.length = 0;
 
       await MCP.add("test-server-no-oauth", {
         type: "remote",
@@ -113,41 +113,41 @@ test("headers are passed to transports when oauth is explicitly disabled", async
         headers: {
           Authorization: "Bearer test-token",
         },
-      }).catch(() => {})
+      }).catch(() => {});
 
-      expect(transportCalls.length).toBeGreaterThanOrEqual(1)
+      expect(transportCalls.length).toBeGreaterThanOrEqual(1);
 
       for (const call of transportCalls) {
-        expect(call.options.requestInit).toBeDefined()
+        expect(call.options.requestInit).toBeDefined();
         expect(call.options.requestInit?.headers).toEqual({
           Authorization: "Bearer test-token",
-        })
+        });
         // OAuth is disabled, so no authProvider
-        expect(call.options.authProvider).toBeUndefined()
+        expect(call.options.authProvider).toBeUndefined();
       }
     },
-  })
-})
+  });
+});
 
 test("no requestInit when headers are not provided", async () => {
-  await using tmp = await tmpdir()
+  await using tmp = await tmpdir();
 
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      transportCalls.length = 0
+      transportCalls.length = 0;
 
       await MCP.add("test-server-no-headers", {
         type: "remote",
         url: "https://example.com/mcp",
-      }).catch(() => {})
+      }).catch(() => {});
 
-      expect(transportCalls.length).toBeGreaterThanOrEqual(1)
+      expect(transportCalls.length).toBeGreaterThanOrEqual(1);
 
       for (const call of transportCalls) {
         // No headers means requestInit should be undefined
-        expect(call.options.requestInit).toBeUndefined()
+        expect(call.options.requestInit).toBeUndefined();
       }
     },
-  })
-})
+  });
+});

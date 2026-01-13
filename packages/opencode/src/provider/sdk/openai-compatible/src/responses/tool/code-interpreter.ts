@@ -1,10 +1,10 @@
-import { createProviderDefinedToolFactoryWithOutputSchema } from "@ai-sdk/provider-utils"
-import { z } from "zod/v4"
+import { createProviderDefinedToolFactoryWithOutputSchema } from "@ai-sdk/provider-utils";
+import { z } from "zod/v4";
 
 export const codeInterpreterInputSchema = z.object({
   code: z.string().nullish(),
   containerId: z.string(),
-})
+});
 
 export const codeInterpreterOutputSchema = z.object({
   outputs: z
@@ -15,7 +15,7 @@ export const codeInterpreterOutputSchema = z.object({
       ]),
     )
     .nullish(),
-})
+});
 
 export const codeInterpreterArgsSchema = z.object({
   container: z
@@ -26,7 +26,7 @@ export const codeInterpreterArgsSchema = z.object({
       }),
     ])
     .optional(),
-})
+});
 
 type CodeInterpreterArgs = {
   /**
@@ -34,20 +34,20 @@ type CodeInterpreterArgs = {
    * Can be a container ID
    * or an object that specifies uploaded file IDs to make available to your code.
    */
-  container?: string | { fileIds?: string[] }
-}
+  container?: string | { fileIds?: string[] };
+};
 
 export const codeInterpreterToolFactory = createProviderDefinedToolFactoryWithOutputSchema<
   {
     /**
      * The code to run, or null if not available.
      */
-    code?: string | null
+    code?: string | null;
 
     /**
      * The ID of the container used to run the code.
      */
-    containerId: string
+    containerId: string;
   },
   {
     /**
@@ -56,22 +56,22 @@ export const codeInterpreterToolFactory = createProviderDefinedToolFactoryWithOu
      */
     outputs?: Array<
       | {
-          type: "logs"
+          type: "logs";
 
           /**
            * The logs output from the code interpreter.
            */
-          logs: string
+          logs: string;
         }
       | {
-          type: "image"
+          type: "image";
 
           /**
            * The URL of the image output from the code interpreter.
            */
-          url: string
+          url: string;
         }
-    > | null
+    > | null;
   },
   CodeInterpreterArgs
 >({
@@ -79,10 +79,10 @@ export const codeInterpreterToolFactory = createProviderDefinedToolFactoryWithOu
   name: "code_interpreter",
   inputSchema: codeInterpreterInputSchema,
   outputSchema: codeInterpreterOutputSchema,
-})
+});
 
 export const codeInterpreter = (
   args: CodeInterpreterArgs = {}, // default
 ) => {
-  return codeInterpreterToolFactory(args)
-}
+  return codeInterpreterToolFactory(args);
+};

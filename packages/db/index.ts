@@ -1,4 +1,4 @@
-export { createClient, createDb, createDbFromDialect, createDialect } from './src/kysely_db'
+export { createClient, createDb, createDbFromDialect, createDialect } from "./src/kysely_db";
 
 export type {
   Database,
@@ -14,4 +14,4 @@ export type {
   OrdersTable,
   WhopTransfersTable,
   WhopWebhookEventsTable,
-} from './src/types'
+} from "./src/types";

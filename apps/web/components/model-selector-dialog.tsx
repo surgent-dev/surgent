@@ -2,12 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Search, X, ChevronLeft, ChevronRight, Check, Info } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -45,7 +40,7 @@ const CORE_MODELS: Record<string, string[]> = {
   anthropic: ["claude-opus-4-5"],
   openai: ["gpt-5.2", "gpt-5"],
   google: ["gemini-3-flash-preview", "gemini-3-pro-preview"],
-  "github-copilot": [ "gemini-3-flash-preview", "claude-opus-4-5"],
+  "github-copilot": ["gemini-3-flash-preview", "claude-opus-4-5"],
 };
 
 const MODEL_TAGS: Record<string, string> = {
@@ -62,7 +57,7 @@ export default function ModelSelectorDialog({ open, onOpenChange, models, select
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const coreModels = useMemo(() => models.filter(m => CORE_MODELS[m.providerId]?.includes(m.id)), [models]);
+  const coreModels = useMemo(() => models.filter((m) => CORE_MODELS[m.providerId]?.includes(m.id)), [models]);
 
   const groupByProvider = (list: ProviderModel[]) => {
     const groups: Record<string, ProviderModel[]> = {};
@@ -76,7 +71,7 @@ export default function ModelSelectorDialog({ open, onOpenChange, models, select
   const allGrouped = useMemo(() => groupByProvider(models), [models]);
 
   const providers = useMemo(() => {
-    return [...new Set(models.map(m => m.providerId))].map(id => ({
+    return [...new Set(models.map((m) => m.providerId))].map((id) => ({
       id,
       label: PROVIDER_LABELS[id] || id,
       count: allGrouped[id]?.length || 0,
@@ -118,21 +113,17 @@ export default function ModelSelectorDialog({ open, onOpenChange, models, select
   const ModelRow = ({ model, providerId }: { model: ProviderModel; providerId: string }) => {
     const isSelected = selectedModel?.modelId === model.id && selectedModel?.providerId === providerId;
     const tag = MODEL_TAGS[model.id];
-    
+
     return (
       <button
         onClick={() => handleSelect(model)}
         className={cn(
           "w-full h-10 flex items-center gap-3 px-4 text-sm transition-colors",
-          isSelected ? "bg-muted" : "hover:bg-muted/40"
+          isSelected ? "bg-muted" : "hover:bg-muted/40",
         )}
       >
-        <span className="flex-1 text-left font-medium truncate">
-          {tag || model.name || model.id}
-        </span>
-        <span className="text-xs text-muted-foreground truncate max-w-24">
-          {model.name || model.id}
-        </span>
+        <span className="flex-1 text-left font-medium truncate">{tag || model.name || model.id}</span>
+        <span className="text-xs text-muted-foreground truncate max-w-24">{model.name || model.id}</span>
         {isSelected && <Check className="size-4 shrink-0" />}
       </button>
     );
@@ -152,8 +143,8 @@ export default function ModelSelectorDialog({ open, onOpenChange, models, select
 
         {/* Back */}
         {step !== "featured" && (
-          <button 
-            onClick={goBack} 
+          <button
+            onClick={goBack}
             className="h-9 px-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 border-b transition-colors"
           >
             <ChevronLeft className="size-3.5" />
@@ -176,16 +167,14 @@ export default function ModelSelectorDialog({ open, onOpenChange, models, select
                     <span>Claude subscription may take ~5 mins to sync after connecting.</span>
                   </div>
                 )}
-                {providerModels.map(model => (
+                {providerModels.map((model) => (
                   <ModelRow key={model.id} model={model} providerId={providerId} />
                 ))}
               </div>
             ))}
 
             {coreModels.length === 0 && (
-              <div className="py-12 text-center text-xs text-muted-foreground">
-                No models available
-              </div>
+              <div className="py-12 text-center text-xs text-muted-foreground">No models available</div>
             )}
 
             {hasMoreModels && (
@@ -206,7 +195,7 @@ export default function ModelSelectorDialog({ open, onOpenChange, models, select
         {/* Providers */}
         {step === "all" && (
           <div className="py-1">
-            {providers.map(provider => (
+            {providers.map((provider) => (
               <button
                 key={provider.id}
                 onClick={() => goToProvider(provider.id)}
@@ -235,21 +224,24 @@ export default function ModelSelectorDialog({ open, onOpenChange, models, select
               <input
                 type="text"
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search models..."
                 className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/40"
                 autoFocus
               />
               {search && (
-                <button onClick={() => setSearch("")} className="text-muted-foreground/50 hover:text-foreground transition-colors">
+                <button
+                  onClick={() => setSearch("")}
+                  className="text-muted-foreground/50 hover:text-foreground transition-colors"
+                >
                   <X className="size-4" />
                 </button>
               )}
             </div>
             <ScrollArea className="max-h-[260px]">
               {(allGrouped[selectedProvider] ?? [])
-                .filter(m => !search.trim() || (m.name || m.id).toLowerCase().includes(search.toLowerCase()))
-                .map(model => (
+                .filter((m) => !search.trim() || (m.name || m.id).toLowerCase().includes(search.toLowerCase()))
+                .map((model) => (
                   <ModelRow key={model.id} model={model} providerId={selectedProvider} />
                 ))}
             </ScrollArea>

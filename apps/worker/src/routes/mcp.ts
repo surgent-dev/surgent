@@ -1,13 +1,13 @@
-import { Hono } from 'hono'
-import { StreamableHTTPTransport } from '@hono/mcp'
-import { createConvexMcpServer } from '@/mcp/convex'
-import type { AppContext } from '@/types/application'
+import { Hono } from "hono";
+import { StreamableHTTPTransport } from "@hono/mcp";
+import { createConvexMcpServer } from "@/mcp/convex";
+import type { AppContext } from "@/types/application";
 
-const mcp = new Hono<AppContext>()
+const mcp = new Hono<AppContext>();
 
 // Create the MCP server and transport
-const mcpServer = createConvexMcpServer()
-const transport = new StreamableHTTPTransport()
+const mcpServer = createConvexMcpServer();
+const transport = new StreamableHTTPTransport();
 
 /**
  * MCP endpoint for Convex tools
@@ -28,17 +28,17 @@ const transport = new StreamableHTTPTransport()
  *   }
  * }
  */
-mcp.all('/convex', async (c) => {
-  const user = c.get('user')
+mcp.all("/convex", async (c) => {
+  const user = c.get("user");
   if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401)
+    return c.json({ error: "Unauthorized" }, 401);
   }
 
   if (!mcpServer.isConnected()) {
-    await mcpServer.connect(transport)
+    await mcpServer.connect(transport);
   }
 
-  return transport.handleRequest(c)
-})
+  return transport.handleRequest(c);
+});
 
-export default mcp
+export default mcp;

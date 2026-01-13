@@ -1,9 +1,9 @@
-import { describe, expect, test } from "bun:test"
-import path from "path"
-import { BashTool } from "../../src/tool/bash"
-import { Instance } from "../../src/project/instance"
-import { Permission } from "../../src/permission"
-import { tmpdir } from "../fixture/fixture"
+import { describe, expect, test } from "bun:test";
+import path from "path";
+import { BashTool } from "../../src/tool/bash";
+import { Instance } from "../../src/project/instance";
+import { Permission } from "../../src/permission";
+import { tmpdir } from "../fixture/fixture";
 
 const ctx = {
   sessionID: "test",
@@ -12,29 +12,29 @@ const ctx = {
   agent: "build",
   abort: AbortSignal.any([]),
   metadata: () => {},
-}
+};
 
-const projectRoot = path.join(__dirname, "../..")
+const projectRoot = path.join(__dirname, "../..");
 
 describe("tool.bash", () => {
   test("basic", async () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const bash = await BashTool.init()
+        const bash = await BashTool.init();
         const result = await bash.execute(
           {
             command: "echo 'test'",
             description: "Echo test message",
           },
           ctx,
-        )
-        expect(result.metadata.exit).toBe(0)
-        expect(result.metadata.output).toContain("test")
+        );
+        expect(result.metadata.exit).toBe(0);
+        expect(result.metadata.output).toContain("test");
       },
-    })
-  })
-})
+    });
+  });
+});
 
 describe("tool.bash permissions", () => {
   test("allows command matching allow pattern", async () => {
@@ -50,25 +50,25 @@ describe("tool.bash permissions", () => {
               },
             },
           }),
-        )
+        );
       },
-    })
+    });
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const bash = await BashTool.init()
+        const bash = await BashTool.init();
         const result = await bash.execute(
           {
             command: "echo hello",
             description: "Echo hello",
           },
           ctx,
-        )
-        expect(result.metadata.exit).toBe(0)
-        expect(result.metadata.output).toContain("hello")
+        );
+        expect(result.metadata.exit).toBe(0);
+        expect(result.metadata.output).toContain("hello");
       },
-    })
-  })
+    });
+  });
 
   test("denies command matching deny pattern", async () => {
     await using tmp = await tmpdir({
@@ -83,13 +83,13 @@ describe("tool.bash permissions", () => {
               },
             },
           }),
-        )
+        );
       },
-    })
+    });
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const bash = await BashTool.init()
+        const bash = await BashTool.init();
         await expect(
           bash.execute(
             {
@@ -98,10 +98,10 @@ describe("tool.bash permissions", () => {
             },
             ctx,
           ),
-        ).rejects.toThrow("restricted")
+        ).rejects.toThrow("restricted");
       },
-    })
-  })
+    });
+  });
 
   test("denies all commands with wildcard deny", async () => {
     await using tmp = await tmpdir({
@@ -115,13 +115,13 @@ describe("tool.bash permissions", () => {
               },
             },
           }),
-        )
+        );
       },
-    })
+    });
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const bash = await BashTool.init()
+        const bash = await BashTool.init();
         await expect(
           bash.execute(
             {
@@ -130,10 +130,10 @@ describe("tool.bash permissions", () => {
             },
             ctx,
           ),
-        ).rejects.toThrow("restricted")
+        ).rejects.toThrow("restricted");
       },
-    })
-  })
+    });
+  });
 
   test("more specific pattern overrides general pattern", async () => {
     await using tmp = await tmpdir({
@@ -149,13 +149,13 @@ describe("tool.bash permissions", () => {
               },
             },
           }),
-        )
+        );
       },
-    })
+    });
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const bash = await BashTool.init()
+        const bash = await BashTool.init();
         // ls should be allowed
         const result = await bash.execute(
           {
@@ -163,8 +163,8 @@ describe("tool.bash permissions", () => {
             description: "List files",
           },
           ctx,
-        )
-        expect(result.metadata.exit).toBe(0)
+        );
+        expect(result.metadata.exit).toBe(0);
 
         // pwd should be allowed
         const pwd = await bash.execute(
@@ -173,8 +173,8 @@ describe("tool.bash permissions", () => {
             description: "Print working directory",
           },
           ctx,
-        )
-        expect(pwd.metadata.exit).toBe(0)
+        );
+        expect(pwd.metadata.exit).toBe(0);
 
         // cat should be denied
         await expect(
@@ -185,10 +185,10 @@ describe("tool.bash permissions", () => {
             },
             ctx,
           ),
-        ).rejects.toThrow("restricted")
+        ).rejects.toThrow("restricted");
       },
-    })
-  })
+    });
+  });
 
   test("denies dangerous subcommands while allowing safe ones", async () => {
     await using tmp = await tmpdir({
@@ -205,13 +205,13 @@ describe("tool.bash permissions", () => {
               },
             },
           }),
-        )
+        );
       },
-    })
+    });
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const bash = await BashTool.init()
+        const bash = await BashTool.init();
         // Basic find should work
         const result = await bash.execute(
           {
@@ -219,8 +219,8 @@ describe("tool.bash permissions", () => {
             description: "Find typescript files",
           },
           ctx,
-        )
-        expect(result.metadata.exit).toBe(0)
+        );
+        expect(result.metadata.exit).toBe(0);
 
         // find -delete should be denied
         await expect(
@@ -231,7 +231,7 @@ describe("tool.bash permissions", () => {
             },
             ctx,
           ),
-        ).rejects.toThrow("restricted")
+        ).rejects.toThrow("restricted");
 
         // find -exec should be denied
         await expect(
@@ -242,10 +242,10 @@ describe("tool.bash permissions", () => {
             },
             ctx,
           ),
-        ).rejects.toThrow("restricted")
+        ).rejects.toThrow("restricted");
       },
-    })
-  })
+    });
+  });
 
   test("allows git read commands while denying writes", async () => {
     await using tmp = await tmpdir({
@@ -266,13 +266,13 @@ describe("tool.bash permissions", () => {
               },
             },
           }),
-        )
+        );
       },
-    })
+    });
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const bash = await BashTool.init()
+        const bash = await BashTool.init();
         // git status should work
         const status = await bash.execute(
           {
@@ -280,8 +280,8 @@ describe("tool.bash permissions", () => {
             description: "Git status",
           },
           ctx,
-        )
-        expect(status.metadata.exit).toBe(0)
+        );
+        expect(status.metadata.exit).toBe(0);
 
         // git log should work
         const log = await bash.execute(
@@ -290,8 +290,8 @@ describe("tool.bash permissions", () => {
             description: "Git log",
           },
           ctx,
-        )
-        expect(log.metadata.exit).toBe(0)
+        );
+        expect(log.metadata.exit).toBe(0);
 
         // git commit should be denied
         await expect(
@@ -302,7 +302,7 @@ describe("tool.bash permissions", () => {
             },
             ctx,
           ),
-        ).rejects.toThrow("restricted")
+        ).rejects.toThrow("restricted");
 
         // git push should be denied
         await expect(
@@ -313,10 +313,10 @@ describe("tool.bash permissions", () => {
             },
             ctx,
           ),
-        ).rejects.toThrow("restricted")
+        ).rejects.toThrow("restricted");
       },
-    })
-  })
+    });
+  });
 
   test("denies external directory access when permission is deny", async () => {
     await using tmp = await tmpdir({
@@ -331,13 +331,13 @@ describe("tool.bash permissions", () => {
               },
             },
           }),
-        )
+        );
       },
-    })
+    });
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const bash = await BashTool.init()
+        const bash = await BashTool.init();
         // Should deny cd to parent directory (cd is checked for external paths)
         await expect(
           bash.execute(
@@ -347,10 +347,10 @@ describe("tool.bash permissions", () => {
             },
             ctx,
           ),
-        ).rejects.toThrow()
+        ).rejects.toThrow();
       },
-    })
-  })
+    });
+  });
 
   test("denies workdir outside project when external_directory is deny", async () => {
     await using tmp = await tmpdir({
@@ -365,13 +365,13 @@ describe("tool.bash permissions", () => {
               },
             },
           }),
-        )
+        );
       },
-    })
+    });
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const bash = await BashTool.init()
+        const bash = await BashTool.init();
         await expect(
           bash.execute(
             {
@@ -381,10 +381,10 @@ describe("tool.bash permissions", () => {
             },
             ctx,
           ),
-        ).rejects.toThrow()
+        ).rejects.toThrow();
       },
-    })
-  })
+    });
+  });
 
   test("allows rm inside project when external_directory is deny", async () => {
     await using tmp = await tmpdir({
@@ -399,25 +399,25 @@ describe("tool.bash permissions", () => {
               },
             },
           }),
-        )
-        await Bun.write(path.join(dir, "delete-me.txt"), "ok")
+        );
+        await Bun.write(path.join(dir, "delete-me.txt"), "ok");
       },
-    })
+    });
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const bash = await BashTool.init()
+        const bash = await BashTool.init();
         const result = await bash.execute(
           {
             command: "rm delete-me.txt",
             description: "Remove temp file",
           },
           ctx,
-        )
-        expect(result.metadata.exit).toBe(0)
+        );
+        expect(result.metadata.exit).toBe(0);
       },
-    })
-  })
+    });
+  });
 
   test("handles multiple commands in sequence", async () => {
     await using tmp = await tmpdir({
@@ -433,13 +433,13 @@ describe("tool.bash permissions", () => {
               },
             },
           }),
-        )
+        );
       },
-    })
+    });
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const bash = await BashTool.init()
+        const bash = await BashTool.init();
         // echo && echo should work
         const result = await bash.execute(
           {
@@ -447,9 +447,9 @@ describe("tool.bash permissions", () => {
             description: "Echo twice",
           },
           ctx,
-        )
-        expect(result.metadata.output).toContain("foo")
-        expect(result.metadata.output).toContain("bar")
+        );
+        expect(result.metadata.output).toContain("foo");
+        expect(result.metadata.output).toContain("bar");
 
         // echo && curl should fail (curl is denied)
         await expect(
@@ -460,8 +460,8 @@ describe("tool.bash permissions", () => {
             },
             ctx,
           ),
-        ).rejects.toThrow("restricted")
+        ).rejects.toThrow("restricted");
       },
-    })
-  })
-})
+    });
+  });
+});

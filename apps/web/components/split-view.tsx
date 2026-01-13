@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import Conversation from './conversation';
-import PreviewPanel, { type PreviewTab } from './preview-panel';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { useActivateProject, useProjectQuery } from '@/queries/projects';
-import { useSandbox } from '@/hooks/use-sandbox';
-import { useIsMobile } from '@/hooks/use-mobile';
-import ProjectHeader from './project-header';
+import { useEffect, useRef, useState, useCallback } from "react";
+import Conversation from "./conversation";
+import PreviewPanel, { type PreviewTab } from "./preview-panel";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useActivateProject, useProjectQuery } from "@/queries/projects";
+import { useSandbox } from "@/hooks/use-sandbox";
+import { useIsMobile } from "@/hooks/use-mobile";
+import ProjectHeader from "./project-header";
 
 interface SplitViewProps {
   projectId?: string;
@@ -22,24 +22,24 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   const setSandboxId = useSandbox((state: any) => state.setSandboxId);
   const lastActivatedId = useRef<string | undefined>(undefined);
   const isMobile = useIsMobile();
-  
+
   const hasConvex = Boolean((project?.metadata as any)?.convex);
   const convexTabAdded = useRef(false);
-  
+
   const [tabs, setTabs] = useState<PreviewTab[]>([
-    { id: 'preview', type: 'preview', title: 'Preview' },
-    { id: 'payments', type: 'payments', title: 'Payments' },
+    { id: "preview", type: "preview", title: "Preview" },
+    { id: "payments", type: "payments", title: "Payments" },
   ]);
-  const [activeTabId, setActiveTabId] = useState('preview');
+  const [activeTabId, setActiveTabId] = useState("preview");
   const tabCounter = useRef(0);
-  
+
   // Add Convex tab once when project has Convex enabled (insert after Preview, before Payments)
   useEffect(() => {
     if (hasConvex && !convexTabAdded.current) {
       convexTabAdded.current = true;
-      setTabs(prev => {
-        const previewIdx = prev.findIndex(t => t.id === 'preview');
-        const newTab = { id: 'convex', type: 'convex' as const, title: 'Database' };
+      setTabs((prev) => {
+        const previewIdx = prev.findIndex((t) => t.id === "preview");
+        const newTab = { id: "convex", type: "convex" as const, title: "Database" };
         const result = [...prev];
         result.splice(previewIdx + 1, 0, newTab);
         return result;
@@ -48,8 +48,8 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   }, [hasConvex]);
 
   const handleCloseTab = useCallback((tabId: string) => {
-    setTabs(t => t.filter(tab => tab.id !== tabId));
-    setActiveTabId(prev => (prev === tabId ? 'preview' : prev));
+    setTabs((t) => t.filter((tab) => tab.id !== tabId));
+    setActiveTabId((prev) => (prev === tabId ? "preview" : prev));
   }, []);
 
   // Activate project sandbox on mount
@@ -76,8 +76,12 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
             <Tabs defaultValue="chat" className="h-full min-h-0 flex flex-col">
               <div className="px-2 pt-2 pb-1.5">
                 <TabsList className="w-full max-w-sm mx-auto h-9 p-0.5!">
-                  <TabsTrigger value="chat" className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm">Conversation</TabsTrigger>
-                  <TabsTrigger value="preview" className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm">Preview</TabsTrigger>
+                  <TabsTrigger value="chat" className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm">
+                    Conversation
+                  </TabsTrigger>
+                  <TabsTrigger value="preview" className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm">
+                    Preview
+                  </TabsTrigger>
                 </TabsList>
               </div>
               <TabsContent value="chat" className="flex-1 min-h-0 flex flex-col">
@@ -88,7 +92,15 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
               <TabsContent value="preview" className="flex-1 min-h-0 flex flex-col">
                 <div className="flex-1 min-h-0 px-1 pb-1">
                   <div className="h-full min-h-0 overflow-hidden rounded-xl border bg-background">
-                    <PreviewPanel projectId={projectId} project={project} onPreviewUrl={onPreviewUrl} tabs={tabs} activeTabId={activeTabId} onTabChange={setActiveTabId} onCloseTab={handleCloseTab} />
+                    <PreviewPanel
+                      projectId={projectId}
+                      project={project}
+                      onPreviewUrl={onPreviewUrl}
+                      tabs={tabs}
+                      activeTabId={activeTabId}
+                      onTabChange={setActiveTabId}
+                      onCloseTab={handleCloseTab}
+                    />
                   </div>
                 </div>
               </TabsContent>
@@ -103,7 +115,15 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
               <ResizableHandle className="shadow-2xl" />
               <ResizablePanel defaultSize={60} minSize={30}>
                 <div className="h-full bg-background">
-                  <PreviewPanel projectId={projectId} project={project} onPreviewUrl={onPreviewUrl} tabs={tabs} activeTabId={activeTabId} onTabChange={setActiveTabId} onCloseTab={handleCloseTab} />
+                  <PreviewPanel
+                    projectId={projectId}
+                    project={project}
+                    onPreviewUrl={onPreviewUrl}
+                    tabs={tabs}
+                    activeTabId={activeTabId}
+                    onTabChange={setActiveTabId}
+                    onCloseTab={handleCloseTab}
+                  />
                 </div>
               </ResizablePanel>
             </ResizablePanelGroup>

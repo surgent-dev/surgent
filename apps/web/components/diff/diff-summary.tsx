@@ -48,7 +48,9 @@ export default function DiffSummary({ diffs, variant = "compact", className, max
   if (variant === "compact") {
     return (
       <div className={cn("flex items-center gap-2", className)}>
-        <div className="text-[11px] text-foreground/70">{files} file{files !== 1 ? "s" : ""} changed</div>
+        <div className="text-[11px] text-foreground/70">
+          {files} file{files !== 1 ? "s" : ""} changed
+        </div>
         {showBars ? (
           <Bars add={additions} del={deletions} />
         ) : (
@@ -81,9 +83,7 @@ export default function DiffSummary({ diffs, variant = "compact", className, max
               </span>
             </li>
           ))}
-          {remaining > 0 && (
-            <li className="text-[12px] text-foreground/60">… and {remaining} more</li>
-          )}
+          {remaining > 0 && <li className="text-[12px] text-foreground/60">… and {remaining} more</li>}
         </ul>
       </div>
     </div>

@@ -50,7 +50,8 @@
     "monaco-themes": "^0.4.7"
   },
   "prettier": {
-    "semi": false,
+    "semi": true,
+    "singleQuote": false,
     "printWidth": 120
   },
   "catalog": {

@@ -14,34 +14,36 @@ bun run index.ts
 
 This project was created using `bun init` in bun v1.2.12. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
 
-
 # OpenCode
 
 AI-powered headless coding agent.
 
 ## Stack
 
-| Tool | Purpose |
-|------|---------|
-| **Bun** | Runtime & package manager |
-| **TypeScript** | Language |
-| **Hono** | HTTP server |
-| **Zod** | Schema validation |
-| **Turbo** | Monorepo task runner |
-| **Prettier** | Code formatting |
-| **Husky** | Git hooks |
+| Tool           | Purpose                   |
+| -------------- | ------------------------- |
+| **Bun**        | Runtime & package manager |
+| **TypeScript** | Language                  |
+| **Hono**       | HTTP server               |
+| **Zod**        | Schema validation         |
+| **Turbo**      | Monorepo task runner      |
+| **Prettier**   | Code formatting           |
+| **Husky**      | Git hooks                 |
 
 ## Host vs Workspace
 
 **Host (Global.Path.\*)**
+
 - Machine running the opencode CLI/server process.
 - Stores user-level, cross-project data (auth, config, global caches, logs).
 
 **Workspace (Instance.ws.\*)**
+
 - Sandbox where the repo and tools run.
 - Stores project data and any tool/binary that must execute in the sandbox.
 
 **Rule of thumb**
+
 - Needs to run inside the repo sandbox → `Instance.ws.*`
 - User data or host process deps → `Global.Path.*` / `BunProc`
 
@@ -110,61 +112,61 @@ bun test
 
 ## Config
 
-| File | Purpose |
-|------|---------|
-| `.editorconfig` | Editor settings (indent, line endings) |
-| `bunfig.toml` | Bun configuration |
-| `turbo.json` | Turbo pipeline config |
-| `tsconfig.json` | TypeScript config |
-| `package.json` → `"prettier"` | Prettier config (no semi, 120 chars) |
+| File                          | Purpose                                |
+| ----------------------------- | -------------------------------------- |
+| `.editorconfig`               | Editor settings (indent, line endings) |
+| `bunfig.toml`                 | Bun configuration                      |
+| `turbo.json`                  | Turbo pipeline config                  |
+| `tsconfig.json`               | TypeScript config                      |
+| `package.json` → `"prettier"` | Prettier config (no semi, 120 chars)   |
 
 Host vs Workspace — quick mental model
 
-  Host (Global.Path.*)
+Host (Global.Path.\*)
 
-  - The machine where the opencode CLI/server process runs.
-  - Holds user‑level, cross‑project data.
-  - Good for:
-      - Auth tokens, OAuth sessions
-      - User config & rules
-      - Global caches for SDKs/providers
-      - Logs and model metadata cache
-  - Example paths: Global.Path.data, Global.Path.cache, Global.Path.bin
+- The machine where the opencode CLI/server process runs.
+- Holds user‑level, cross‑project data.
+- Good for:
+  - Auth tokens, OAuth sessions
+  - User config & rules
+  - Global caches for SDKs/providers
+  - Logs and model metadata cache
+- Example paths: Global.Path.data, Global.Path.cache, Global.Path.bin
 
-  Workspace (Instance.ws.*)
+Workspace (Instance.ws.\*)
 
-  - The sandbox where the user’s repo and tools run.
-  - Holds project‑specific data and anything that must execute in the sandbox.
-  - Good for:
-      - Project files
-      - Tool installs executed inside the sandbox (LSP servers, formatters, rg)
-      - Snapshots & per‑repo data
-  - Example access: Instance.ws.fs, Instance.ws.proc, Instance.ws.env, Instance.ws.global.*
+- The sandbox where the user’s repo and tools run.
+- Holds project‑specific data and anything that must execute in the sandbox.
+- Good for:
+  - Project files
+  - Tool installs executed inside the sandbox (LSP servers, formatters, rg)
+  - Snapshots & per‑repo data
+- Example access: Instance.ws.fs, Instance.ws.proc, Instance.ws.env, Instance.ws.global.\*
 
-  ———
+———
 
-  1. Host server bootstraps and owns the process.
-  2. A workspace provider is created per repo.
-  3. All file/exec operations that touch repo or tools go through Instance.ws.
-  4. User data and shared caches stay on the host (Global.Path.*).
+1. Host server bootstraps and owns the process.
+2. A workspace provider is created per repo.
+3. All file/exec operations that touch repo or tools go through Instance.ws.
+4. User data and shared caches stay on the host (Global.Path.\*).
 
-  Workspace‑scoped execution
+Workspace‑scoped execution
 
-  - Use Instance.ws.proc.exec/spawn
-  - Use Instance.ws.env.execPath for Bun
-  - Use Instance.ws.fs for file IO
-  - Use Instance.ws.global.{bin,cache,data} for workspace tool dirs
+- Use Instance.ws.proc.exec/spawn
+- Use Instance.ws.env.execPath for Bun
+- Use Instance.ws.fs for file IO
+- Use Instance.ws.global.{bin,cache,data} for workspace tool dirs
 
-  Host‑scoped execution
+Host‑scoped execution
 
-  - Use BunProc.run/install (host Bun, global cache)
-  - Use Global.Path.* for global data/cache/bin
+- Use BunProc.run/install (host Bun, global cache)
+- Use Global.Path.\* for global data/cache/bin
 
-  ———
+———
 
-  ## Current decisions (as of now)
+## Current decisions (as of now)
 
-  - Provider SDKs (AWS, etc): host‑scoped
-    (BunProc.install into Global.Path.cache, imported by host process)
-  - Formatters & LSP installs:
-    workspace‑scoped (run inside sandbox)
+- Provider SDKs (AWS, etc): host‑scoped
+  (BunProc.install into Global.Path.cache, imported by host process)
+- Formatters & LSP installs:
+  workspace‑scoped (run inside sandbox)

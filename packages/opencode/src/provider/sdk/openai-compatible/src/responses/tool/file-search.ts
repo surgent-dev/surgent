@@ -1,20 +1,20 @@
-import { createProviderDefinedToolFactoryWithOutputSchema } from "@ai-sdk/provider-utils"
+import { createProviderDefinedToolFactoryWithOutputSchema } from "@ai-sdk/provider-utils";
 import type {
   OpenAIResponsesFileSearchToolComparisonFilter,
   OpenAIResponsesFileSearchToolCompoundFilter,
-} from "../openai-responses-api-types"
-import { z } from "zod/v4"
+} from "../openai-responses-api-types";
+import { z } from "zod/v4";
 
 const comparisonFilterSchema = z.object({
   key: z.string(),
   type: z.enum(["eq", "ne", "gt", "gte", "lt", "lte"]),
   value: z.union([z.string(), z.number(), z.boolean()]),
-})
+});
 
 const compoundFilterSchema: z.ZodType<any> = z.object({
   type: z.enum(["and", "or"]),
   filters: z.array(z.union([comparisonFilterSchema, z.lazy(() => compoundFilterSchema)])),
-})
+});
 
 export const fileSearchArgsSchema = z.object({
   vectorStoreIds: z.array(z.string()),
@@ -26,7 +26,7 @@ export const fileSearchArgsSchema = z.object({
     })
     .optional(),
   filters: z.union([comparisonFilterSchema, compoundFilterSchema]).optional(),
-})
+});
 
 export const fileSearchOutputSchema = z.object({
   queries: z.array(z.string()),
@@ -41,7 +41,7 @@ export const fileSearchOutputSchema = z.object({
       }),
     )
     .nullable(),
-})
+});
 
 export const fileSearch = createProviderDefinedToolFactoryWithOutputSchema<
   {},
@@ -49,7 +49,7 @@ export const fileSearch = createProviderDefinedToolFactoryWithOutputSchema<
     /**
      * The search query to execute.
      */
-    queries: string[]
+    queries: string[];
 
     /**
      * The results of the file search tool call.
@@ -64,39 +64,39 @@ export const fileSearch = createProviderDefinedToolFactoryWithOutputSchema<
            * Keys are strings with a maximum length of 64 characters.
            * Values are strings with a maximum length of 512 characters, booleans, or numbers.
            */
-          attributes: Record<string, unknown>
+          attributes: Record<string, unknown>;
 
           /**
            * The unique ID of the file.
            */
-          fileId: string
+          fileId: string;
 
           /**
            * The name of the file.
            */
-          filename: string
+          filename: string;
 
           /**
            * The relevance score of the file - a value between 0 and 1.
            */
-          score: number
+          score: number;
 
           /**
            * The text that was retrieved from the file.
            */
-          text: string
-        }[]
+          text: string;
+        }[];
   },
   {
     /**
      * List of vector store IDs to search through.
      */
-    vectorStoreIds: string[]
+    vectorStoreIds: string[];
 
     /**
      * Maximum number of search results to return. Defaults to 10.
      */
-    maxNumResults?: number
+    maxNumResults?: number;
 
     /**
      * Ranking options for the search.
@@ -105,24 +105,24 @@ export const fileSearch = createProviderDefinedToolFactoryWithOutputSchema<
       /**
        * The ranker to use for the file search.
        */
-      ranker?: string
+      ranker?: string;
 
       /**
        * The score threshold for the file search, a number between 0 and 1.
        * Numbers closer to 1 will attempt to return only the most relevant results,
        * but may return fewer results.
        */
-      scoreThreshold?: number
-    }
+      scoreThreshold?: number;
+    };
 
     /**
      * A filter to apply.
      */
-    filters?: OpenAIResponsesFileSearchToolComparisonFilter | OpenAIResponsesFileSearchToolCompoundFilter
+    filters?: OpenAIResponsesFileSearchToolComparisonFilter | OpenAIResponsesFileSearchToolCompoundFilter;
   }
 >({
   id: "openai.file_search",
   name: "file_search",
   inputSchema: z.object({}),
   outputSchema: fileSearchOutputSchema,
-})
+});

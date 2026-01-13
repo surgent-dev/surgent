@@ -56,6 +56,7 @@ Backend implementation specialist. Execute tasks with precision, zero scope cree
 ## Verification (Required)
 
 Task incomplete without evidence:
+
 1. Run lint + type-check on changed files
 2. Run build/test if they exist
 3. Include output in report

@@ -1,19 +1,19 @@
-import { Config } from "../config/config"
-import z from "zod"
-import { Provider } from "../provider/provider"
-import { generateObject, type ModelMessage } from "ai"
-import { SystemPrompt } from "../session/system"
-import { Instance } from "../project/instance"
-import { mergeDeep } from "remeda"
-import { Log } from "../util/log"
+import { Config } from "../config/config";
+import z from "zod";
+import { Provider } from "../provider/provider";
+import { generateObject, type ModelMessage } from "ai";
+import { SystemPrompt } from "../session/system";
+import { Instance } from "../project/instance";
+import { mergeDeep } from "remeda";
+import { Log } from "../util/log";
 
-const log = Log.create({ service: "agent" })
+const log = Log.create({ service: "agent" });
 
-import PROMPT_GENERATE from "./generate.txt"
-import PROMPT_COMPACTION from "./prompt/compaction.txt"
-import PROMPT_EXPLORE from "./prompt/explore.txt"
-import PROMPT_SUMMARY from "./prompt/summary.txt"
-import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_GENERATE from "./generate.txt";
+import PROMPT_COMPACTION from "./prompt/compaction.txt";
+import PROMPT_EXPLORE from "./prompt/explore.txt";
+import PROMPT_SUMMARY from "./prompt/summary.txt";
+import PROMPT_TITLE from "./prompt/title.txt";
 
 export namespace Agent {
   export const Info = z
@@ -48,12 +48,12 @@ export namespace Agent {
     })
     .meta({
       ref: "Agent",
-    })
-  export type Info = z.infer<typeof Info>
+    });
+  export type Info = z.infer<typeof Info>;
 
   const state = Instance.state(async () => {
-    const cfg = await Config.get()
-    const defaultTools = cfg.tools ?? {}
+    const cfg = await Config.get();
+    const defaultTools = cfg.tools ?? {};
     const defaultPermission: Info["permission"] = {
       edit: "allow",
       bash: {
@@ -65,8 +65,8 @@ export namespace Agent {
       webfetch: "allow",
       doom_loop: "ask",
       external_directory: "ask",
-    }
-    const agentPermission = mergeAgentPermissions(defaultPermission, cfg.permission ?? {})
+    };
+    const agentPermission = mergeAgentPermissions(defaultPermission, cfg.permission ?? {});
 
     const planPermission = mergeAgentPermissions(
       {
@@ -112,7 +112,7 @@ export namespace Agent {
         webfetch: "allow",
       },
       cfg.permission ?? {},
-    )
+    );
 
     const result: Record<string, Info> = {
       build: {
@@ -195,13 +195,13 @@ export namespace Agent {
         prompt: PROMPT_SUMMARY,
         tools: {},
       },
-    }
+    };
     for (const [key, value] of Object.entries(cfg.agent ?? {})) {
       if (value.disable) {
-        delete result[key]
-        continue
+        delete result[key];
+        continue;
       }
-      let item = result[key]
+      let item = result[key];
       if (!item)
         item = result[key] = {
           name: key,
@@ -210,7 +210,7 @@ export namespace Agent {
           options: {},
           tools: {},
           native: false,
-        }
+        };
       const {
         name,
         model,
@@ -224,81 +224,81 @@ export namespace Agent {
         color,
         maxSteps,
         ...extra
-      } = value
+      } = value;
       item.options = {
         ...item.options,
         ...extra,
-      }
-      if (model) item.model = Provider.parseModel(model)
-      if (prompt) item.prompt = prompt
+      };
+      if (model) item.model = Provider.parseModel(model);
+      if (prompt) item.prompt = prompt;
       if (tools)
         item.tools = {
           ...item.tools,
           ...tools,
-        }
+        };
       item.tools = {
         ...defaultTools,
         ...item.tools,
-      }
-      if (description) item.description = description
-      if (temperature != undefined) item.temperature = temperature
-      if (top_p != undefined) item.topP = top_p
-      if (mode) item.mode = mode
-      if (color) item.color = color
+      };
+      if (description) item.description = description;
+      if (temperature != undefined) item.temperature = temperature;
+      if (top_p != undefined) item.topP = top_p;
+      if (mode) item.mode = mode;
+      if (color) item.color = color;
       // just here for consistency & to prevent it from being added as an option
-      if (name) item.name = name
-      if (maxSteps != undefined) item.maxSteps = maxSteps
+      if (name) item.name = name;
+      if (maxSteps != undefined) item.maxSteps = maxSteps;
 
       if (permission ?? cfg.permission) {
-        item.permission = mergeAgentPermissions(cfg.permission ?? {}, permission ?? {})
+        item.permission = mergeAgentPermissions(cfg.permission ?? {}, permission ?? {});
       }
     }
 
     // Mark the default agent
-    const defaultName = cfg.default_agent ?? "build"
-    const defaultCandidate = result[defaultName]
+    const defaultName = cfg.default_agent ?? "build";
+    const defaultCandidate = result[defaultName];
     if (defaultCandidate && defaultCandidate.mode !== "subagent") {
-      defaultCandidate.default = true
+      defaultCandidate.default = true;
     } else {
       // Fall back to "build" if configured default is invalid
       if (result["build"]) {
-        result["build"].default = true
+        result["build"].default = true;
       }
     }
 
-    const hasPrimaryAgents = Object.values(result).filter((a) => a.mode !== "subagent" && !a.hidden).length > 0
+    const hasPrimaryAgents = Object.values(result).filter((a) => a.mode !== "subagent" && !a.hidden).length > 0;
     if (!hasPrimaryAgents) {
       throw new Config.InvalidError({
         path: "config",
         message: "No primary agents are available. Please configure at least one agent with mode 'primary' or 'all'.",
-      })
+      });
     }
 
-    return result
-  })
+    return result;
+  });
 
   export async function get(agent: string) {
-    return state().then((x) => x[agent])
+    return state().then((x) => x[agent]);
   }
 
   export async function list() {
-    return state().then((x) => Object.values(x))
+    return state().then((x) => Object.values(x));
   }
 
   export async function defaultAgent(): Promise<string> {
-    const agents = await state()
-    const defaultCandidate = Object.values(agents).find((a) => a.default)
-    return defaultCandidate?.name ?? "build"
+    const agents = await state();
+    const defaultCandidate = Object.values(agents).find((a) => a.default);
+    return defaultCandidate?.name ?? "build";
   }
 
   export async function generate(input: { description: string; model?: { providerID: string; modelID: string } }) {
-    const cfg = await Config.get()
-    const defaultModel = input.model ?? (await Provider.defaultModel())
-    const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID)
-    const language = await Provider.getLanguage(model)
-    const system = SystemPrompt.header(defaultModel.providerID)
-    system.push(PROMPT_GENERATE)
-    const existing = await list()
+    const cfg = await Config.get();
+    const defaultModel = input.model ?? (await Provider.defaultModel());
+    const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID);
+    const language = await Provider.getLanguage(model);
+    const system = SystemPrompt.header(defaultModel.providerID);
+    system.push(PROMPT_GENERATE);
+    const existing = await list();
     const result = await generateObject({
       experimental_telemetry: {
         isEnabled: cfg.experimental?.openTelemetry,
@@ -325,8 +325,8 @@ export namespace Agent {
         whenToUse: z.string(),
         systemPrompt: z.string(),
       }),
-    })
-    return result.object
+    });
+    return result.object;
   }
 }
 
@@ -334,54 +334,54 @@ function mergeAgentPermissions(basePermission: any, overridePermission: any): Ag
   if (typeof basePermission.bash === "string") {
     basePermission.bash = {
       "*": basePermission.bash,
-    }
+    };
   }
   if (typeof overridePermission.bash === "string") {
     overridePermission.bash = {
       "*": overridePermission.bash,
-    }
+    };
   }
 
   if (typeof basePermission.skill === "string") {
     basePermission.skill = {
       "*": basePermission.skill,
-    }
+    };
   }
   if (typeof overridePermission.skill === "string") {
     overridePermission.skill = {
       "*": overridePermission.skill,
-    }
+    };
   }
-  const merged = mergeDeep(basePermission ?? {}, overridePermission ?? {}) as any
-  let mergedBash
+  const merged = mergeDeep(basePermission ?? {}, overridePermission ?? {}) as any;
+  let mergedBash;
   if (merged.bash) {
     if (typeof merged.bash === "string") {
       mergedBash = {
         "*": merged.bash,
-      }
+      };
     } else if (typeof merged.bash === "object") {
       mergedBash = mergeDeep(
         {
           "*": "allow",
         },
         merged.bash,
-      )
+      );
     }
   }
 
-  let mergedSkill
+  let mergedSkill;
   if (merged.skill) {
     if (typeof merged.skill === "string") {
       mergedSkill = {
         "*": merged.skill,
-      }
+      };
     } else if (typeof merged.skill === "object") {
       mergedSkill = mergeDeep(
         {
           "*": "allow",
         },
         merged.skill,
-      )
+      );
     }
   }
 
@@ -392,7 +392,7 @@ function mergeAgentPermissions(basePermission: any, overridePermission: any): Ag
     skill: mergedSkill ?? { "*": "allow" },
     doom_loop: merged.doom_loop,
     external_directory: merged.external_directory,
-  }
+  };
 
-  return result
+  return result;
 }

@@ -1,6 +1,6 @@
-import { resolver } from "hono-openapi"
-import z from "zod"
-import { Storage } from "../storage/storage"
+import { resolver } from "hono-openapi";
+import z from "zod";
+import { Storage } from "../storage/storage";
 
 export const ERRORS = {
   400: {
@@ -29,8 +29,8 @@ export const ERRORS = {
       },
     },
   },
-} as const
+} as const;
 
 export function errors(...codes: number[]) {
-  return Object.fromEntries(codes.map((code) => [code, ERRORS[code as keyof typeof ERRORS]]))
+  return Object.fromEntries(codes.map((code) => [code, ERRORS[code as keyof typeof ERRORS]]));
 }

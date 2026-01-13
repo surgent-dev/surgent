@@ -1,7 +1,7 @@
-import { BusEvent } from "../bus/bus-event"
-import { Bus } from "../bus"
-import { Instance } from "../project/instance"
-import z from "zod"
+import { BusEvent } from "../bus/bus-event";
+import { Bus } from "../bus";
+import { Instance } from "../project/instance";
+import z from "zod";
 
 export namespace SessionStatus {
   export const Info = z
@@ -21,8 +21,8 @@ export namespace SessionStatus {
     ])
     .meta({
       ref: "SessionStatus",
-    })
-  export type Info = z.infer<typeof Info>
+    });
+  export type Info = z.infer<typeof Info>;
 
   export const Event = {
     Status: BusEvent.define(
@@ -39,38 +39,38 @@ export namespace SessionStatus {
         sessionID: z.string(),
       }),
     ),
-  }
+  };
 
   const state = Instance.state(() => {
-    const data: Record<string, Info> = {}
-    return data
-  })
+    const data: Record<string, Info> = {};
+    return data;
+  });
 
   export function get(sessionID: string) {
     return (
       state()[sessionID] ?? {
         type: "idle",
       }
-    )
+    );
   }
 
   export function list() {
-    return state()
+    return state();
   }
 
   export function set(sessionID: string, status: Info) {
     Bus.publish(Event.Status, {
       sessionID,
       status,
-    })
+    });
     if (status.type === "idle") {
       // deprecated
       Bus.publish(Event.Idle, {
         sessionID,
-      })
-      delete state()[sessionID]
-      return
+      });
+      delete state()[sessionID];
+      return;
     }
-    state()[sessionID] = status
+    state()[sessionID] = status;
   }
 }

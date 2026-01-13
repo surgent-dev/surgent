@@ -104,9 +104,7 @@ admin.get("/overview", requireAdmin, async (c) => {
 
   const projectsInRange = await projectsCountQuery.executeTakeFirst();
 
-  const deployedProjectsInRange = deployed
-    ? await projectsCountQuery.where(deployedFilter).executeTakeFirst()
-    : null;
+  const deployedProjectsInRange = deployed ? await projectsCountQuery.where(deployedFilter).executeTakeFirst() : null;
 
   const last10Users = await db
     .selectFrom("user")

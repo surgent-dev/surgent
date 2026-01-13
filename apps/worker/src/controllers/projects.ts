@@ -24,7 +24,10 @@ const DEFAULT_WRANGLER = {
 };
 
 export class HttpError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -83,15 +86,15 @@ function buildBashCommand(cwd: string, script: string): string {
   return `bash -lc '${["set -euo pipefail", `cd ${shellQuote(cwd)}`, script].join("\n").replace(/'/g, "'\"'\"'")}'`;
 }
 
-type ProviderName = "e2b" | "daytona"
+type ProviderName = "e2b" | "daytona";
 
-const sandboxProviderName: ProviderName = config.sandbox.provider === "daytona" ? "daytona" : "e2b"
+const sandboxProviderName: ProviderName = config.sandbox.provider === "daytona" ? "daytona" : "e2b";
 
 function getSandboxProvider(): SandboxProvider {
   if (config.sandbox.provider === "daytona") {
-    return new DaytonaProvider(config.daytona.apiKey, config.daytona.serverUrl, config.daytona.snapshot)
+    return new DaytonaProvider(config.daytona.apiKey, config.daytona.serverUrl, config.daytona.snapshot);
   }
-  return new E2BProvider(config.e2b.template)
+  return new E2BProvider(config.e2b.template);
 }
 
 function stripTrailingSlash(s: string): string {
@@ -106,7 +109,12 @@ function resolveEntryPath(currentDir: string, entry: unknown): string {
 }
 
 function sanitizeScriptName(input: string): string {
-  return input.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "").slice(0, 63);
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 63);
 }
 
 async function directoryExists(sandbox: Sandbox, dir: string): Promise<boolean> {
@@ -124,7 +132,7 @@ async function downloadFileSafe(sandbox: Sandbox, filePath: string, cwd?: string
     const cmd = `base64 -w0 ${shellQuote(filePath)} 2>/dev/null || base64 ${shellQuote(filePath)}`;
     const res = await sandbox.exec(cmd, { timeout: 60_000, cwd });
     if (res.code !== 0) throw new Error(`downloadFileSafe failed: ${res.output}`);
-    return Buffer.from((res.output || '').toString().trim(), 'base64');
+    return Buffer.from((res.output || "").toString().trim(), "base64");
   }
 }
 
@@ -141,8 +149,8 @@ async function collectAssets(sandbox: Sandbox, rootDir: string) {
       } else {
         const buffer = await downloadFileSafe(sandbox, entryPath);
         const rel = `/${posix.relative(root, entryPath)}`;
-        manifest[rel] = { hash: createHash('sha256').update(buffer).digest('hex').slice(0, 32), size: buffer.length };
-        files.push({ path: rel, base64: buffer.toString('base64') });
+        manifest[rel] = { hash: createHash("sha256").update(buffer).digest("hex").slice(0, 32), size: buffer.length };
+        files.push({ path: rel, base64: buffer.toString("base64") });
       }
     }
   }
@@ -163,7 +171,7 @@ async function pm2JList(sandbox: Sandbox, cwd: string): Promise<any[]> {
 
 async function isPm2Online(sandbox: Sandbox, cwd: string, name: string): Promise<boolean> {
   const list = await pm2JList(sandbox, cwd);
-  return list.find(p => p?.name === name)?.pm2_env?.status === "online";
+  return list.find((p) => p?.name === name)?.pm2_env?.status === "online";
 }
 
 async function ensurePm2Process(sandbox: Sandbox, cwd: string, name: string, command: string, forceRestart = false) {
@@ -174,7 +182,13 @@ async function ensurePm2Process(sandbox: Sandbox, cwd: string, name: string, com
   await sandbox.exec(`pm2 start "${command}" --name ${name} --update-env`, { timeout: 300_000, cwd });
 }
 
-async function getOrCreateSandbox(opts: { port: number; workingDirectory: string; sandboxId?: string; env?: Record<string, string>; name?: string }) {
+async function getOrCreateSandbox(opts: {
+  port: number;
+  workingDirectory: string;
+  sandboxId?: string;
+  env?: Record<string, string>;
+  name?: string;
+}) {
   const provider = getSandboxProvider();
   let sandbox: Sandbox;
 
@@ -190,7 +204,6 @@ async function getOrCreateSandbox(opts: { port: number; workingDirectory: string
 
   return { sandbox, previewUrl: await sandbox.host(opts.port) };
 }
-
 
 // ============================================================================
 // Main Functions
@@ -239,21 +252,21 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     const wranglerConfig = { name: scriptName, ...DEFAULT_WRANGLER };
     const wrangler = parseWranglerConfig(JSON.stringify(wranglerConfig));
     const deployConfig = buildDeploymentConfig(
-      wrangler, 
-      DEFAULT_WORKER, 
-      config.cloudflare.accountId!, 
-      config.cloudflare.apiToken!, 
-      manifest
+      wrangler,
+      DEFAULT_WORKER,
+      config.cloudflare.accountId!,
+      config.cloudflare.apiToken!,
+      manifest,
     );
 
     if (envVars) deployConfig.vars = { ...envVars, ...deployConfig.vars };
 
-    const fileContents = new Map(files.map(f => [f.path, Buffer.from(f.base64, "base64")]));
+    const fileContents = new Map(files.map((f) => [f.path, Buffer.from(f.base64, "base64")]));
     await deployToDispatch(
-      { ...deployConfig, dispatchNamespace: config.cloudflare.dispatchNamespace! }, 
-      fileContents, 
-      undefined, 
-      wranglerConfig.assets
+      { ...deployConfig, dispatchNamespace: config.cloudflare.dispatchNamespace! },
+      fileContents,
+      undefined,
+      wranglerConfig.assets,
     );
 
     // 8. Update project
@@ -273,7 +286,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
 async function findAssetsDir(sandbox: Sandbox, workingDir: string): Promise<string | null> {
   const clientDir = `${workingDir}/dist/client`;
   const distDir = `${workingDir}/dist`;
-  
+
   if (await directoryExists(sandbox, clientDir)) return clientDir;
   if (await directoryExists(sandbox, distDir)) return distDir;
   return null;
@@ -287,8 +300,9 @@ async function readEnvFile(sandbox: Sandbox, path: string): Promise<Record<strin
   }
 }
 
-
-export async function initializeProject(args: InitializeProjectArgs): Promise<{ projectId: string; sandboxId: string; previewUrl: string }> {
+export async function initializeProject(
+  args: InitializeProjectArgs,
+): Promise<{ projectId: string; sandboxId: string; previewUrl: string }> {
   console.log("[init] starting...", { userId: args.userId, githubUrl: args.githubUrl });
   const projectCount = await ProjectService.countProjectsByUserId(args.userId);
   console.log("[init] project count:", projectCount);
@@ -296,11 +310,18 @@ export async function initializeProject(args: InitializeProjectArgs): Promise<{ 
     throw new HttpError(400, `Project limit reached. Maximum ${MAX_PROJECTS_PER_USER} projects per user.`);
   }
 
-  const created = await ProjectService.createProject({ userId: args.userId, name: args.name || "app", githubUrl: args.githubUrl });
+  const created = await ProjectService.createProject({
+    userId: args.userId,
+    name: args.name || "app",
+    githubUrl: args.githubUrl,
+  });
   const projectId = created.id;
   const workingDirectory = localWorkspacePath(projectId);
 
-  const apiKeyResult = await auth.api.createApiKey({ body: { name: `p-${projectId.slice(0, 8)}` }, headers: args.headers });
+  const apiKeyResult = await auth.api.createApiKey({
+    body: { name: `p-${projectId.slice(0, 8)}` },
+    headers: args.headers,
+  });
 
   console.log("[init] creating sandbox...");
   const { sandbox, previewUrl } = await getOrCreateSandbox({
@@ -350,7 +371,12 @@ export async function initializeProject(args: InitializeProjectArgs): Promise<{ 
 export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxId: string; previewUrl: string }> {
   const workingDirectory = localWorkspacePath(args.projectId);
 
-  const { sandbox, previewUrl } = await getOrCreateSandbox({ sandboxId: args.sandboxId, port: 3000, workingDirectory, name: "server" });
+  const { sandbox, previewUrl } = await getOrCreateSandbox({
+    sandboxId: args.sandboxId,
+    port: 3000,
+    workingDirectory,
+    name: "server",
+  });
 
   try {
     const project = await ProjectService.getProjectById(args.projectId);
@@ -376,7 +402,7 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
   const sandbox = await getSandboxProvider().resume(sandboxId);
   const cwd = project.metadata?.workingDirectory || localWorkspacePath(args.projectId);
 
-  const res = await sandbox.exec('bunx convex deploy -y', { cwd, timeout: 180_000 });
+  const res = await sandbox.exec("bunx convex deploy -y", { cwd, timeout: 180_000 });
   if (res.code !== 0) throw new Error(`convex deploy failed: ${res.output}`);
 }
 
@@ -393,16 +419,16 @@ export async function downloadProject(projectId: string): Promise<{ buffer: Buff
 
   // Use tar (always available) with excludes for large/irrelevant directories
   const tarCmd = [
-    'tar -czf',
+    "tar -czf",
     shellQuote(archivePath),
-    '--exclude=node_modules',
-    '--exclude=.git',
-    '--exclude=.next',
-    '--exclude=dist',
-    '--exclude=.turbo',
-    '--exclude=*.log',
-    '.',
-  ].join(' ');
+    "--exclude=node_modules",
+    "--exclude=.git",
+    "--exclude=.next",
+    "--exclude=dist",
+    "--exclude=.turbo",
+    "--exclude=*.log",
+    ".",
+  ].join(" ");
 
   const result = await sandbox.exec(tarCmd, { cwd: workingDir, timeout: 180_000 });
   if (result.code !== 0) {
@@ -414,7 +440,7 @@ export async function downloadProject(projectId: string): Promise<{ buffer: Buff
   // Cleanup
   await sandbox.exec(`rm -f ${shellQuote(archivePath)}`).catch(() => {});
 
-  const safeName = (project.name || 'project').replace(/[^a-zA-Z0-9_-]/g, '-');
+  const safeName = (project.name || "project").replace(/[^a-zA-Z0-9_-]/g, "-");
   return { buffer, filename: `${safeName}.tar.gz` };
 }
 

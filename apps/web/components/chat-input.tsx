@@ -40,17 +40,17 @@ const FALLBACK_MODELS: ProviderModel[] = [
 const MAX_FILES = 5;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-export default function ChatInput({ 
-  onSubmit, 
-  disabled, 
-  placeholder = "Ask anything...", 
-  className, 
-  mode = "plan", 
-  onToggleMode, 
-  isWorking, 
-  onStop, 
-  isStopping, 
-  value: controlledValue, 
+export default function ChatInput({
+  onSubmit,
+  disabled,
+  placeholder = "Ask anything...",
+  className,
+  mode = "plan",
+  onToggleMode,
+  isWorking,
+  onStop,
+  isStopping,
+  value: controlledValue,
   onValueChange,
   models = FALLBACK_MODELS,
   selectedModel,
@@ -69,7 +69,7 @@ export default function ChatInput({
   // Find current selected model
   const currentModel = useMemo(() => {
     if (selectedModel) {
-      return models.find(m => m.id === selectedModel.modelId && m.providerId === selectedModel.providerId);
+      return models.find((m) => m.id === selectedModel.modelId && m.providerId === selectedModel.providerId);
     }
     return models[0];
   }, [models, selectedModel]);
@@ -79,7 +79,7 @@ export default function ChatInput({
   };
 
   const addFiles = async (files: File[]) => {
-    const valid = files.filter(f => f.size <= MAX_FILE_SIZE).slice(0, MAX_FILES - attachments.length);
+    const valid = files.filter((f) => f.size <= MAX_FILE_SIZE).slice(0, MAX_FILES - attachments.length);
     if (!valid.length) return;
 
     const newAttachments: UploadingAttachment[] = await Promise.all(
@@ -88,22 +88,18 @@ export default function ChatInput({
         file,
         preview: file.type.startsWith("image/") ? await fileToDataUrl(file) : undefined,
         status: "uploading" as const,
-      }))
+      })),
     );
 
-    setAttachments(prev => [...prev, ...newAttachments].slice(0, MAX_FILES));
+    setAttachments((prev) => [...prev, ...newAttachments].slice(0, MAX_FILES));
 
     for (const attachment of newAttachments) {
       uploadFile(attachment.file)
         .then(({ url, size }) => {
-          setAttachments(prev =>
-            prev.map(a => a.id === attachment.id ? { ...a, status: "done", url, size } : a)
-          );
+          setAttachments((prev) => prev.map((a) => (a.id === attachment.id ? { ...a, status: "done", url, size } : a)));
         })
         .catch(() => {
-          setAttachments(prev =>
-            prev.map(a => a.id === attachment.id ? { ...a, status: "error" } : a)
-          );
+          setAttachments((prev) => prev.map((a) => (a.id === attachment.id ? { ...a, status: "error" } : a)));
         });
     }
   };
@@ -114,8 +110,11 @@ export default function ChatInput({
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
-    const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith("image/"));
-    if (files.length) { e.preventDefault(); addFiles(files); }
+    const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
+    if (files.length) {
+      e.preventDefault();
+      addFiles(files);
+    }
   };
 
   const handleDragEnter = (e: React.DragEvent) => {
@@ -138,11 +137,11 @@ export default function ChatInput({
   };
 
   const removeAttachment = (id: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== id));
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
   const handleSubmit = async () => {
-    const hasUploading = attachments.some(a => a.status === "uploading");
+    const hasUploading = attachments.some((a) => a.status === "uploading");
     if ((!value.trim() && !attachments.length) || disabled || hasUploading) return;
 
     const fileParts = attachmentsToParts(attachments);
@@ -155,7 +154,7 @@ export default function ChatInput({
     onSubmit(text, fileParts.length ? fileParts : undefined, model.id, model.providerId);
   };
 
-  const hasUploading = attachments.some(a => a.status === "uploading");
+  const hasUploading = attachments.some((a) => a.status === "uploading");
   const canSubmit = !hasUploading && !disabled && (value.trim() || attachments.length);
 
   return (
@@ -163,19 +162,23 @@ export default function ChatInput({
       className={cn("w-full relative", className)}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
-      onDragOver={e => e.preventDefault()}
+      onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
     >
-      <div className={cn(
-        "absolute inset-0 z-10 rounded-2xl border-2 border-dashed border-brand bg-brand/10 flex items-center justify-center pointer-events-none transition-opacity duration-150",
-        isDragging ? "opacity-100" : "opacity-0"
-      )}>
+      <div
+        className={cn(
+          "absolute inset-0 z-10 rounded-2xl border-2 border-dashed border-brand bg-brand/10 flex items-center justify-center pointer-events-none transition-opacity duration-150",
+          isDragging ? "opacity-100" : "opacity-0",
+        )}
+      >
         <span className="text-sm font-medium text-brand">Drop files here</span>
       </div>
-      <div className={cn(
-        "rounded-2xl border bg-background shadow-lg overflow-hidden transition-colors",
-        isDragging ? "border-brand" : "border-border"
-      )}>
+      <div
+        className={cn(
+          "rounded-2xl border bg-background shadow-lg overflow-hidden transition-colors",
+          isDragging ? "border-brand" : "border-border",
+        )}
+      >
         {/* File previews */}
         {attachments.length > 0 && (
           <div className="flex gap-1 sm:gap-1.5 p-2 sm:p-3 pb-0 flex-wrap">
@@ -214,9 +217,9 @@ export default function ChatInput({
         <textarea
           className="w-full p-3 sm:p-4 resize-none outline-none text-sm min-h-[44px] sm:min-h-[48px] max-h-48 sm:max-h-72 bg-transparent text-foreground placeholder:text-muted-foreground"
           value={value}
-          onChange={e => setValue(e.target.value)}
+          onChange={(e) => setValue(e.target.value)}
           onPaste={handlePaste}
-          onKeyDown={e => {
+          onKeyDown={(e) => {
             if (e.key !== "Enter" || e.shiftKey) return;
             e.preventDefault();
             isWorking ? onStop?.() : handleSubmit();
@@ -253,22 +256,27 @@ export default function ChatInput({
               onClick={onToggleMode}
               className={cn(
                 "h-8 px-2 sm:px-3 rounded-full text-xs font-medium transition-colors shrink-0",
-                mode === "plan"
-                  ? "bg-brand/10 text-brand hover:bg-brand/15"
-                  : "text-muted-foreground hover:bg-muted"
+                mode === "plan" ? "bg-brand/10 text-brand hover:bg-brand/15" : "text-muted-foreground hover:bg-muted",
               )}
             >
-              <span className={cn("sm:mr-1.5 size-1.5 rounded-full", mode === "plan" ? "bg-brand" : "bg-muted-foreground")} />
+              <span
+                className={cn("sm:mr-1.5 size-1.5 rounded-full", mode === "plan" ? "bg-brand" : "bg-muted-foreground")}
+              />
               <span className="hidden sm:inline">Chat mode</span>
             </Button>
 
-            <button 
+            <button
               onClick={() => setModelDialogOpen(true)}
               className="h-8 px-2 sm:px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors flex items-center gap-1.5"
             >
               {currentModel ? (
                 <>
-                  <span className={cn("size-1.5 rounded-full", PROVIDER_COLORS[currentModel.providerId] || "bg-muted-foreground")} />
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      PROVIDER_COLORS[currentModel.providerId] || "bg-muted-foreground",
+                    )}
+                  />
                   <span className="max-w-28 truncate">{currentModel.name || currentModel.id}</span>
                 </>
               ) : (
@@ -278,7 +286,7 @@ export default function ChatInput({
             </button>
           </div>
 
-            <Button
+          <Button
             type="button"
             disabled={isStopping || (!isWorking && !canSubmit)}
             onClick={isWorking ? onStop : handleSubmit}
@@ -288,15 +296,21 @@ export default function ChatInput({
               "rounded-full transition-all duration-200 shrink-0",
               isWorking
                 ? "h-8 px-3 text-danger border-danger/30 hover:bg-danger/10 bg-transparent"
-                : "size-8 p-0 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+                : "size-8 p-0 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
             )}
           >
             {isWorking ? (
               <span className="flex items-center gap-1.5 text-xs">
-                {isStopping ? <span className="size-2 rounded-full bg-danger animate-spin" /> : <span className="size-2 rounded-full bg-danger animate-pulse" />}
+                {isStopping ? (
+                  <span className="size-2 rounded-full bg-danger animate-spin" />
+                ) : (
+                  <span className="size-2 rounded-full bg-danger animate-pulse" />
+                )}
                 <span className="sr-only">Stop</span>
               </span>
-            ) : <ArrowUp className="size-4" />}
+            ) : (
+              <ArrowUp className="size-4" />
+            )}
           </Button>
         </div>
       </div>

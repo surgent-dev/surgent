@@ -1,7 +1,7 @@
-import { describe, expect, test } from "bun:test"
-import { MessageV2 } from "../../src/session/message-v2"
+import { describe, expect, test } from "bun:test";
+import { MessageV2 } from "../../src/session/message-v2";
 
-const sessionID = "session"
+const sessionID = "session";
 
 function userInfo(id: string): MessageV2.User {
   return {
@@ -12,7 +12,7 @@ function userInfo(id: string): MessageV2.User {
     agent: "user",
     model: { providerID: "test", modelID: "test" },
     tools: {},
-  }
+  };
 }
 
 function assistantInfo(id: string, parentID: string, error?: MessageV2.Assistant["error"]): MessageV2.Assistant {
@@ -35,7 +35,7 @@ function assistantInfo(id: string, parentID: string, error?: MessageV2.Assistant
       reasoning: 0,
       cache: { read: 0, write: 0 },
     },
-  }
+  };
 }
 
 function basePart(messageID: string, id: string) {
@@ -43,7 +43,7 @@ function basePart(messageID: string, id: string) {
     id,
     sessionID,
     messageID,
-  }
+  };
 }
 
 describe("session.message-v2.toModelMessage", () => {
@@ -63,18 +63,18 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ]
+    ];
 
     expect(MessageV2.toModelMessage(input)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "hello" }],
       },
-    ])
-  })
+    ]);
+  });
 
   test("filters out messages with only ignored parts", () => {
-    const messageID = "m-user"
+    const messageID = "m-user";
 
     const input: MessageV2.WithParts[] = [
       {
@@ -88,13 +88,13 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ]
+    ];
 
-    expect(MessageV2.toModelMessage(input)).toStrictEqual([])
-  })
+    expect(MessageV2.toModelMessage(input)).toStrictEqual([]);
+  });
 
   test("includes synthetic text parts", () => {
-    const messageID = "m-user"
+    const messageID = "m-user";
 
     const input: MessageV2.WithParts[] = [
       {
@@ -119,7 +119,7 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ]
+    ];
 
     expect(MessageV2.toModelMessage(input)).toStrictEqual([
       {
@@ -130,11 +130,11 @@ describe("session.message-v2.toModelMessage", () => {
         role: "assistant",
         content: [{ type: "text", text: "assistant" }],
       },
-    ])
-  })
+    ]);
+  });
 
   test("converts user text/file parts and injects compaction/subtask prompts", () => {
-    const messageID = "m-user"
+    const messageID = "m-user";
 
     const input: MessageV2.WithParts[] = [
       {
@@ -186,7 +186,7 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ]
+    ];
 
     expect(MessageV2.toModelMessage(input)).toStrictEqual([
       {
@@ -203,12 +203,12 @@ describe("session.message-v2.toModelMessage", () => {
           { type: "text", text: "The following tool was executed by the user" },
         ],
       },
-    ])
-  })
+    ]);
+  });
 
   test("converts assistant tool completion into tool-call + tool-result messages and emits attachment message", () => {
-    const userID = "m-user"
-    const assistantID = "m-assistant"
+    const userID = "m-user";
+    const assistantID = "m-assistant";
 
     const input: MessageV2.WithParts[] = [
       {
@@ -256,7 +256,7 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ]
+    ];
 
     expect(MessageV2.toModelMessage(input)).toStrictEqual([
       {
@@ -301,12 +301,12 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ])
-  })
+    ]);
+  });
 
   test("replaces compacted tool output with placeholder", () => {
-    const userID = "m-user"
-    const assistantID = "m-assistant"
+    const userID = "m-user";
+    const assistantID = "m-assistant";
 
     const input: MessageV2.WithParts[] = [
       {
@@ -338,7 +338,7 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ]
+    ];
 
     expect(MessageV2.toModelMessage(input)).toStrictEqual([
       {
@@ -368,12 +368,12 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ])
-  })
+    ]);
+  });
 
   test("converts assistant tool error into error-text tool result", () => {
-    const userID = "m-user"
-    const assistantID = "m-assistant"
+    const userID = "m-user";
+    const assistantID = "m-assistant";
 
     const input: MessageV2.WithParts[] = [
       {
@@ -405,7 +405,7 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ]
+    ];
 
     expect(MessageV2.toModelMessage(input)).toStrictEqual([
       {
@@ -437,11 +437,11 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ])
-  })
+    ]);
+  });
 
   test("filters assistant messages with non-abort errors", () => {
-    const assistantID = "m-assistant"
+    const assistantID = "m-assistant";
 
     const input: MessageV2.WithParts[] = [
       {
@@ -458,16 +458,16 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ]
+    ];
 
-    expect(MessageV2.toModelMessage(input)).toStrictEqual([])
-  })
+    expect(MessageV2.toModelMessage(input)).toStrictEqual([]);
+  });
 
   test("includes aborted assistant messages only when they have non-step-start/reasoning content", () => {
-    const assistantID1 = "m-assistant-1"
-    const assistantID2 = "m-assistant-2"
+    const assistantID1 = "m-assistant-1";
+    const assistantID2 = "m-assistant-2";
 
-    const aborted = new MessageV2.AbortedError({ message: "aborted" }).toObject() as MessageV2.Assistant["error"]
+    const aborted = new MessageV2.AbortedError({ message: "aborted" }).toObject() as MessageV2.Assistant["error"];
 
     const input: MessageV2.WithParts[] = [
       {
@@ -501,7 +501,7 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ]
+    ];
 
     expect(MessageV2.toModelMessage(input)).toStrictEqual([
       {
@@ -511,11 +511,11 @@ describe("session.message-v2.toModelMessage", () => {
           { type: "text", text: "partial answer" },
         ],
       },
-    ])
-  })
+    ]);
+  });
 
   test("splits assistant messages on step-start boundaries", () => {
-    const assistantID = "m-assistant"
+    const assistantID = "m-assistant";
 
     const input: MessageV2.WithParts[] = [
       {
@@ -537,7 +537,7 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ]
+    ];
 
     expect(MessageV2.toModelMessage(input)).toStrictEqual([
       {
@@ -548,11 +548,11 @@ describe("session.message-v2.toModelMessage", () => {
         role: "assistant",
         content: [{ type: "text", text: "second" }],
       },
-    ])
-  })
+    ]);
+  });
 
   test("drops messages that only contain step-start parts", () => {
-    const assistantID = "m-assistant"
+    const assistantID = "m-assistant";
 
     const input: MessageV2.WithParts[] = [
       {
@@ -564,8 +564,8 @@ describe("session.message-v2.toModelMessage", () => {
           },
         ],
       },
-    ]
+    ];
 
-    expect(MessageV2.toModelMessage(input)).toStrictEqual([])
-  })
-})
+    expect(MessageV2.toModelMessage(input)).toStrictEqual([]);
+  });
+});

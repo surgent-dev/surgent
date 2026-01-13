@@ -2,28 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
-import {
-  Github,
-  ExternalLink,
-  Loader2,
-  Check,
-  Unplug,
-  Clock,
-  GitBranch,
-  Plus,
-  X,
-} from "lucide-react";
+import { Github, ExternalLink, Loader2, Check, Unplug, Clock, GitBranch, Plus, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   useGitHubStatus,
@@ -40,22 +24,13 @@ interface GitHubDialogProps {
   projectId?: string;
 }
 
-export default function GitHubDialog({
-  open,
-  onOpenChange,
-  projectId,
-}: GitHubDialogProps) {
+export default function GitHubDialog({ open, onOpenChange, projectId }: GitHubDialogProps) {
   const [repoName, setRepoName] = useState("");
   const [description, setDescription] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
-  const [selectedInstallationId, setSelectedInstallationId] = useState<
-    number | null
-  >(null);
+  const [selectedInstallationId, setSelectedInstallationId] = useState<number | null>(null);
 
-  const { data: status, isLoading: statusLoading } = useGitHubStatus(
-    projectId,
-    { enabled: open },
-  );
+  const { data: status, isLoading: statusLoading } = useGitHubStatus(projectId, { enabled: open });
   const {
     data: installUrlData,
     refetch: refetchInstallUrl,
@@ -90,11 +65,7 @@ export default function GitHubDialog({
 
   const handleCreate = async () => {
     if (!projectId || !repoName.trim() || !status?.oauthLinked) return;
-    const installationId = Number(
-      selectedInstallationId ??
-        status?.installation?.id ??
-        installations[0]?.id,
-    );
+    const installationId = Number(selectedInstallationId ?? status?.installation?.id ?? installations[0]?.id);
 
     try {
       const result = await createRepoMutation.mutateAsync({
@@ -113,8 +84,7 @@ export default function GitHubDialog({
     } catch (error: unknown) {
       const err = error as { response?: Response };
       const body = await err.response?.json().catch(() => null);
-      const message =
-        body?.error?.message || body?.error || "Failed to create repository";
+      const message = body?.error?.message || body?.error || "Failed to create repository";
       toast.error(message);
     }
   };
@@ -137,11 +107,7 @@ export default function GitHubDialog({
       const result = await pushMutation.mutateAsync(projectId);
       if (result.success) {
         const shortSha = result.sha?.slice(0, 7);
-        toast.success(
-          shortSha
-            ? `Pushed successfully! SHA: ${shortSha}`
-            : "Pushed successfully!",
-        );
+        toast.success(shortSha ? `Pushed successfully! SHA: ${shortSha}` : "Pushed successfully!");
         onOpenChange(false);
       } else {
         toast.error(result.error || "Push failed");
@@ -162,13 +128,9 @@ export default function GitHubDialog({
       : status?.installation
         ? [status.installation]
         : [];
-  const userAccount = installations.find(
-    (item) => item.accountType.toLowerCase() === "user",
-  );
-  const accountTypeLabel = (type: string) =>
-    type.toLowerCase() === "user" ? "Personal" : "Org";
-  const defaultInstallationId =
-    status?.installation?.id ?? installations[0]?.id ?? null;
+  const userAccount = installations.find((item) => item.accountType.toLowerCase() === "user");
+  const accountTypeLabel = (type: string) => (type.toLowerCase() === "user" ? "Personal" : "Org");
+  const defaultInstallationId = status?.installation?.id ?? installations[0]?.id ?? null;
 
   useEffect(() => {
     if (!open || !defaultInstallationId || selectedInstallationId) return;
@@ -194,10 +156,7 @@ export default function GitHubDialog({
               <Loader2 className="size-2.5 animate-spin text-muted-foreground" />
             ) : (
               <div
-                className={cn(
-                  "size-2 rounded-full",
-                  isOauthLinked ? "bg-success" : "bg-muted-foreground/30",
-                )}
+                className={cn("size-2 rounded-full", isOauthLinked ? "bg-success" : "bg-muted-foreground/30")}
                 title={isOauthLinked ? "Authorized" : "Not authorized"}
               />
             )}
@@ -225,16 +184,10 @@ export default function GitHubDialog({
             <div className="text-center space-y-1">
               <h3 className="font-medium">Connect GitHub</h3>
               <p className="text-xs text-muted-foreground max-w-[240px] mx-auto">
-                Install the Surgent GitHub App to create repositories and push
-                your code.
+                Install the Surgent GitHub App to create repositories and push your code.
               </p>
             </div>
-            <Button
-              onClick={handleInstall}
-              size="sm"
-              className="px-6 text-sm"
-              disabled={isFetchingInstallUrl}
-            >
+            <Button onClick={handleInstall} size="sm" className="px-6 text-sm" disabled={isFetchingInstallUrl}>
               Install GitHub App
               <ExternalLink className="size-3 ml-2 opacity-50" />
             </Button>
@@ -245,16 +198,12 @@ export default function GitHubDialog({
             {/* Stats Bar */}
             <div className="h-8 flex items-center px-4 gap-2 text-xs border-b bg-muted/10">
               <span className="text-muted-foreground">Connected as</span>
-              <span className="font-medium text-foreground">
-                {userAccount ? userAccount.account : "User"}
-              </span>
+              <span className="font-medium text-foreground">{userAccount ? userAccount.account : "User"}</span>
 
               {installations.length > 1 && (
                 <>
                   <span className="text-muted-foreground">·</span>
-                  <span className="text-muted-foreground">
-                    {installations.length} accounts
-                  </span>
+                  <span className="text-muted-foreground">{installations.length} accounts</span>
                 </>
               )}
 
@@ -275,21 +224,12 @@ export default function GitHubDialog({
               <div className="space-y-3">
                 {installations.length > 1 ? (
                   <div className="space-y-2">
-                    <Label
-                      htmlFor="github-account"
-                      className="text-xs font-medium text-muted-foreground ml-1"
-                    >
+                    <Label htmlFor="github-account" className="text-xs font-medium text-muted-foreground ml-1">
                       Target account
                     </Label>
                     <Select
-                      value={
-                        selectedInstallationId
-                          ? String(selectedInstallationId)
-                          : ""
-                      }
-                      onValueChange={(value) =>
-                        setSelectedInstallationId(Number(value))
-                      }
+                      value={selectedInstallationId ? String(selectedInstallationId) : ""}
+                      onValueChange={(value) => setSelectedInstallationId(Number(value))}
                     >
                       <SelectTrigger
                         id="github-account"
@@ -300,8 +240,7 @@ export default function GitHubDialog({
                       <SelectContent>
                         {installations.map((item) => (
                           <SelectItem key={item.id} value={String(item.id)}>
-                            {item.account} ·{" "}
-                            {accountTypeLabel(item.accountType)}
+                            {item.account} · {accountTypeLabel(item.accountType)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -309,10 +248,7 @@ export default function GitHubDialog({
                   </div>
                 ) : null}
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="repo-name"
-                    className="text-xs font-medium text-muted-foreground ml-1"
-                  >
+                  <Label htmlFor="repo-name" className="text-xs font-medium text-muted-foreground ml-1">
                     Repository Name
                   </Label>
                   <Input
@@ -325,12 +261,8 @@ export default function GitHubDialog({
                 </div>
 
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="repo-desc"
-                    className="text-xs font-medium text-muted-foreground ml-1"
-                  >
-                    Description{" "}
-                    <span className="opacity-50 font-normal">(optional)</span>
+                  <Label htmlFor="repo-desc" className="text-xs font-medium text-muted-foreground ml-1">
+                    Description <span className="opacity-50 font-normal">(optional)</span>
                   </Label>
                   <Input
                     id="repo-desc"
@@ -343,32 +275,18 @@ export default function GitHubDialog({
 
                 <div className="flex items-center justify-between py-1 px-1">
                   <div className="space-y-0.5">
-                    <Label
-                      htmlFor="private-mode"
-                      className="text-sm font-medium"
-                    >
+                    <Label htmlFor="private-mode" className="text-sm font-medium">
                       Private Repository
                     </Label>
-                    <p className="text-[10px] text-muted-foreground">
-                      Only you can see this repository
-                    </p>
+                    <p className="text-[10px] text-muted-foreground">Only you can see this repository</p>
                   </div>
-                  <Switch
-                    id="private-mode"
-                    checked={isPrivate}
-                    onCheckedChange={setIsPrivate}
-                    className="scale-90"
-                  />
+                  <Switch id="private-mode" checked={isPrivate} onCheckedChange={setIsPrivate} className="scale-90" />
                 </div>
               </div>
 
               <Button
                 onClick={handleCreate}
-                disabled={
-                  !repoName.trim() ||
-                  createRepoMutation.isPending ||
-                  !isOauthLinked
-                }
+                disabled={!repoName.trim() || createRepoMutation.isPending || !isOauthLinked}
                 className="w-full font-medium"
               >
                 {createRepoMutation.isPending ? (
@@ -376,16 +294,12 @@ export default function GitHubDialog({
                 ) : (
                   <Github className="size-4 mr-2" />
                 )}
-                {createRepoMutation.isPending
-                  ? "Creating..."
-                  : "Create & Connect"}
+                {createRepoMutation.isPending ? "Creating..." : "Create & Connect"}
               </Button>
 
               {!isOauthLinked && (
                 <div className="text-center">
-                  <p className="text-xs text-warning mb-2">
-                    Authorization required
-                  </p>
+                  <p className="text-xs text-warning mb-2">Authorization required</p>
                   <Button
                     size="sm"
                     variant="outline"
@@ -444,11 +358,7 @@ export default function GitHubDialog({
                 </p>
               </div>
 
-              <Button
-                onClick={handlePush}
-                disabled={pushMutation.isPending}
-                className="w-full font-medium shadow-sm"
-              >
+              <Button onClick={handlePush} disabled={pushMutation.isPending} className="w-full font-medium shadow-sm">
                 {pushMutation.isPending ? (
                   <Loader2 className="size-4 animate-spin mr-2" />
                 ) : (

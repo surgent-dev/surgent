@@ -15,9 +15,7 @@ export default function LoginPage() {
     setError("");
     try {
       const base = process.env.NEXT_PUBLIC_APP_URL;
-      const callbackURL = base
-        ? new URL(isWaitlistMode() ? "/waitlist" : "/dashboard", base).toString()
-        : undefined;
+      const callbackURL = base ? new URL(isWaitlistMode() ? "/waitlist" : "/dashboard", base).toString() : undefined;
 
       await authClient.signIn.social({
         provider: "google",
@@ -40,7 +38,7 @@ export default function LoginPage() {
           <div className="mb-10">
             <h1 className="text-4xl font-bold text-foreground">Surgent</h1>
           </div>
-          
+
           <h2 className="text-2xl font-semibold tracking-tight text-foreground">
             {isWaitlistMode() ? "Join the waitlist" : "Log in to Surgent"}
           </h2>
@@ -84,17 +82,11 @@ export default function LoginPage() {
 
             <div className="prose text-center text-sm text-muted-foreground">
               By clicking continue, you agree to our{" "}
-              <a 
-                href="/terms" 
-                className="underline hover:text-foreground transition-colors"
-              >
+              <a href="/terms" className="underline hover:text-foreground transition-colors">
                 Terms of Service
               </a>{" "}
               and{" "}
-              <a 
-                href="/privacy" 
-                className="underline hover:text-foreground transition-colors"
-              >
+              <a href="/privacy" className="underline hover:text-foreground transition-colors">
                 Privacy Policy
               </a>
             </div>
@@ -103,14 +95,11 @@ export default function LoginPage() {
 
         <div className="prose text-center text-sm text-muted-foreground">
           Don&apos;t have an account yet?{" "}
-          <a 
-            href="/signup" 
-            className="text-foreground underline hover:no-underline font-medium"
-          >
+          <a href="/signup" className="text-foreground underline hover:no-underline font-medium">
             Sign up
           </a>
         </div>
       </div>
     </div>
   );
-} 
+}

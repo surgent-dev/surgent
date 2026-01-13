@@ -1,4 +1,4 @@
-const env = process.env
+const env = process.env;
 
 // Centralized environment variables as a single config object
 export const config = {
@@ -76,6 +76,6 @@ export const config = {
     platformFeeFixed: env.PLATFORM_FEE_FIXED,
   },
   opencode: {
-    url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
+    url: env.OPENCODE_URL || "http://127.0.0.1:4096",
   },
-} as const
+} as const;

@@ -1,35 +1,35 @@
-import { Hono } from 'hono'
-import { Configuration, SandboxApi } from '@daytonaio/api-client'
-import type { AppContext } from '@/types/application'
-import { config } from '@/lib/config'
+import { Hono } from "hono";
+import { Configuration, SandboxApi } from "@daytonaio/api-client";
+import type { AppContext } from "@/types/application";
+import { config } from "@/lib/config";
 
-const preview = new Hono<AppContext>()
+const preview = new Hono<AppContext>();
 
 function getSandboxIdAndPort(host: string, defaultPort: number) {
-  const subdomain = host.split(':')[0].split('.')[0]
-  const segments = subdomain.split('-')
-  const first = segments[0]
+  const subdomain = host.split(":")[0].split(".")[0];
+  const segments = subdomain.split("-");
+  const first = segments[0];
 
   if (/^\d+$/.test(first) && segments.length >= 2) {
     return {
-      sandboxId: segments.slice(1).join('-'),
+      sandboxId: segments.slice(1).join("-"),
       port: parseInt(first, 10),
-    }
+    };
   }
 
-  return { sandboxId: subdomain, port: defaultPort }
+  return { sandboxId: subdomain, port: defaultPort };
 }
 
 function createSandboxApi() {
-  const basePath = config.daytona.apiUrl || 'https://app.daytona.io/api'
-  const apiKey = config.daytona.apiKey
+  const basePath = config.daytona.apiUrl || "https://app.daytona.io/api";
+  const apiKey = config.daytona.apiKey;
 
   return new SandboxApi(
     new Configuration({
       basePath,
       baseOptions: { headers: { Authorization: `Bearer ${apiKey}` } },
-    })
-  )
+    }),
+  );
 }
 
 async function proxyRequest(
@@ -37,22 +37,22 @@ async function proxyRequest(
   sandboxId: string,
   port: number,
   req: Request,
-  url: URL
+  url: URL,
 ): Promise<Response> {
-  const { data } = await api.getPortPreviewUrl(sandboxId, port)
+  const { data } = await api.getPortPreviewUrl(sandboxId, port);
 
-  const targetUrl = new URL(data.url as string)
-  targetUrl.pathname = `${targetUrl.pathname.replace(/\/$/, '')}${url.pathname}`
-  targetUrl.search = url.search
+  const targetUrl = new URL(data.url as string);
+  targetUrl.pathname = `${targetUrl.pathname.replace(/\/$/, "")}${url.pathname}`;
+  targetUrl.search = url.search;
 
-  const headers = new Headers(req.headers)
-  headers.set('x-daytona-preview-token', data.token as string)
-  headers.set('x-daytona-skip-preview-warning', 'true')
-  headers.delete('host')
+  const headers = new Headers(req.headers);
+  headers.set("x-daytona-preview-token", data.token as string);
+  headers.set("x-daytona-skip-preview-warning", "true");
+  headers.delete("host");
 
   // WebSocket passthrough (Vite HMR)
-  if (req.headers.get('Upgrade') === 'websocket') {
-    return fetch(new Request(targetUrl.toString(), { method: req.method, headers }))
+  if (req.headers.get("Upgrade") === "websocket") {
+    return fetch(new Request(targetUrl.toString(), { method: req.method, headers }));
   }
 
   const resp = await fetch(
@@ -60,50 +60,50 @@ async function proxyRequest(
       method: req.method,
       headers,
       body: req.body,
-    })
-  )
+    }),
+  );
 
   // Disable caching for dev preview
-  const outHeaders = new Headers(resp.headers)
-  outHeaders.set('cache-control', 'no-store, no-cache, must-revalidate, max-age=0')
-  outHeaders.delete('etag')
-  outHeaders.delete('last-modified')
+  const outHeaders = new Headers(resp.headers);
+  outHeaders.set("cache-control", "no-store, no-cache, must-revalidate, max-age=0");
+  outHeaders.delete("etag");
+  outHeaders.delete("last-modified");
 
   return new Response(resp.body, {
     status: resp.status,
     statusText: resp.statusText,
     headers: outHeaders,
-  })
+  });
 }
 
-preview.all('/*', async (c) => {
-  const url = new URL(c.req.url)
-  const defaultPort = Number(config.daytona.defaultPort)
-  const { sandboxId, port } = getSandboxIdAndPort(url.hostname, defaultPort)
+preview.all("/*", async (c) => {
+  const url = new URL(c.req.url);
+  const defaultPort = Number(config.daytona.defaultPort);
+  const { sandboxId, port } = getSandboxIdAndPort(url.hostname, defaultPort);
 
   if (!config.daytona.apiUrl || !config.daytona.apiKey) {
-    return c.text('Daytona not configured', 500)
+    return c.text("Daytona not configured", 500);
   }
 
-  const accept = c.req.header('Accept')
+  const accept = c.req.header("Accept");
 
   try {
-    const api = createSandboxApi()
-    const resp = await proxyRequest(api, sandboxId, port, c.req.raw, url)
+    const api = createSandboxApi();
+    const resp = await proxyRequest(api, sandboxId, port, c.req.raw, url);
 
-    if (resp.status >= 502 && accept?.includes('text/html')) {
+    if (resp.status >= 502 && accept?.includes("text/html")) {
       // @ts-expect-error - Hono types for status code are strict
-      return c.html(getErrorHtml(), resp.status)
+      return c.html(getErrorHtml(), resp.status);
     }
 
-    return resp
+    return resp;
   } catch {
-    if (accept?.includes('text/html')) {
-      return c.html(getErrorHtml(), 502)
+    if (accept?.includes("text/html")) {
+      return c.html(getErrorHtml(), 502);
     }
-    return c.text('Upstream unavailable', 502)
+    return c.text("Upstream unavailable", 502);
   }
-})
+});
 
 function getErrorHtml() {
   return `
@@ -186,7 +186,7 @@ function getErrorHtml() {
   </div>
 </body>
 </html>
-  `
+  `;
 }
 
-export default preview
+export default preview;

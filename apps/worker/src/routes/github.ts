@@ -56,19 +56,14 @@ github.get("/callback", async (c) => {
     const redirectBase = config.auth.baseUrl || new URL(c.req.url).origin;
     const redirectUrl = new URL("/api/github/callback", redirectBase).toString();
 
-    const oauthAuth = code
-      ? await githubApp.exchangeUserAccessToken(code, redirectUrl, state ?? undefined)
-      : null;
+    const oauthAuth = code ? await githubApp.exchangeUserAccessToken(code, redirectUrl, state ?? undefined) : null;
 
     const tokenUpdate = oauthAuth
       ? {
           userAccessToken: oauthAuth.token,
           userAccessTokenExpiresAt:
-            "expiresAt" in oauthAuth && oauthAuth.expiresAt
-              ? new Date(oauthAuth.expiresAt as string)
-              : null,
-          userRefreshToken:
-            "refreshToken" in oauthAuth ? (oauthAuth.refreshToken as string) : null,
+            "expiresAt" in oauthAuth && oauthAuth.expiresAt ? new Date(oauthAuth.expiresAt as string) : null,
+          userRefreshToken: "refreshToken" in oauthAuth ? (oauthAuth.refreshToken as string) : null,
           userRefreshTokenExpiresAt:
             "refreshTokenExpiresAt" in oauthAuth && oauthAuth.refreshTokenExpiresAt
               ? new Date(oauthAuth.refreshTokenExpiresAt as string)
@@ -169,10 +164,7 @@ github.post("/webhook", async (c) => {
     if (event === "installation" && payload.action === "deleted") {
       const installationId = payload.installation.id;
 
-      await db
-        .deleteFrom("github_installations")
-        .where("installationId", "=", installationId)
-        .execute();
+      await db.deleteFrom("github_installations").where("installationId", "=", installationId).execute();
 
       console.log("[github] Installation deleted", { installationId });
     }

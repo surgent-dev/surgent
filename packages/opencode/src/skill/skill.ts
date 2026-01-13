@@ -1,18 +1,18 @@
-import z from "zod"
-import { Config } from "../config/config"
-import { Instance } from "../project/instance"
-import { NamedError } from "@opencode-ai/util/error"
-import { ConfigMarkdown } from "../config/markdown"
-import { Log } from "../util/log"
+import z from "zod";
+import { Config } from "../config/config";
+import { Instance } from "../project/instance";
+import { NamedError } from "@opencode-ai/util/error";
+import { ConfigMarkdown } from "../config/markdown";
+import { Log } from "../util/log";
 
 export namespace Skill {
-  const log = Log.create({ service: "skill" })
+  const log = Log.create({ service: "skill" });
   export const Info = z.object({
     name: z.string(),
     description: z.string(),
     location: z.string(),
-  })
-  export type Info = z.infer<typeof Info>
+  });
+  export type Info = z.infer<typeof Info>;
 
   export const InvalidError = NamedError.create(
     "SkillInvalidError",
@@ -21,7 +21,7 @@ export namespace Skill {
       message: z.string().optional(),
       issues: z.custom<z.core.$ZodIssue[]>().optional(),
     }),
-  )
+  );
 
   export const NameMismatchError = NamedError.create(
     "SkillNameMismatchError",
@@ -30,17 +30,17 @@ export namespace Skill {
       expected: z.string(),
       actual: z.string(),
     }),
-  )
+  );
 
-  const SKILL_GLOB = new Bun.Glob("{skill,skills}/**/SKILL.md")
+  const SKILL_GLOB = new Bun.Glob("{skill,skills}/**/SKILL.md");
 
   export const state = Instance.state(async () => {
-    const directories = await Config.directories()
-    const skills: Record<string, Info> = {}
-    const sandbox = Instance.sandbox
+    const directories = await Config.directories();
+    const skills: Record<string, Info> = {};
+    const sandbox = Instance.sandbox;
 
     for (const dir of directories) {
-      const isWorkspaceDir = sandbox.contains(dir)
+      const isWorkspaceDir = sandbox.contains(dir);
       try {
         for await (const match of SKILL_GLOB.scan({
           cwd: dir,
@@ -48,14 +48,14 @@ export namespace Skill {
           onlyFiles: true,
           followSymlinks: true,
         })) {
-          if (isWorkspaceDir && !sandbox.contains(match)) continue
-          const md = await ConfigMarkdown.parse(match)
+          if (isWorkspaceDir && !sandbox.contains(match)) continue;
+          const md = await ConfigMarkdown.parse(match);
           if (!md) {
-            continue
+            continue;
           }
 
-          const parsed = Info.pick({ name: true, description: true }).safeParse(md.data)
-          if (!parsed.success) continue
+          const parsed = Info.pick({ name: true, description: true }).safeParse(md.data);
+          if (!parsed.success) continue;
 
           // Warn on duplicate skill names
           if (skills[parsed.data.name]) {
@@ -63,28 +63,28 @@ export namespace Skill {
               name: parsed.data.name,
               existing: skills[parsed.data.name].location,
               duplicate: match,
-            })
+            });
           }
 
           skills[parsed.data.name] = {
             name: parsed.data.name,
             description: parsed.data.description,
             location: match,
-          }
+          };
         }
       } catch (error) {
-        log.debug("skipping skill scan", { dir, error })
+        log.debug("skipping skill scan", { dir, error });
       }
     }
 
-    return skills
-  })
+    return skills;
+  });
 
   export async function get(name: string) {
-    return state().then((x) => x[name])
+    return state().then((x) => x[name]);
   }
 
   export async function all() {
-    return state().then((x) => Object.values(x))
+    return state().then((x) => Object.values(x));
   }
 }

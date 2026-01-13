@@ -1,19 +1,24 @@
 "use client";
 
-import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from '@/components/agent/web-preview';
-import { useEffect, useState } from 'react';
-import { X, Database, Monitor, CreditCard, GitCompare, Power, RefreshCw } from 'lucide-react';
-import type { FileDiff } from '@opencode-ai/sdk';
-import { useConvexDashboardQuery, useActivateProject, useSandboxHealthQuery, type ConvexDashboardCredentials } from '@/queries/projects';
-import DiffView from '@/components/diff/diff-view';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn } from '@/lib/utils';
-import { EmbeddedDashboard } from '@/components/agent/convex-dashboard';
-import { Button } from '@/components/ui/button';
+import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from "@/components/agent/web-preview";
+import { useEffect, useState } from "react";
+import { X, Database, Monitor, CreditCard, GitCompare, Power, RefreshCw } from "lucide-react";
+import type { FileDiff } from "@opencode-ai/sdk";
+import {
+  useConvexDashboardQuery,
+  useActivateProject,
+  useSandboxHealthQuery,
+  type ConvexDashboardCredentials,
+} from "@/queries/projects";
+import DiffView from "@/components/diff/diff-view";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import { EmbeddedDashboard } from "@/components/agent/convex-dashboard";
+import { Button } from "@/components/ui/button";
 
 export interface PreviewTab {
   id: string;
-  type: 'preview' | 'changes' | 'convex' | 'payments';
+  type: "preview" | "changes" | "convex" | "payments";
   title: string;
   diffs?: FileDiff[];
   messageId?: string;
@@ -21,8 +26,8 @@ export interface PreviewTab {
 }
 
 const DEFAULT_TABS: PreviewTab[] = [
-  { id: 'preview', type: 'preview', title: 'Preview' },
-  { id: 'payments', type: 'payments', title: 'Payments' },
+  { id: "preview", type: "preview", title: "Preview" },
+  { id: "payments", type: "payments", title: "Payments" },
 ];
 
 // Loading spinner component
@@ -51,19 +56,19 @@ function PreviewNavControls() {
   );
 }
 
-function ConvexContent({ 
-  credentials, 
-  isLoading, 
-  path 
-}: { 
-  credentials?: ConvexDashboardCredentials; 
-  isLoading: boolean; 
+function ConvexContent({
+  credentials,
+  isLoading,
+  path,
+}: {
+  credentials?: ConvexDashboardCredentials;
+  isLoading: boolean;
   path?: string;
 }) {
   if (isLoading) {
     return <LoadingState icon={Database} message="Loading Convex dashboard..." />;
   }
-  
+
   if (!credentials) {
     return (
       <div className="w-full h-full flex items-center justify-center">
@@ -71,8 +76,8 @@ function ConvexContent({
       </div>
     );
   }
-  
-  return <EmbeddedDashboard credentials={credentials} path={path || 'data'} />;
+
+  return <EmbeddedDashboard credentials={credentials} path={path || "data"} />;
 }
 
 function ChangesContent({ diffs }: { diffs: FileDiff[] }) {
@@ -80,14 +85,7 @@ function ChangesContent({ diffs }: { diffs: FileDiff[] }) {
     <ScrollArea className="h-full">
       <div className="p-4 space-y-4">
         {diffs.map((d, i) => (
-          <DiffView 
-            key={i} 
-            before={d.before} 
-            after={d.after} 
-            path={d.file} 
-            collapseUnchanged 
-            contextLines={3} 
-          />
+          <DiffView key={i} before={d.before} after={d.after} path={d.file} collapseUnchanged contextLines={3} />
         ))}
       </div>
     </ScrollArea>
@@ -110,13 +108,7 @@ function PaymentsContent() {
   );
 }
 
-function SandboxPausedContent({ 
-  onActivate, 
-  isActivating 
-}: { 
-  onActivate: () => void; 
-  isActivating: boolean;
-}) {
+function SandboxPausedContent({ onActivate, isActivating }: { onActivate: () => void; isActivating: boolean }) {
   return (
     <div className="w-full h-full flex items-center justify-center">
       <div className="flex flex-col items-center gap-4 text-center max-w-sm">
@@ -148,36 +140,40 @@ function SandboxPausedContent({
 }
 
 // Get icon for tab type
-function getTabIcon(type: PreviewTab['type']) {
+function getTabIcon(type: PreviewTab["type"]) {
   switch (type) {
-    case 'preview': return Monitor;
-    case 'convex': return Database;
-    case 'payments': return CreditCard;
-    case 'changes': return GitCompare;
+    case "preview":
+      return Monitor;
+    case "convex":
+      return Database;
+    case "payments":
+      return CreditCard;
+    case "changes":
+      return GitCompare;
   }
 }
 
 // Tab button component
-function TabButton({ 
-  tab, 
-  isActive, 
-  onSelect, 
-  onClose 
-}: { 
-  tab: PreviewTab; 
-  isActive: boolean; 
-  onSelect: () => void; 
+function TabButton({
+  tab,
+  isActive,
+  onSelect,
+  onClose,
+}: {
+  tab: PreviewTab;
+  isActive: boolean;
+  onSelect: () => void;
   onClose?: () => void;
 }) {
-  const isClosable = tab.type !== 'preview' && tab.type !== 'convex' && tab.type !== 'payments';
+  const isClosable = tab.type !== "preview" && tab.type !== "convex" && tab.type !== "payments";
   const Icon = getTabIcon(tab.type);
-  
+
   return (
     <button
       onClick={onSelect}
       className={cn(
         "group flex items-center gap-2 px-3 text-sm border-r transition-colors",
-        isActive ? "bg-background text-foreground dark:bg-muted" : "text-muted-foreground hover:bg-muted/50"
+        isActive ? "bg-background text-foreground dark:bg-muted" : "text-muted-foreground hover:bg-muted/50",
       )}
     >
       {Icon && <Icon className="size-4 shrink-0" />}
@@ -185,7 +181,10 @@ function TabButton({
       {isClosable && onClose && (
         <span
           role="button"
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
           className="p-0.5 rounded hover:bg-muted-foreground/20 opacity-0 group-hover:opacity-100 transition-opacity"
         >
           <X className="size-3" />
@@ -205,15 +204,23 @@ interface PreviewPanelProps {
   onCloseTab?: (tabId: string) => void;
 }
 
-export default function PreviewPanel({ projectId, project, onPreviewUrl, tabs = DEFAULT_TABS, activeTabId = 'preview', onTabChange, onCloseTab }: PreviewPanelProps) {
-  const activeTab = tabs.find(t => t.id === activeTabId);
+export default function PreviewPanel({
+  projectId,
+  project,
+  onPreviewUrl,
+  tabs = DEFAULT_TABS,
+  activeTabId = "preview",
+  onTabChange,
+  onCloseTab,
+}: PreviewPanelProps) {
+  const activeTab = tabs.find((t) => t.id === activeTabId);
   const hasConvex = Boolean((project?.metadata as any)?.convex);
-  const isConvexTabActive = activeTab?.type === 'convex';
-  const isPreviewTabActive = activeTab?.type === 'preview';
-  
+  const isConvexTabActive = activeTab?.type === "convex";
+  const isPreviewTabActive = activeTab?.type === "preview";
+
   const { data: convexCredentials, isLoading: convexLoading } = useConvexDashboardQuery(
     projectId,
-    hasConvex && isConvexTabActive
+    hasConvex && isConvexTabActive,
   );
 
   const proxyHost = process.env.NEXT_PUBLIC_PROXY_URL;
@@ -223,10 +230,10 @@ export default function PreviewPanel({ projectId, project, onPreviewUrl, tabs = 
   const previewUrl = storedPreviewUrl || fallbackPreviewUrl;
   const isReady = Boolean(previewUrl);
 
-  const [currentUrl, setCurrentUrl] = useState('');
+  const [currentUrl, setCurrentUrl] = useState("");
 
   const { data: health } = useSandboxHealthQuery(projectId, isPreviewTabActive);
-  const sandboxDown = health && health.status !== 'running';
+  const sandboxDown = health && health.status !== "running";
 
   const { mutate: activate, isPending: activating } = useActivateProject();
 
@@ -251,7 +258,7 @@ export default function PreviewPanel({ projectId, project, onPreviewUrl, tabs = 
       {/* Tab bar */}
       <div className="flex h-10 items-stretch border-b bg-muted/30 dark:bg-background shrink-0">
         <div className="flex min-w-0 flex-1 overflow-x-auto">
-          {tabs.map(tab => (
+          {tabs.map((tab) => (
             <TabButton
               key={tab.id}
               tab={tab}
@@ -271,29 +278,25 @@ export default function PreviewPanel({ projectId, project, onPreviewUrl, tabs = 
 
       {/* Tab content */}
       <div className="flex-1 min-h-0 flex flex-col">
-        {isPreviewTabActive && (
-          sandboxDown ? (
-            <SandboxPausedContent onActivate={() => projectId && activate({ id: projectId })} isActivating={activating} />
+        {isPreviewTabActive &&
+          (sandboxDown ? (
+            <SandboxPausedContent
+              onActivate={() => projectId && activate({ id: projectId })}
+              isActivating={activating}
+            />
           ) : isReady && previewUrl ? (
             <WebPreviewBody className="w-full h-full border-0" />
           ) : (
             <LoadingState message="Starting sandbox..." />
-          )
+          ))}
+
+        {activeTab?.type === "convex" && (
+          <ConvexContent credentials={convexCredentials} isLoading={convexLoading} path={activeTab.convexPath} />
         )}
-        
-        {activeTab?.type === 'convex' && (
-          <ConvexContent
-            credentials={convexCredentials}
-            isLoading={convexLoading}
-            path={activeTab.convexPath}
-          />
-        )}
-        
-        {activeTab?.type === 'payments' && <PaymentsContent />}
-        
-        {activeTab?.type === 'changes' && activeTab.diffs?.length && (
-          <ChangesContent diffs={activeTab.diffs} />
-        )}
+
+        {activeTab?.type === "payments" && <PaymentsContent />}
+
+        {activeTab?.type === "changes" && activeTab.diffs?.length && <ChangesContent diffs={activeTab.diffs} />}
       </div>
     </div>
   );
@@ -301,12 +304,7 @@ export default function PreviewPanel({ projectId, project, onPreviewUrl, tabs = 
   // Wrap in WebPreview context when preview is ready and sandbox is up
   if (isPreviewTabActive && isReady && previewUrl && !sandboxDown) {
     return (
-      <WebPreview
-        key={previewUrl}
-        defaultUrl={previewUrl}
-        onUrlChange={handleUrlChange}
-        className="h-full border-0"
-      >
+      <WebPreview key={previewUrl} defaultUrl={previewUrl} onUrlChange={handleUrlChange} className="h-full border-0">
         {renderContent()}
       </WebPreview>
     );

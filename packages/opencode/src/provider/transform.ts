@@ -1,17 +1,17 @@
-import type { APICallError, ModelMessage } from "ai"
-import { unique } from "remeda"
-import type { JSONSchema } from "zod/v4/core"
-import type { Provider } from "./provider"
-import type { ModelsDev } from "./models"
+import type { APICallError, ModelMessage } from "ai";
+import { unique } from "remeda";
+import type { JSONSchema } from "zod/v4/core";
+import type { Provider } from "./provider";
+import type { ModelsDev } from "./models";
 
-type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
+type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number];
 
 function mimeToModality(mime: string): Modality | undefined {
-  if (mime.startsWith("image/")) return "image"
-  if (mime.startsWith("audio/")) return "audio"
-  if (mime.startsWith("video/")) return "video"
-  if (mime === "application/pdf") return "pdf"
-  return undefined
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("video/")) return "video";
+  if (mime === "application/pdf") return "pdf";
+  return undefined;
 }
 
 export namespace ProviderTransform {
@@ -24,19 +24,19 @@ export namespace ProviderTransform {
               return {
                 ...part,
                 toolCallId: part.toolCallId.replace(/[^a-zA-Z0-9_-]/g, "_"),
-              }
+              };
             }
-            return part
-          })
+            return part;
+          });
         }
-        return msg
-      })
+        return msg;
+      });
     }
     if (model.providerID === "mistral" || model.api.id.toLowerCase().includes("mistral")) {
-      const result: ModelMessage[] = []
+      const result: ModelMessage[] = [];
       for (let i = 0; i < msgs.length; i++) {
-        const msg = msgs[i]
-        const nextMsg = msgs[i + 1]
+        const msg = msgs[i];
+        const nextMsg = msgs[i + 1];
 
         if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
           msg.content = msg.content.map((part) => {
@@ -45,18 +45,18 @@ export namespace ProviderTransform {
               const normalizedId = part.toolCallId
                 .replace(/[^a-zA-Z0-9]/g, "") // Remove non-alphanumeric characters
                 .substring(0, 9) // Take first 9 characters
-                .padEnd(9, "0") // Pad with zeros if less than 9 characters
+                .padEnd(9, "0"); // Pad with zeros if less than 9 characters
 
               return {
                 ...part,
                 toolCallId: normalizedId,
-              }
+              };
             }
-            return part
-          })
+            return part;
+          });
         }
 
-        result.push(msg)
+        result.push(msg);
 
         // Fix message sequence: tool messages cannot be followed by user messages
         if (msg.role === "tool" && nextMsg?.role === "user") {
@@ -68,10 +68,10 @@ export namespace ProviderTransform {
                 text: "Done.",
               },
             ],
-          })
+          });
         }
       }
-      return result
+      return result;
     }
 
     if (
@@ -81,11 +81,11 @@ export namespace ProviderTransform {
     ) {
       return msgs.map((msg) => {
         if (msg.role === "assistant" && Array.isArray(msg.content)) {
-          const reasoningParts = msg.content.filter((part: any) => part.type === "reasoning")
-          const reasoningText = reasoningParts.map((part: any) => part.text).join("")
+          const reasoningParts = msg.content.filter((part: any) => part.type === "reasoning");
+          const reasoningText = reasoningParts.map((part: any) => part.text).join("");
 
           // Filter out reasoning parts from content
-          const filteredContent = msg.content.filter((part: any) => part.type !== "reasoning")
+          const filteredContent = msg.content.filter((part: any) => part.type !== "reasoning");
 
           // Include reasoning_content directly on the message for all assistant messages
           if (reasoningText) {
@@ -99,25 +99,25 @@ export namespace ProviderTransform {
                   reasoning_content: reasoningText,
                 },
               },
-            }
+            };
           }
 
           return {
             ...msg,
             content: filteredContent,
-          }
+          };
         }
 
-        return msg
-      })
+        return msg;
+      });
     }
 
-    return msgs
+    return msgs;
   }
 
   function applyCaching(msgs: ModelMessage[], providerID: string): ModelMessage[] {
-    const system = msgs.filter((msg) => msg.role === "system").slice(0, 2)
-    const final = msgs.filter((msg) => msg.role !== "system").slice(-2)
+    const system = msgs.filter((msg) => msg.role === "system").slice(0, 2);
+    const final = msgs.filter((msg) => msg.role !== "system").slice(-2);
 
     const providerOptions = {
       anthropic: {
@@ -132,134 +132,135 @@ export namespace ProviderTransform {
       openaiCompatible: {
         cache_control: { type: "ephemeral" },
       },
-    }
+    };
 
     for (const msg of unique([...system, ...final])) {
-      const shouldUseContentOptions = providerID !== "anthropic" && Array.isArray(msg.content) && msg.content.length > 0
+      const shouldUseContentOptions =
+        providerID !== "anthropic" && Array.isArray(msg.content) && msg.content.length > 0;
 
       if (shouldUseContentOptions) {
-        const lastContent = msg.content[msg.content.length - 1]
+        const lastContent = msg.content[msg.content.length - 1];
         if (lastContent && typeof lastContent === "object") {
           lastContent.providerOptions = {
             ...lastContent.providerOptions,
             ...providerOptions,
-          }
-          continue
+          };
+          continue;
         }
       }
 
       msg.providerOptions = {
         ...msg.providerOptions,
         ...providerOptions,
-      }
+      };
     }
 
-    return msgs
+    return msgs;
   }
 
   function unsupportedParts(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
     return msgs.map((msg) => {
-      if (msg.role !== "user" || !Array.isArray(msg.content)) return msg
+      if (msg.role !== "user" || !Array.isArray(msg.content)) return msg;
 
       const filtered = msg.content.map((part) => {
-        if (part.type !== "file" && part.type !== "image") return part
+        if (part.type !== "file" && part.type !== "image") return part;
 
         // Check for empty base64 image data
         if (part.type === "image") {
-          const imageStr = part.image.toString()
+          const imageStr = part.image.toString();
           if (imageStr.startsWith("data:")) {
-            const match = imageStr.match(/^data:([^;]+);base64,(.*)$/)
+            const match = imageStr.match(/^data:([^;]+);base64,(.*)$/);
             if (match && (!match[2] || match[2].length === 0)) {
               return {
                 type: "text" as const,
                 text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",
-              }
+              };
             }
           }
         }
 
-        const mime = part.type === "image" ? part.image.toString().split(";")[0].replace("data:", "") : part.mediaType
-        const filename = part.type === "file" ? part.filename : undefined
-        const modality = mimeToModality(mime)
-        if (!modality) return part
-        if (model.capabilities.input[modality]) return part
+        const mime = part.type === "image" ? part.image.toString().split(";")[0].replace("data:", "") : part.mediaType;
+        const filename = part.type === "file" ? part.filename : undefined;
+        const modality = mimeToModality(mime);
+        if (!modality) return part;
+        if (model.capabilities.input[modality]) return part;
 
-        const name = filename ? `"${filename}"` : modality
+        const name = filename ? `"${filename}"` : modality;
         return {
           type: "text" as const,
           text: `ERROR: Cannot read ${name} (this model does not support ${modality} input). Inform the user.`,
-        }
-      })
+        };
+      });
 
-      return { ...msg, content: filtered }
-    })
+      return { ...msg, content: filtered };
+    });
   }
 
   export function message(msgs: ModelMessage[], model: Provider.Model) {
-    msgs = unsupportedParts(msgs, model)
-    msgs = normalizeMessages(msgs, model)
+    msgs = unsupportedParts(msgs, model);
+    msgs = normalizeMessages(msgs, model);
     if (
       model.providerID === "anthropic" ||
       model.api.id.includes("anthropic") ||
       model.api.id.includes("claude") ||
       model.api.npm === "@ai-sdk/anthropic"
     ) {
-      msgs = applyCaching(msgs, model.providerID)
+      msgs = applyCaching(msgs, model.providerID);
     }
 
-    return msgs
+    return msgs;
   }
 
   export function temperature(model: Provider.Model) {
-    const id = model.id.toLowerCase()
-    if (id.includes("qwen")) return 0.55
-    if (id.includes("claude")) return undefined
-    if (id.includes("gemini")) return 1.0
-    if (id.includes("glm-4.6")) return 1.0
-    if (id.includes("glm-4.7")) return 1.0
-    if (id.includes("minimax-m2")) return 1.0
+    const id = model.id.toLowerCase();
+    if (id.includes("qwen")) return 0.55;
+    if (id.includes("claude")) return undefined;
+    if (id.includes("gemini")) return 1.0;
+    if (id.includes("glm-4.6")) return 1.0;
+    if (id.includes("glm-4.7")) return 1.0;
+    if (id.includes("minimax-m2")) return 1.0;
     if (id.includes("kimi-k2")) {
-      if (id.includes("thinking")) return 1.0
-      return 0.6
+      if (id.includes("thinking")) return 1.0;
+      return 0.6;
     }
-    return undefined
+    return undefined;
   }
 
   export function topP(model: Provider.Model) {
-    const id = model.id.toLowerCase()
-    if (id.includes("qwen")) return 1
+    const id = model.id.toLowerCase();
+    if (id.includes("qwen")) return 1;
     if (id.includes("minimax-m2")) {
-      if (id.includes("m2.1")) return 0.9
-      return 0.95
+      if (id.includes("m2.1")) return 0.9;
+      return 0.95;
     }
-    if (id.includes("gemini")) return 0.95
-    return undefined
+    if (id.includes("gemini")) return 0.95;
+    return undefined;
   }
 
   export function topK(model: Provider.Model) {
-    const id = model.id.toLowerCase()
-    if (id.includes("minimax-m2")) return 20
-    if (id.includes("gemini")) return 64
-    return undefined
+    const id = model.id.toLowerCase();
+    if (id.includes("minimax-m2")) return 20;
+    if (id.includes("gemini")) return 64;
+    return undefined;
   }
 
-  const WIDELY_SUPPORTED_EFFORTS = ["low", "medium", "high"]
-  const OPENAI_EFFORTS = ["none", "minimal", ...WIDELY_SUPPORTED_EFFORTS, "xhigh"]
+  const WIDELY_SUPPORTED_EFFORTS = ["low", "medium", "high"];
+  const OPENAI_EFFORTS = ["none", "minimal", ...WIDELY_SUPPORTED_EFFORTS, "xhigh"];
 
   export function variants(model: Provider.Model): Record<string, Record<string, any>> {
-    if (!model.capabilities.reasoning) return {}
+    if (!model.capabilities.reasoning) return {};
 
-    const id = model.id.toLowerCase()
-    if (id.includes("deepseek") || id.includes("minimax") || id.includes("glm") || id.includes("mistral")) return {}
+    const id = model.id.toLowerCase();
+    if (id.includes("deepseek") || id.includes("minimax") || id.includes("glm") || id.includes("mistral")) return {};
 
     switch (model.api.npm) {
       case "@openrouter/ai-sdk-provider":
-        if (!model.id.includes("gpt") && !model.id.includes("gemini-3") && !model.id.includes("grok-4")) return {}
-        return Object.fromEntries(OPENAI_EFFORTS.map((effort) => [effort, { reasoning: { effort } }]))
+        if (!model.id.includes("gpt") && !model.id.includes("gemini-3") && !model.id.includes("grok-4")) return {};
+        return Object.fromEntries(OPENAI_EFFORTS.map((effort) => [effort, { reasoning: { effort } }]));
 
       // TODO: YOU CANNOT SET max_tokens if this is set!!!
       case "@ai-sdk/gateway":
-        return Object.fromEntries(OPENAI_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
+        return Object.fromEntries(OPENAI_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]));
 
       case "@ai-sdk/cerebras":
       // https://v5.ai-sdk.dev/providers/ai-sdk-providers/cerebras
@@ -270,14 +271,14 @@ export namespace ProviderTransform {
       case "@ai-sdk/deepinfra":
       // https://v5.ai-sdk.dev/providers/ai-sdk-providers/deepinfra
       case "@ai-sdk/openai-compatible":
-        return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
+        return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]));
 
       case "@ai-sdk/azure":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/azure
-        if (id === "o1-mini") return {}
-        const azureEfforts = ["low", "medium", "high"]
+        if (id === "o1-mini") return {};
+        const azureEfforts = ["low", "medium", "high"];
         if (id.includes("gpt-5")) {
-          azureEfforts.unshift("minimal")
+          azureEfforts.unshift("minimal");
         }
         return Object.fromEntries(
           azureEfforts.map((effort) => [
@@ -288,16 +289,16 @@ export namespace ProviderTransform {
               include: ["reasoning.encrypted_content"],
             },
           ]),
-        )
+        );
       case "@ai-sdk/openai":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/openai
-        if (id === "gpt-5-pro") return {}
-        const openaiEfforts = ["minimal", ...WIDELY_SUPPORTED_EFFORTS]
+        if (id === "gpt-5-pro") return {};
+        const openaiEfforts = ["minimal", ...WIDELY_SUPPORTED_EFFORTS];
         if (model.release_date >= "2025-11-13") {
-          openaiEfforts.unshift("none")
+          openaiEfforts.unshift("none");
         }
         if (model.release_date >= "2025-12-04") {
-          openaiEfforts.push("xhigh")
+          openaiEfforts.push("xhigh");
         }
         return Object.fromEntries(
           openaiEfforts.map((effort) => [
@@ -308,7 +309,7 @@ export namespace ProviderTransform {
               include: ["reasoning.encrypted_content"],
             },
           ]),
-        )
+        );
 
       case "@ai-sdk/anthropic":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/anthropic
@@ -325,7 +326,7 @@ export namespace ProviderTransform {
               budgetTokens: 31999,
             },
           },
-        }
+        };
 
       case "@ai-sdk/amazon-bedrock":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/amazon-bedrock
@@ -339,7 +340,7 @@ export namespace ProviderTransform {
               },
             },
           ]),
-        )
+        );
 
       case "@ai-sdk/google-vertex":
       // https://v5.ai-sdk.dev/providers/ai-sdk-providers/google-vertex
@@ -359,7 +360,7 @@ export namespace ProviderTransform {
                 thinkingBudget: 24576,
               },
             },
-          }
+          };
         }
         return Object.fromEntries(
           ["low", "high"].map((effort) => [
@@ -369,19 +370,19 @@ export namespace ProviderTransform {
               thinkingLevel: effort,
             },
           ]),
-        )
+        );
 
       case "@ai-sdk/mistral":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/mistral
-        return {}
+        return {};
 
       case "@ai-sdk/cohere":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/cohere
-        return {}
+        return {};
 
       case "@ai-sdk/groq":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/groq
-        const groqEffort = ["none", ...WIDELY_SUPPORTED_EFFORTS]
+        const groqEffort = ["none", ...WIDELY_SUPPORTED_EFFORTS];
         return Object.fromEntries(
           groqEffort.map((effort) => [
             effort,
@@ -390,13 +391,13 @@ export namespace ProviderTransform {
               thinkingLevel: effort,
             },
           ]),
-        )
+        );
 
       case "@ai-sdk/perplexity":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/perplexity
-        return {}
+        return {};
     }
-    return {}
+    return {};
   }
 
   export function options(
@@ -404,14 +405,14 @@ export namespace ProviderTransform {
     sessionID: string,
     providerOptions?: Record<string, any>,
   ): Record<string, any> {
-    const result: Record<string, any> = {}
+    const result: Record<string, any> = {};
 
     if (model.api.npm === "@openrouter/ai-sdk-provider") {
       result["usage"] = {
         include: true,
-      }
+      };
       if (model.api.id.includes("gemini-3")) {
-        result["reasoning"] = { effort: "high" }
+        result["reasoning"] = { effort: "high" };
       }
     }
 
@@ -419,63 +420,61 @@ export namespace ProviderTransform {
       model.providerID === "baseten" ||
       (model.providerID === "opencode" && ["kimi-k2-thinking", "glm-4.6"].includes(model.api.id))
     ) {
-      result["chat_template_args"] = { enable_thinking: true }
+      result["chat_template_args"] = { enable_thinking: true };
     }
 
     if (model.providerID === "openai" || providerOptions?.setCacheKey) {
-      result["promptCacheKey"] = sessionID
+      result["promptCacheKey"] = sessionID;
     }
 
-    if (
-      (model.api.npm === "@ai-sdk/google" || model.api.npm === "@ai-sdk/google-vertex")
-    ) {
+    if (model.api.npm === "@ai-sdk/google" || model.api.npm === "@ai-sdk/google-vertex") {
       result["thinkingConfig"] = {
         includeThoughts: true,
-      }
+      };
       if (model.api.id.includes("gemini-3")) {
-        result["thinkingConfig"]["thinkingLevel"] = "high"
+        result["thinkingConfig"]["thinkingLevel"] = "high";
       }
     }
 
     if (model.api.id.includes("gpt-5") && !model.api.id.includes("gpt-5-chat")) {
       if (model.providerID.includes("codex")) {
-        result["store"] = false
+        result["store"] = false;
       }
 
       if (!model.api.id.includes("codex") && !model.api.id.includes("gpt-5-pro")) {
-        result["reasoningEffort"] = "medium"
+        result["reasoningEffort"] = "medium";
       }
 
       if (model.api.id.endsWith("gpt-5.") && model.providerID !== "azure") {
-        result["textVerbosity"] = "low"
+        result["textVerbosity"] = "low";
       }
 
       if (model.providerID.startsWith("opencode")) {
-        result["promptCacheKey"] = sessionID
-        result["include"] = ["reasoning.encrypted_content"]
-        result["reasoningSummary"] = "auto"
+        result["promptCacheKey"] = sessionID;
+        result["include"] = ["reasoning.encrypted_content"];
+        result["reasoningSummary"] = "auto";
       }
     }
-    return result
+    return result;
   }
 
   export function smallOptions(model: Provider.Model) {
-    const options: Record<string, any> = {}
+    const options: Record<string, any> = {};
 
     if (model.providerID === "openai" || model.api.id.includes("gpt-5")) {
       if (model.api.id.includes("5.")) {
-        options["reasoningEffort"] = "low"
+        options["reasoningEffort"] = "low";
       } else {
-        options["reasoningEffort"] = "minimal"
+        options["reasoningEffort"] = "minimal";
       }
     }
     if (model.providerID === "google") {
       options["thinkingConfig"] = {
         thinkingBudget: 0,
-      }
+      };
     }
 
-    return options
+    return options;
   }
 
   export function providerOptions(model: Provider.Model, options: { [x: string]: any }) {
@@ -485,32 +484,32 @@ export namespace ProviderTransform {
       case "@ai-sdk/azure":
         return {
           ["openai" as string]: options,
-        }
+        };
       case "@ai-sdk/amazon-bedrock":
         return {
           ["bedrock" as string]: options,
-        }
+        };
       case "@ai-sdk/anthropic":
         return {
           ["anthropic" as string]: options,
-        }
+        };
       case "@ai-sdk/google-vertex":
       case "@ai-sdk/google":
         return {
           ["google" as string]: options,
-        }
+        };
       case "@ai-sdk/gateway":
         return {
           ["gateway" as string]: options,
-        }
+        };
       case "@openrouter/ai-sdk-provider":
         return {
           ["openrouter" as string]: options,
-        }
+        };
       default:
         return {
           [model.providerID]: options,
-        }
+        };
     }
   }
 
@@ -520,23 +519,23 @@ export namespace ProviderTransform {
     modelLimit: number,
     globalLimit: number,
   ): number {
-    const modelCap = modelLimit || globalLimit
-    const standardLimit = Math.min(modelCap, globalLimit)
+    const modelCap = modelLimit || globalLimit;
+    const standardLimit = Math.min(modelCap, globalLimit);
 
     if (npm === "@ai-sdk/anthropic") {
-      const thinking = options?.["thinking"]
-      const budgetTokens = typeof thinking?.["budgetTokens"] === "number" ? thinking["budgetTokens"] : 0
-      const enabled = thinking?.["type"] === "enabled"
+      const thinking = options?.["thinking"];
+      const budgetTokens = typeof thinking?.["budgetTokens"] === "number" ? thinking["budgetTokens"] : 0;
+      const enabled = thinking?.["type"] === "enabled";
       if (enabled && budgetTokens > 0) {
         // Return text tokens so that text + thinking <= model cap, preferring 32k text when possible.
         if (budgetTokens + standardLimit <= modelCap) {
-          return standardLimit
+          return standardLimit;
         }
-        return modelCap - budgetTokens
+        return modelCap - budgetTokens;
       }
     }
 
-    return standardLimit
+    return standardLimit;
   }
 
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema) {
@@ -562,56 +561,56 @@ export namespace ProviderTransform {
     if (model.providerID === "google" || model.api.id.includes("gemini")) {
       const sanitizeGemini = (obj: any): any => {
         if (obj === null || typeof obj !== "object") {
-          return obj
+          return obj;
         }
 
         if (Array.isArray(obj)) {
-          return obj.map(sanitizeGemini)
+          return obj.map(sanitizeGemini);
         }
 
-        const result: any = {}
+        const result: any = {};
         for (const [key, value] of Object.entries(obj)) {
           if (key === "enum" && Array.isArray(value)) {
             // Convert all enum values to strings
-            result[key] = value.map((v) => String(v))
+            result[key] = value.map((v) => String(v));
             // If we have integer type with enum, change type to string
             if (result.type === "integer" || result.type === "number") {
-              result.type = "string"
+              result.type = "string";
             }
           } else if (typeof value === "object" && value !== null) {
-            result[key] = sanitizeGemini(value)
+            result[key] = sanitizeGemini(value);
           } else {
-            result[key] = value
+            result[key] = value;
           }
         }
 
         // Filter required array to only include fields that exist in properties
         if (result.type === "object" && result.properties && Array.isArray(result.required)) {
-          result.required = result.required.filter((field: any) => field in result.properties)
+          result.required = result.required.filter((field: any) => field in result.properties);
         }
 
         if (result.type === "array" && result.items == null) {
-          result.items = {}
+          result.items = {};
         }
 
-        return result
-      }
+        return result;
+      };
 
-      schema = sanitizeGemini(schema)
+      schema = sanitizeGemini(schema);
     }
 
-    return schema
+    return schema;
   }
 
   export function error(providerID: string, error: APICallError) {
-    let message = error.message
+    let message = error.message;
     if (providerID === "github-copilot" && message.includes("The requested model is not supported")) {
       return (
         message +
         "\n\nMake sure the model is enabled in your copilot settings: https://github.com/settings/copilot/features"
-      )
+      );
     }
 
-    return message
+    return message;
   }
 }

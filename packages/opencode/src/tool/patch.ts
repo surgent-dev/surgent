@@ -1,15 +1,15 @@
-import z from "zod"
-import { Tool } from "./tool"
-import { FileTime } from "../file/time"
-import { Permission } from "../permission"
-import { Instance } from "../project/instance"
-import { Agent } from "../agent/agent"
-import { Patch } from "../patch"
-import { createTwoFilesPatch } from "diff"
+import z from "zod";
+import { Tool } from "./tool";
+import { FileTime } from "../file/time";
+import { Permission } from "../permission";
+import { Instance } from "../project/instance";
+import { Agent } from "../agent/agent";
+import { Patch } from "../patch";
+import { createTwoFilesPatch } from "diff";
 
 const PatchParams = z.object({
   patchText: z.string().describe("The full patch text that describes all changes to be made"),
-})
+});
 
 export const PatchTool = Tool.define("patch", {
   description:
@@ -17,41 +17,41 @@ export const PatchTool = Tool.define("patch", {
   parameters: PatchParams,
   async execute(params, ctx) {
     if (!params.patchText) {
-      throw new Error("patchText is required")
+      throw new Error("patchText is required");
     }
 
     // Parse the patch to get hunks
-    let hunks: Patch.Hunk[]
+    let hunks: Patch.Hunk[];
     try {
-      const parseResult = Patch.parsePatch(params.patchText)
-      hunks = parseResult.hunks
+      const parseResult = Patch.parsePatch(params.patchText);
+      hunks = parseResult.hunks;
     } catch (error) {
-      throw new Error(`Failed to parse patch: ${error}`)
+      throw new Error(`Failed to parse patch: ${error}`);
     }
 
     if (hunks.length === 0) {
-      throw new Error("No file changes found in patch")
+      throw new Error("No file changes found in patch");
     }
 
     // Validate file paths and check permissions
-    const agent = await Agent.get(ctx.agent)
-    const sandbox = Instance.sandbox
-    const path = sandbox.path
+    const agent = await Agent.get(ctx.agent);
+    const sandbox = Instance.sandbox;
+    const path = sandbox.path;
     const fileChanges: Array<{
-      filePath: string
-      oldContent: string
-      newContent: string
-      type: "add" | "update" | "delete" | "move"
-      movePath?: string
-    }> = []
+      filePath: string;
+      oldContent: string;
+      newContent: string;
+      type: "add" | "update" | "delete" | "move";
+      movePath?: string;
+    }> = [];
 
-    let totalDiff = ""
+    let totalDiff = "";
 
     for (const hunk of hunks) {
-      const filePath = path.resolve(hunk.path)
+      const filePath = path.resolve(hunk.path);
 
       if (!sandbox.contains(filePath)) {
-        const parentDir = path.dirname(filePath)
+        const parentDir = path.dirname(filePath);
         if (agent.permission.external_directory === "ask") {
           await Permission.ask({
             type: "external_directory",
@@ -64,7 +64,7 @@ export const PatchTool = Tool.define("patch", {
               filepath: filePath,
               parentDir,
             },
-          })
+          });
         } else if (agent.permission.external_directory === "deny") {
           throw new Permission.RejectedError(
             ctx.sessionID,
@@ -75,49 +75,49 @@ export const PatchTool = Tool.define("patch", {
               parentDir,
             },
             `File ${filePath} is not in the current working directory`,
-          )
+          );
         }
       }
 
       switch (hunk.type) {
         case "add":
           if (hunk.type === "add") {
-            const oldContent = ""
-            const newContent = hunk.contents
-            const diff = createTwoFilesPatch(filePath, filePath, oldContent, newContent)
+            const oldContent = "";
+            const newContent = hunk.contents;
+            const diff = createTwoFilesPatch(filePath, filePath, oldContent, newContent);
 
             fileChanges.push({
               filePath,
               oldContent,
               newContent,
               type: "add",
-            })
+            });
 
-            totalDiff += diff + "\n"
+            totalDiff += diff + "\n";
           }
-          break
+          break;
 
         case "update":
           // Check if file exists for update
-          const stats = await sandbox.fs.stat(filePath).catch(() => null)
+          const stats = await sandbox.fs.stat(filePath).catch(() => null);
           if (!stats || stats.isDir) {
-            throw new Error(`File not found or is directory: ${filePath}`)
+            throw new Error(`File not found or is directory: ${filePath}`);
           }
 
           // Read file and update time tracking (like edit tool does)
-          await FileTime.assert(ctx.sessionID, filePath)
-          const oldContent = await sandbox.fs.readText(filePath)
-          let newContent = oldContent
+          await FileTime.assert(ctx.sessionID, filePath);
+          const oldContent = await sandbox.fs.readText(filePath);
+          let newContent = oldContent;
 
           // Apply the update chunks to get new content
           try {
-            const fileUpdate = await Patch.deriveNewContentsFromChunks(filePath, hunk.chunks)
-            newContent = fileUpdate.content
+            const fileUpdate = await Patch.deriveNewContentsFromChunks(filePath, hunk.chunks);
+            newContent = fileUpdate.content;
           } catch (error) {
-            throw new Error(`Failed to apply update to ${filePath}: ${error}`)
+            throw new Error(`Failed to apply update to ${filePath}: ${error}`);
           }
 
-          const diff = createTwoFilesPatch(filePath, filePath, oldContent, newContent)
+          const diff = createTwoFilesPatch(filePath, filePath, oldContent, newContent);
 
           fileChanges.push({
             filePath,
@@ -125,26 +125,26 @@ export const PatchTool = Tool.define("patch", {
             newContent,
             type: hunk.move_path ? "move" : "update",
             movePath: hunk.move_path ? path.resolve(hunk.move_path) : undefined,
-          })
+          });
 
-          totalDiff += diff + "\n"
-          break
+          totalDiff += diff + "\n";
+          break;
 
         case "delete":
           // Check if file exists for deletion
-          await FileTime.assert(ctx.sessionID, filePath)
-          const contentToDelete = await sandbox.fs.readText(filePath)
-          const deleteDiff = createTwoFilesPatch(filePath, filePath, contentToDelete, "")
+          await FileTime.assert(ctx.sessionID, filePath);
+          const contentToDelete = await sandbox.fs.readText(filePath);
+          const deleteDiff = createTwoFilesPatch(filePath, filePath, contentToDelete, "");
 
           fileChanges.push({
             filePath,
             oldContent: contentToDelete,
             newContent: "",
             type: "delete",
-          })
+          });
 
-          totalDiff += deleteDiff + "\n"
-          break
+          totalDiff += deleteDiff + "\n";
+          break;
       }
     }
 
@@ -159,60 +159,60 @@ export const PatchTool = Tool.define("patch", {
         metadata: {
           diff: totalDiff,
         },
-      })
+      });
     }
 
     // Apply the changes
-    const changedFiles: string[] = []
+    const changedFiles: string[] = [];
 
     for (const change of fileChanges) {
       switch (change.type) {
         case "add":
           // Create parent directories
-          const addDir = path.dirname(change.filePath)
+          const addDir = path.dirname(change.filePath);
           if (addDir !== "." && addDir !== "/") {
-            await sandbox.fs.mkdirp(addDir)
+            await sandbox.fs.mkdirp(addDir);
           }
-          await sandbox.fs.writeText(change.filePath, change.newContent)
-          changedFiles.push(change.filePath)
-          break
+          await sandbox.fs.writeText(change.filePath, change.newContent);
+          changedFiles.push(change.filePath);
+          break;
 
         case "update":
-          await sandbox.fs.writeText(change.filePath, change.newContent)
-          changedFiles.push(change.filePath)
-          break
+          await sandbox.fs.writeText(change.filePath, change.newContent);
+          changedFiles.push(change.filePath);
+          break;
 
         case "move":
           if (change.movePath) {
             // Create parent directories for destination
-            const moveDir = path.dirname(change.movePath)
+            const moveDir = path.dirname(change.movePath);
             if (moveDir !== "." && moveDir !== "/") {
-              await sandbox.fs.mkdirp(moveDir)
+              await sandbox.fs.mkdirp(moveDir);
             }
             // Write to new location
-            await sandbox.fs.writeText(change.movePath, change.newContent)
+            await sandbox.fs.writeText(change.movePath, change.newContent);
             // Remove original
-            await sandbox.fs.rm(change.filePath)
-            changedFiles.push(change.movePath)
+            await sandbox.fs.rm(change.filePath);
+            changedFiles.push(change.movePath);
           }
-          break
+          break;
 
         case "delete":
-          await sandbox.fs.rm(change.filePath)
-          changedFiles.push(change.filePath)
-          break
+          await sandbox.fs.rm(change.filePath);
+          changedFiles.push(change.filePath);
+          break;
       }
 
       // Update file time tracking
-      FileTime.read(ctx.sessionID, change.filePath)
+      FileTime.read(ctx.sessionID, change.filePath);
       if (change.movePath) {
-        FileTime.read(ctx.sessionID, change.movePath)
+        FileTime.read(ctx.sessionID, change.movePath);
       }
     }
 
     // Generate output summary
-    const relativePaths = changedFiles.map((filePath) => path.relative(Instance.directory, filePath))
-    const summary = `${fileChanges.length} files changed`
+    const relativePaths = changedFiles.map((filePath) => path.relative(Instance.directory, filePath));
+    const summary = `${fileChanges.length} files changed`;
 
     return {
       title: summary,
@@ -220,6 +220,6 @@ export const PatchTool = Tool.define("patch", {
         diff: totalDiff,
       },
       output: `Patch applied successfully. ${summary}:\n${relativePaths.map((p) => `  ${p}`).join("\n")}`,
-    }
+    };
   },
-})
+});

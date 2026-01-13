@@ -1,5 +1,5 @@
-import { realpathSync } from "fs"
-import { dirname, join, relative } from "path"
+import { realpathSync } from "fs";
+import { dirname, join, relative } from "path";
 
 export namespace Filesystem {
   /**
@@ -8,49 +8,49 @@ export namespace Filesystem {
    * different casing than what we send them.
    */
   export function normalizePath(p: string): string {
-    if (process.platform !== "win32") return p
+    if (process.platform !== "win32") return p;
     try {
-      return realpathSync.native(p)
+      return realpathSync.native(p);
     } catch {
-      return p
+      return p;
     }
   }
   export function overlaps(a: string, b: string) {
-    const relA = relative(a, b)
-    const relB = relative(b, a)
-    return !relA || !relA.startsWith("..") || !relB || !relB.startsWith("..")
+    const relA = relative(a, b);
+    const relB = relative(b, a);
+    return !relA || !relA.startsWith("..") || !relB || !relB.startsWith("..");
   }
 
   export function contains(parent: string, child: string) {
-    return !relative(parent, child).startsWith("..")
+    return !relative(parent, child).startsWith("..");
   }
 
   export async function findUp(target: string, start: string, stop?: string) {
-    let current = start
-    const result = []
+    let current = start;
+    const result = [];
     while (true) {
-      const search = join(current, target)
-      if (await Bun.file(search).exists()) result.push(search)
-      if (stop === current) break
-      const parent = dirname(current)
-      if (parent === current) break
-      current = parent
+      const search = join(current, target);
+      if (await Bun.file(search).exists()) result.push(search);
+      if (stop === current) break;
+      const parent = dirname(current);
+      if (parent === current) break;
+      current = parent;
     }
-    return result
+    return result;
   }
 
   export async function* up(options: { targets: string[]; start: string; stop?: string }) {
-    const { targets, start, stop } = options
-    let current = start
+    const { targets, start, stop } = options;
+    let current = start;
     while (true) {
       for (const target of targets) {
-        const search = join(current, target)
-        if (await Bun.file(search).exists()) yield search
+        const search = join(current, target);
+        if (await Bun.file(search).exists()) yield search;
       }
-      if (stop === current) break
-      const parent = dirname(current)
-      if (parent === current) break
-      current = parent
+      if (stop === current) break;
+      const parent = dirname(current);
+      if (parent === current) break;
+      current = parent;
     }
   }
 }

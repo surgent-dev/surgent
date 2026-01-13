@@ -18,8 +18,6 @@ export const useSandbox = create<SandboxState>()(
       setActiveSession: (projectId, sessionId) =>
         set((s) => ({ activeSessionId: { ...s.activeSessionId, [projectId]: sessionId } })),
     }),
-    { name: "sandbox-store", partialize: (s) => ({ activeSessionId: s.activeSessionId }) }
-  )
+    { name: "sandbox-store", partialize: (s) => ({ activeSessionId: s.activeSessionId }) },
+  ),
 );
-
-

@@ -1,11 +1,7 @@
 import { db } from "@/lib/db";
 
 export function getProjectById(projectId: string) {
-  return db
-    .selectFrom("project")
-    .selectAll()
-    .where("id", "=", projectId)
-    .executeTakeFirst();
+  return db.selectFrom("project").selectAll().where("id", "=", projectId).executeTakeFirst();
 }
 
 export async function countProjectsByUserId(userId: string): Promise<number> {
@@ -44,10 +40,7 @@ export async function createProject(args: {
   return { id: row.id as string };
 }
 
-export async function updateProject(
-  projectId: string,
-  data: { metadata?: any; sandbox?: any; deployment?: any }
-) {
+export async function updateProject(projectId: string, data: { metadata?: any; sandbox?: any; deployment?: any }) {
   await db
     .updateTable("project")
     .set({ ...data, updatedAt: new Date() })
@@ -59,7 +52,7 @@ export async function updateDeploymentStatus(
   projectId: string,
   status: string,
   name?: string,
-  meta?: { step?: string; error?: string }
+  meta?: { step?: string; error?: string },
 ) {
   const project = await getProjectById(projectId);
   if (!project) return;
@@ -75,4 +68,3 @@ export async function updateDeploymentStatus(
     },
   });
 }
-

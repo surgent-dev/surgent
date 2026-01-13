@@ -1,25 +1,25 @@
-import { BusEvent } from "../bus/bus-event"
-import z from "zod"
-import { NamedError } from "@opencode-ai/util/error"
-import { APICallError, convertToModelMessages, LoadAPIKeyError, type ModelMessage, type UIMessage } from "ai"
-import { Identifier } from "../id/id"
-import { fn } from "../util/fn"
-import { Storage } from "../storage/storage"
-import { ProviderTransform } from "../provider/transform"
-import { STATUS_CODES } from "http"
-import { iife } from "../util/iife"
-import { type SystemError } from "bun"
+import { BusEvent } from "../bus/bus-event";
+import z from "zod";
+import { NamedError } from "@opencode-ai/util/error";
+import { APICallError, convertToModelMessages, LoadAPIKeyError, type ModelMessage, type UIMessage } from "ai";
+import { Identifier } from "../id/id";
+import { fn } from "../util/fn";
+import { Storage } from "../storage/storage";
+import { ProviderTransform } from "../provider/transform";
+import { STATUS_CODES } from "http";
+import { iife } from "../util/iife";
+import { type SystemError } from "bun";
 
 export namespace MessageV2 {
-  export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
-  export const AbortedError = NamedError.create("MessageAbortedError", z.object({ message: z.string() }))
+  export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}));
+  export const AbortedError = NamedError.create("MessageAbortedError", z.object({ message: z.string() }));
   export const AuthError = NamedError.create(
     "ProviderAuthError",
     z.object({
       providerID: z.string(),
       message: z.string(),
     }),
-  )
+  );
   export const APIError = NamedError.create(
     "APIError",
     z.object({
@@ -30,14 +30,14 @@ export namespace MessageV2 {
       responseBody: z.string().optional(),
       metadata: z.record(z.string(), z.string()).optional(),
     }),
-  )
-  export type APIError = z.infer<typeof APIError.Schema>
+  );
+  export type APIError = z.infer<typeof APIError.Schema>;
 
   const PartBase = z.object({
     id: z.string(),
     sessionID: z.string(),
     messageID: z.string(),
-  })
+  });
 
   export const TextPart = PartBase.extend({
     type: z.literal("text"),
@@ -53,8 +53,8 @@ export namespace MessageV2 {
     metadata: z.record(z.string(), z.any()).optional(),
   }).meta({
     ref: "TextPart",
-  })
-  export type TextPart = z.infer<typeof TextPart>
+  });
+  export type TextPart = z.infer<typeof TextPart>;
 
   export const ReasoningPart = PartBase.extend({
     type: z.literal("reasoning"),
@@ -66,8 +66,8 @@ export namespace MessageV2 {
     }),
   }).meta({
     ref: "ReasoningPart",
-  })
-  export type ReasoningPart = z.infer<typeof ReasoningPart>
+  });
+  export type ReasoningPart = z.infer<typeof ReasoningPart>;
 
   const FilePartSourceBase = z.object({
     text: z
@@ -79,7 +79,7 @@ export namespace MessageV2 {
       .meta({
         ref: "FilePartSourceText",
       }),
-  })
+  });
 
   const Range = z
     .object({
@@ -94,15 +94,15 @@ export namespace MessageV2 {
     })
     .meta({
       ref: "Range",
-    })
-  export type Range = z.infer<typeof Range>
+    });
+  export type Range = z.infer<typeof Range>;
 
   export const FileSource = FilePartSourceBase.extend({
     type: z.literal("file"),
     path: z.string(),
   }).meta({
     ref: "FileSource",
-  })
+  });
 
   export const SymbolSource = FilePartSourceBase.extend({
     type: z.literal("symbol"),
@@ -112,11 +112,11 @@ export namespace MessageV2 {
     kind: z.number().int(),
   }).meta({
     ref: "SymbolSource",
-  })
+  });
 
   export const FilePartSource = z.discriminatedUnion("type", [FileSource, SymbolSource]).meta({
     ref: "FilePartSource",
-  })
+  });
 
   export const FilePart = PartBase.extend({
     type: z.literal("file"),
@@ -126,8 +126,8 @@ export namespace MessageV2 {
     source: FilePartSource.optional(),
   }).meta({
     ref: "FilePart",
-  })
-  export type FilePart = z.infer<typeof FilePart>
+  });
+  export type FilePart = z.infer<typeof FilePart>;
 
   export const AgentPart = PartBase.extend({
     type: z.literal("agent"),
@@ -141,16 +141,16 @@ export namespace MessageV2 {
       .optional(),
   }).meta({
     ref: "AgentPart",
-  })
-  export type AgentPart = z.infer<typeof AgentPart>
+  });
+  export type AgentPart = z.infer<typeof AgentPart>;
 
   export const CompactionPart = PartBase.extend({
     type: z.literal("compaction"),
     auto: z.boolean(),
   }).meta({
     ref: "CompactionPart",
-  })
-  export type CompactionPart = z.infer<typeof CompactionPart>
+  });
+  export type CompactionPart = z.infer<typeof CompactionPart>;
 
   export const SubtaskPart = PartBase.extend({
     type: z.literal("subtask"),
@@ -158,8 +158,8 @@ export namespace MessageV2 {
     description: z.string(),
     agent: z.string(),
     command: z.string().optional(),
-  })
-  export type SubtaskPart = z.infer<typeof SubtaskPart>
+  });
+  export type SubtaskPart = z.infer<typeof SubtaskPart>;
 
   export const RetryPart = PartBase.extend({
     type: z.literal("retry"),
@@ -170,15 +170,15 @@ export namespace MessageV2 {
     }),
   }).meta({
     ref: "RetryPart",
-  })
-  export type RetryPart = z.infer<typeof RetryPart>
+  });
+  export type RetryPart = z.infer<typeof RetryPart>;
 
   export const StepStartPart = PartBase.extend({
     type: z.literal("step-start"),
   }).meta({
     ref: "StepStartPart",
-  })
-  export type StepStartPart = z.infer<typeof StepStartPart>
+  });
+  export type StepStartPart = z.infer<typeof StepStartPart>;
 
   export const StepFinishPart = PartBase.extend({
     type: z.literal("step-finish"),
@@ -195,8 +195,8 @@ export namespace MessageV2 {
     }),
   }).meta({
     ref: "StepFinishPart",
-  })
-  export type StepFinishPart = z.infer<typeof StepFinishPart>
+  });
+  export type StepFinishPart = z.infer<typeof StepFinishPart>;
 
   export const PatchPart = PartBase.extend({
     type: z.literal("patch"),
@@ -204,8 +204,8 @@ export namespace MessageV2 {
     files: z.string().array(),
   }).meta({
     ref: "PatchPart",
-  })
-  export type PatchPart = z.infer<typeof PatchPart>
+  });
+  export type PatchPart = z.infer<typeof PatchPart>;
 
   export const ToolStatePending = z
     .object({
@@ -215,9 +215,9 @@ export namespace MessageV2 {
     })
     .meta({
       ref: "ToolStatePending",
-    })
+    });
 
-  export type ToolStatePending = z.infer<typeof ToolStatePending>
+  export type ToolStatePending = z.infer<typeof ToolStatePending>;
 
   export const ToolStateRunning = z
     .object({
@@ -231,8 +231,8 @@ export namespace MessageV2 {
     })
     .meta({
       ref: "ToolStateRunning",
-    })
-  export type ToolStateRunning = z.infer<typeof ToolStateRunning>
+    });
+  export type ToolStateRunning = z.infer<typeof ToolStateRunning>;
 
   export const ToolStateCompleted = z
     .object({
@@ -250,8 +250,8 @@ export namespace MessageV2 {
     })
     .meta({
       ref: "ToolStateCompleted",
-    })
-  export type ToolStateCompleted = z.infer<typeof ToolStateCompleted>
+    });
+  export type ToolStateCompleted = z.infer<typeof ToolStateCompleted>;
 
   export const ToolStateError = z
     .object({
@@ -266,14 +266,14 @@ export namespace MessageV2 {
     })
     .meta({
       ref: "ToolStateError",
-    })
-  export type ToolStateError = z.infer<typeof ToolStateError>
+    });
+  export type ToolStateError = z.infer<typeof ToolStateError>;
 
   export const ToolState = z
     .discriminatedUnion("status", [ToolStatePending, ToolStateRunning, ToolStateCompleted, ToolStateError])
     .meta({
       ref: "ToolState",
-    })
+    });
 
   export const ToolPart = PartBase.extend({
     type: z.literal("tool"),
@@ -283,13 +283,13 @@ export namespace MessageV2 {
     metadata: z.record(z.string(), z.any()).optional(),
   }).meta({
     ref: "ToolPart",
-  })
-  export type ToolPart = z.infer<typeof ToolPart>
+  });
+  export type ToolPart = z.infer<typeof ToolPart>;
 
   const Base = z.object({
     id: z.string(),
     sessionID: z.string(),
-  })
+  });
 
   export const User = Base.extend({
     role: z.literal("user"),
@@ -312,8 +312,8 @@ export namespace MessageV2 {
     variant: z.string().optional(),
   }).meta({
     ref: "UserMessage",
-  })
-  export type User = z.infer<typeof User>
+  });
+  export type User = z.infer<typeof User>;
 
   export const Part = z
     .discriminatedUnion("type", [
@@ -331,8 +331,8 @@ export namespace MessageV2 {
     ])
     .meta({
       ref: "Part",
-    })
-  export type Part = z.infer<typeof Part>
+    });
+  export type Part = z.infer<typeof Part>;
 
   export const Assistant = Base.extend({
     role: z.literal("assistant"),
@@ -375,13 +375,13 @@ export namespace MessageV2 {
     finish: z.string().optional(),
   }).meta({
     ref: "AssistantMessage",
-  })
-  export type Assistant = z.infer<typeof Assistant>
+  });
+  export type Assistant = z.infer<typeof Assistant>;
 
   export const Info = z.discriminatedUnion("role", [User, Assistant]).meta({
     ref: "Message",
-  })
-  export type Info = z.infer<typeof Info>
+  });
+  export type Info = z.infer<typeof Info>;
 
   export const Event = {
     Updated: BusEvent.define(
@@ -412,33 +412,33 @@ export namespace MessageV2 {
         partID: z.string(),
       }),
     ),
-  }
+  };
 
   export const WithParts = z.object({
     info: Info,
     parts: z.array(Part),
-  })
-  export type WithParts = z.infer<typeof WithParts>
+  });
+  export type WithParts = z.infer<typeof WithParts>;
 
   export function toModelMessage(input: WithParts[]): ModelMessage[] {
-    const result: UIMessage[] = []
+    const result: UIMessage[] = [];
 
     for (const msg of input) {
-      if (msg.parts.length === 0) continue
+      if (msg.parts.length === 0) continue;
 
       if (msg.info.role === "user") {
         const userMessage: UIMessage = {
           id: msg.info.id,
           role: "user",
           parts: [],
-        }
-        result.push(userMessage)
+        };
+        result.push(userMessage);
         for (const part of msg.parts) {
           if (part.type === "text" && !part.ignored)
             userMessage.parts.push({
               type: "text",
               text: part.text,
-            })
+            });
           // text/plain and directory files are converted into text parts, ignore them
           if (part.type === "file" && part.mime !== "text/plain" && part.mime !== "application/x-directory")
             userMessage.parts.push({
@@ -446,19 +446,19 @@ export namespace MessageV2 {
               url: part.url,
               mediaType: part.mime,
               filename: part.filename,
-            })
+            });
 
           if (part.type === "compaction") {
             userMessage.parts.push({
               type: "text",
               text: "What did we do so far?",
-            })
+            });
           }
           if (part.type === "subtask") {
             userMessage.parts.push({
               type: "text",
               text: "The following tool was executed by the user",
-            })
+            });
           }
         }
       }
@@ -471,25 +471,25 @@ export namespace MessageV2 {
             msg.parts.some((part) => part.type !== "step-start" && part.type !== "reasoning")
           )
         ) {
-          continue
+          continue;
         }
         const assistantMessage: UIMessage = {
           id: msg.info.id,
           role: "assistant",
           parts: [],
-        }
-        const attachmentMessages: UIMessage[] = []
+        };
+        const attachmentMessages: UIMessage[] = [];
         for (const part of msg.parts) {
           if (part.type === "text")
             assistantMessage.parts.push({
               type: "text",
               text: part.text,
               providerMetadata: part.metadata,
-            })
+            });
           if (part.type === "step-start")
             assistantMessage.parts.push({
               type: "step-start",
-            })
+            });
           if (part.type === "tool") {
             if (part.state.status === "completed") {
               if (part.state.attachments?.length) {
@@ -508,7 +508,7 @@ export namespace MessageV2 {
                       filename: attachment.filename,
                     })),
                   ],
-                })
+                });
               }
               assistantMessage.parts.push({
                 type: ("tool-" + part.tool) as `tool-${string}`,
@@ -517,7 +517,7 @@ export namespace MessageV2 {
                 input: part.state.input,
                 output: part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output,
                 callProviderMetadata: part.metadata,
-              })
+              });
             }
             if (part.state.status === "error")
               assistantMessage.parts.push({
@@ -527,47 +527,47 @@ export namespace MessageV2 {
                 input: part.state.input,
                 errorText: part.state.error,
                 callProviderMetadata: part.metadata,
-              })
+              });
           }
           if (part.type === "reasoning") {
             assistantMessage.parts.push({
               type: "reasoning",
               text: part.text,
               providerMetadata: part.metadata,
-            })
+            });
           }
         }
         if (attachmentMessages.length > 0) {
-          result.push(...attachmentMessages)
+          result.push(...attachmentMessages);
         }
         if (assistantMessage.parts.length > 0) {
-          result.push(assistantMessage)
+          result.push(assistantMessage);
         }
       }
     }
 
-    return convertToModelMessages(result.filter((msg) => msg.parts.some((part) => part.type !== "step-start")))
+    return convertToModelMessages(result.filter((msg) => msg.parts.some((part) => part.type !== "step-start")));
   }
 
   export const stream = fn(Identifier.schema("session"), async function* (sessionID) {
-    const list = await Array.fromAsync(await Storage.list(["message", sessionID]))
+    const list = await Array.fromAsync(await Storage.list(["message", sessionID]));
     for (let i = list.length - 1; i >= 0; i--) {
       yield await get({
         sessionID,
         messageID: list[i][2],
-      })
+      });
     }
-  })
+  });
 
   export const parts = fn(Identifier.schema("message"), async (messageID) => {
-    const result = [] as MessageV2.Part[]
+    const result = [] as MessageV2.Part[];
     for (const item of await Storage.list(["part", messageID])) {
-      const read = await Storage.read<MessageV2.Part>(item)
-      result.push(read)
+      const read = await Storage.read<MessageV2.Part>(item);
+      result.push(read);
     }
-    result.sort((a, b) => (a.id > b.id ? 1 : -1))
-    return result
-  })
+    result.sort((a, b) => (a.id > b.id ? 1 : -1));
+    return result;
+  });
 
   export const get = fn(
     z.object({
@@ -578,25 +578,25 @@ export namespace MessageV2 {
       return {
         info: await Storage.read<MessageV2.Info>(["message", input.sessionID, input.messageID]),
         parts: await parts(input.messageID),
-      }
+      };
     },
-  )
+  );
 
   export async function filterCompacted(stream: AsyncIterable<MessageV2.WithParts>) {
-    const result = [] as MessageV2.WithParts[]
-    const completed = new Set<string>()
+    const result = [] as MessageV2.WithParts[];
+    const completed = new Set<string>();
     for await (const msg of stream) {
-      result.push(msg)
+      result.push(msg);
       if (
         msg.info.role === "user" &&
         completed.has(msg.info.id) &&
         msg.parts.some((part) => part.type === "compaction")
       )
-        break
-      if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish) completed.add(msg.info.parentID)
+        break;
+      if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish) completed.add(msg.info.parentID);
     }
-    result.reverse()
-    return result
+    result.reverse();
+    return result;
   }
 
   export function fromError(e: unknown, ctx: { providerID: string }) {
@@ -607,9 +607,9 @@ export namespace MessageV2 {
           {
             cause: e,
           },
-        ).toObject()
+        ).toObject();
       case MessageV2.OutputLengthError.isInstance(e):
-        return e
+        return e;
       case LoadAPIKeyError.isInstance(e):
         return new MessageV2.AuthError(
           {
@@ -617,7 +617,7 @@ export namespace MessageV2 {
             message: e.message,
           },
           { cause: e },
-        ).toObject()
+        ).toObject();
       case (e as SystemError)?.code === "ECONNRESET":
         return new MessageV2.APIError(
           {
@@ -630,37 +630,37 @@ export namespace MessageV2 {
             },
           },
           { cause: e },
-        ).toObject()
+        ).toObject();
       case APICallError.isInstance(e):
         const message = iife(() => {
-          let msg = e.message
+          let msg = e.message;
           if (msg === "") {
-            if (e.responseBody) return e.responseBody
+            if (e.responseBody) return e.responseBody;
             if (e.statusCode) {
-              const err = STATUS_CODES[e.statusCode]
-              if (err) return err
+              const err = STATUS_CODES[e.statusCode];
+              if (err) return err;
             }
-            return "Unknown error"
+            return "Unknown error";
           }
-          const transformed = ProviderTransform.error(ctx.providerID, e)
+          const transformed = ProviderTransform.error(ctx.providerID, e);
           if (transformed !== msg) {
-            return transformed
+            return transformed;
           }
           if (!e.responseBody || (e.statusCode && msg !== STATUS_CODES[e.statusCode])) {
-            return msg
+            return msg;
           }
 
           try {
-            const body = JSON.parse(e.responseBody)
+            const body = JSON.parse(e.responseBody);
             // try to extract common error message fields
-            const errMsg = body.message || body.error || body.error?.message
+            const errMsg = body.message || body.error || body.error?.message;
             if (errMsg && typeof errMsg === "string") {
-              return `${msg}: ${errMsg}`
+              return `${msg}: ${errMsg}`;
             }
           } catch {}
 
-          return `${msg}: ${e.responseBody}`
-        }).trim()
+          return `${msg}: ${e.responseBody}`;
+        }).trim();
 
         return new MessageV2.APIError(
           {
@@ -671,11 +671,11 @@ export namespace MessageV2 {
             responseBody: e.responseBody,
           },
           { cause: e },
-        ).toObject()
+        ).toObject();
       case e instanceof Error:
-        return new NamedError.Unknown({ message: e.toString() }, { cause: e }).toObject()
+        return new NamedError.Unknown({ message: e.toString() }, { cause: e }).toObject();
       default:
-        return new NamedError.Unknown({ message: JSON.stringify(e) }, { cause: e })
+        return new NamedError.Unknown({ message: JSON.stringify(e) }, { cause: e });
     }
   }
 }

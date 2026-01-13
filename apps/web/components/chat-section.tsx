@@ -1,4 +1,4 @@
-import Conversation from '@/components/conversation';
+import Conversation from "@/components/conversation";
 
 export default function ChatSection({ projectId }: { projectId: string }) {
   return (
@@ -9,5 +9,3 @@ export default function ChatSection({ projectId }: { projectId: string }) {
     </div>
   );
 }
-
-

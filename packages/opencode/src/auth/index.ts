@@ -1,7 +1,7 @@
-import path from "path"
-import { Global } from "../global"
-import fs from "fs/promises"
-import z from "zod"
+import path from "path";
+import { Global } from "../global";
+import fs from "fs/promises";
+import z from "zod";
 
 export namespace Auth {
   export const Oauth = z
@@ -12,14 +12,14 @@ export namespace Auth {
       expires: z.number(),
       enterpriseUrl: z.string().optional(),
     })
-    .meta({ ref: "OAuth" })
+    .meta({ ref: "OAuth" });
 
   export const Api = z
     .object({
       type: z.literal("api"),
       key: z.string(),
     })
-    .meta({ ref: "ApiAuth" })
+    .meta({ ref: "ApiAuth" });
 
   export const WellKnown = z
     .object({
@@ -27,44 +27,44 @@ export namespace Auth {
       key: z.string(),
       token: z.string(),
     })
-    .meta({ ref: "WellKnownAuth" })
+    .meta({ ref: "WellKnownAuth" });
 
-  export const Info = z.discriminatedUnion("type", [Oauth, Api, WellKnown]).meta({ ref: "Auth" })
-  export type Info = z.infer<typeof Info>
+  export const Info = z.discriminatedUnion("type", [Oauth, Api, WellKnown]).meta({ ref: "Auth" });
+  export type Info = z.infer<typeof Info>;
 
-  const filepath = path.join(Global.Path.data, "auth.json")
+  const filepath = path.join(Global.Path.data, "auth.json");
 
   export async function get(providerID: string) {
-    const auth = await all()
-    return auth[providerID]
+    const auth = await all();
+    return auth[providerID];
   }
 
   export async function all(): Promise<Record<string, Info>> {
-    const file = Bun.file(filepath)
-    const data = await file.json().catch(() => ({}) as Record<string, unknown>)
+    const file = Bun.file(filepath);
+    const data = await file.json().catch(() => ({}) as Record<string, unknown>);
     return Object.entries(data).reduce(
       (acc, [key, value]) => {
-        const parsed = Info.safeParse(value)
-        if (!parsed.success) return acc
-        acc[key] = parsed.data
-        return acc
+        const parsed = Info.safeParse(value);
+        if (!parsed.success) return acc;
+        acc[key] = parsed.data;
+        return acc;
       },
       {} as Record<string, Info>,
-    )
+    );
   }
 
   export async function set(key: string, info: Info) {
-    const file = Bun.file(filepath)
-    const data = await all()
-    await Bun.write(file, JSON.stringify({ ...data, [key]: info }, null, 2))
-    await fs.chmod(file.name!, 0o600)
+    const file = Bun.file(filepath);
+    const data = await all();
+    await Bun.write(file, JSON.stringify({ ...data, [key]: info }, null, 2));
+    await fs.chmod(file.name!, 0o600);
   }
 
   export async function remove(key: string) {
-    const file = Bun.file(filepath)
-    const data = await all()
-    delete data[key]
-    await Bun.write(file, JSON.stringify(data, null, 2))
-    await fs.chmod(file.name!, 0o600)
+    const file = Bun.file(filepath);
+    const data = await all();
+    delete data[key];
+    await Bun.write(file, JSON.stringify(data, null, 2));
+    await fs.chmod(file.name!, 0o600);
   }
 }

@@ -1,102 +1,102 @@
-import { BusEvent } from "../bus/bus-event"
-import { Bus } from "../bus"
-import { GlobalBus } from "../bus/global"
-import { Log } from "../util/log"
-import { describeRoute, validator, resolver } from "hono-openapi"
-import { Hono } from "hono"
-import { cors } from "hono/cors"
-import { stream, streamSSE } from "hono/streaming"
-import { proxy } from "hono/proxy"
-import { Session } from "../session"
-import z from "zod"
-import { Provider } from "../provider/provider"
-import { filter, mapValues, sortBy, pipe } from "remeda"
-import { NamedError } from "@opencode-ai/util/error"
-import { ModelsDev } from "../provider/models"
-import { Ripgrep } from "../file/ripgrep"
-import { Config } from "../config/config"
-import { File } from "../file"
-import { MessageV2 } from "../session/message-v2"
-import { Permission } from "../permission"
-import { Instance } from "../project/instance"
-import { Agent } from "../agent/agent"
-import { Auth } from "../auth"
-import { Command } from "../command"
-import { Global } from "../global"
-import { ProjectRoute } from "./project"
-import { ToolRegistry } from "../tool/registry"
-import { zodToJsonSchema } from "zod-to-json-schema"
-import { SessionPrompt } from "../session/prompt"
-import { SessionCompaction } from "../session/compaction"
-import { lazy } from "../util/lazy"
-import { Todo } from "../session/todo"
-import { InstanceBootstrap } from "../project/bootstrap"
-import { MCP } from "../mcp"
-import { Storage } from "../storage/storage"
-import type { ContentfulStatusCode } from "hono/utils/http-status"
-import { SessionStatus } from "../session/status"
-import { websocket } from "hono/bun"
-import { errors } from "./error"
-import { Installation } from "../installation"
+import { BusEvent } from "../bus/bus-event";
+import { Bus } from "../bus";
+import { GlobalBus } from "../bus/global";
+import { Log } from "../util/log";
+import { describeRoute, validator, resolver } from "hono-openapi";
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { stream, streamSSE } from "hono/streaming";
+import { proxy } from "hono/proxy";
+import { Session } from "../session";
+import z from "zod";
+import { Provider } from "../provider/provider";
+import { filter, mapValues, sortBy, pipe } from "remeda";
+import { NamedError } from "@opencode-ai/util/error";
+import { ModelsDev } from "../provider/models";
+import { Ripgrep } from "../file/ripgrep";
+import { Config } from "../config/config";
+import { File } from "../file";
+import { MessageV2 } from "../session/message-v2";
+import { Permission } from "../permission";
+import { Instance } from "../project/instance";
+import { Agent } from "../agent/agent";
+import { Auth } from "../auth";
+import { Command } from "../command";
+import { Global } from "../global";
+import { ProjectRoute } from "./project";
+import { ToolRegistry } from "../tool/registry";
+import { zodToJsonSchema } from "zod-to-json-schema";
+import { SessionPrompt } from "../session/prompt";
+import { SessionCompaction } from "../session/compaction";
+import { lazy } from "../util/lazy";
+import { Todo } from "../session/todo";
+import { InstanceBootstrap } from "../project/bootstrap";
+import { MCP } from "../mcp";
+import { Storage } from "../storage/storage";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { SessionStatus } from "../session/status";
+import { websocket } from "hono/bun";
+import { errors } from "./error";
+import { Installation } from "../installation";
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
-globalThis.AI_SDK_LOG_WARNINGS = false
+globalThis.AI_SDK_LOG_WARNINGS = false;
 
 export namespace Server {
-  const log = Log.create({ service: "server" })
-  let _corsWhitelist: string[] = []
+  const log = Log.create({ service: "server" });
+  let _corsWhitelist: string[] = [];
 
   export const Event = {
     Connected: BusEvent.define("server.connected", z.object({})),
     Disposed: BusEvent.define("global.disposed", z.object({})),
-  }
+  };
 
-  const app = new Hono()
+  const app = new Hono();
   export const App = lazy(() =>
     app
       .onError((err, c) => {
         log.error("failed", {
           error: err,
-        })
+        });
         if (err instanceof NamedError) {
-          let status: ContentfulStatusCode
-          if (err instanceof Storage.NotFoundError) status = 404
-          else if (err instanceof Provider.ModelNotFoundError) status = 400
-          else status = 500
-          return c.json(err.toObject(), { status })
+          let status: ContentfulStatusCode;
+          if (err instanceof Storage.NotFoundError) status = 404;
+          else if (err instanceof Provider.ModelNotFoundError) status = 400;
+          else status = 500;
+          return c.json(err.toObject(), { status });
         }
-        const message = err instanceof Error && err.stack ? err.stack : err.toString()
+        const message = err instanceof Error && err.stack ? err.stack : err.toString();
         return c.json(new NamedError.Unknown({ message }).toObject(), {
           status: 500,
-        })
+        });
       })
       .use(async (c, next) => {
-        const skipLogging = c.req.path === "/log"
+        const skipLogging = c.req.path === "/log";
         if (!skipLogging) {
           log.info("request", {
             method: c.req.method,
             path: c.req.path,
-          })
+          });
         }
         const timer = log.time("request", {
           method: c.req.method,
           path: c.req.path,
-        })
-        await next()
+        });
+        await next();
         if (!skipLogging) {
-          timer.stop()
+          timer.stop();
         }
       })
       .use(
         cors({
           origin: (input) => {
             if (/^https:\/\/([a-z0-9-]+\.)*opencode\.ai$/.test(input)) {
-              return input
+              return input;
             }
             if (_corsWhitelist.includes(input)) {
-              return input
+              return input;
             }
-            return
+            return;
           },
         }),
       )
@@ -118,7 +118,7 @@ export namespace Server {
           },
         }),
         async (c) => {
-          return c.json({ healthy: true, version: Installation.VERSION })
+          return c.json({ healthy: true, version: Installation.VERSION });
         },
       )
       .get(
@@ -148,7 +148,7 @@ export namespace Server {
           },
         }),
         async (c) => {
-          log.info("global event connected")
+          log.info("global event connected");
           return streamSSE(c, async (stream) => {
             stream.writeSSE({
               data: JSON.stringify({
@@ -157,13 +157,13 @@ export namespace Server {
                   properties: {},
                 },
               }),
-            })
+            });
             async function handler(event: any) {
               await stream.writeSSE({
                 data: JSON.stringify(event),
-              })
+              });
             }
-            GlobalBus.on("event", handler)
+            GlobalBus.on("event", handler);
 
             // Send heartbeat every 30s to prevent WKWebView timeout (60s default)
             const heartbeat = setInterval(() => {
@@ -174,18 +174,18 @@ export namespace Server {
                     properties: {},
                   },
                 }),
-              })
-            }, 30000)
+              });
+            }, 30000);
 
             await new Promise<void>((resolve) => {
               stream.onAbort(() => {
-                clearInterval(heartbeat)
-                GlobalBus.off("event", handler)
-                resolve()
-                log.info("global event disconnected")
-              })
-            })
-          })
+                clearInterval(heartbeat);
+                GlobalBus.off("event", handler);
+                resolve();
+                log.info("global event disconnected");
+              });
+            });
+          });
         },
       )
       .post(
@@ -206,29 +206,29 @@ export namespace Server {
           },
         }),
         async (c) => {
-          await Instance.disposeAll()
+          await Instance.disposeAll();
           GlobalBus.emit("event", {
             directory: "global",
             payload: {
               type: Event.Disposed.type,
               properties: {},
             },
-          })
-          return c.json(true)
+          });
+          return c.json(true);
         },
       )
       .use(async (c, next) => {
-        const sandboxId = c.req.header("x-sandbox-id") || c.req.query("sandboxId")
-        const defaultDirectory = sandboxId ? "/home/user/workspace" : process.cwd()
-        const directory = c.req.query("directory") || c.req.header("x-opencode-directory") || defaultDirectory
+        const sandboxId = c.req.header("x-sandbox-id") || c.req.query("sandboxId");
+        const defaultDirectory = sandboxId ? "/home/user/workspace" : process.cwd();
+        const directory = c.req.query("directory") || c.req.header("x-opencode-directory") || defaultDirectory;
         return Instance.provide({
           directory,
           sandboxId: sandboxId || undefined,
           init: InstanceBootstrap,
           async fn() {
-            return next()
+            return next();
           },
-        })
+        });
       })
       .use(validator("query", z.object({ directory: z.string().optional(), sandboxId: z.string().optional() })))
 
@@ -252,7 +252,7 @@ export namespace Server {
           },
         }),
         async (c) => {
-          return c.json(await Config.get())
+          return c.json(await Config.get());
         },
       )
 
@@ -276,9 +276,9 @@ export namespace Server {
         }),
         validator("json", Config.Info),
         async (c) => {
-          const config = c.req.valid("json")
-          await Config.update(config)
-          return c.json(config)
+          const config = c.req.valid("json");
+          await Config.update(config);
+          return c.json(config);
         },
       )
       .get(
@@ -301,7 +301,7 @@ export namespace Server {
           },
         }),
         async (c) => {
-          return c.json(await ToolRegistry.ids())
+          return c.json(await ToolRegistry.ids());
         },
       )
       .get(
@@ -343,8 +343,8 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const { provider } = c.req.valid("query")
-          const tools = await ToolRegistry.tools(provider)
+          const { provider } = c.req.valid("query");
+          const tools = await ToolRegistry.tools(provider);
           return c.json(
             tools.map((t) => ({
               id: t.id,
@@ -352,7 +352,7 @@ export namespace Server {
               // Handle both Zod schemas and plain JSON schemas
               parameters: (t.parameters as any)?._def ? zodToJsonSchema(t.parameters as any) : t.parameters,
             })),
-          )
+          );
         },
       )
       .post(
@@ -373,8 +373,8 @@ export namespace Server {
           },
         }),
         async (c) => {
-          await Instance.dispose()
-          return c.json(true)
+          await Instance.dispose();
+          return c.json(true);
         },
       )
       .get(
@@ -411,7 +411,7 @@ export namespace Server {
             state: Global.Path.state,
             config: Global.Path.config,
             directory: Instance.directory,
-          })
+          });
         },
       )
       .get(
@@ -432,13 +432,13 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const sessions = await Array.fromAsync(Session.list())
+          const sessions = await Array.fromAsync(Session.list());
           pipe(
             await Array.fromAsync(Session.list()),
             filter((s) => !s.time.archived),
             sortBy((s) => s.time.updated),
-          )
-          return c.json(sessions)
+          );
+          return c.json(sessions);
         },
       )
       .get(
@@ -460,8 +460,8 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const result = SessionStatus.list()
-          return c.json(result)
+          const result = SessionStatus.list();
+          return c.json(result);
         },
       )
       .get(
@@ -490,10 +490,10 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const sessionID = c.req.valid("param").sessionID
-          log.info("SEARCH", { url: c.req.url })
-          const session = await Session.get(sessionID)
-          return c.json(session)
+          const sessionID = c.req.valid("param").sessionID;
+          log.info("SEARCH", { url: c.req.url });
+          const session = await Session.get(sessionID);
+          return c.json(session);
         },
       )
       .get(
@@ -522,9 +522,9 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const sessionID = c.req.valid("param").sessionID
-          const session = await Session.children(sessionID)
-          return c.json(session)
+          const sessionID = c.req.valid("param").sessionID;
+          const session = await Session.children(sessionID);
+          return c.json(session);
         },
       )
       .get(
@@ -552,9 +552,9 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const sessionID = c.req.valid("param").sessionID
-          const todos = await Todo.get(sessionID)
-          return c.json(todos)
+          const sessionID = c.req.valid("param").sessionID;
+          const todos = await Todo.get(sessionID);
+          return c.json(todos);
         },
       )
       .post(
@@ -577,9 +577,9 @@ export namespace Server {
         }),
         validator("json", Session.create.schema.optional()),
         async (c) => {
-          const body = c.req.valid("json") ?? {}
-          const session = await Session.create(body)
-          return c.json(session)
+          const body = c.req.valid("json") ?? {};
+          const session = await Session.create(body);
+          return c.json(session);
         },
       )
       .delete(
@@ -607,9 +607,9 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const sessionID = c.req.valid("param").sessionID
-          await Session.remove(sessionID)
-          return c.json(true)
+          const sessionID = c.req.valid("param").sessionID;
+          await Session.remove(sessionID);
+          return c.json(true);
         },
       )
       .patch(
@@ -648,17 +648,17 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const sessionID = c.req.valid("param").sessionID
-          const updates = c.req.valid("json")
+          const sessionID = c.req.valid("param").sessionID;
+          const updates = c.req.valid("json");
 
           const updatedSession = await Session.update(sessionID, (session) => {
             if (updates.title !== undefined) {
-              session.title = updates.title
+              session.title = updates.title;
             }
-            if (updates.time?.archived !== undefined) session.time.archived = updates.time.archived
-          })
+            if (updates.time?.archived !== undefined) session.time.archived = updates.time.archived;
+          });
 
-          return c.json(updatedSession)
+          return c.json(updatedSession);
         },
       )
       .post(
@@ -688,10 +688,10 @@ export namespace Server {
         ),
         validator("json", Session.initialize.schema.omit({ sessionID: true })),
         async (c) => {
-          const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
-          await Session.initialize({ ...body, sessionID })
-          return c.json(true)
+          const sessionID = c.req.valid("param").sessionID;
+          const body = c.req.valid("json");
+          await Session.initialize({ ...body, sessionID });
+          return c.json(true);
         },
       )
       .post(
@@ -719,10 +719,10 @@ export namespace Server {
         ),
         validator("json", Session.fork.schema.omit({ sessionID: true })),
         async (c) => {
-          const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
-          const result = await Session.fork({ ...body, sessionID })
-          return c.json(result)
+          const sessionID = c.req.valid("param").sessionID;
+          const body = c.req.valid("json");
+          const result = await Session.fork({ ...body, sessionID });
+          return c.json(result);
         },
       )
       .post(
@@ -750,8 +750,8 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          SessionPrompt.cancel(c.req.valid("param").sessionID)
-          return c.json(true)
+          SessionPrompt.cancel(c.req.valid("param").sessionID);
+          return c.json(true);
         },
       )
       .post(
@@ -787,15 +787,15 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
-          const msgs = await Session.messages({ sessionID })
-          let currentAgent = await Agent.defaultAgent()
+          const sessionID = c.req.valid("param").sessionID;
+          const body = c.req.valid("json");
+          const msgs = await Session.messages({ sessionID });
+          let currentAgent = await Agent.defaultAgent();
           for (let i = msgs.length - 1; i >= 0; i--) {
-            const info = msgs[i].info
+            const info = msgs[i].info;
             if (info.role === "user") {
-              currentAgent = info.agent || (await Agent.defaultAgent())
-              break
+              currentAgent = info.agent || (await Agent.defaultAgent());
+              break;
             }
           }
           await SessionCompaction.create({
@@ -806,9 +806,9 @@ export namespace Server {
               modelID: body.modelID,
             },
             auto: body.auto,
-          })
-          await SessionPrompt.loop(sessionID)
-          return c.json(true)
+          });
+          await SessionPrompt.loop(sessionID);
+          return c.json(true);
         },
       )
       .get(
@@ -842,12 +842,12 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const query = c.req.valid("query")
+          const query = c.req.valid("query");
           const messages = await Session.messages({
             sessionID: c.req.valid("param").sessionID,
             limit: query.limit,
-          })
-          return c.json(messages)
+          });
+          return c.json(messages);
         },
       )
       .get(
@@ -881,12 +881,12 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const params = c.req.valid("param")
+          const params = c.req.valid("param");
           const message = await MessageV2.get({
             sessionID: params.sessionID,
             messageID: params.messageID,
-          })
-          return c.json(message)
+          });
+          return c.json(message);
         },
       )
       .delete(
@@ -915,13 +915,13 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const params = c.req.valid("param")
+          const params = c.req.valid("param");
           await Session.removePart({
             sessionID: params.sessionID,
             messageID: params.messageID,
             partID: params.partID,
-          })
-          return c.json(true)
+          });
+          return c.json(true);
         },
       )
       .patch(
@@ -951,15 +951,15 @@ export namespace Server {
         ),
         validator("json", MessageV2.Part),
         async (c) => {
-          const params = c.req.valid("param")
-          const body = c.req.valid("json")
+          const params = c.req.valid("param");
+          const body = c.req.valid("json");
           if (body.id !== params.partID || body.messageID !== params.messageID || body.sessionID !== params.sessionID) {
             throw new Error(
               `Part mismatch: body.id='${body.id}' vs partID='${params.partID}', body.messageID='${body.messageID}' vs messageID='${params.messageID}', body.sessionID='${body.sessionID}' vs sessionID='${params.sessionID}'`,
-            )
+            );
           }
-          const part = await Session.updatePart(body)
-          return c.json(part)
+          const part = await Session.updatePart(body);
+          return c.json(part);
         },
       )
       .post(
@@ -993,14 +993,14 @@ export namespace Server {
         ),
         validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
         async (c) => {
-          c.status(200)
-          c.header("Content-Type", "application/json")
+          c.status(200);
+          c.header("Content-Type", "application/json");
           return stream(c, async (stream) => {
-            const sessionID = c.req.valid("param").sessionID
-            const body = c.req.valid("json")
-            const msg = await SessionPrompt.prompt({ ...body, sessionID })
-            stream.write(JSON.stringify(msg))
-          })
+            const sessionID = c.req.valid("param").sessionID;
+            const body = c.req.valid("json");
+            const msg = await SessionPrompt.prompt({ ...body, sessionID });
+            stream.write(JSON.stringify(msg));
+          });
         },
       )
       .post(
@@ -1025,13 +1025,13 @@ export namespace Server {
         ),
         validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
         async (c) => {
-          c.status(204)
-          c.header("Content-Type", "application/json")
+          c.status(204);
+          c.header("Content-Type", "application/json");
           return stream(c, async () => {
-            const sessionID = c.req.valid("param").sessionID
-            const body = c.req.valid("json")
-            SessionPrompt.prompt({ ...body, sessionID })
-          })
+            const sessionID = c.req.valid("param").sessionID;
+            const body = c.req.valid("json");
+            SessionPrompt.prompt({ ...body, sessionID });
+          });
         },
       )
       .post(
@@ -1065,10 +1065,10 @@ export namespace Server {
         ),
         validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
         async (c) => {
-          const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
-          const msg = await SessionPrompt.command({ ...body, sessionID })
-          return c.json(msg)
+          const sessionID = c.req.valid("param").sessionID;
+          const body = c.req.valid("json");
+          const msg = await SessionPrompt.command({ ...body, sessionID });
+          return c.json(msg);
         },
       )
       .post(
@@ -1097,10 +1097,10 @@ export namespace Server {
         ),
         validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
         async (c) => {
-          const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
-          const msg = await SessionPrompt.shell({ ...body, sessionID })
-          return c.json(msg)
+          const sessionID = c.req.valid("param").sessionID;
+          const body = c.req.valid("json");
+          const msg = await SessionPrompt.shell({ ...body, sessionID });
+          return c.json(msg);
         },
       )
       .post(
@@ -1130,15 +1130,15 @@ export namespace Server {
         ),
         validator("json", z.object({ response: Permission.Response })),
         async (c) => {
-          const params = c.req.valid("param")
-          const sessionID = params.sessionID
-          const permissionID = params.permissionID
+          const params = c.req.valid("param");
+          const sessionID = params.sessionID;
+          const permissionID = params.permissionID;
           Permission.respond({
             sessionID,
             permissionID,
             response: c.req.valid("json").response,
-          })
-          return c.json(true)
+          });
+          return c.json(true);
         },
       )
       .get(
@@ -1159,8 +1159,8 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const permissions = Permission.list()
-          return c.json(permissions)
+          const permissions = Permission.list();
+          return c.json(permissions);
         },
       )
       .get(
@@ -1181,8 +1181,8 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const commands = await Command.list()
-          return c.json(commands)
+          const commands = await Command.list();
+          return c.json(commands);
         },
       )
       .get(
@@ -1208,12 +1208,12 @@ export namespace Server {
           },
         }),
         async (c) => {
-          using _ = log.time("providers")
-          const providers = await Provider.list().then((x) => mapValues(x, (item) => item))
+          using _ = log.time("providers");
+          const providers = await Provider.list().then((x) => mapValues(x, (item) => item));
           return c.json({
             providers: Object.values(providers),
             default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0].id),
-          })
+          });
         },
       )
       .get(
@@ -1240,28 +1240,28 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const config = await Config.get()
-          const disabled = new Set(config.disabled_providers ?? [])
-          const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
+          const config = await Config.get();
+          const disabled = new Set(config.disabled_providers ?? []);
+          const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined;
 
-          const allProviders = await ModelsDev.get()
-          const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
+          const allProviders = await ModelsDev.get();
+          const filteredProviders: Record<string, (typeof allProviders)[string]> = {};
           for (const [key, value] of Object.entries(allProviders)) {
             if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) {
-              filteredProviders[key] = value
+              filteredProviders[key] = value;
             }
           }
 
-          const connected = await Provider.list()
+          const connected = await Provider.list();
           const providers = Object.assign(
             mapValues(filteredProviders, (x) => Provider.fromModelsDevProvider(x)),
             connected,
-          )
+          );
           return c.json({
             all: Object.values(providers),
             default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0].id),
             connected: Object.keys(connected),
-          })
+          });
         },
       )
       .get(
@@ -1288,13 +1288,13 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const pattern = c.req.valid("query").pattern
+          const pattern = c.req.valid("query").pattern;
           const result = await Ripgrep.search({
             cwd: Instance.directory,
             pattern,
             limit: 10,
-          })
-          return c.json(result)
+          });
+          return c.json(result);
         },
       )
       .get(
@@ -1322,14 +1322,14 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const query = c.req.valid("query").query
-          const dirs = c.req.valid("query").dirs
+          const query = c.req.valid("query").query;
+          const dirs = c.req.valid("query").dirs;
           const results = await File.search({
             query,
             limit: 10,
             dirs: dirs !== "false",
-          })
-          return c.json(results)
+          });
+          return c.json(results);
         },
       )
       .get(
@@ -1356,9 +1356,9 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const path = c.req.valid("query").path
-          const content = await File.list(path)
-          return c.json(content)
+          const path = c.req.valid("query").path;
+          const content = await File.list(path);
+          return c.json(content);
         },
       )
       .get(
@@ -1385,9 +1385,9 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const path = c.req.valid("query").path
-          const content = await File.read(path)
-          return c.json(content)
+          const path = c.req.valid("query").path;
+          const content = await File.read(path);
+          return c.json(content);
         },
       )
       .get(
@@ -1408,8 +1408,8 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const content = await File.status()
-          return c.json(content)
+          const content = await File.status();
+          return c.json(content);
         },
       )
       .post(
@@ -1443,25 +1443,25 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const { service, level, message, extra } = c.req.valid("json")
-          const logger = Log.create({ service })
+          const { service, level, message, extra } = c.req.valid("json");
+          const logger = Log.create({ service });
 
           switch (level) {
             case "debug":
-              logger.debug(message, extra)
-              break
+              logger.debug(message, extra);
+              break;
             case "info":
-              logger.info(message, extra)
-              break
+              logger.info(message, extra);
+              break;
             case "error":
-              logger.error(message, extra)
-              break
+              logger.error(message, extra);
+              break;
             case "warn":
-              logger.warn(message, extra)
-              break
+              logger.warn(message, extra);
+              break;
           }
 
-          return c.json(true)
+          return c.json(true);
         },
       )
       .get(
@@ -1482,8 +1482,8 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const modes = await Agent.list()
-          return c.json(modes)
+          const modes = await Agent.list();
+          return c.json(modes);
         },
       )
       .get(
@@ -1504,7 +1504,7 @@ export namespace Server {
           },
         }),
         async (c) => {
-          return c.json(await MCP.status())
+          return c.json(await MCP.status());
         },
       )
       .post(
@@ -1533,9 +1533,9 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const { name, config } = c.req.valid("json")
-          const result = await MCP.add(name, config)
-          return c.json(result.status)
+          const { name, config } = c.req.valid("json");
+          const result = await MCP.add(name, config);
+          return c.json(result.status);
         },
       )
       .post(
@@ -1561,13 +1561,13 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const name = c.req.param("name")
-          const supportsOAuth = await MCP.supportsOAuth(name)
+          const name = c.req.param("name");
+          const supportsOAuth = await MCP.supportsOAuth(name);
           if (!supportsOAuth) {
-            return c.json({ error: `MCP server ${name} does not support OAuth` }, 400)
+            return c.json({ error: `MCP server ${name} does not support OAuth` }, 400);
           }
-          const result = await MCP.startAuth(name)
-          return c.json(result)
+          const result = await MCP.startAuth(name);
+          return c.json(result);
         },
       )
       .post(
@@ -1596,10 +1596,10 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const name = c.req.param("name")
-          const { code } = c.req.valid("json")
-          const status = await MCP.finishAuth(name, code)
-          return c.json(status)
+          const name = c.req.param("name");
+          const { code } = c.req.valid("json");
+          const status = await MCP.finishAuth(name, code);
+          return c.json(status);
         },
       )
       .post(
@@ -1621,13 +1621,13 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const name = c.req.param("name")
-          const supportsOAuth = await MCP.supportsOAuth(name)
+          const name = c.req.param("name");
+          const supportsOAuth = await MCP.supportsOAuth(name);
           if (!supportsOAuth) {
-            return c.json({ error: `MCP server ${name} does not support OAuth` }, 400)
+            return c.json({ error: `MCP server ${name} does not support OAuth` }, 400);
           }
-          const status = await MCP.authenticate(name)
-          return c.json(status)
+          const status = await MCP.authenticate(name);
+          return c.json(status);
         },
       )
       .delete(
@@ -1649,9 +1649,9 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const name = c.req.param("name")
-          await MCP.removeAuth(name)
-          return c.json({ success: true as const })
+          const name = c.req.param("name");
+          await MCP.removeAuth(name);
+          return c.json({ success: true as const });
         },
       )
       .post(
@@ -1672,9 +1672,9 @@ export namespace Server {
         }),
         validator("param", z.object({ name: z.string() })),
         async (c) => {
-          const { name } = c.req.valid("param")
-          await MCP.connect(name)
-          return c.json(true)
+          const { name } = c.req.valid("param");
+          await MCP.connect(name);
+          return c.json(true);
         },
       )
       .post(
@@ -1695,9 +1695,9 @@ export namespace Server {
         }),
         validator("param", z.object({ name: z.string() })),
         async (c) => {
-          const { name } = c.req.valid("param")
-          await MCP.disconnect(name)
-          return c.json(true)
+          const { name } = c.req.valid("param");
+          await MCP.disconnect(name);
+          return c.json(true);
         },
       )
       .put(
@@ -1726,10 +1726,10 @@ export namespace Server {
         ),
         validator("json", Auth.Info),
         async (c) => {
-          const providerID = c.req.valid("param").providerID
-          const info = c.req.valid("json")
-          await Auth.set(providerID, info)
-          return c.json(true)
+          const providerID = c.req.valid("param").providerID;
+          const info = c.req.valid("json");
+          await Auth.set(providerID, info);
+          return c.json(true);
         },
       )
       .get(
@@ -1750,22 +1750,22 @@ export namespace Server {
           },
         }),
         async (c) => {
-          log.info("event connected")
+          log.info("event connected");
           return streamSSE(c, async (stream) => {
             stream.writeSSE({
               data: JSON.stringify({
                 type: "server.connected",
                 properties: {},
               }),
-            })
+            });
             const unsub = Bus.subscribeAll(async (event) => {
               await stream.writeSSE({
                 data: JSON.stringify(event),
-              })
+              });
               if (event.type === Bus.InstanceDisposed.type) {
-                stream.close()
+                stream.close();
               }
-            })
+            });
 
             // Send heartbeat every 30s to prevent WKWebView timeout (60s default)
             const heartbeat = setInterval(() => {
@@ -1774,18 +1774,18 @@ export namespace Server {
                   type: "server.heartbeat",
                   properties: {},
                 }),
-              })
-            }, 30000)
+              });
+            }, 30000);
 
             await new Promise<void>((resolve) => {
               stream.onAbort(() => {
-                clearInterval(heartbeat)
-                unsub()
-                resolve()
-                log.info("event disconnected")
-              })
-            })
-          })
+                clearInterval(heartbeat);
+                unsub();
+                resolve();
+                log.info("event disconnected");
+              });
+            });
+          });
         },
       )
       .all("/*", async (c) => {
@@ -1794,25 +1794,25 @@ export namespace Server {
           headers: {
             host: "app.opencode.ai",
           },
-        })
+        });
       }),
-  )
+  );
 
   export function listen(opts: { port: number; hostname: string; cors?: string[] }) {
-    _corsWhitelist = opts.cors ?? []
+    _corsWhitelist = opts.cors ?? [];
     const args = {
       hostname: opts.hostname,
       idleTimeout: 0,
       fetch: App().fetch,
       websocket: websocket,
-    } as const
+    } as const;
     if (opts.port === 0) {
       try {
-        return Bun.serve({ ...args, port: 4096 })
+        return Bun.serve({ ...args, port: 4096 });
       } catch {
         // port 4096 not available, fall through to use port 0
       }
     }
-    return Bun.serve({ ...args, port: opts.port })
+    return Bun.serve({ ...args, port: opts.port });
   }
 }

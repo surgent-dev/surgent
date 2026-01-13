@@ -17,5 +17,3 @@ export async function requireAdmin(c: Context<AppContext>, next: Next) {
 
   return next();
 }
-
-

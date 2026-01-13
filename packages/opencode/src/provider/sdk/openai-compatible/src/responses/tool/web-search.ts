@@ -1,5 +1,5 @@
-import { createProviderDefinedToolFactory } from "@ai-sdk/provider-utils"
-import { z } from "zod/v4"
+import { createProviderDefinedToolFactory } from "@ai-sdk/provider-utils";
+import { z } from "zod/v4";
 
 export const webSearchArgsSchema = z.object({
   filters: z
@@ -19,7 +19,7 @@ export const webSearchArgsSchema = z.object({
       timezone: z.string().optional(),
     })
     .optional(),
-})
+});
 
 export const webSearchToolFactory = createProviderDefinedToolFactory<
   {
@@ -35,8 +35,8 @@ export const webSearchToolFactory = createProviderDefinedToolFactory<
        * If not provided, all domains are allowed.
        * Subdomains of the provided domains are allowed as well.
        */
-      allowedDomains?: string[]
-    }
+      allowedDomains?: string[];
+    };
 
     /**
      * Search context size to use for the web search.
@@ -44,7 +44,7 @@ export const webSearchToolFactory = createProviderDefinedToolFactory<
      * - medium: Balanced context, cost, and latency (default)
      * - low: Least context, lowest cost, fastest response
      */
-    searchContextSize?: "low" | "medium" | "high"
+    searchContextSize?: "low" | "medium" | "high";
 
     /**
      * User location information to provide geographically relevant search results.
@@ -53,24 +53,24 @@ export const webSearchToolFactory = createProviderDefinedToolFactory<
       /**
        * Type of location (always 'approximate')
        */
-      type: "approximate"
+      type: "approximate";
       /**
        * Two-letter ISO country code (e.g., 'US', 'GB')
        */
-      country?: string
+      country?: string;
       /**
        * City name (free text, e.g., 'Minneapolis')
        */
-      city?: string
+      city?: string;
       /**
        * Region name (free text, e.g., 'Minnesota')
        */
-      region?: string
+      region?: string;
       /**
        * IANA timezone (e.g., 'America/Chicago')
        */
-      timezone?: string
-    }
+      timezone?: string;
+    };
   }
 >({
   id: "openai.web_search",
@@ -94,10 +94,10 @@ export const webSearchToolFactory = createProviderDefinedToolFactory<
       ])
       .nullish(),
   }),
-})
+});
 
 export const webSearch = (
   args: Parameters<typeof webSearchToolFactory>[0] = {}, // default
 ) => {
-  return webSearchToolFactory(args)
-}
+  return webSearchToolFactory(args);
+};

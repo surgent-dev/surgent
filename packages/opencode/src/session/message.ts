@@ -1,15 +1,15 @@
-import z from "zod"
-import { NamedError } from "@opencode-ai/util/error"
+import z from "zod";
+import { NamedError } from "@opencode-ai/util/error";
 
 export namespace Message {
-  export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
+  export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}));
   export const AuthError = NamedError.create(
     "ProviderAuthError",
     z.object({
       providerID: z.string(),
       message: z.string(),
     }),
-  )
+  );
 
   export const ToolCall = z
     .object({
@@ -21,8 +21,8 @@ export namespace Message {
     })
     .meta({
       ref: "ToolCall",
-    })
-  export type ToolCall = z.infer<typeof ToolCall>
+    });
+  export type ToolCall = z.infer<typeof ToolCall>;
 
   export const ToolPartialCall = z
     .object({
@@ -34,8 +34,8 @@ export namespace Message {
     })
     .meta({
       ref: "ToolPartialCall",
-    })
-  export type ToolPartialCall = z.infer<typeof ToolPartialCall>
+    });
+  export type ToolPartialCall = z.infer<typeof ToolPartialCall>;
 
   export const ToolResult = z
     .object({
@@ -48,13 +48,13 @@ export namespace Message {
     })
     .meta({
       ref: "ToolResult",
-    })
-  export type ToolResult = z.infer<typeof ToolResult>
+    });
+  export type ToolResult = z.infer<typeof ToolResult>;
 
   export const ToolInvocation = z.discriminatedUnion("state", [ToolCall, ToolPartialCall, ToolResult]).meta({
     ref: "ToolInvocation",
-  })
-  export type ToolInvocation = z.infer<typeof ToolInvocation>
+  });
+  export type ToolInvocation = z.infer<typeof ToolInvocation>;
 
   export const TextPart = z
     .object({
@@ -63,8 +63,8 @@ export namespace Message {
     })
     .meta({
       ref: "TextPart",
-    })
-  export type TextPart = z.infer<typeof TextPart>
+    });
+  export type TextPart = z.infer<typeof TextPart>;
 
   export const ReasoningPart = z
     .object({
@@ -74,8 +74,8 @@ export namespace Message {
     })
     .meta({
       ref: "ReasoningPart",
-    })
-  export type ReasoningPart = z.infer<typeof ReasoningPart>
+    });
+  export type ReasoningPart = z.infer<typeof ReasoningPart>;
 
   export const ToolInvocationPart = z
     .object({
@@ -84,8 +84,8 @@ export namespace Message {
     })
     .meta({
       ref: "ToolInvocationPart",
-    })
-  export type ToolInvocationPart = z.infer<typeof ToolInvocationPart>
+    });
+  export type ToolInvocationPart = z.infer<typeof ToolInvocationPart>;
 
   export const SourceUrlPart = z
     .object({
@@ -97,8 +97,8 @@ export namespace Message {
     })
     .meta({
       ref: "SourceUrlPart",
-    })
-  export type SourceUrlPart = z.infer<typeof SourceUrlPart>
+    });
+  export type SourceUrlPart = z.infer<typeof SourceUrlPart>;
 
   export const FilePart = z
     .object({
@@ -109,8 +109,8 @@ export namespace Message {
     })
     .meta({
       ref: "FilePart",
-    })
-  export type FilePart = z.infer<typeof FilePart>
+    });
+  export type FilePart = z.infer<typeof FilePart>;
 
   export const StepStartPart = z
     .object({
@@ -118,15 +118,15 @@ export namespace Message {
     })
     .meta({
       ref: "StepStartPart",
-    })
-  export type StepStartPart = z.infer<typeof StepStartPart>
+    });
+  export type StepStartPart = z.infer<typeof StepStartPart>;
 
   export const MessagePart = z
     .discriminatedUnion("type", [TextPart, ReasoningPart, ToolInvocationPart, SourceUrlPart, FilePart, StepStartPart])
     .meta({
       ref: "MessagePart",
-    })
-  export type MessagePart = z.infer<typeof MessagePart>
+    });
+  export type MessagePart = z.infer<typeof MessagePart>;
 
   export const Info = z
     .object({
@@ -143,16 +143,16 @@ export namespace Message {
             .discriminatedUnion("name", [AuthError.Schema, NamedError.Unknown.Schema, OutputLengthError.Schema])
             .optional(),
           sessionID: z.string(),
-      tool: z.record(
-        z.string(),
-        z
-          .object({
-            title: z.string(),
-            time: z.object({
-              start: z.number(),
-              end: z.number(),
-            }),
-          })
+          tool: z.record(
+            z.string(),
+            z
+              .object({
+                title: z.string(),
+                time: z.object({
+                  start: z.number(),
+                  end: z.number(),
+                }),
+              })
               .catchall(z.any()),
           ),
           assistant: z
@@ -182,6 +182,6 @@ export namespace Message {
     })
     .meta({
       ref: "Message",
-    })
-  export type Info = z.infer<typeof Info>
+    });
+  export type Info = z.infer<typeof Info>;
 }

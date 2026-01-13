@@ -3,7 +3,20 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import { ArrowLeft, Users, Rocket, CreditCard, Pencil, ExternalLink, Download, Loader2, AlertTriangle, X, DollarSign, Github } from "lucide-react";
+import {
+  ArrowLeft,
+  Users,
+  Rocket,
+  CreditCard,
+  Pencil,
+  ExternalLink,
+  Download,
+  Loader2,
+  AlertTriangle,
+  X,
+  DollarSign,
+  Github,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -85,30 +98,33 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       {
         onSuccess: () => setIsEditing(false),
         onError: () => toast.error("Failed to rename"),
-      }
+      },
     );
   };
 
-  const handleConfirmDeploy = useCallback(async (name: string) => {
-    if (!projectId || isDeploying) return;
-    setIsDeploying(true);
-    try {
-      await deployProject.mutateAsync({ id: projectId, deployName: name });
-      setIsDialogOpen(false);
-      toast.success("Deployment started!");
-    } catch {
-      toast.error("Failed to start deployment");
-    }
-    setIsDeploying(false);
-  }, [deployProject, isDeploying, projectId]);
+  const handleConfirmDeploy = useCallback(
+    async (name: string) => {
+      if (!projectId || isDeploying) return;
+      setIsDeploying(true);
+      try {
+        await deployProject.mutateAsync({ id: projectId, deployName: name });
+        setIsDialogOpen(false);
+        toast.success("Deployment started!");
+      } catch {
+        toast.error("Failed to start deployment");
+      }
+      setIsDeploying(false);
+    },
+    [deployProject, isDeploying, projectId],
+  );
 
   const handlePublishClick = useCallback(async () => {
     if (!projectId || isCheckingAccess) return;
-    
+
     setIsCheckingAccess(true);
     try {
       const { data } = check({ featureId: "publish_your_app" });
-      
+
       if (data?.allowed) {
         setIsDialogOpen(true);
       } else {
@@ -127,19 +143,19 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     try {
       const response = await http.get(`api/projects/${projectId}/download`, { timeout: 120000 });
       const blob = await response.blob();
-      
-      const disposition = response.headers.get('Content-Disposition');
+
+      const disposition = response.headers.get("Content-Disposition");
       const match = disposition?.match(/filename="(.+)"/);
-      const filename = match?.[1] || `${project?.name || 'project'}.tar.gz`;
-      
+      const filename = match?.[1] || `${project?.name || "project"}.tar.gz`;
+
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
       link.download = filename;
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Download failed:', err);
+      console.error("Download failed:", err);
       toast.error("Download failed");
     } finally {
       setDownloading(false);
@@ -148,9 +164,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
   const handleDownloadClick = useCallback(() => {
     if (downloading || !projectId) return;
-    
+
     try {
-      const { data } = check({ featureId: 'download_code' });
+      const { data } = check({ featureId: "download_code" });
       if (data?.allowed) {
         performDownload();
       } else {
@@ -171,7 +187,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const status = deployment?.status ?? "";
   const isInProgress = ["queued", "starting", "building", "uploading"].includes(status);
   const isFailed = status.includes("failed");
-  const errorMsg = isFailed ? (deployment?.error || status) : null;
+  const errorMsg = isFailed ? deployment?.error || status : null;
 
   return (
     <>
@@ -181,7 +197,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           <div className="flex items-center gap-3 text-sm">
             <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
             <span className="text-foreground">
-              <span className="font-medium">Heads up!</span> Projects may be deleted after inactivity. Download your code to keep it safe.
+              <span className="font-medium">Heads up!</span> Projects may be deleted after inactivity. Download your
+              code to keep it safe.
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -192,7 +209,11 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               disabled={downloading}
               className="h-7 text-xs text-warning hover:bg-warning/20"
             >
-              {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
+              {downloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              ) : (
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+              )}
               Download now
             </Button>
             <button
@@ -208,12 +229,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       <header className="h-12 flex items-center justify-between px-4 bg-background border-b shrink-0">
         {/* Left side */}
         <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => router.push("/dashboard")}
-          >
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.push("/dashboard")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
 
@@ -244,7 +260,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         <div className="flex items-center gap-2">
           {status && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className={`h-2 w-2 rounded-full ${status === "deployed" ? "bg-success" : isFailed ? "bg-danger" : "bg-warning animate-pulse"}`} />
+              <span
+                className={`h-2 w-2 rounded-full ${status === "deployed" ? "bg-success" : isFailed ? "bg-danger" : "bg-warning animate-pulse"}`}
+              />
               {status === "deployed" ? "Live" : isFailed ? "Failed" : isInProgress ? "Deploying" : null}
             </div>
           )}
@@ -260,17 +278,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDownloadClick}
-                disabled={!projectId || downloading}
-              >
-                {downloading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
+              <Button variant="outline" size="sm" onClick={handleDownloadClick} disabled={!projectId || downloading}>
+                {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 {downloading ? "Preparing..." : "Download Code"}
               </Button>
             </TooltipTrigger>
@@ -308,7 +317,13 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 disabled={!projectId || isDeploying || isInProgress || isCheckingAccess}
               >
                 <Rocket className="h-4 w-4" />
-                {isCheckingAccess ? "Checking..." : isInProgress ? "Publishing..." : status === "deployed" ? "Republish" : "Publish"}
+                {isCheckingAccess
+                  ? "Checking..."
+                  : isInProgress
+                    ? "Publishing..."
+                    : status === "deployed"
+                      ? "Republish"
+                      : "Publish"}
               </Button>
             </TooltipTrigger>
             {errorMsg && <TooltipContent>{errorMsg}</TooltipContent>}
@@ -316,10 +331,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="h-8 w-8 rounded-full p-0"
-              >
+              <Button variant="ghost" className="h-8 w-8 rounded-full p-0">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={user?.image} alt={user?.name || user?.email} />
                   <AvatarFallback className="bg-brand text-brand-foreground text-sm font-medium">
@@ -331,9 +343,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="py-3">
                 <div className="flex flex-col space-y-1">
-                  <span className="font-medium text-base">
-                    {user?.name || user?.email}
-                  </span>
+                  <span className="font-medium text-base">{user?.name || user?.email}</span>
                   {customer && (
                     <span className="text-xs rounded-full bg-muted px-2 py-0.5 w-fit text-brand font-semibold mt-1">
                       {customer.products[0]?.name || "Free"} Plan
@@ -347,9 +357,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 Billing & Plans
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut}>
-                Sign out
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -363,23 +371,11 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         isSubmitting={isDeploying}
       />
 
-      <PaywallDialog
-        open={isPaywallOpen}
-        setOpen={setIsPaywallOpen}
-        featureId="publish_your_app"
-      />
+      <PaywallDialog open={isPaywallOpen} setOpen={setIsPaywallOpen} featureId="publish_your_app" />
 
-      <PaywallDialog
-        open={isDownloadPaywallOpen}
-        setOpen={setIsDownloadPaywallOpen}
-        featureId="download_code"
-      />
+      <PaywallDialog open={isDownloadPaywallOpen} setOpen={setIsDownloadPaywallOpen} featureId="download_code" />
 
-      <GitHubDialog
-        open={isGitHubDialogOpen}
-        onOpenChange={setIsGitHubDialogOpen}
-        projectId={projectId}
-      />
+      <GitHubDialog open={isGitHubDialogOpen} onOpenChange={setIsGitHubDialogOpen} projectId={projectId} />
     </>
   );
 }

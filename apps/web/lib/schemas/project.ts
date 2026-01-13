@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from "zod";
 
 export const ProjectSandboxSchema = z
   .object({
@@ -8,7 +8,7 @@ export const ProjectSandboxSchema = z
     isInitialized: z.boolean().optional(),
     deployed: z.boolean().optional(),
   })
-  .nullable()
+  .nullable();
 
 export const ProjectSchema = z.object({
   id: z.string(),
@@ -21,11 +21,10 @@ export const ProjectSchema = z.object({
   metadata: z.any().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
-})
+});
 
-export const ProjectsSchema = z.array(ProjectSchema)
+export const ProjectsSchema = z.array(ProjectSchema);
 
-export const CreateProjectResponseSchema = z.object({ id: z.string() })
+export const CreateProjectResponseSchema = z.object({ id: z.string() });
 
-export type Project = z.infer<typeof ProjectSchema>
-
+export type Project = z.infer<typeof ProjectSchema>;

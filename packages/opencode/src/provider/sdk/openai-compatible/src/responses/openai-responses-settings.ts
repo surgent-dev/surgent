@@ -1,1 +1,1 @@
-export type OpenAIResponsesModelId = string
+export type OpenAIResponsesModelId = string;

@@ -1,5 +1,5 @@
-import z from "zod"
-import { Tool } from "./tool"
+import z from "zod";
+import { Tool } from "./tool";
 
 export const InvalidTool = Tool.define("invalid", {
   description: "Do not use",
@@ -12,6 +12,6 @@ export const InvalidTool = Tool.define("invalid", {
       title: "Invalid Tool",
       output: `The arguments provided to the tool are invalid: ${params.error}`,
       metadata: {},
-    }
+    };
   },
-})
+});

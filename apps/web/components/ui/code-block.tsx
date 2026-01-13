@@ -30,13 +30,7 @@ export type CodeBlockCodeProps = {
   className?: string;
 } & React.HTMLProps<HTMLDivElement>;
 
-function CodeBlockCode({
-  code,
-  language = "tsx",
-  className,
-  style,
-  ...props
-}: CodeBlockCodeProps) {
+function CodeBlockCode({ code, language = "tsx", className, style, ...props }: CodeBlockCodeProps) {
   return (
     <div
       className={cn(

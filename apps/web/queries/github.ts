@@ -28,21 +28,15 @@ async function fetchGitHubStatus(projectId: string): Promise<GitHubStatus> {
   return http.get(`api/projects/${projectId}/github/status`).json();
 }
 
-async function fetchGitHubInstallUrl(
-  projectId: string,
-): Promise<{ url: string }> {
+async function fetchGitHubInstallUrl(projectId: string): Promise<{ url: string }> {
   return http.get(`api/projects/${projectId}/github/install-url`).json();
 }
 
-async function disconnectGitHubRepo(
-  projectId: string,
-): Promise<{ disconnected: boolean }> {
+async function disconnectGitHubRepo(projectId: string): Promise<{ disconnected: boolean }> {
   return http.post(`api/projects/${projectId}/github/disconnect`).json();
 }
 
-async function pushToGitHub(
-  projectId: string,
-): Promise<{ success: boolean; sha?: string; error?: string }> {
+async function pushToGitHub(projectId: string): Promise<{ success: boolean; sha?: string; error?: string }> {
   return http.post(`api/projects/${projectId}/github/push`).json();
 }
 
@@ -65,17 +59,11 @@ async function createGitHubRepo(
   };
   error?: string;
 }> {
-  return http
-    .post(`api/projects/${projectId}/github/create-repo`, { json: data })
-    .json();
+  return http.post(`api/projects/${projectId}/github/create-repo`, { json: data }).json();
 }
 
-
 // Hooks
-export function useGitHubStatus(
-  projectId?: string,
-  options?: { enabled?: boolean },
-) {
+export function useGitHubStatus(projectId?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["github-status", projectId],
     queryFn: () => fetchGitHubStatus(projectId!),
@@ -84,10 +72,7 @@ export function useGitHubStatus(
   });
 }
 
-export function useGitHubInstallUrl(
-  projectId?: string,
-  options?: { enabled?: boolean },
-) {
+export function useGitHubInstallUrl(projectId?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["github-install-url", projectId],
     queryFn: () => fetchGitHubInstallUrl(projectId!),

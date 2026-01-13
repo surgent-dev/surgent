@@ -1,15 +1,15 @@
 export type WorkerBinding = {
-  fetch(request: Request): Promise<Response>
-}
+  fetch(request: Request): Promise<Response>;
+};
 
 export type DispatchNamespace = {
-  get(name: string): WorkerBinding
-}
+  get(name: string): WorkerBinding;
+};
 
 export type Bindings = {
-  dispatcher?: DispatchNamespace
-}
+  dispatcher?: DispatchNamespace;
+};
 
 export type AppContext = {
-  Bindings: Bindings
-}
+  Bindings: Bindings;
+};

@@ -1,21 +1,21 @@
-import { BusEvent } from "../bus/bus-event"
-import { Bus } from "../bus"
-import z from "zod"
-import { Log } from "../util/log"
-import { Identifier } from "../id/id"
-import { Instance } from "../project/instance"
-import { Wildcard } from "../util/wildcard"
+import { BusEvent } from "../bus/bus-event";
+import { Bus } from "../bus";
+import z from "zod";
+import { Log } from "../util/log";
+import { Identifier } from "../id/id";
+import { Instance } from "../project/instance";
+import { Wildcard } from "../util/wildcard";
 
 export namespace Permission {
-  const log = Log.create({ service: "permission" })
+  const log = Log.create({ service: "permission" });
 
   function toKeys(pattern: Info["pattern"], type: string): string[] {
-    return pattern === undefined ? [type] : Array.isArray(pattern) ? pattern : [pattern]
+    return pattern === undefined ? [type] : Array.isArray(pattern) ? pattern : [pattern];
   }
 
   function covered(keys: string[], approved: Record<string, boolean>): boolean {
-    const pats = Object.keys(approved)
-    return keys.every((k) => pats.some((p) => Wildcard.match(k, p)))
+    const pats = Object.keys(approved);
+    return keys.every((k) => pats.some((p) => Wildcard.match(k, p)));
   }
 
   export const Info = z
@@ -34,8 +34,8 @@ export namespace Permission {
     })
     .meta({
       ref: "Permission",
-    })
-  export type Info = z.infer<typeof Info>
+    });
+  export type Info = z.infer<typeof Info>;
 
   export const Event = {
     Updated: BusEvent.define("permission.updated", Info),
@@ -47,74 +47,74 @@ export namespace Permission {
         response: z.string(),
       }),
     ),
-  }
+  };
 
   const state = Instance.state(
     () => {
       const pending: {
         [sessionID: string]: {
           [permissionID: string]: {
-            info: Info
-            resolve: () => void
-            reject: (e: any) => void
-          }
-        }
-      } = {}
+            info: Info;
+            resolve: () => void;
+            reject: (e: any) => void;
+          };
+        };
+      } = {};
 
       const approved: {
         [sessionID: string]: {
-          [permissionID: string]: boolean
-        }
-      } = {}
+          [permissionID: string]: boolean;
+        };
+      } = {};
 
       return {
         pending,
         approved,
-      }
+      };
     },
     async (state) => {
       for (const pending of Object.values(state.pending)) {
         for (const item of Object.values(pending)) {
-          item.reject(new RejectedError(item.info.sessionID, item.info.id, item.info.callID, item.info.metadata))
+          item.reject(new RejectedError(item.info.sessionID, item.info.id, item.info.callID, item.info.metadata));
         }
       }
     },
-  )
+  );
 
   export function pending() {
-    return state().pending
+    return state().pending;
   }
 
   export function list() {
-    const { pending } = state()
-    const result: Info[] = []
+    const { pending } = state();
+    const result: Info[] = [];
     for (const items of Object.values(pending)) {
       for (const item of Object.values(items)) {
-        result.push(item.info)
+        result.push(item.info);
       }
     }
-    return result.sort((a, b) => a.id.localeCompare(b.id))
+    return result.sort((a, b) => a.id.localeCompare(b.id));
   }
 
   export async function ask(input: {
-    type: Info["type"]
-    title: Info["title"]
-    pattern?: Info["pattern"]
-    callID?: Info["callID"]
-    sessionID: Info["sessionID"]
-    messageID: Info["messageID"]
-    metadata: Info["metadata"]
+    type: Info["type"];
+    title: Info["title"];
+    pattern?: Info["pattern"];
+    callID?: Info["callID"];
+    sessionID: Info["sessionID"];
+    messageID: Info["messageID"];
+    metadata: Info["metadata"];
   }) {
-    const { pending, approved } = state()
+    const { pending, approved } = state();
     log.info("asking", {
       sessionID: input.sessionID,
       messageID: input.messageID,
       toolCallID: input.callID,
       pattern: input.pattern,
-    })
-    const approvedForSession = approved[input.sessionID] || {}
-    const keys = toKeys(input.pattern, input.type)
-    if (covered(keys, approvedForSession)) return
+    });
+    const approvedForSession = approved[input.sessionID] || {};
+    const keys = toKeys(input.pattern, input.type);
+    if (covered(keys, approvedForSession)) return;
     const info: Info = {
       id: Identifier.ascending("permission"),
       type: input.type,
@@ -127,54 +127,54 @@ export namespace Permission {
       time: {
         created: Date.now(),
       },
-    }
+    };
 
-    pending[input.sessionID] = pending[input.sessionID] || {}
+    pending[input.sessionID] = pending[input.sessionID] || {};
     return new Promise<void>((resolve, reject) => {
       pending[input.sessionID][info.id] = {
         info,
         resolve,
         reject,
-      }
-      Bus.publish(Event.Updated, info)
-    })
+      };
+      Bus.publish(Event.Updated, info);
+    });
   }
 
-  export const Response = z.enum(["once", "always", "reject"])
-  export type Response = z.infer<typeof Response>
+  export const Response = z.enum(["once", "always", "reject"]);
+  export type Response = z.infer<typeof Response>;
 
   export function respond(input: { sessionID: Info["sessionID"]; permissionID: Info["id"]; response: Response }) {
-    log.info("response", input)
-    const { pending, approved } = state()
-    const match = pending[input.sessionID]?.[input.permissionID]
-    if (!match) return
-    delete pending[input.sessionID][input.permissionID]
+    log.info("response", input);
+    const { pending, approved } = state();
+    const match = pending[input.sessionID]?.[input.permissionID];
+    if (!match) return;
+    delete pending[input.sessionID][input.permissionID];
     Bus.publish(Event.Replied, {
       sessionID: input.sessionID,
       permissionID: input.permissionID,
       response: input.response,
-    })
+    });
     if (input.response === "reject") {
-      match.reject(new RejectedError(input.sessionID, input.permissionID, match.info.callID, match.info.metadata))
-      return
+      match.reject(new RejectedError(input.sessionID, input.permissionID, match.info.callID, match.info.metadata));
+      return;
     }
-    match.resolve()
+    match.resolve();
     if (input.response === "always") {
-      approved[input.sessionID] = approved[input.sessionID] || {}
-      const approveKeys = toKeys(match.info.pattern, match.info.type)
+      approved[input.sessionID] = approved[input.sessionID] || {};
+      const approveKeys = toKeys(match.info.pattern, match.info.type);
       for (const k of approveKeys) {
-        approved[input.sessionID][k] = true
+        approved[input.sessionID][k] = true;
       }
-      const items = pending[input.sessionID]
-      if (!items) return
+      const items = pending[input.sessionID];
+      if (!items) return;
       for (const item of Object.values(items)) {
-        const itemKeys = toKeys(item.info.pattern, item.info.type)
+        const itemKeys = toKeys(item.info.pattern, item.info.type);
         if (covered(itemKeys, approved[input.sessionID])) {
           respond({
             sessionID: item.info.sessionID,
             permissionID: item.info.id,
             response: input.response,
-          })
+          });
         }
       }
     }
@@ -192,7 +192,7 @@ export namespace Permission {
         reason !== undefined
           ? reason
           : `The user rejected permission to use this specific tool call. You may try again with different parameters.`,
-      )
+      );
     }
   }
 }

@@ -3,19 +3,19 @@ import {
   type LanguageModelV2Prompt,
   type LanguageModelV2ToolCallPart,
   UnsupportedFunctionalityError,
-} from "@ai-sdk/provider"
-import { convertToBase64, parseProviderOptions } from "@ai-sdk/provider-utils"
-import { z } from "zod/v4"
-import type { OpenAIResponsesInput, OpenAIResponsesReasoning } from "./openai-responses-api-types"
-import { localShellInputSchema, localShellOutputSchema } from "./tool/local-shell"
+} from "@ai-sdk/provider";
+import { convertToBase64, parseProviderOptions } from "@ai-sdk/provider-utils";
+import { z } from "zod/v4";
+import type { OpenAIResponsesInput, OpenAIResponsesReasoning } from "./openai-responses-api-types";
+import { localShellInputSchema, localShellOutputSchema } from "./tool/local-shell";
 
 /**
  * Check if a string is a file ID based on the given prefixes
  * Returns false if prefixes is undefined (disables file ID detection)
  */
 function isFileId(data: string, prefixes?: readonly string[]): boolean {
-  if (!prefixes) return false
-  return prefixes.some((prefix) => data.startsWith(prefix))
+  if (!prefixes) return false;
+  return prefixes.some((prefix) => data.startsWith(prefix));
 }
 
 export async function convertToOpenAIResponsesInput({
@@ -25,43 +25,43 @@ export async function convertToOpenAIResponsesInput({
   store,
   hasLocalShellTool = false,
 }: {
-  prompt: LanguageModelV2Prompt
-  systemMessageMode: "system" | "developer" | "remove"
-  fileIdPrefixes?: readonly string[]
-  store: boolean
-  hasLocalShellTool?: boolean
+  prompt: LanguageModelV2Prompt;
+  systemMessageMode: "system" | "developer" | "remove";
+  fileIdPrefixes?: readonly string[];
+  store: boolean;
+  hasLocalShellTool?: boolean;
 }): Promise<{
-  input: OpenAIResponsesInput
-  warnings: Array<LanguageModelV2CallWarning>
+  input: OpenAIResponsesInput;
+  warnings: Array<LanguageModelV2CallWarning>;
 }> {
-  const input: OpenAIResponsesInput = []
-  const warnings: Array<LanguageModelV2CallWarning> = []
+  const input: OpenAIResponsesInput = [];
+  const warnings: Array<LanguageModelV2CallWarning> = [];
 
   for (const { role, content } of prompt) {
     switch (role) {
       case "system": {
         switch (systemMessageMode) {
           case "system": {
-            input.push({ role: "system", content })
-            break
+            input.push({ role: "system", content });
+            break;
           }
           case "developer": {
-            input.push({ role: "developer", content })
-            break
+            input.push({ role: "developer", content });
+            break;
           }
           case "remove": {
             warnings.push({
               type: "other",
               message: "system messages are removed for this model",
-            })
-            break
+            });
+            break;
           }
           default: {
-            const _exhaustiveCheck: never = systemMessageMode
-            throw new Error(`Unsupported system message mode: ${_exhaustiveCheck}`)
+            const _exhaustiveCheck: never = systemMessageMode;
+            throw new Error(`Unsupported system message mode: ${_exhaustiveCheck}`);
           }
         }
-        break
+        break;
       }
 
       case "user": {
@@ -70,11 +70,11 @@ export async function convertToOpenAIResponsesInput({
           content: content.map((part, index) => {
             switch (part.type) {
               case "text": {
-                return { type: "input_text", text: part.text }
+                return { type: "input_text", text: part.text };
               }
               case "file": {
                 if (part.mediaType.startsWith("image/")) {
-                  const mediaType = part.mediaType === "image/*" ? "image/jpeg" : part.mediaType
+                  const mediaType = part.mediaType === "image/*" ? "image/jpeg" : part.mediaType;
 
                   return {
                     type: "input_image",
@@ -86,13 +86,13 @@ export async function convertToOpenAIResponsesInput({
                             image_url: `data:${mediaType};base64,${convertToBase64(part.data)}`,
                           }),
                     detail: part.providerOptions?.openai?.imageDetail,
-                  }
+                  };
                 } else if (part.mediaType === "application/pdf") {
                   if (part.data instanceof URL) {
                     return {
                       type: "input_file",
                       file_url: part.data.toString(),
-                    }
+                    };
                   }
                   return {
                     type: "input_file",
@@ -102,23 +102,23 @@ export async function convertToOpenAIResponsesInput({
                           filename: part.filename ?? `part-${index}.pdf`,
                           file_data: `data:application/pdf;base64,${convertToBase64(part.data)}`,
                         }),
-                  }
+                  };
                 } else {
                   throw new UnsupportedFunctionalityError({
                     functionality: `file part media type ${part.mediaType}`,
-                  })
+                  });
                 }
               }
             }
           }),
-        })
+        });
 
-        break
+        break;
       }
 
       case "assistant": {
-        const reasoningMessages: Record<string, OpenAIResponsesReasoning> = {}
-        const toolCallParts: Record<string, LanguageModelV2ToolCallPart> = {}
+        const reasoningMessages: Record<string, OpenAIResponsesReasoning> = {};
+        const toolCallParts: Record<string, LanguageModelV2ToolCallPart> = {};
 
         for (const part of content) {
           switch (part.type) {
@@ -127,18 +127,18 @@ export async function convertToOpenAIResponsesInput({
                 role: "assistant",
                 content: [{ type: "output_text", text: part.text }],
                 id: (part.providerOptions?.openai?.itemId as string) ?? undefined,
-              })
-              break
+              });
+              break;
             }
             case "tool-call": {
-              toolCallParts[part.toolCallId] = part
+              toolCallParts[part.toolCallId] = part;
 
               if (part.providerExecuted) {
-                break
+                break;
               }
 
               if (hasLocalShellTool && part.toolName === "local_shell") {
-                const parsedInput = localShellInputSchema.parse(part.input)
+                const parsedInput = localShellInputSchema.parse(part.input);
                 input.push({
                   type: "local_shell_call",
                   call_id: part.toolCallId,
@@ -151,9 +151,9 @@ export async function convertToOpenAIResponsesInput({
                     working_directory: parsedInput.action.workingDirectory,
                     env: parsedInput.action.env,
                   },
-                })
+                });
 
-                break
+                break;
               }
 
               input.push({
@@ -162,23 +162,23 @@ export async function convertToOpenAIResponsesInput({
                 name: part.toolName,
                 arguments: JSON.stringify(part.input),
                 id: (part.providerOptions?.openai?.itemId as string) ?? undefined,
-              })
-              break
+              });
+              break;
             }
 
             // assistant tool result parts are from provider-executed tools:
             case "tool-result": {
               if (store) {
                 // use item references to refer to tool results from built-in tools
-                input.push({ type: "item_reference", id: part.toolCallId })
+                input.push({ type: "item_reference", id: part.toolCallId });
               } else {
                 warnings.push({
                   type: "other",
                   message: `Results for OpenAI tool ${part.toolName} are not sent to the API when store is false`,
-                })
+                });
               }
 
-              break
+              break;
             }
 
             case "reasoning": {
@@ -186,41 +186,41 @@ export async function convertToOpenAIResponsesInput({
                 provider: "openai",
                 providerOptions: part.providerOptions,
                 schema: openaiResponsesReasoningProviderOptionsSchema,
-              })
+              });
 
-              const reasoningId = providerOptions?.itemId
+              const reasoningId = providerOptions?.itemId;
 
               if (reasoningId != null) {
-                const reasoningMessage = reasoningMessages[reasoningId]
+                const reasoningMessage = reasoningMessages[reasoningId];
 
                 if (store) {
                   if (reasoningMessage === undefined) {
                     // use item references to refer to reasoning (single reference)
-                    input.push({ type: "item_reference", id: reasoningId })
+                    input.push({ type: "item_reference", id: reasoningId });
 
                     // store unused reasoning message to mark id as used
                     reasoningMessages[reasoningId] = {
                       type: "reasoning",
                       id: reasoningId,
                       summary: [],
-                    }
+                    };
                   }
                 } else {
                   const summaryParts: Array<{
-                    type: "summary_text"
-                    text: string
-                  }> = []
+                    type: "summary_text";
+                    text: string;
+                  }> = [];
 
                   if (part.text.length > 0) {
                     summaryParts.push({
                       type: "summary_text",
                       text: part.text,
-                    })
+                    });
                   } else if (reasoningMessage !== undefined) {
                     warnings.push({
                       type: "other",
                       message: `Cannot append empty reasoning part to existing reasoning sequence. Skipping reasoning part: ${JSON.stringify(part)}.`,
-                    })
+                    });
                   }
 
                   if (reasoningMessage === undefined) {
@@ -229,75 +229,75 @@ export async function convertToOpenAIResponsesInput({
                       id: reasoningId,
                       encrypted_content: providerOptions?.reasoningEncryptedContent,
                       summary: summaryParts,
-                    }
-                    input.push(reasoningMessages[reasoningId])
+                    };
+                    input.push(reasoningMessages[reasoningId]);
                   } else {
-                    reasoningMessage.summary.push(...summaryParts)
+                    reasoningMessage.summary.push(...summaryParts);
                   }
                 }
               } else {
                 warnings.push({
                   type: "other",
                   message: `Non-OpenAI reasoning parts are not supported. Skipping reasoning part: ${JSON.stringify(part)}.`,
-                })
+                });
               }
-              break
+              break;
             }
           }
         }
 
-        break
+        break;
       }
 
       case "tool": {
         for (const part of content) {
-          const output = part.output
+          const output = part.output;
 
           if (hasLocalShellTool && part.toolName === "local_shell" && output.type === "json") {
             input.push({
               type: "local_shell_call_output",
               call_id: part.toolCallId,
               output: localShellOutputSchema.parse(output.value).output,
-            })
-            break
+            });
+            break;
           }
 
-          let contentValue: string
+          let contentValue: string;
           switch (output.type) {
             case "text":
             case "error-text":
-              contentValue = output.value
-              break
+              contentValue = output.value;
+              break;
             case "content":
             case "json":
             case "error-json":
-              contentValue = JSON.stringify(output.value)
-              break
+              contentValue = JSON.stringify(output.value);
+              break;
           }
 
           input.push({
             type: "function_call_output",
             call_id: part.toolCallId,
             output: contentValue,
-          })
+          });
         }
 
-        break
+        break;
       }
 
       default: {
-        const _exhaustiveCheck: never = role
-        throw new Error(`Unsupported role: ${_exhaustiveCheck}`)
+        const _exhaustiveCheck: never = role;
+        throw new Error(`Unsupported role: ${_exhaustiveCheck}`);
       }
     }
   }
 
-  return { input, warnings }
+  return { input, warnings };
 }
 
 const openaiResponsesReasoningProviderOptionsSchema = z.object({
   itemId: z.string().nullish(),
   reasoningEncryptedContent: z.string().nullish(),
-})
+});
 
-export type OpenAIResponsesReasoningProviderOptions = z.infer<typeof openaiResponsesReasoningProviderOptionsSchema>
+export type OpenAIResponsesReasoningProviderOptions = z.infer<typeof openaiResponsesReasoningProviderOptionsSchema>;

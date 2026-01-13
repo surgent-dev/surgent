@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { autumn } from "autumn-js/better-auth";
 import { apiKey } from "better-auth/plugins";
 import { dialect } from "@/lib/db";
-import { config } from './config'
+import { config } from "./config";
 
 export const auth = betterAuth({
   secret: config.auth.secret,
@@ -14,7 +14,7 @@ export const auth = betterAuth({
     apiKey({
       rateLimit: { enabled: false },
       enableSessionForAPIKeys: true,
-      apiKeyHeaders: ['x-api-key', 'authorization'],
+      apiKeyHeaders: ["x-api-key", "authorization"],
     }),
   ],
 

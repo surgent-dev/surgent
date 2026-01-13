@@ -1,73 +1,73 @@
-import z from "zod"
-import { Identifier } from "../id/id"
-import { MessageV2 } from "./message-v2"
-import { Log } from "../util/log"
-import { Session } from "."
-import { Agent } from "../agent/agent"
-import { Provider } from "../provider/provider"
-import { type Tool as AITool, tool, jsonSchema } from "ai"
-import { SessionCompaction } from "./compaction"
-import { Instance } from "../project/instance"
-import { Bus } from "../bus"
-import { ProviderTransform } from "../provider/transform"
-import { SystemPrompt } from "./system"
-import PROMPT_PLAN from "../session/prompt/plan.txt"
-import BUILD_SWITCH from "../session/prompt/build-switch.txt"
-import MAX_STEPS from "../session/prompt/max-steps.txt"
-import { defer } from "../util/defer"
-import { mergeDeep, pipe } from "remeda"
-import { ToolRegistry } from "../tool/registry"
-import { Wildcard } from "../util/wildcard"
-import { MCP } from "../mcp"
-import { ReadTool } from "../tool/read"
-import { ListTool } from "../tool/ls"
-import { FileTime } from "../file/time"
-import { Flag } from "../flag/flag"
-import { ulid } from "ulid"
-import { Command } from "../command"
-import { fileURLToPath } from "bun"
-import { ConfigMarkdown } from "../config/markdown"
-import { SessionSummary } from "./summary"
-import { NamedError } from "@opencode-ai/util/error"
-import { fn } from "../util/fn"
-import { SessionProcessor } from "./processor"
-import { TaskTool } from "../tool/task"
-import { SessionStatus } from "./status"
-import { LLM } from "./llm"
-import { iife } from "../util/iife"
-import { Shell } from "../shell/shell"
+import z from "zod";
+import { Identifier } from "../id/id";
+import { MessageV2 } from "./message-v2";
+import { Log } from "../util/log";
+import { Session } from ".";
+import { Agent } from "../agent/agent";
+import { Provider } from "../provider/provider";
+import { type Tool as AITool, tool, jsonSchema } from "ai";
+import { SessionCompaction } from "./compaction";
+import { Instance } from "../project/instance";
+import { Bus } from "../bus";
+import { ProviderTransform } from "../provider/transform";
+import { SystemPrompt } from "./system";
+import PROMPT_PLAN from "../session/prompt/plan.txt";
+import BUILD_SWITCH from "../session/prompt/build-switch.txt";
+import MAX_STEPS from "../session/prompt/max-steps.txt";
+import { defer } from "../util/defer";
+import { mergeDeep, pipe } from "remeda";
+import { ToolRegistry } from "../tool/registry";
+import { Wildcard } from "../util/wildcard";
+import { MCP } from "../mcp";
+import { ReadTool } from "../tool/read";
+import { ListTool } from "../tool/ls";
+import { FileTime } from "../file/time";
+import { Flag } from "../flag/flag";
+import { ulid } from "ulid";
+import { Command } from "../command";
+import { fileURLToPath } from "bun";
+import { ConfigMarkdown } from "../config/markdown";
+import { SessionSummary } from "./summary";
+import { NamedError } from "@opencode-ai/util/error";
+import { fn } from "../util/fn";
+import { SessionProcessor } from "./processor";
+import { TaskTool } from "../tool/task";
+import { SessionStatus } from "./status";
+import { LLM } from "./llm";
+import { iife } from "../util/iife";
+import { Shell } from "../shell/shell";
 
 // @ts-ignore
-globalThis.AI_SDK_LOG_WARNINGS = false
+globalThis.AI_SDK_LOG_WARNINGS = false;
 
 export namespace SessionPrompt {
-  const log = Log.create({ service: "session.prompt" })
-  export const OUTPUT_TOKEN_MAX = Flag.OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
+  const log = Log.create({ service: "session.prompt" });
+  export const OUTPUT_TOKEN_MAX = Flag.OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000;
 
   const state = Instance.state(
     () => {
       const data: Record<
         string,
         {
-          abort: AbortController
+          abort: AbortController;
           callbacks: {
-            resolve(input: MessageV2.WithParts): void
-            reject(): void
-          }[]
+            resolve(input: MessageV2.WithParts): void;
+            reject(): void;
+          }[];
         }
-      > = {}
-      return data
+      > = {};
+      return data;
     },
     async (current) => {
       for (const item of Object.values(current)) {
-        item.abort.abort()
+        item.abort.abort();
       }
     },
-  )
+  );
 
   export function assertNotBusy(sessionID: string) {
-    const match = state()[sessionID]
-    if (match) throw new Session.BusyError(sessionID)
+    const match = state()[sessionID];
+    if (match) throw new Session.BusyError(sessionID);
   }
 
   export const PromptInput = z.object({
@@ -128,53 +128,51 @@ export namespace SessionPrompt {
           }),
       ]),
     ),
-  })
-  export type PromptInput = z.infer<typeof PromptInput>
+  });
+  export type PromptInput = z.infer<typeof PromptInput>;
 
   export const prompt = fn(PromptInput, async (input) => {
-    const session = await Session.get(input.sessionID)
+    const session = await Session.get(input.sessionID);
 
-    const message = await createUserMessage(input)
-    await Session.touch(input.sessionID)
+    const message = await createUserMessage(input);
+    await Session.touch(input.sessionID);
 
     if (input.noReply === true) {
-      return message
+      return message;
     }
 
-    return loop(input.sessionID)
-  })
+    return loop(input.sessionID);
+  });
 
   export async function resolvePromptParts(template: string): Promise<PromptInput["parts"]> {
-    const sandbox = Instance.sandbox
-    const sandboxPath = sandbox.path
-    const homedir = sandbox.os.homedir
+    const sandbox = Instance.sandbox;
+    const sandboxPath = sandbox.path;
+    const homedir = sandbox.os.homedir;
     const parts: PromptInput["parts"] = [
       {
         type: "text",
         text: template,
       },
-    ]
-    const files = ConfigMarkdown.files(template)
-    const seen = new Set<string>()
+    ];
+    const files = ConfigMarkdown.files(template);
+    const seen = new Set<string>();
     await Promise.all(
       files.map(async (match) => {
-        const name = match[1]
-        if (seen.has(name)) return
-        seen.add(name)
-        const filepath = name.startsWith("~/")
-          ? sandboxPath.join(homedir, name.slice(2))
-          : sandboxPath.resolve(name)
+        const name = match[1];
+        if (seen.has(name)) return;
+        seen.add(name);
+        const filepath = name.startsWith("~/") ? sandboxPath.join(homedir, name.slice(2)) : sandboxPath.resolve(name);
 
-        const stats = await sandbox.fs.stat(filepath).catch(() => undefined)
+        const stats = await sandbox.fs.stat(filepath).catch(() => undefined);
         if (!stats) {
-          const agent = await Agent.get(name)
+          const agent = await Agent.get(name);
           if (agent) {
             parts.push({
               type: "agent",
               name: agent.name,
-            })
+            });
           }
-          return
+          return;
         }
 
         if (stats.isDir) {
@@ -183,8 +181,8 @@ export namespace SessionPrompt {
             url: `file://${filepath}`,
             filename: name,
             mime: "application/x-directory",
-          })
-          return
+          });
+          return;
         }
 
         parts.push({
@@ -192,83 +190,83 @@ export namespace SessionPrompt {
           url: `file://${filepath}`,
           filename: name,
           mime: "text/plain",
-        })
+        });
       }),
-    )
-    return parts
+    );
+    return parts;
   }
 
   function start(sessionID: string) {
-    const s = state()
-    if (s[sessionID]) return
-    const controller = new AbortController()
+    const s = state();
+    if (s[sessionID]) return;
+    const controller = new AbortController();
     s[sessionID] = {
       abort: controller,
       callbacks: [],
-    }
-    return controller.signal
+    };
+    return controller.signal;
   }
 
   export function cancel(sessionID: string) {
-    log.info("cancel", { sessionID })
-    const s = state()
-    const match = s[sessionID]
-    if (!match) return
-    match.abort.abort()
+    log.info("cancel", { sessionID });
+    const s = state();
+    const match = s[sessionID];
+    if (!match) return;
+    match.abort.abort();
     for (const item of match.callbacks) {
-      item.reject()
+      item.reject();
     }
-    delete s[sessionID]
-    SessionStatus.set(sessionID, { type: "idle" })
-    return
+    delete s[sessionID];
+    SessionStatus.set(sessionID, { type: "idle" });
+    return;
   }
 
   export const loop = fn(Identifier.schema("session"), async (sessionID) => {
-    const abort = start(sessionID)
+    const abort = start(sessionID);
     if (!abort) {
       return new Promise<MessageV2.WithParts>((resolve, reject) => {
-        const callbacks = state()[sessionID].callbacks
-        callbacks.push({ resolve, reject })
-      })
+        const callbacks = state()[sessionID].callbacks;
+        callbacks.push({ resolve, reject });
+      });
     }
 
-    using _ = defer(() => cancel(sessionID))
+    using _ = defer(() => cancel(sessionID));
 
-    let step = 0
+    let step = 0;
     while (true) {
-      SessionStatus.set(sessionID, { type: "busy" })
-      log.info("loop", { step, sessionID })
-      if (abort.aborted) break
-      let msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
+      SessionStatus.set(sessionID, { type: "busy" });
+      log.info("loop", { step, sessionID });
+      if (abort.aborted) break;
+      let msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID));
 
-      let lastUser: MessageV2.User | undefined
-      let lastAssistant: MessageV2.Assistant | undefined
-      let lastFinished: MessageV2.Assistant | undefined
-      let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
+      let lastUser: MessageV2.User | undefined;
+      let lastAssistant: MessageV2.Assistant | undefined;
+      let lastFinished: MessageV2.Assistant | undefined;
+      let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = [];
       for (let i = msgs.length - 1; i >= 0; i--) {
-        const msg = msgs[i]
-        if (!lastUser && msg.info.role === "user") lastUser = msg.info as MessageV2.User
-        if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
+        const msg = msgs[i];
+        if (!lastUser && msg.info.role === "user") lastUser = msg.info as MessageV2.User;
+        if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant;
         if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
-          lastFinished = msg.info as MessageV2.Assistant
-        if (lastUser && lastFinished) break
-        const task = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
+          lastFinished = msg.info as MessageV2.Assistant;
+        if (lastUser && lastFinished) break;
+        const task = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask");
         if (task && !lastFinished) {
-          tasks.push(...task)
+          tasks.push(...task);
         }
       }
 
-      if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+      if (!lastUser) throw new Error("No user message found in stream. This should never happen.");
       if (
         lastAssistant?.finish &&
         !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
         lastUser.id < lastAssistant.id
       ) {
-        log.info("exiting loop", { sessionID })
-        break
+        log.info("exiting loop", { sessionID });
+        break;
       }
 
-      step++
+      step++;
       if (step === 1)
         ensureTitle({
           session: await Session.get(sessionID),
@@ -276,15 +274,15 @@ export namespace SessionPrompt {
           providerID: lastUser.model.providerID,
           message: msgs.find((m) => m.info.role === "user")!,
           history: msgs,
-        })
+        });
 
-      const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID)
-      const task = tasks.pop()
+      const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID);
+      const task = tasks.pop();
 
       // pending subtask
       // TODO: centralize "invoke tool" logic
       if (task?.type === "subtask") {
-        const taskTool = await TaskTool.init()
+        const taskTool = await TaskTool.init();
         const assistantMessage = (await Session.updateMessage({
           id: Identifier.ascending("message"),
           role: "assistant",
@@ -308,7 +306,7 @@ export namespace SessionPrompt {
           time: {
             created: Date.now(),
           },
-        })) as MessageV2.Assistant
+        })) as MessageV2.Assistant;
         let part = (await Session.updatePart({
           id: Identifier.ascending("part"),
           messageID: assistantMessage.id,
@@ -328,14 +326,14 @@ export namespace SessionPrompt {
               start: Date.now(),
             },
           },
-        })) as MessageV2.ToolPart
+        })) as MessageV2.ToolPart;
         const taskArgs = {
           prompt: task.prompt,
           description: task.description,
           subagent_type: task.agent,
           command: task.command,
-        }
-        let executionError: Error | undefined
+        };
+        let executionError: Error | undefined;
         const result = await taskTool
           .execute(taskArgs, {
             agent: task.agent,
@@ -350,17 +348,17 @@ export namespace SessionPrompt {
                   ...part.state,
                   ...input,
                 },
-              } satisfies MessageV2.ToolPart)
+              } satisfies MessageV2.ToolPart);
             },
           })
           .catch((error) => {
-            executionError = error
-            log.error("subtask execution failed", { error, agent: task.agent, description: task.description })
-            return undefined
-          })
-        assistantMessage.finish = "tool-calls"
-        assistantMessage.time.completed = Date.now()
-        await Session.updateMessage(assistantMessage)
+            executionError = error;
+            log.error("subtask execution failed", { error, agent: task.agent, description: task.description });
+            return undefined;
+          });
+        assistantMessage.finish = "tool-calls";
+        assistantMessage.time.completed = Date.now();
+        await Session.updateMessage(assistantMessage);
         if (result && part.state.status === "running") {
           await Session.updatePart({
             ...part,
@@ -376,7 +374,7 @@ export namespace SessionPrompt {
                 end: Date.now(),
               },
             },
-          } satisfies MessageV2.ToolPart)
+          } satisfies MessageV2.ToolPart);
         }
         if (!result) {
           await Session.updatePart({
@@ -391,7 +389,7 @@ export namespace SessionPrompt {
               metadata: part.metadata,
               input: part.state.input,
             },
-          } satisfies MessageV2.ToolPart)
+          } satisfies MessageV2.ToolPart);
         }
 
         // Add synthetic user message to prevent certain reasoning models from erroring
@@ -406,8 +404,8 @@ export namespace SessionPrompt {
           },
           agent: lastUser.agent,
           model: lastUser.model,
-        }
-        await Session.updateMessage(summaryUserMsg)
+        };
+        await Session.updateMessage(summaryUserMsg);
         await Session.updatePart({
           id: Identifier.ascending("part"),
           messageID: summaryUserMsg.id,
@@ -415,9 +413,9 @@ export namespace SessionPrompt {
           type: "text",
           text: "Summarize the task tool output above and continue with your task.",
           synthetic: true,
-        } satisfies MessageV2.TextPart)
+        } satisfies MessageV2.TextPart);
 
-        continue
+        continue;
       }
 
       // pending compaction
@@ -428,9 +426,9 @@ export namespace SessionPrompt {
           abort,
           sessionID,
           auto: task.auto,
-        })
-        if (result === "stop") break
-        continue
+        });
+        if (result === "stop") break;
+        continue;
       }
 
       // context overflow, needs compaction
@@ -444,18 +442,18 @@ export namespace SessionPrompt {
           agent: lastUser.agent,
           model: lastUser.model,
           auto: true,
-        })
-        continue
+        });
+        continue;
       }
 
       // normal processing
-      const agent = await Agent.get(lastUser.agent)
-      const maxSteps = agent.maxSteps ?? Infinity
-      const isLastStep = step >= maxSteps
+      const agent = await Agent.get(lastUser.agent);
+      const maxSteps = agent.maxSteps ?? Infinity;
+      const isLastStep = step >= maxSteps;
       msgs = insertReminders({
         messages: msgs,
         agent,
-      })
+      });
 
       const processor = SessionProcessor.create({
         assistantMessage: (await Session.updateMessage({
@@ -485,33 +483,33 @@ export namespace SessionPrompt {
         sessionID: sessionID,
         model,
         abort,
-      })
+      });
       const tools = await resolveTools({
         agent,
         sessionID,
         model,
         tools: lastUser.tools,
         processor,
-      })
+      });
 
       if (step === 1) {
         SessionSummary.summarize({
           sessionID: sessionID,
           messageID: lastUser.id,
-        })
+        });
       }
 
       const sessionMessages = msgs.map((msg) => ({
         info: msg.info,
         parts: msg.parts.map((part) => ({ ...part })),
-      }))
+      }));
 
       if (step > 1 && lastFinished) {
         for (const msg of sessionMessages) {
-          if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
+          if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue;
           for (const part of msg.parts) {
-            if (part.type !== "text" || part.ignored || part.synthetic) continue
-            if (!part.text.trim()) continue
+            if (part.type !== "text" || part.ignored || part.synthetic) continue;
+            if (!part.text.trim()) continue;
             part.text = [
               "<system-reminder>",
               "The user sent the following message:",
@@ -519,7 +517,7 @@ export namespace SessionPrompt {
               "",
               "Please address this message and continue with your tasks.",
               "</system-reminder>",
-            ].join("\n")
+            ].join("\n");
           }
         }
       }
@@ -543,56 +541,56 @@ export namespace SessionPrompt {
         ],
         tools,
         model,
-      })
-      if (result === "stop") break
+      });
+      if (result === "stop") break;
       if (result === "compact") {
         await SessionCompaction.create({
           sessionID,
           agent: lastUser.agent,
           model: lastUser.model,
           auto: true,
-        })
+        });
       }
-      continue
+      continue;
     }
-    SessionCompaction.prune({ sessionID })
+    SessionCompaction.prune({ sessionID });
     for await (const item of MessageV2.stream(sessionID)) {
-      if (item.info.role === "user") continue
-      const queued = state()[sessionID]?.callbacks ?? []
+      if (item.info.role === "user") continue;
+      const queued = state()[sessionID]?.callbacks ?? [];
       for (const q of queued) {
-        q.resolve(item)
+        q.resolve(item);
       }
-      return item
+      return item;
     }
-    throw new Error("Impossible")
-  })
+    throw new Error("Impossible");
+  });
 
   async function lastModel(sessionID: string) {
     for await (const item of MessageV2.stream(sessionID)) {
-      if (item.info.role === "user" && item.info.model) return item.info.model
+      if (item.info.role === "user" && item.info.model) return item.info.model;
     }
-    return Provider.defaultModel()
+    return Provider.defaultModel();
   }
 
   async function resolveTools(input: {
-    agent: Agent.Info
-    model: Provider.Model
-    sessionID: string
-    tools?: Record<string, boolean>
-    processor: SessionProcessor.Info
+    agent: Agent.Info;
+    model: Provider.Model;
+    sessionID: string;
+    tools?: Record<string, boolean>;
+    processor: SessionProcessor.Info;
   }) {
-    using _ = log.time("resolveTools")
+    using _ = log.time("resolveTools");
     // Capture instance context now - AI SDK callbacks may lose AsyncLocalStorage context
-    const instanceCtx = { directory: Instance.directory, sandboxId: Instance.sandboxId }
-    const tools: Record<string, AITool> = {}
+    const instanceCtx = { directory: Instance.directory, sandboxId: Instance.sandboxId };
+    const tools: Record<string, AITool> = {};
     const enabledTools = pipe(
       input.agent.tools,
       mergeDeep(await ToolRegistry.enabled(input.agent)),
       mergeDeep(input.tools ?? {}),
-    )
+    );
     for (const item of await ToolRegistry.tools(input.model.providerID, input.agent)) {
-      if (Wildcard.all(item.id, enabledTools) === false) continue
-      const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+      if (Wildcard.all(item.id, enabledTools) === false) continue;
+      const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters));
       tools[item.id] = tool({
         id: item.id as any,
         description: item.description,
@@ -615,7 +613,7 @@ export namespace SessionPrompt {
                     directory: instanceCtx.directory,
                     sandboxId: instanceCtx.sandboxId,
                     fn: async () => {
-                      const match = input.processor.partFromToolCall(options.toolCallId)
+                      const match = input.processor.partFromToolCall(options.toolCallId);
                       if (match && match.state.status === "running") {
                         await Session.updatePart({
                           ...match,
@@ -628,28 +626,28 @@ export namespace SessionPrompt {
                               start: Date.now(),
                             },
                           },
-                        })
+                        });
                       }
                     },
-                  })
+                  });
                 },
-              })
-              return result
+              });
+              return result;
             },
-          })
+          });
         },
         toModelOutput(result) {
           return {
             type: "text",
             value: result.output,
-          }
+          };
         },
-      })
+      });
     }
     for (const [key, item] of Object.entries(await MCP.tools())) {
-      if (Wildcard.all(key, enabledTools) === false) continue
-      const execute = item.execute
-      if (!execute) continue
+      if (Wildcard.all(key, enabledTools) === false) continue;
+      const execute = item.execute;
+      if (!execute) continue;
 
       // Wrap execute to normalize output and attach content ordering.
       item.execute = async (args, opts) => {
@@ -657,14 +655,14 @@ export namespace SessionPrompt {
           directory: instanceCtx.directory,
           sandboxId: instanceCtx.sandboxId,
           fn: async () => {
-            const result = await execute(args, opts)
+            const result = await execute(args, opts);
 
-            const textParts: string[] = []
-            const attachments: MessageV2.FilePart[] = []
+            const textParts: string[] = [];
+            const attachments: MessageV2.FilePart[] = [];
 
             for (const contentItem of result.content) {
               if (contentItem.type === "text") {
-                textParts.push(contentItem.text)
+                textParts.push(contentItem.text);
               } else if (contentItem.type === "image") {
                 attachments.push({
                   id: Identifier.ascending("part"),
@@ -673,7 +671,7 @@ export namespace SessionPrompt {
                   type: "file",
                   mime: contentItem.mimeType,
                   url: `data:${contentItem.mimeType};base64,${contentItem.data}`,
-                })
+                });
               }
               // Add support for other types if needed
             }
@@ -684,24 +682,24 @@ export namespace SessionPrompt {
               output: textParts.join("\n\n"),
               attachments,
               content: result.content, // directly return content to preserve ordering when outputting to model
-            }
+            };
           },
-        })
-      }
+        });
+      };
       item.toModelOutput = (result) => {
         return {
           type: "text",
           value: result.output,
-        }
-      }
-      tools[key] = item
+        };
+      };
+      tools[key] = item;
     }
-    return tools
+    return tools;
   }
 
   async function createUserMessage(input: PromptInput) {
-    const sandbox = Instance.sandbox
-    const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()))
+    const sandbox = Instance.sandbox;
+    const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()));
     const info: MessageV2.Info = {
       id: input.messageID ?? Identifier.ascending("message"),
       role: "user",
@@ -714,12 +712,12 @@ export namespace SessionPrompt {
       model: input.model ?? agent.model ?? (await lastModel(input.sessionID)),
       system: input.system,
       variant: input.variant,
-    }
+    };
 
     const parts = await Promise.all(
       input.parts.map(async (part): Promise<MessageV2.Part[]> => {
         if (part.type === "file") {
-          const url = new URL(part.url)
+          const url = new URL(part.url);
           switch (url.protocol) {
             case "data:":
               if (part.mime === "text/plain") {
@@ -746,36 +744,36 @@ export namespace SessionPrompt {
                     messageID: info.id,
                     sessionID: input.sessionID,
                   },
-                ]
+                ];
               }
-              break
+              break;
             case "file:":
-              log.info("file", { mime: part.mime })
+              log.info("file", { mime: part.mime });
               // have to normalize, symbol search returns absolute paths
               // Decode the pathname since URL constructor doesn't automatically decode it
-              const filepath = fileURLToPath(part.url)
-              const stat = await sandbox.fs.stat(filepath)
+              const filepath = fileURLToPath(part.url);
+              const stat = await sandbox.fs.stat(filepath);
 
               if (stat.isDir) {
-                part.mime = "application/x-directory"
+                part.mime = "application/x-directory";
               }
 
               if (part.mime === "text/plain") {
-                let offset: number | undefined = undefined
-                let limit: number | undefined = undefined
+                let offset: number | undefined = undefined;
+                let limit: number | undefined = undefined;
                 const range = {
                   start: url.searchParams.get("start"),
                   end: url.searchParams.get("end"),
-                }
+                };
                 if (range.start != null) {
-                  let start = parseInt(range.start)
-                  let end = range.end ? parseInt(range.end) : undefined
-                  offset = Math.max(start - 1, 0)
+                  let start = parseInt(range.start);
+                  let end = range.end ? parseInt(range.end) : undefined;
+                  offset = Math.max(start - 1, 0);
                   if (end) {
-                    limit = end - offset
+                    limit = end - offset;
                   }
                 }
-                const args = { filePath: filepath, offset, limit }
+                const args = { filePath: filepath, offset, limit };
 
                 const pieces: MessageV2.Part[] = [
                   {
@@ -786,11 +784,11 @@ export namespace SessionPrompt {
                     synthetic: true,
                     text: `Called the Read tool with the following input: ${JSON.stringify(args)}`,
                   },
-                ]
+                ];
 
                 await ReadTool.init()
                   .then(async (t) => {
-                    const model = await Provider.getModel(info.model.providerID, info.model.modelID)
+                    const model = await Provider.getModel(info.model.providerID, info.model.modelID);
                     const result = await t.execute(args, {
                       sessionID: input.sessionID,
                       abort: new AbortController().signal,
@@ -798,7 +796,7 @@ export namespace SessionPrompt {
                       messageID: info.id,
                       extra: { bypassCwdCheck: true, model },
                       metadata: async () => {},
-                    })
+                    });
                     pieces.push({
                       id: Identifier.ascending("part"),
                       messageID: info.id,
@@ -806,7 +804,7 @@ export namespace SessionPrompt {
                       type: "text",
                       synthetic: true,
                       text: result.output,
-                    })
+                    });
                     if (result.attachments?.length) {
                       pieces.push(
                         ...result.attachments.map((attachment) => ({
@@ -816,25 +814,25 @@ export namespace SessionPrompt {
                           messageID: info.id,
                           sessionID: input.sessionID,
                         })),
-                      )
+                      );
                     } else {
                       pieces.push({
                         ...part,
                         id: part.id ?? Identifier.ascending("part"),
                         messageID: info.id,
                         sessionID: input.sessionID,
-                      })
+                      });
                     }
                   })
                   .catch((error) => {
-                    log.error("failed to read file", { error })
-                    const message = error instanceof Error ? error.message : error.toString()
+                    log.error("failed to read file", { error });
+                    const message = error instanceof Error ? error.message : error.toString();
                     Bus.publish(Session.Event.Error, {
                       sessionID: input.sessionID,
                       error: new NamedError.Unknown({
                         message,
                       }).toObject(),
-                    })
+                    });
                     pieces.push({
                       id: Identifier.ascending("part"),
                       messageID: info.id,
@@ -842,14 +840,14 @@ export namespace SessionPrompt {
                       type: "text",
                       synthetic: true,
                       text: `Read tool failed to read ${filepath} with the following error: ${message}`,
-                    })
-                  })
+                    });
+                  });
 
-                return pieces
+                return pieces;
               }
 
               if (part.mime === "application/x-directory") {
-                const args = { path: filepath }
+                const args = { path: filepath };
                 const result = await ListTool.init().then((t) =>
                   t.execute(args, {
                     sessionID: input.sessionID,
@@ -859,7 +857,7 @@ export namespace SessionPrompt {
                     extra: { bypassCwdCheck: true },
                     metadata: async () => {},
                   }),
-                )
+                );
                 return [
                   {
                     id: Identifier.ascending("part"),
@@ -883,11 +881,11 @@ export namespace SessionPrompt {
                     messageID: info.id,
                     sessionID: input.sessionID,
                   },
-                ]
+                ];
               }
 
-              const fileBytes = await sandbox.fs.readBytes(filepath)
-              FileTime.read(input.sessionID, filepath)
+              const fileBytes = await sandbox.fs.readBytes(filepath);
+              FileTime.read(input.sessionID, filepath);
               return [
                 {
                   id: Identifier.ascending("part"),
@@ -907,7 +905,7 @@ export namespace SessionPrompt {
                   filename: part.filename!,
                   source: part.source,
                 },
-              ]
+              ];
           }
         }
 
@@ -929,7 +927,7 @@ export namespace SessionPrompt {
                 "Use the above message and context to generate a prompt and call the task tool with subagent: " +
                 part.name,
             },
-          ]
+          ];
         }
 
         return [
@@ -939,24 +937,24 @@ export namespace SessionPrompt {
             messageID: info.id,
             sessionID: input.sessionID,
           },
-        ]
+        ];
       }),
-    ).then((x) => x.flat())
+    ).then((x) => x.flat());
 
-    await Session.updateMessage(info)
+    await Session.updateMessage(info);
     for (const part of parts) {
-      await Session.updatePart(part)
+      await Session.updatePart(part);
     }
 
     return {
       info,
       parts,
-    }
+    };
   }
 
   function insertReminders(input: { messages: MessageV2.WithParts[]; agent: Agent.Info }) {
-    const userMessage = input.messages.findLast((msg) => msg.info.role === "user")
-    if (!userMessage) return input.messages
+    const userMessage = input.messages.findLast((msg) => msg.info.role === "user");
+    if (!userMessage) return input.messages;
     if (input.agent.name === "plan") {
       userMessage.parts.push({
         id: Identifier.ascending("part"),
@@ -966,9 +964,9 @@ export namespace SessionPrompt {
         // TODO (for mr dax): update to use the anthropic full fledged one (see plan-reminder-anthropic.txt)
         text: PROMPT_PLAN,
         synthetic: true,
-      })
+      });
     }
-    const wasPlan = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "plan")
+    const wasPlan = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "plan");
     if (wasPlan && input.agent.name === "build") {
       userMessage.parts.push({
         id: Identifier.ascending("part"),
@@ -977,9 +975,9 @@ export namespace SessionPrompt {
         type: "text",
         text: BUILD_SWITCH,
         synthetic: true,
-      })
+      });
     }
-    return input.messages
+    return input.messages;
   }
 
   export const ShellInput = z.object({
@@ -992,17 +990,17 @@ export namespace SessionPrompt {
       })
       .optional(),
     command: z.string(),
-  })
-  export type ShellInput = z.infer<typeof ShellInput>
+  });
+  export type ShellInput = z.infer<typeof ShellInput>;
   export async function shell(input: ShellInput) {
-    const abort = start(input.sessionID)
+    const abort = start(input.sessionID);
     if (!abort) {
-      throw new Session.BusyError(input.sessionID)
+      throw new Session.BusyError(input.sessionID);
     }
-    using _ = defer(() => cancel(input.sessionID))
+    using _ = defer(() => cancel(input.sessionID));
 
-    const agent = await Agent.get(input.agent)
-    const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
+    const agent = await Agent.get(input.agent);
+    const model = input.model ?? agent.model ?? (await lastModel(input.sessionID));
     const userMsg: MessageV2.User = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
@@ -1015,8 +1013,8 @@ export namespace SessionPrompt {
         providerID: model.providerID,
         modelID: model.modelID,
       },
-    }
-    await Session.updateMessage(userMsg)
+    };
+    await Session.updateMessage(userMsg);
     const userPart: MessageV2.Part = {
       type: "text",
       id: Identifier.ascending("part"),
@@ -1024,8 +1022,8 @@ export namespace SessionPrompt {
       sessionID: input.sessionID,
       text: "The following tool was executed by the user",
       synthetic: true,
-    }
-    await Session.updatePart(userPart)
+    };
+    await Session.updatePart(userPart);
 
     const msg: MessageV2.Assistant = {
       id: Identifier.ascending("message"),
@@ -1050,8 +1048,8 @@ export namespace SessionPrompt {
       },
       modelID: model.modelID,
       providerID: model.providerID,
-    }
-    await Session.updateMessage(msg)
+    };
+    await Session.updateMessage(msg);
     const part: MessageV2.Part = {
       type: "tool",
       id: Identifier.ascending("part"),
@@ -1068,26 +1066,26 @@ export namespace SessionPrompt {
           command: input.command,
         },
       },
-    }
-    await Session.updatePart(part)
-    const sandbox = Instance.sandbox
+    };
+    await Session.updatePart(part);
+    const sandbox = Instance.sandbox;
     const shell = Instance.sandboxId
       ? (await sandbox.proc.which("bash")) || (await sandbox.proc.which("sh")) || "/bin/sh"
-      : Shell.preferred()
-    const args = Instance.sandboxId ? ["-c", input.command] : Shell.commandArgs(shell, input.command)
+      : Shell.preferred();
+    const args = Instance.sandboxId ? ["-c", input.command] : Shell.commandArgs(shell, input.command);
 
-    let output = ""
+    let output = "";
 
     const append = (chunk: string) => {
-      output += chunk
+      output += chunk;
       if (part.state.status === "running") {
         part.state.metadata = {
           output,
           description: "",
-        }
-        Session.updatePart(part)
+        };
+        Session.updatePart(part);
       }
-    }
+    };
 
     const result = await sandbox.proc.spawn([shell, ...args], {
       cwd: Instance.directory,
@@ -1101,13 +1099,13 @@ export namespace SessionPrompt {
       signal: abort,
       onStdout: append,
       onStderr: append,
-    })
+    });
 
     if (result.aborted) {
-      output += "\n\n" + ["<metadata>", "User aborted the command", "</metadata>"].join("\n")
+      output += "\n\n" + ["<metadata>", "User aborted the command", "</metadata>"].join("\n");
     }
-    msg.time.completed = Date.now()
-    await Session.updateMessage(msg)
+    msg.time.completed = Date.now();
+    await Session.updateMessage(msg);
     if (part.state.status === "running") {
       part.state = {
         status: "completed",
@@ -1122,10 +1120,10 @@ export namespace SessionPrompt {
           description: "",
         },
         output,
-      }
-      await Session.updatePart(part)
+      };
+      await Session.updatePart(part);
     }
-    return { info: msg, parts: [part] }
+    return { info: msg, parts: [part] };
   }
 
   export const CommandInput = z.object({
@@ -1136,12 +1134,12 @@ export namespace SessionPrompt {
     arguments: z.string(),
     command: z.string(),
     variant: z.string().optional(),
-  })
-  export type CommandInput = z.infer<typeof CommandInput>
-  const bashRegex = /!`([^`]+)`/g
-  const argsRegex = /(?:[^\s"']+|"[^"]*"|'[^']*')+/g
-  const placeholderRegex = /\$(\d+)/g
-  const quoteTrimRegex = /^["']|["']$/g
+  });
+  export type CommandInput = z.infer<typeof CommandInput>;
+  const bashRegex = /!`([^`]+)`/g;
+  const argsRegex = /(?:[^\s"']+|"[^"]*"|'[^']*')+/g;
+  const placeholderRegex = /\$(\d+)/g;
+  const quoteTrimRegex = /^["']|["']$/g;
   /**
    * Regular expression to match @ file references in text
    * Matches @ followed by file paths, excluding commas, periods at end of sentences, and backticks
@@ -1149,97 +1147,97 @@ export namespace SessionPrompt {
    */
 
   export async function command(input: CommandInput) {
-    log.info("command", input)
-    const command = await Command.get(input.command)
-    const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent())
+    log.info("command", input);
+    const command = await Command.get(input.command);
+    const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent());
 
-    const raw = input.arguments.match(argsRegex) ?? []
-    const args = raw.map((arg) => arg.replace(quoteTrimRegex, ""))
+    const raw = input.arguments.match(argsRegex) ?? [];
+    const args = raw.map((arg) => arg.replace(quoteTrimRegex, ""));
 
-    const templateCommand = await command.template
-    const placeholders = templateCommand.match(placeholderRegex) ?? []
-    let last = 0
+    const templateCommand = await command.template;
+    const placeholders = templateCommand.match(placeholderRegex) ?? [];
+    let last = 0;
     for (const item of placeholders) {
-      const value = Number(item.slice(1))
-      if (value > last) last = value
+      const value = Number(item.slice(1));
+      if (value > last) last = value;
     }
 
     // Let the final placeholder swallow any extra arguments so prompts read naturally
     const withArgs = templateCommand.replaceAll(placeholderRegex, (_, index) => {
-      const position = Number(index)
-      const argIndex = position - 1
-      if (argIndex >= args.length) return ""
-      if (position === last) return args.slice(argIndex).join(" ")
-      return args[argIndex]
-    })
-    let template = withArgs.replaceAll("$ARGUMENTS", input.arguments)
+      const position = Number(index);
+      const argIndex = position - 1;
+      if (argIndex >= args.length) return "";
+      if (position === last) return args.slice(argIndex).join(" ");
+      return args[argIndex];
+    });
+    let template = withArgs.replaceAll("$ARGUMENTS", input.arguments);
 
-    const shellBlocks = ConfigMarkdown.shell(template)
+    const shellBlocks = ConfigMarkdown.shell(template);
     if (shellBlocks.length > 0) {
-      const sandbox = Instance.sandbox
+      const sandbox = Instance.sandbox;
       const shell = Instance.sandboxId
         ? (await sandbox.proc.which("bash")) || (await sandbox.proc.which("sh")) || "/bin/sh"
-        : Shell.preferred()
+        : Shell.preferred();
       const results = await Promise.all(
         shellBlocks.map(async ([, cmd]) => {
           try {
-            const args = Instance.sandboxId ? ["-c", cmd] : Shell.commandArgs(shell, cmd)
+            const args = Instance.sandboxId ? ["-c", cmd] : Shell.commandArgs(shell, cmd);
             const result = await sandbox.proc.run([shell, ...args], {
               cwd: Instance.directory,
               env: Instance.sandboxId ? undefined : { ...process.env },
-            })
+            });
             if (result.exitCode !== 0) {
-              const msg = (result.stderr || result.stdout).trim()
-              return msg ? `Error executing command:\n${msg}` : `Error executing command (exit ${result.exitCode})`
+              const msg = (result.stderr || result.stdout).trim();
+              return msg ? `Error executing command:\n${msg}` : `Error executing command (exit ${result.exitCode})`;
             }
-            return result.stdout
+            return result.stdout;
           } catch (error) {
-            return `Error executing command: ${error instanceof Error ? error.message : String(error)}`
+            return `Error executing command: ${error instanceof Error ? error.message : String(error)}`;
           }
         }),
-      )
-      let index = 0
-      template = template.replace(bashRegex, () => results[index++])
+      );
+      let index = 0;
+      template = template.replace(bashRegex, () => results[index++]);
     }
-    template = template.trim()
+    template = template.trim();
 
     const model = await (async () => {
       if (command.model) {
-        return Provider.parseModel(command.model)
+        return Provider.parseModel(command.model);
       }
       if (command.agent) {
-        const cmdAgent = await Agent.get(command.agent)
+        const cmdAgent = await Agent.get(command.agent);
         if (cmdAgent?.model) {
-          return cmdAgent.model
+          return cmdAgent.model;
         }
       }
-      if (input.model) return Provider.parseModel(input.model)
-      return await lastModel(input.sessionID)
-    })()
+      if (input.model) return Provider.parseModel(input.model);
+      return await lastModel(input.sessionID);
+    })();
 
     try {
-      await Provider.getModel(model.providerID, model.modelID)
+      await Provider.getModel(model.providerID, model.modelID);
     } catch (e) {
       if (Provider.ModelNotFoundError.isInstance(e)) {
-        const { providerID, modelID, suggestions } = e.data
-        const hint = suggestions?.length ? ` Did you mean: ${suggestions.join(", ")}?` : ""
+        const { providerID, modelID, suggestions } = e.data;
+        const hint = suggestions?.length ? ` Did you mean: ${suggestions.join(", ")}?` : "";
         Bus.publish(Session.Event.Error, {
           sessionID: input.sessionID,
           error: new NamedError.Unknown({ message: `Model not found: ${providerID}/${modelID}.${hint}` }).toObject(),
-        })
+        });
       }
-      throw e
+      throw e;
     }
-    const agent = await Agent.get(agentName)
+    const agent = await Agent.get(agentName);
     if (!agent) {
-      const available = await Agent.list().then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))
-      const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
-      const error = new NamedError.Unknown({ message: `Agent not found: "${agentName}".${hint}` })
+      const available = await Agent.list().then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name));
+      const hint = available.length ? ` Available agents: ${available.join(", ")}` : "";
+      const error = new NamedError.Unknown({ message: `Agent not found: "${agentName}".${hint}` });
       Bus.publish(Session.Event.Error, {
         sessionID: input.sessionID,
         error: error.toObject(),
-      })
-      throw error
+      });
+      throw error;
     }
 
     const parts =
@@ -1254,7 +1252,7 @@ export namespace SessionPrompt {
               prompt: await resolvePromptParts(template).then((x) => x.find((y) => y.type === "text")?.text ?? ""),
             },
           ]
-        : await resolvePromptParts(template)
+        : await resolvePromptParts(template);
 
     const result = (await prompt({
       sessionID: input.sessionID,
@@ -1263,33 +1261,33 @@ export namespace SessionPrompt {
       agent: agentName,
       parts,
       variant: input.variant,
-    })) as MessageV2.WithParts
+    })) as MessageV2.WithParts;
 
     Bus.publish(Command.Event.Executed, {
       name: input.command,
       sessionID: input.sessionID,
       arguments: input.arguments,
       messageID: result.info.id,
-    })
+    });
 
-    return result
+    return result;
   }
 
   async function ensureTitle(input: {
-    session: Session.Info
-    message: MessageV2.WithParts
-    history: MessageV2.WithParts[]
-    providerID: string
-    modelID: string
+    session: Session.Info;
+    message: MessageV2.WithParts;
+    history: MessageV2.WithParts[];
+    providerID: string;
+    modelID: string;
   }) {
-    if (input.session.parentID) return
-    if (!Session.isDefaultTitle(input.session.title)) return
+    if (input.session.parentID) return;
+    if (!Session.isDefaultTitle(input.session.title)) return;
     const isFirst =
       input.history.filter((m) => m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic))
-        .length === 1
-    if (!isFirst) return
-    const agent = await Agent.get("title")
-    if (!agent) return
+        .length === 1;
+    if (!isFirst) return;
+    const agent = await Agent.get("title");
+    if (!agent) return;
     const result = await LLM.stream({
       agent,
       user: input.message.info as MessageV2.User,
@@ -1297,10 +1295,10 @@ export namespace SessionPrompt {
       small: true,
       tools: {},
       model: await iife(async () => {
-        if (agent.model) return await Provider.getModel(agent.model.providerID, agent.model.modelID)
+        if (agent.model) return await Provider.getModel(agent.model.providerID, agent.model.modelID);
         return (
           (await Provider.getSmallModel(input.providerID)) ?? (await Provider.getModel(input.providerID, input.modelID))
-        )
+        );
       }),
       abort: new AbortController().signal,
       sessionID: input.session.id,
@@ -1329,19 +1327,19 @@ export namespace SessionPrompt {
           },
         ]),
       ],
-    })
-    const text = await result.text.catch((err) => log.error("failed to generate title", { error: err }))
+    });
+    const text = await result.text.catch((err) => log.error("failed to generate title", { error: err }));
     if (text)
       return Session.update(input.session.id, (draft) => {
         const cleaned = text
           .replace(/<think>[\s\S]*?<\/think>\s*/g, "")
           .split("\n")
           .map((line) => line.trim())
-          .find((line) => line.length > 0)
-        if (!cleaned) return
+          .find((line) => line.length > 0);
+        if (!cleaned) return;
 
-        const title = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned
-        draft.title = title
-      })
+        const title = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned;
+        draft.title = title;
+      });
   }
 }

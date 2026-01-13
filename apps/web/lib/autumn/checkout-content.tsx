@@ -5,21 +5,14 @@ export const getCheckoutContent = (checkoutResult: CheckoutResult) => {
   const { is_one_off, is_free, has_trial, updateable } = product.properties;
   const scenario = product.scenario;
 
-  const nextCycleAtStr = next_cycle
-    ? new Date(next_cycle.starts_at).toLocaleDateString()
-    : undefined;
+  const nextCycleAtStr = next_cycle ? new Date(next_cycle.starts_at).toLocaleDateString() : undefined;
 
   const productName = product.name;
 
   if (is_one_off) {
     return {
       title: <p>Purchase {productName}</p>,
-      message: (
-        <p>
-          By clicking confirm, you will purchase {productName} and your card
-          will be charged immediately.
-        </p>
-      ),
+      message: <p>By clicking confirm, you will purchase {productName} and your card will be charged immediately.</p>,
     };
   }
 
@@ -29,8 +22,8 @@ export const getCheckoutContent = (checkoutResult: CheckoutResult) => {
         title: <p>Update Plan</p>,
         message: (
           <p>
-            Update your prepaid quantity. You&apos;ll be charged or credited the
-            prorated difference based on your current billing cycle.
+            Update your prepaid quantity. You&apos;ll be charged or credited the prorated difference based on your
+            current billing cycle.
           </p>
         ),
       };
@@ -42,8 +35,7 @@ export const getCheckoutContent = (checkoutResult: CheckoutResult) => {
       title: <p>Start trial for {productName}</p>,
       message: (
         <p>
-          By clicking confirm, you will start a free trial of {productName}{" "}
-          which ends on {nextCycleAtStr}.
+          By clicking confirm, you will start a free trial of {productName} which ends on {nextCycleAtStr}.
         </p>
       ),
     };
@@ -55,8 +47,8 @@ export const getCheckoutContent = (checkoutResult: CheckoutResult) => {
         title: <p>{productName} product already scheduled</p>,
         message: (
           <p>
-            You are currently on product {current_product.name} and are
-            scheduled to start {productName} on {nextCycleAtStr}.
+            You are currently on product {current_product.name} and are scheduled to start {productName} on{" "}
+            {nextCycleAtStr}.
           </p>
         ),
       };
@@ -71,32 +63,20 @@ export const getCheckoutContent = (checkoutResult: CheckoutResult) => {
       if (is_free) {
         return {
           title: <p>Enable {productName}</p>,
-          message: (
-            <p>
-              By clicking confirm, {productName} will be enabled immediately.
-            </p>
-          ),
+          message: <p>By clicking confirm, {productName} will be enabled immediately.</p>,
         };
       }
 
       return {
         title: <p>Subscribe to {productName}</p>,
         message: (
-          <p>
-            By clicking confirm, you will be subscribed to {productName} and
-            your card will be charged immediately.
-          </p>
+          <p>By clicking confirm, you will be subscribed to {productName} and your card will be charged immediately.</p>
         ),
       };
     case "renew":
       return {
         title: <p>Renew</p>,
-        message: (
-          <p>
-            By clicking confirm, you will renew your subscription to{" "}
-            {productName}.
-          </p>
-        ),
+        message: <p>By clicking confirm, you will renew your subscription to {productName}.</p>,
       };
 
     case "upgrade":
@@ -104,8 +84,7 @@ export const getCheckoutContent = (checkoutResult: CheckoutResult) => {
         title: <p>Upgrade to {productName}</p>,
         message: (
           <p>
-            By clicking confirm, you will upgrade to {productName} and your
-            payment method will be charged immediately.
+            By clicking confirm, you will upgrade to {productName} and your payment method will be charged immediately.
           </p>
         ),
       };
@@ -115,9 +94,8 @@ export const getCheckoutContent = (checkoutResult: CheckoutResult) => {
         title: <p>Downgrade to {productName}</p>,
         message: (
           <p>
-            By clicking confirm, your current subscription to{" "}
-            {current_product.name} will be cancelled and a new subscription to{" "}
-            {productName} will begin on {nextCycleAtStr}.
+            By clicking confirm, your current subscription to {current_product.name} will be cancelled and a new
+            subscription to {productName} will begin on {nextCycleAtStr}.
           </p>
         ),
       };
@@ -127,8 +105,7 @@ export const getCheckoutContent = (checkoutResult: CheckoutResult) => {
         title: <p>Cancel</p>,
         message: (
           <p>
-            By clicking confirm, your subscription to {current_product.name}{" "}
-            will end on {nextCycleAtStr}.
+            By clicking confirm, your subscription to {current_product.name} will end on {nextCycleAtStr}.
           </p>
         ),
       };

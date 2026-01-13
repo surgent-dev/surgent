@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import React, { useState, useMemo } from "react"
-import type { Message, Part, Permission, TextPart, ToolPart, ReasoningPart, FilePart } from "@opencode-ai/sdk"
+import React, { useState, useMemo } from "react";
+import type { Message, Part, Permission, TextPart, ToolPart, ReasoningPart, FilePart } from "@opencode-ai/sdk";
 import {
   AlertCircle,
   Bot,
@@ -16,13 +16,13 @@ import {
   Search,
   Terminal,
   Trash2,
-} from "lucide-react"
-import { ShimmeringText } from "@/components/ui/shimmer-text"
-import { Markdown } from "@/components/ui/markdown"
-import { useRespondPermission } from "@/queries/chats"
-import useAgentStream from "@/lib/use-agent-stream"
+} from "lucide-react";
+import { ShimmeringText } from "@/components/ui/shimmer-text";
+import { Markdown } from "@/components/ui/markdown";
+import { useRespondPermission } from "@/queries/chats";
+import useAgentStream from "@/lib/use-agent-stream";
 
-type PermissionResponse = "once" | "always" | "reject"
+type PermissionResponse = "once" | "always" | "reject";
 
 const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: string }> = {
   read: { icon: Eye, done: "Read", doing: "Reading..." },
@@ -39,62 +39,62 @@ const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: stri
   task: { icon: Bot, done: "Subagent", doing: "Subagent..." },
   dev: { icon: Play, done: "Started", doing: "Starting..." },
   devLogs: { icon: Terminal, done: "Logs", doing: "Loading..." },
-}
+};
 
 function getTarget(part: ToolPart): string | undefined {
-  if (part.state.status === "pending") return
-  const input = part.state.input as Record<string, unknown>
+  if (part.state.status === "pending") return;
+  const input = part.state.input as Record<string, unknown>;
   if (["read", "write", "edit"].includes(part.tool))
     return String(input.filePath || "")
       .split(/[/\\]/)
-      .pop()
-  if (["bash", "dev"].includes(part.tool)) return String(input.command || "")
-  if (part.tool === "task") return String(input.description || input.subagent_type || "")
-  if (part.tool === "grep") return String(input.pattern || "")
-  if (part.tool === "glob") return String(input.pattern || "")
-  if (part.tool === "list") return String(input.path || "/")
+      .pop();
+  if (["bash", "dev"].includes(part.tool)) return String(input.command || "");
+  if (part.tool === "task") return String(input.description || input.subagent_type || "");
+  if (part.tool === "grep") return String(input.pattern || "");
+  if (part.tool === "glob") return String(input.pattern || "");
+  if (part.tool === "list") return String(input.path || "/");
   if (part.tool === "webfetch") {
     try {
-      return new URL(String(input.url)).hostname
+      return new URL(String(input.url)).hostname;
     } catch {
-      return String(input.url)
+      return String(input.url);
     }
   }
 }
 
 function formatValue(val: unknown): string {
-  if (val === undefined || val === null) return ""
-  if (typeof val === "string") return val
-  return JSON.stringify(val, null, 2)
+  if (val === undefined || val === null) return "";
+  if (typeof val === "string") return val;
+  return JSON.stringify(val, null, 2);
 }
 
-type Turn = { user: Message; assistants: Message[] }
+type Turn = { user: Message; assistants: Message[] };
 
 function groupTurns(messages: Message[]): Turn[] {
-  const turns: Turn[] = []
-  let current: Turn | undefined
+  const turns: Turn[] = [];
+  let current: Turn | undefined;
   messages.forEach((m) => {
     if (m.role === "user") {
-      current = { user: m, assistants: [] }
-      turns.push(current)
-      return
+      current = { user: m, assistants: [] };
+      turns.push(current);
+      return;
     }
-    if (m.role === "assistant" && current) current.assistants.push(m)
-  })
-  return turns
+    if (m.role === "assistant" && current) current.assistants.push(m);
+  });
+  return turns;
 }
 
-type TodoItem = { id?: string; content?: string; status?: string }
+type TodoItem = { id?: string; content?: string; status?: string };
 
 function getTodosFromToolPart(part: ToolPart): TodoItem[] {
-  const input = part.state.status !== "pending" ? (part.state.input as Record<string, unknown>) : {}
-  if (Array.isArray(input?.todos)) return input.todos as TodoItem[]
-  if (part.state.status !== "completed") return []
+  const input = part.state.status !== "pending" ? (part.state.input as Record<string, unknown>) : {};
+  if (Array.isArray(input?.todos)) return input.todos as TodoItem[];
+  if (part.state.status !== "completed") return [];
   try {
-    const val = typeof part.state.output === "string" ? JSON.parse(part.state.output) : part.state.output
-    return Array.isArray(val) ? (val as TodoItem[]) : []
+    const val = typeof part.state.output === "string" ? JSON.parse(part.state.output) : part.state.output;
+    return Array.isArray(val) ? (val as TodoItem[]) : [];
   } catch {
-    return []
+    return [];
   }
 }
 
@@ -104,10 +104,10 @@ function PermissionPrompt({
   responding,
   error,
 }: {
-  permission: Permission
-  onRespond: (response: PermissionResponse) => void
-  responding: boolean
-  error?: string
+  permission: Permission;
+  onRespond: (response: PermissionResponse) => void;
+  responding: boolean;
+  error?: string;
 }) {
   return (
     <div className="rounded-lg border overflow-hidden bg-muted/30">
@@ -145,7 +145,7 @@ function PermissionPrompt({
       </div>
       {error && <div className="px-3 py-1.5 text-[11px] text-destructive border-t">{error}</div>}
     </div>
-  )
+  );
 }
 
 function Tool({
@@ -156,20 +156,20 @@ function Tool({
   responding,
   respondError,
 }: {
-  part: ToolPart
-  projectId?: string
-  permission?: Permission
-  onRespondPermission?: (permission: Permission, response: PermissionResponse) => void
-  responding?: boolean
-  respondError?: string
+  part: ToolPart;
+  projectId?: string;
+  permission?: Permission;
+  onRespondPermission?: (permission: Permission, response: PermissionResponse) => void;
+  responding?: boolean;
+  respondError?: string;
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const cfg = TOOLS[part.tool] || { icon: FileText, done: part.tool, doing: "Working..." }
-  const Icon = cfg.icon
-  const target = getTarget(part)
-  const running = part.state.status === "running" || part.state.status === "pending"
-  const meta = part.state.status === "pending" ? undefined : part.state.metadata
-  const subSessionId = part.tool === "task" && typeof meta?.sessionId === "string" ? meta.sessionId : undefined
+  const [expanded, setExpanded] = useState(false);
+  const cfg = TOOLS[part.tool] || { icon: FileText, done: part.tool, doing: "Working..." };
+  const Icon = cfg.icon;
+  const target = getTarget(part);
+  const running = part.state.status === "running" || part.state.status === "pending";
+  const meta = part.state.status === "pending" ? undefined : part.state.metadata;
+  const subSessionId = part.tool === "task" && typeof meta?.sessionId === "string" ? meta.sessionId : undefined;
 
   const header = (() => {
     if (running) {
@@ -182,7 +182,7 @@ function Tool({
             </code>
           )}
         </div>
-      )
+      );
     }
 
     if (part.state.status === "error") {
@@ -191,7 +191,7 @@ function Tool({
           <Icon className="size-2.5 sm:size-3 shrink-0" />
           <span>Skipped {target || cfg.done}</span>
         </div>
-      )
+      );
     }
 
     return (
@@ -209,8 +209,8 @@ function Tool({
           {expanded ? "▾" : "▸"}
         </span>
       </div>
-    )
-  })()
+    );
+  })();
 
   return (
     <div className={permission ? "space-y-2" : undefined}>
@@ -263,11 +263,11 @@ function Tool({
         />
       )}
     </div>
-  )
+  );
 }
 
 function SubagentStream({ projectId, sessionId }: { projectId: string; sessionId: string }) {
-  const { messages, parts, permissions, loading, connected } = useAgentStream({ projectId, sessionId })
+  const { messages, parts, permissions, loading, connected } = useAgentStream({ projectId, sessionId });
 
   return (
     <div className="space-y-2">
@@ -284,14 +284,14 @@ function SubagentStream({ projectId, sessionId }: { projectId: string; sessionId
         permissions={permissions}
       />
     </div>
-  )
+  );
 }
 
 function Todos({ part }: { part: ToolPart }) {
-  const loading = part.state.status === "running" || part.state.status === "pending"
-  const todos = useMemo(() => getTodosFromToolPart(part), [part.state])
+  const loading = part.state.status === "running" || part.state.status === "pending";
+  const todos = useMemo(() => getTodosFromToolPart(part), [part.state]);
 
-  const done = todos.filter((t) => t.status === "completed").length
+  const done = todos.filter((t) => t.status === "completed").length;
 
   return (
     <div className="my-1.5 sm:my-2 p-2 sm:p-3 rounded-xl bg-muted/50 border w-full min-w-0">
@@ -305,7 +305,7 @@ function Todos({ part }: { part: ToolPart }) {
       {todos.length > 0 ? (
         <div className="space-y-1 sm:space-y-1.5">
           {todos.map((t, i) => {
-            const isDone = t.status === "completed"
+            const isDone = t.status === "completed";
             return (
               <div
                 key={t.id || i}
@@ -322,14 +322,14 @@ function Todos({ part }: { part: ToolPart }) {
                   {t.content}
                 </span>
               </div>
-            )
+            );
           })}
         </div>
       ) : (
         <p className="text-[11px] sm:text-xs text-muted-foreground">No tasks yet</p>
       )}
     </div>
-  )
+  );
 }
 
 function Thinking({
@@ -338,10 +338,10 @@ function Thinking({
   open,
   toggle,
 }: {
-  text: string
-  streaming: boolean
-  open: boolean
-  toggle: () => void
+  text: string;
+  streaming: boolean;
+  open: boolean;
+  toggle: () => void;
 }) {
   return (
     <div className="my-1">
@@ -362,11 +362,11 @@ function Thinking({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function FileThumb({ file }: { file: FilePart }) {
-  const isImage = file.mime?.startsWith("image/")
+  const isImage = file.mime?.startsWith("image/");
   return (
     <a
       href={file.url}
@@ -383,17 +383,17 @@ function FileThumb({ file }: { file: FilePart }) {
         </div>
       )}
     </a>
-  )
+  );
 }
 
 function ApiError({
   error,
 }: {
-  error: { code?: string; data?: { code?: string; message?: string }; message?: string; name?: string }
+  error: { code?: string; data?: { code?: string; message?: string }; message?: string; name?: string };
 }) {
-  const code = error?.code || error?.data?.code
-  const msg = error?.data?.message || error?.message || error?.name || "Request failed"
-  const isContext = code === "context_length_exceeded" || msg.includes("context")
+  const code = error?.code || error?.data?.code;
+  const msg = error?.data?.message || error?.message || error?.name || "Request failed";
+  const isContext = code === "context_length_exceeded" || msg.includes("context");
 
   return (
     <div
@@ -404,7 +404,7 @@ function ApiError({
         {isContext ? "Context limit reached. Start a new session." : msg}
       </p>
     </div>
-  )
+  );
 }
 
 export function AgentThread({
@@ -415,52 +415,52 @@ export function AgentThread({
   permissions,
   isWorking,
 }: {
-  projectId?: string
-  sessionId: string
-  messages: Message[]
-  partsMap: Record<string, Part[]>
-  permissions?: Permission[]
-  isWorking?: boolean
+  projectId?: string;
+  sessionId: string;
+  messages: Message[];
+  partsMap: Record<string, Part[]>;
+  permissions?: Permission[];
+  isWorking?: boolean;
 }) {
-  const [openThoughts, setOpenThoughts] = useState<Record<string, boolean>>({})
-  const [permissionErrors, setPermissionErrors] = useState<Record<string, string>>({})
-  const respondPermission = useRespondPermission(projectId, sessionId)
+  const [openThoughts, setOpenThoughts] = useState<Record<string, boolean>>({});
+  const [permissionErrors, setPermissionErrors] = useState<Record<string, string>>({});
+  const respondPermission = useRespondPermission(projectId, sessionId);
 
-  const turns = useMemo(() => groupTurns(messages), [messages])
+  const turns = useMemo(() => groupTurns(messages), [messages]);
 
   const permissionByCallId = useMemo(() => {
-    const map = new Map<string, Permission>()
-    ;(permissions ?? []).forEach((p) => {
-      if (p.callID) map.set(p.callID, p)
-    })
-    return map
-  }, [permissions])
+    const map = new Map<string, Permission>();
+    (permissions ?? []).forEach((p) => {
+      if (p.callID) map.set(p.callID, p);
+    });
+    return map;
+  }, [permissions]);
 
   const toolCallIds = useMemo(() => {
-    const ids = new Set<string>()
+    const ids = new Set<string>();
     messages.forEach((m) => {
-      ;(partsMap[m.id] ?? []).forEach((p) => {
-        if (p.type !== "tool") return
-        const toolPart = p as ToolPart
-        if (toolPart.tool === "todoread") return
-        if (toolPart.callID) ids.add(toolPart.callID)
-      })
-    })
-    return ids
-  }, [partsMap, messages])
+      (partsMap[m.id] ?? []).forEach((p) => {
+        if (p.type !== "tool") return;
+        const toolPart = p as ToolPart;
+        if (toolPart.tool === "todoread") return;
+        if (toolPart.callID) ids.add(toolPart.callID);
+      });
+    });
+    return ids;
+  }, [partsMap, messages]);
 
   const unmatchedPermissions = useMemo(() => {
-    if (!permissions?.length) return []
-    return permissions.filter((p) => !p.callID || !toolCallIds.has(p.callID))
-  }, [permissions, toolCallIds])
+    if (!permissions?.length) return [];
+    return permissions.filter((p) => !p.callID || !toolCallIds.has(p.callID));
+  }, [permissions, toolCallIds]);
 
   const respondToPermission = (permission: Permission, response: PermissionResponse) => {
-    if (!projectId) return
+    if (!projectId) return;
     setPermissionErrors((s) => {
-      if (!s[permission.id]) return s
-      const { [permission.id]: _, ...rest } = s
-      return rest
-    })
+      if (!s[permission.id]) return s;
+      const { [permission.id]: _, ...rest } = s;
+      return rest;
+    });
     respondPermission.mutate(
       { permissionId: permission.id, response },
       {
@@ -468,32 +468,32 @@ export function AgentThread({
           setPermissionErrors((s) => ({
             ...s,
             [permission.id]: err instanceof Error ? err.message : String(err),
-          }))
+          }));
         },
       },
-    )
-  }
+    );
+  };
 
   const getText = (m: Message) => {
     const fromParts = (partsMap[m.id] ?? [])
       .filter((p): p is TextPart => p.type === "text")
       .filter((p) => !p.synthetic && !p.ignored)
       .map((p) => p.text)
-      .join("\n")
-    const summary = m.summary
-    const fromSummary = summary && typeof summary === "object" ? summary.body || summary.title || "" : ""
-    const text = fromParts || fromSummary
+      .join("\n");
+    const summary = m.summary;
+    const fromSummary = summary && typeof summary === "object" ? summary.body || summary.title || "" : "";
+    const text = fromParts || fromSummary;
     if (m.role === "user") {
-      return text.replace(/!\[[^\]]*\]\([^)]+\)\n*/g, "").trim()
+      return text.replace(/!\[[^\]]*\]\([^)]+\)\n*/g, "").trim();
     }
-    return text
-  }
+    return text;
+  };
 
-  const getFiles = (m: Message) => partsMap[m.id]?.filter((p): p is FilePart => p.type === "file") ?? []
+  const getFiles = (m: Message) => partsMap[m.id]?.filter((p): p is FilePart => p.type === "file") ?? [];
 
   const renderPart = (p: Part) => {
     if (p.type === "subtask") {
-      const description = p.description ? ` — ${p.description}` : ""
+      const description = p.description ? ` — ${p.description}` : "";
       return (
         <div
           key={p.id}
@@ -503,13 +503,13 @@ export function AgentThread({
           <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs">@{p.agent}</code>
           {description}
         </div>
-      )
+      );
     }
 
     if (p.type === "reasoning") {
-      const text = (p as ReasoningPart).text?.replace("[REDACTED]", "").trim() || ""
-      const streaming = !(p as ReasoningPart).time?.end
-      if (!text && !streaming) return null
+      const text = (p as ReasoningPart).text?.replace("[REDACTED]", "").trim() || "";
+      const streaming = !(p as ReasoningPart).time?.end;
+      if (!text && !streaming) return null;
       return (
         <Thinking
           key={p.id}
@@ -518,15 +518,15 @@ export function AgentThread({
           open={openThoughts[p.id] ?? streaming}
           toggle={() => setOpenThoughts((s) => ({ ...s, [p.id]: !s[p.id] }))}
         />
-      )
+      );
     }
 
     if (p.type === "tool") {
-      const toolPart = p as ToolPart
-      const permission = toolPart.callID ? permissionByCallId.get(toolPart.callID) : undefined
-      if (toolPart.tool === "todoread") return null
+      const toolPart = p as ToolPart;
+      const permission = toolPart.callID ? permissionByCallId.get(toolPart.callID) : undefined;
+      if (toolPart.tool === "todoread") return null;
       if (toolPart.tool === "todowrite") {
-        if (!permission) return <Todos key={p.id} part={toolPart} />
+        if (!permission) return <Todos key={p.id} part={toolPart} />;
         return (
           <div key={p.id} className="space-y-2">
             <Todos part={toolPart} />
@@ -537,7 +537,7 @@ export function AgentThread({
               error={permissionErrors[permission.id]}
             />
           </div>
-        )
+        );
       }
       return (
         <Tool
@@ -549,7 +549,7 @@ export function AgentThread({
           responding={respondPermission.isPending && respondPermission.variables?.permissionId === permission?.id}
           respondError={permission ? permissionErrors[permission.id] : undefined}
         />
-      )
+      );
     }
 
     if (p.type === "file")
@@ -557,43 +557,43 @@ export function AgentThread({
         <div key={p.id} className="flex gap-1 py-1">
           <FileThumb file={p as FilePart} />
         </div>
-      )
+      );
 
     // Hide step markers - these are internal and noisy
     if (p.type === "step-start" || p.type === "step-finish" || p.type === "patch") {
-      return null
+      return null;
     }
 
     if (p.type === "text") {
-      const content = (p as TextPart).text?.trim()
-      if (!content) return null
+      const content = (p as TextPart).text?.trim();
+      if (!content) return null;
       return (
         <Markdown key={p.id} className="[&_p]:text-[13px] [&_p]:sm:text-sm [&_li]:text-[13px] [&_li]:sm:text-sm">
           {content}
         </Markdown>
-      )
+      );
     }
 
-    return null
-  }
+    return null;
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6">
       {turns.map((turn, idx) => {
-        const timeline = turn.assistants.flatMap((m) => partsMap[m.id] || [])
+        const timeline = turn.assistants.flatMap((m) => partsMap[m.id] || []);
 
-        const text = getText(turn.user)
-        const userFiles = getFiles(turn.user)
-        const userParts = partsMap[turn.user.id] ?? []
-        const isSyntheticUser = userParts.some((p) => p.type === "text" && (p as TextPart).synthetic)
-        const isLast = idx === turns.length - 1
-        const lastAssistant = turn.assistants[turn.assistants.length - 1]
+        const text = getText(turn.user);
+        const userFiles = getFiles(turn.user);
+        const userParts = partsMap[turn.user.id] ?? [];
+        const isSyntheticUser = userParts.some((p) => p.type === "text" && (p as TextPart).synthetic);
+        const isLast = idx === turns.length - 1;
+        const lastAssistant = turn.assistants[turn.assistants.length - 1];
         const working = isLast
           ? (isWorking ?? !!(lastAssistant && lastAssistant.role === "assistant" && !lastAssistant.time.completed))
-          : false
-        const showPlanning = isLast && !!working
-        const showSending = isLast && userParts.length === 0 && !text && userFiles.length === 0
-        const showUser = !isSyntheticUser && (userFiles.length > 0 || !!text || showSending)
+          : false;
+        const showPlanning = isLast && !!working;
+        const showSending = isLast && userParts.length === 0 && !text && userFiles.length === 0;
+        const showUser = !isSyntheticUser && (userFiles.length > 0 || !!text || showSending);
 
         return (
           <div key={turn.user.id} className="space-y-2 sm:space-y-3">
@@ -625,19 +625,19 @@ export function AgentThread({
                 const err =
                   (
                     m as Message & {
-                      error?: { data?: { message?: string }; message?: string; name?: string }
-                      info?: { error?: { data?: { message?: string }; message?: string; name?: string } }
+                      error?: { data?: { message?: string }; message?: string; name?: string };
+                      info?: { error?: { data?: { message?: string }; message?: string; name?: string } };
                     }
                   ).error ||
                   (
                     m as Message & {
-                      info?: { error?: { data?: { message?: string }; message?: string; name?: string } }
+                      info?: { error?: { data?: { message?: string }; message?: string; name?: string } };
                     }
-                  ).info?.error
-                if (!err) return null
-                const msg = err.data?.message || err.message || err.name || "Request failed"
-                if (msg.toLowerCase().includes("abort")) return null
-                return <ApiError key={m.id} error={err} />
+                  ).info?.error;
+                if (!err) return null;
+                const msg = err.data?.message || err.message || err.name || "Request failed";
+                if (msg.toLowerCase().includes("abort")) return null;
+                return <ApiError key={m.id} error={err} />;
               })}
 
               {timeline.map(renderPart)}
@@ -664,8 +664,8 @@ export function AgentThread({
               )}
             </div>
           </div>
-        )
+        );
       })}
     </div>
-  )
+  );
 }

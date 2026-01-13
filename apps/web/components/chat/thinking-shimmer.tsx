@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 export function ThinkingShimmer() {
   return (
@@ -12,4 +12,3 @@ export function ThinkingShimmer() {
     </div>
   );
 }
-

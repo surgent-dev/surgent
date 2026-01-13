@@ -13,11 +13,7 @@ import {
   downloadProject,
   HttpError,
 } from "@/controllers/projects";
-import {
-  listDeploymentEnvVars,
-  setDeploymentEnvVars,
-  buildDashboardCredentials,
-} from "@/apis/convex";
+import { listDeploymentEnvVars, setDeploymentEnvVars, buildDashboardCredentials } from "@/apis/convex";
 import { createGitHubApp, GitHubService } from "@/apis/github";
 import { ungzip } from "pako";
 
@@ -32,15 +28,10 @@ projects.use("*", async (c, next) => {
 
 // Helper to fetch project and verify ownership
 async function getOwnedProject(id: string, userId: string) {
-  const project = await db
-    .selectFrom("project")
-    .selectAll()
-    .where("id", "=", id)
-    .executeTakeFirst();
+  const project = await db.selectFrom("project").selectAll().where("id", "=", id).executeTakeFirst();
 
   if (!project) return { error: "Project not found", status: 404 as const };
-  if (project.userId !== userId)
-    return { error: "Forbidden", status: 403 as const };
+  if (project.userId !== userId) return { error: "Forbidden", status: 403 as const };
 
   return { project };
 }
@@ -70,15 +61,10 @@ projects.get("/", requireAuth, async (c) => {
 // GET /projects/:id - Get single project
 projects.get("/:id", zValidator("param", idParam), async (c) => {
   const { id } = c.req.valid("param");
-  const row = await db
-    .selectFrom("project")
-    .selectAll()
-    .where("id", "=", id)
-    .executeTakeFirst();
+  const row = await db.selectFrom("project").selectAll().where("id", "=", id).executeTakeFirst();
 
   if (!row) return c.json({ error: "Project not found" }, 404);
-  if (row.userId !== c.get("user")!.id)
-    return c.json({ error: "Forbidden" }, 403);
+  if (row.userId !== c.get("user")!.id) return c.json({ error: "Forbidden" }, 403);
   return c.json(row);
 });
 
@@ -96,11 +82,7 @@ projects.patch(
       return c.json({ error: result.error }, result.status);
     }
 
-    await db
-      .updateTable("project")
-      .set({ name, updatedAt: new Date() })
-      .where("id", "=", id)
-      .execute();
+    await db.updateTable("project").set({ name, updatedAt: new Date() }).where("id", "=", id).execute();
 
     return c.json({ updated: true });
   },
@@ -149,8 +131,7 @@ projects.post(
       return c.json({ id: result.projectId });
     } catch (err) {
       const status = err instanceof HttpError ? err.status : 500;
-      const message =
-        err instanceof Error ? err.message : "Failed to create project";
+      const message = err instanceof Error ? err.message : "Failed to create project";
       console.error("[projects] create failed", {
         userId: c.get("user")?.id,
         error: message,
@@ -175,14 +156,9 @@ projects.post(
         deployName,
       });
 
-      const row = await db
-        .selectFrom("project")
-        .selectAll()
-        .where("id", "=", id)
-        .executeTakeFirst();
+      const row = await db.selectFrom("project").selectAll().where("id", "=", id).executeTakeFirst();
       if (!row) return c.json({ error: "Project not found" }, 404);
-      if (row.userId !== c.get("user")!.id)
-        return c.json({ error: "Forbidden" }, 403);
+      if (row.userId !== c.get("user")!.id) return c.json({ error: "Forbidden" }, 403);
 
       const name = deployName ? sanitizeDeployName(deployName) : undefined;
       const previewUrl = name ? `https://${name}.surgent.site` : undefined;
@@ -223,14 +199,9 @@ projects.post(
 // POST /projects/:id/activate - Resume project sandbox (alias)
 projects.post("/:id/activate", zValidator("param", idParam), async (c) => {
   const { id } = c.req.valid("param");
-  const row = await db
-    .selectFrom("project")
-    .selectAll()
-    .where("id", "=", id)
-    .executeTakeFirst();
+  const row = await db.selectFrom("project").selectAll().where("id", "=", id).executeTakeFirst();
   if (!row) return c.json({ error: "Project not found" }, 404);
-  if (row.userId !== c.get("user")!.id)
-    return c.json({ error: "Forbidden" }, 403);
+  if (row.userId !== c.get("user")!.id) return c.json({ error: "Forbidden" }, 403);
 
   const sandboxId = row.sandbox?.id;
   if (!sandboxId) return c.json({ error: "Sandbox not found" }, 400);
@@ -243,11 +214,7 @@ projects.post("/:id/activate", zValidator("param", idParam), async (c) => {
 // GET /projects/:id/health - Check if sandbox preview is reachable
 projects.get("/:id/health", zValidator("param", idParam), async (c) => {
   const { id } = c.req.valid("param");
-  const row = await db
-    .selectFrom("project")
-    .selectAll()
-    .where("id", "=", id)
-    .executeTakeFirst();
+  const row = await db.selectFrom("project").selectAll().where("id", "=", id).executeTakeFirst();
   if (!row) return c.json({ status: "not_found" }, 404);
   if (row.userId !== c.get("user")!.id) return c.json({ status: "forbidden" }, 403);
 
@@ -293,46 +260,29 @@ projects.get("/:id/download", zValidator("param", idParam), async (c) => {
 });
 
 // Convex prod deploy (promote)
-projects.post(
-  "/:id/convex/deploy/prod",
-  zValidator("param", idParam),
-  async (c) => {
-    const { id } = c.req.valid("param");
-    const row = await db
-      .selectFrom("project")
-      .selectAll()
-      .where("id", "=", id)
-      .executeTakeFirst();
-    if (!row) return c.json({ error: "Project not found" }, 404);
-    if (row.userId !== c.get("user")!.id)
-      return c.json({ error: "Forbidden" }, 403);
+projects.post("/:id/convex/deploy/prod", zValidator("param", idParam), async (c) => {
+  const { id } = c.req.valid("param");
+  const row = await db.selectFrom("project").selectAll().where("id", "=", id).executeTakeFirst();
+  if (!row) return c.json({ error: "Project not found" }, 404);
+  if (row.userId !== c.get("user")!.id) return c.json({ error: "Forbidden" }, 403);
 
-    await deployConvexProd({ projectId: id });
-    return c.json({ deployed: true });
-  },
-);
+  await deployConvexProd({ projectId: id });
+  return c.json({ deployed: true });
+});
 
 // GET /projects/:id/convex/env - List all environment variables
 projects.get("/:id/convex/env", zValidator("param", idParam), async (c) => {
   const { id } = c.req.valid("param");
-  const row = await db
-    .selectFrom("project")
-    .selectAll()
-    .where("id", "=", id)
-    .executeTakeFirst();
+  const row = await db.selectFrom("project").selectAll().where("id", "=", id).executeTakeFirst();
   if (!row) return c.json({ error: "Project not found" }, 404);
-  if (row.userId !== c.get("user")!.id)
-    return c.json({ error: "Forbidden" }, 403);
+  if (row.userId !== c.get("user")!.id) return c.json({ error: "Forbidden" }, 403);
 
   const convex = (row.metadata as any)?.convex;
   if (!convex?.deploymentUrl || !convex?.deployKey) {
     return c.json({ error: "Convex not provisioned" }, 400);
   }
 
-  const vars = await listDeploymentEnvVars(
-    convex.deploymentUrl,
-    convex.deployKey,
-  );
+  const vars = await listDeploymentEnvVars(convex.deploymentUrl, convex.deployKey);
   return c.json({ environmentVariables: vars });
 });
 
@@ -345,14 +295,9 @@ projects.post(
     const { id } = c.req.valid("param");
     const { vars } = c.req.valid("json");
 
-    const row = await db
-      .selectFrom("project")
-      .selectAll()
-      .where("id", "=", id)
-      .executeTakeFirst();
+    const row = await db.selectFrom("project").selectAll().where("id", "=", id).executeTakeFirst();
     if (!row) return c.json({ error: "Project not found" }, 404);
-    if (row.userId !== c.get("user")!.id)
-      return c.json({ error: "Forbidden" }, 403);
+    if (row.userId !== c.get("user")!.id) return c.json({ error: "Forbidden" }, 403);
 
     const convex = (row.metadata as any)?.convex;
     if (!convex?.deploymentUrl || !convex?.deployKey) {
@@ -365,37 +310,24 @@ projects.post(
 );
 
 // GET /projects/:id/convex/dashboard - Get dashboard embed credentials
-projects.get(
-  "/:id/convex/dashboard",
-  zValidator("param", idParam),
-  async (c) => {
-    const { id } = c.req.valid("param");
-    const row = await db
-      .selectFrom("project")
-      .selectAll()
-      .where("id", "=", id)
-      .executeTakeFirst();
-    if (!row) return c.json({ error: "Project not found" }, 404);
-    if (row.userId !== c.get("user")!.id)
-      return c.json({ error: "Forbidden" }, 403);
+projects.get("/:id/convex/dashboard", zValidator("param", idParam), async (c) => {
+  const { id } = c.req.valid("param");
+  const row = await db.selectFrom("project").selectAll().where("id", "=", id).executeTakeFirst();
+  if (!row) return c.json({ error: "Project not found" }, 404);
+  if (row.userId !== c.get("user")!.id) return c.json({ error: "Forbidden" }, 403);
 
-    const convex = (row.metadata as any)?.convex;
-    if (
-      !convex?.deploymentName ||
-      !convex?.deploymentUrl ||
-      !convex?.deployKey
-    ) {
-      return c.json({ error: "Convex not provisioned" }, 400);
-    }
+  const convex = (row.metadata as any)?.convex;
+  if (!convex?.deploymentName || !convex?.deploymentUrl || !convex?.deployKey) {
+    return c.json({ error: "Convex not provisioned" }, 400);
+  }
 
-    const credentials = buildDashboardCredentials({
-      deploymentName: convex.deploymentName,
-      deploymentUrl: convex.deploymentUrl,
-      deployKey: convex.deployKey,
-    });
-    return c.json(credentials);
-  },
-);
+  const credentials = buildDashboardCredentials({
+    deploymentName: convex.deploymentName,
+    deploymentUrl: convex.deploymentUrl,
+    deployKey: convex.deployKey,
+  });
+  return c.json(credentials);
+});
 
 // ============================================
 // GitHub Integration Endpoints
@@ -421,11 +353,7 @@ projects.get("/:id/github/status", zValidator("param", idParam), async (c) => {
     return c.json({ error: result.error }, result.status);
   }
 
-  const installations = await db
-    .selectFrom("github_installations")
-    .selectAll()
-    .where("userId", "=", userId)
-    .execute();
+  const installations = await db.selectFrom("github_installations").selectAll().where("userId", "=", userId).execute();
   const oauthLinked = installations.some((item) => item.userAccessToken);
   const installationList = installations.map((item) => ({
     id: item.installationId,
@@ -445,9 +373,7 @@ projects.get("/:id/github/status", zValidator("param", idParam), async (c) => {
 
   const projectGithub = result.project.github as ProjectGitHub | null;
   const connectedInstallation = projectGithub?.installationId
-    ? installationList.find(
-        (item) => item.id === projectGithub.installationId,
-      )
+    ? installationList.find((item) => item.id === projectGithub.installationId)
     : installationList[0];
 
   if (!projectGithub?.repoOwner) {
@@ -477,27 +403,23 @@ projects.get("/:id/github/status", zValidator("param", idParam), async (c) => {
 });
 
 // GET /projects/:id/github/install-url - Get GitHub App installation URL
-projects.get(
-  "/:id/github/install-url",
-  zValidator("param", idParam),
-  async (c) => {
-    const { id } = c.req.valid("param");
-    const userId = c.get("user")!.id;
+projects.get("/:id/github/install-url", zValidator("param", idParam), async (c) => {
+  const { id } = c.req.valid("param");
+  const userId = c.get("user")!.id;
 
-    const result = await getOwnedProject(id, userId);
-    if ("error" in result) {
-      return c.json({ error: result.error }, result.status);
-    }
+  const result = await getOwnedProject(id, userId);
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
 
-    const githubApp = createGitHubApp();
-    if (!githubApp) {
-      return c.json({ error: "GitHub App not configured" }, 500);
-    }
+  const githubApp = createGitHubApp();
+  if (!githubApp) {
+    return c.json({ error: "GitHub App not configured" }, 500);
+  }
 
-    const url = await githubApp.buildInstallUrl(userId, id);
-    return c.json({ url });
-  },
-);
+  const url = await githubApp.buildInstallUrl(userId, id);
+  return c.json({ url });
+});
 
 // GET /projects/:id/github/repos - List repos accessible to user's installation
 projects.get("/:id/github/repos", zValidator("param", idParam), async (c) => {
@@ -525,9 +447,7 @@ projects.get("/:id/github/repos", zValidator("param", idParam), async (c) => {
   }
 
   try {
-    const repos = await githubApp.listInstallationRepos(
-      installation.installationId,
-    );
+    const repos = await githubApp.listInstallationRepos(installation.installationId);
     return c.json({ repos });
   } catch (err) {
     console.error("[github] Failed to list repos", err);
@@ -576,38 +496,26 @@ projects.post(
       defaultBranch: defaultBranch || "main",
     };
 
-    await db
-      .updateTable("project")
-      .set({ github, updatedAt: new Date() })
-      .where("id", "=", id)
-      .execute();
+    await db.updateTable("project").set({ github, updatedAt: new Date() }).where("id", "=", id).execute();
 
     return c.json({ connected: true });
   },
 );
 
 // POST /projects/:id/github/disconnect - Disconnect project from GitHub repo
-projects.post(
-  "/:id/github/disconnect",
-  zValidator("param", idParam),
-  async (c) => {
-    const { id } = c.req.valid("param");
-    const userId = c.get("user")!.id;
+projects.post("/:id/github/disconnect", zValidator("param", idParam), async (c) => {
+  const { id } = c.req.valid("param");
+  const userId = c.get("user")!.id;
 
-    const result = await getOwnedProject(id, userId);
-    if ("error" in result) {
-      return c.json({ error: result.error }, result.status);
-    }
+  const result = await getOwnedProject(id, userId);
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
 
-    await db
-      .updateTable("project")
-      .set({ github: null, updatedAt: new Date() })
-      .where("id", "=", id)
-      .execute();
+  await db.updateTable("project").set({ github: null, updatedAt: new Date() }).where("id", "=", id).execute();
 
-    return c.json({ disconnected: true });
-  },
-);
+  return c.json({ disconnected: true });
+});
 
 // POST /projects/:id/github/create-repo - Create a new GitHub repo and connect it to the project
 projects.post(
@@ -628,12 +536,7 @@ projects.post(
   ),
   async (c) => {
     const { id } = c.req.valid("param");
-    const {
-      name,
-      description,
-      private: isPrivate,
-      installationId,
-    } = c.req.valid("json");
+    const { name, description, private: isPrivate, installationId } = c.req.valid("json");
     const userId = c.get("user")!.id;
 
     const result = await getOwnedProject(id, userId);
@@ -648,17 +551,12 @@ projects.post(
           .where("userId", "=", userId)
           .where("installationId", "=", installationId)
           .executeTakeFirst()
-      : await db
-          .selectFrom("github_installations")
-          .selectAll()
-          .where("userId", "=", userId)
-          .executeTakeFirst();
+      : await db.selectFrom("github_installations").selectAll().where("userId", "=", userId).executeTakeFirst();
 
     if (!installation) {
       return c.json(
         {
-          error:
-            "GitHub installation not found. Please install the GitHub App first.",
+          error: "GitHub installation not found. Please install the GitHub App first.",
         },
         400,
       );
@@ -675,16 +573,12 @@ projects.post(
       if (!oauthToken?.userAccessToken) {
         return c.json(
           {
-            error:
-              "GitHub authorization missing. Please authorize the GitHub App to create repositories.",
+            error: "GitHub authorization missing. Please authorize the GitHub App to create repositories.",
           },
           400,
         );
       }
-      if (
-        oauthToken.userAccessTokenExpiresAt &&
-        new Date(oauthToken.userAccessTokenExpiresAt) <= new Date()
-      ) {
+      if (oauthToken.userAccessTokenExpiresAt && new Date(oauthToken.userAccessTokenExpiresAt) <= new Date()) {
         return c.json(
           {
             error: "GitHub authorization expired. Please authorize again.",
@@ -694,8 +588,7 @@ projects.post(
       }
 
       // Create the repository
-      const isOrg =
-        installation.accountType.toLowerCase() === "organization";
+      const isOrg = installation.accountType.toLowerCase() === "organization";
       const createResult = isOrg
         ? await GitHubService.createOrganizationRepository({
             org: installation.accountLogin,
@@ -712,10 +605,7 @@ projects.post(
           });
 
       if (!createResult.success || !createResult.repository) {
-        return c.json(
-          { error: createResult.error || "Failed to create repository" },
-          400,
-        );
+        return c.json({ error: createResult.error || "Failed to create repository" }, 400);
       }
 
       const repo = createResult.repository;
@@ -729,11 +619,7 @@ projects.post(
         defaultBranch: repo.default_branch,
       };
 
-      await db
-        .updateTable("project")
-        .set({ github, updatedAt: new Date() })
-        .where("id", "=", id)
-        .execute();
+      await db.updateTable("project").set({ github, updatedAt: new Date() }).where("id", "=", id).execute();
 
       return c.json({
         success: true,
@@ -747,8 +633,7 @@ projects.post(
       });
     } catch (err) {
       console.error("[github] Create repo failed", err);
-      const message =
-        err instanceof Error ? err.message : "Failed to create repository";
+      const message = err instanceof Error ? err.message : "Failed to create repository";
       return c.json({ error: message }, 500);
     }
   },
@@ -776,9 +661,7 @@ projects.post("/:id/github/push", zValidator("param", idParam), async (c) => {
 
   try {
     // Get installation token
-    const { token } = await githubApp.getInstallationToken(
-      projectGithub.installationId,
-    );
+    const { token } = await githubApp.getInstallationToken(projectGithub.installationId);
 
     // Download project files
     const { buffer } = await downloadProject(id);
@@ -798,15 +681,8 @@ projects.post("/:id/github/push", zValidator("param", idParam), async (c) => {
 
     if (!pushResult.success) {
       if (pushResult.status === 404) {
-        await db
-          .updateTable("project")
-          .set({ github: null, updatedAt: new Date() })
-          .where("id", "=", id)
-          .execute();
-        return c.json(
-          { error: "Repository not found. Connection removed." },
-          404,
-        );
+        await db.updateTable("project").set({ github: null, updatedAt: new Date() }).where("id", "=", id).execute();
+        return c.json({ error: "Repository not found. Connection removed." }, 404);
       }
       return c.json({ error: pushResult.error || "Push failed" }, 500);
     }
@@ -835,9 +711,7 @@ projects.post("/:id/github/push", zValidator("param", idParam), async (c) => {
 /**
  * Extract files from a tar.gz buffer
  */
-function extractFilesFromTarGz(
-  buffer: Buffer,
-): Array<{ filePath: string; fileContents: string; isBinary?: boolean }> {
+function extractFilesFromTarGz(buffer: Buffer): Array<{ filePath: string; fileContents: string; isBinary?: boolean }> {
   // Decompress gzip
   const decompressed = ungzip(new Uint8Array(buffer));
 
@@ -861,10 +735,7 @@ function extractFilesFromTarGz(
     const name = new TextDecoder().decode(header.slice(0, nameEnd));
 
     // Extract file size (octal, bytes 124-135)
-    const sizeStr = new TextDecoder()
-      .decode(header.slice(124, 136))
-      .replace(/\0/g, "")
-      .trim();
+    const sizeStr = new TextDecoder().decode(header.slice(124, 136)).replace(/\0/g, "").trim();
     const size = parseInt(sizeStr, 8) || 0;
 
     // Extract file type (byte 156)
@@ -873,12 +744,7 @@ function extractFilesFromTarGz(
     offset += 512; // Move past header
 
     // Type 0 or ASCII '0' (48) = regular file
-    if (
-      (type === 0 || type === 48) &&
-      size > 0 &&
-      name &&
-      !name.endsWith("/")
-    ) {
+    if ((type === 0 || type === 48) && size > 0 && name && !name.endsWith("/")) {
       const content = decompressed.slice(offset, offset + size);
       const isBinary = content.some((b) => b === 0);
 

@@ -1,11 +1,11 @@
-import z from "zod"
-import { Tool } from "./tool"
-import { Ripgrep } from "../file/ripgrep"
+import z from "zod";
+import { Tool } from "./tool";
+import { Ripgrep } from "../file/ripgrep";
 
-import DESCRIPTION from "./grep.txt"
-import { Instance } from "../project/instance"
+import DESCRIPTION from "./grep.txt";
+import { Instance } from "../project/instance";
 
-const MAX_LINE_LENGTH = 2000
+const MAX_LINE_LENGTH = 2000;
 
 export const GrepTool = Tool.define("grep", {
   description: DESCRIPTION,
@@ -16,98 +16,98 @@ export const GrepTool = Tool.define("grep", {
   }),
   async execute(params) {
     if (!params.pattern) {
-      throw new Error("pattern is required")
+      throw new Error("pattern is required");
     }
 
-    const sandbox = Instance.sandbox
-    const path = sandbox.path
+    const sandbox = Instance.sandbox;
+    const path = sandbox.path;
     const searchPath = params.path
       ? path.isAbsolute(params.path)
         ? params.path
         : path.resolve(params.path)
-      : Instance.directory
+      : Instance.directory;
 
-    const rgPath = await Ripgrep.filepath()
-    const args = ["-nH", "--field-match-separator=|", "--regexp", params.pattern]
+    const rgPath = await Ripgrep.filepath();
+    const args = ["-nH", "--field-match-separator=|", "--regexp", params.pattern];
     if (params.include) {
-      args.push("--glob", params.include)
+      args.push("--glob", params.include);
     }
-    args.push(searchPath)
+    args.push(searchPath);
 
-    const result = await sandbox.proc.run([rgPath, ...args])
-    const output = result.stdout
-    const errorOutput = result.stderr
-    const exitCode = result.exitCode
+    const result = await sandbox.proc.run([rgPath, ...args]);
+    const output = result.stdout;
+    const errorOutput = result.stderr;
+    const exitCode = result.exitCode;
 
     if (exitCode === 1) {
       return {
         title: params.pattern,
         metadata: { matches: 0, truncated: false },
         output: "No files found",
-      }
+      };
     }
 
     if (exitCode !== 0) {
-      throw new Error(`ripgrep failed: ${errorOutput}`)
+      throw new Error(`ripgrep failed: ${errorOutput}`);
     }
 
     // Handle both Unix (\n) and Windows (\r\n) line endings
-    const lines = output.trim().split(/\r?\n/)
-    const matches = []
+    const lines = output.trim().split(/\r?\n/);
+    const matches = [];
 
     for (const line of lines) {
-      if (!line) continue
+      if (!line) continue;
 
-      const [filePath, lineNumStr, ...lineTextParts] = line.split("|")
-      if (!filePath || !lineNumStr || lineTextParts.length === 0) continue
+      const [filePath, lineNumStr, ...lineTextParts] = line.split("|");
+      if (!filePath || !lineNumStr || lineTextParts.length === 0) continue;
 
-      const lineNum = parseInt(lineNumStr, 10)
-      const lineText = lineTextParts.join("|")
+      const lineNum = parseInt(lineNumStr, 10);
+      const lineText = lineTextParts.join("|");
 
-      const stats = await sandbox.fs.stat(filePath).catch(() => null)
-      if (!stats) continue
+      const stats = await sandbox.fs.stat(filePath).catch(() => null);
+      if (!stats) continue;
 
       matches.push({
         path: filePath,
         modTime: stats.mtime.getTime(),
         lineNum,
         lineText,
-      })
+      });
     }
 
-    matches.sort((a, b) => b.modTime - a.modTime)
+    matches.sort((a, b) => b.modTime - a.modTime);
 
-    const limit = 100
-    const truncated = matches.length > limit
-    const finalMatches = truncated ? matches.slice(0, limit) : matches
+    const limit = 100;
+    const truncated = matches.length > limit;
+    const finalMatches = truncated ? matches.slice(0, limit) : matches;
 
     if (finalMatches.length === 0) {
       return {
         title: params.pattern,
         metadata: { matches: 0, truncated: false },
         output: "No files found",
-      }
+      };
     }
 
-    const outputLines = [`Found ${finalMatches.length} matches`]
+    const outputLines = [`Found ${finalMatches.length} matches`];
 
-    let currentFile = ""
+    let currentFile = "";
     for (const match of finalMatches) {
       if (currentFile !== match.path) {
         if (currentFile !== "") {
-          outputLines.push("")
+          outputLines.push("");
         }
-        currentFile = match.path
-        outputLines.push(`${match.path}:`)
+        currentFile = match.path;
+        outputLines.push(`${match.path}:`);
       }
       const truncatedLineText =
-        match.lineText.length > MAX_LINE_LENGTH ? match.lineText.substring(0, MAX_LINE_LENGTH) + "..." : match.lineText
-      outputLines.push(`  Line ${match.lineNum}: ${truncatedLineText}`)
+        match.lineText.length > MAX_LINE_LENGTH ? match.lineText.substring(0, MAX_LINE_LENGTH) + "..." : match.lineText;
+      outputLines.push(`  Line ${match.lineNum}: ${truncatedLineText}`);
     }
 
     if (truncated) {
-      outputLines.push("")
-      outputLines.push("(Results are truncated. Consider using a more specific path or pattern.)")
+      outputLines.push("");
+      outputLines.push("(Results are truncated. Consider using a more specific path or pattern.)");
     }
 
     return {
@@ -117,6 +117,6 @@ export const GrepTool = Tool.define("grep", {
         truncated,
       },
       output: outputLines.join("\n"),
-    }
+    };
   },
-})
+});

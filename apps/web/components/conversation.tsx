@@ -1,15 +1,20 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
-import { format, parseISO } from "date-fns"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { cn } from "@/lib/utils"
-import { http } from "@/lib/http"
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { format, parseISO } from "date-fns";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import { http } from "@/lib/http";
 import {
   MessageCircle,
   Loader2,
@@ -21,41 +26,41 @@ import {
   AlertCircle,
   X,
   RefreshCw,
-} from "lucide-react"
-import ChatInput, { type FilePart, type ProviderModel } from "./chat-input"
-import TerminalWidget from "./terminal/terminal-widget"
-import { useSandbox } from "@/hooks/use-sandbox"
-import useAgentStream, { type SessionStatusRetry } from "@/lib/use-agent-stream"
-import { AgentThread } from "@/components/agent/agent-thread"
-import { useSessionsQuery, useCreateSession, useSendMessage, useAbortSession } from "@/queries/chats"
-import ProviderDialog from "@/components/provider-dialog"
+} from "lucide-react";
+import ChatInput, { type FilePart, type ProviderModel } from "./chat-input";
+import TerminalWidget from "./terminal/terminal-widget";
+import { useSandbox } from "@/hooks/use-sandbox";
+import useAgentStream, { type SessionStatusRetry } from "@/lib/use-agent-stream";
+import { AgentThread } from "@/components/agent/agent-thread";
+import { useSessionsQuery, useCreateSession, useSendMessage, useAbortSession } from "@/queries/chats";
+import ProviderDialog from "@/components/provider-dialog";
 
 export interface ConversationProps {
-  projectId?: string
-  initialPrompt?: string
+  projectId?: string;
+  initialPrompt?: string;
 }
 
 type ProviderList = {
-  all: Array<{ id: string; models: Record<string, { name?: string; limit?: { context: number } }> }>
-  connected: string[]
-}
+  all: Array<{ id: string; models: Record<string, { name?: string; limit?: { context: number } }> }>;
+  connected: string[];
+};
 
 const PROVIDER_LABELS: Record<string, string> = {
   anthropic: "Claude",
   openai: "OpenAI",
   google: "Gemini",
   "github-copilot": "Copilot",
-}
+};
 
 const formatTitle = (title: string) => {
-  const isoMatch = title.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
-  if (!isoMatch) return title
+  const isoMatch = title.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  if (!isoMatch) return title;
   try {
-    return format(parseISO(isoMatch[0]), "MMM d HH:mm")
+    return format(parseISO(isoMatch[0]), "MMM d HH:mm");
   } catch {
-    return title
+    return title;
   }
-}
+};
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -68,7 +73,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     >
       {children}
     </button>
-  )
+  );
 }
 
 function ActionButton({
@@ -76,9 +81,9 @@ function ActionButton({
   disabled,
   children,
 }: {
-  onClick: () => void
-  disabled?: boolean
-  children: React.ReactNode
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
 }) {
   return (
     <button
@@ -91,21 +96,21 @@ function ActionButton({
     >
       {children}
     </button>
-  )
+  );
 }
 
 function RetryCountdown({ retryInfo }: { retryInfo: SessionStatusRetry }) {
-  const [remaining, setRemaining] = useState(() => Math.max(0, Math.ceil((retryInfo.next - Date.now()) / 1000)))
+  const [remaining, setRemaining] = useState(() => Math.max(0, Math.ceil((retryInfo.next - Date.now()) / 1000)));
 
   useEffect(() => {
     const updateRemaining = () => {
-      const diff = Math.max(0, Math.ceil((retryInfo.next - Date.now()) / 1000))
-      setRemaining(diff)
-    }
-    updateRemaining()
-    const interval = setInterval(updateRemaining, 1000)
-    return () => clearInterval(interval)
-  }, [retryInfo.next])
+      const diff = Math.max(0, Math.ceil((retryInfo.next - Date.now()) / 1000));
+      setRemaining(diff);
+    };
+    updateRemaining();
+    const interval = setInterval(updateRemaining, 1000);
+    return () => clearInterval(interval);
+  }, [retryInfo.next]);
 
   return (
     <div className="flex items-center gap-1.5 text-xs text-warning">
@@ -114,7 +119,7 @@ function RetryCountdown({ retryInfo }: { retryInfo: SessionStatusRetry }) {
       <span className="text-muted-foreground">·</span>
       <span className="tabular-nums">{remaining}s</span>
     </div>
-  )
+  );
 }
 
 function EmptyState() {
@@ -126,47 +131,48 @@ function EmptyState() {
       <p className="font-medium text-sm sm:text-base">No messages yet</p>
       <p className="text-xs sm:text-sm text-muted-foreground">Start a conversation</p>
     </div>
-  )
+  );
 }
 
 export default function Conversation({ projectId, initialPrompt }: ConversationProps) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const usageRef = useRef<{
-    ctxTokens?: number
-    contextPct?: number
-    costSpent: number
-    contextExceeded?: boolean
-  } | null>(null)
+    ctxTokens?: number;
+    contextPct?: number;
+    costSpent: number;
+    contextExceeded?: boolean;
+  } | null>(null);
 
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const viewportRef = useRef<HTMLElement | null>(null)
-  const stickRef = useRef(true)
-  const prefilledRef = useRef(false)
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLElement | null>(null);
+  const stickRef = useRef(true);
+  const prefilledRef = useRef(false);
 
-  const showTerminal = searchParams?.get("terminal") === "true"
-  const [tab, setTab] = useState<"chat" | "terminal">("chat")
-  const [mode, setMode] = useState<"plan" | "build">("build")
-  const [providerOpen, setProviderOpen] = useState(false)
-  const [inputValue, setInputValue] = useState("")
+  const showTerminal = searchParams?.get("terminal") === "true";
+  const [tab, setTab] = useState<"chat" | "terminal">("chat");
+  const [mode, setMode] = useState<"plan" | "build">("build");
+  const [providerOpen, setProviderOpen] = useState(false);
+  const [inputValue, setInputValue] = useState("");
   const [selectedModel, setSelectedModel] = useState<{ modelId: string; providerId: string }>({
     modelId: "gemini-3-flash-preview",
     providerId: "google",
-  })
-  const lastSentRef = useRef<string>("")
+  });
+  const lastSentRef = useRef<string>("");
 
-  const sandboxId = useSandbox((s) => s.sandboxId || undefined)
-  const storedSessionId = useSandbox((s) => (projectId ? s.activeSessionId[projectId] : undefined))
-  const setActiveSession = useSandbox((s) => s.setActiveSession)
+  const sandboxId = useSandbox((s) => s.sandboxId || undefined);
+  const storedSessionId = useSandbox((s) => (projectId ? s.activeSessionId[projectId] : undefined));
+  const setActiveSession = useSandbox((s) => s.setActiveSession);
 
-  const { data: sessions = [] } = useSessionsQuery(projectId)
-  const create = useCreateSession(projectId)
-  const send = useSendMessage(projectId)
-  const abort = useAbortSession()
+  const { data: sessions = [] } = useSessionsQuery(projectId);
+  const create = useCreateSession(projectId);
+  const send = useSendMessage(projectId);
+  const abort = useAbortSession();
 
-  const activeId = storedSessionId && sessions.some((s) => s.id === storedSessionId) ? storedSessionId : sessions[0]?.id
+  const activeId =
+    storedSessionId && sessions.some((s) => s.id === storedSessionId) ? storedSessionId : sessions[0]?.id;
   const {
     messages,
     parts,
@@ -180,121 +186,121 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     dismissError,
     isRetrying,
     retryInfo,
-  } = useAgentStream({ projectId, sessionId: activeId })
-  const working = status?.type !== undefined && status.type !== "idle"
+  } = useAgentStream({ projectId, sessionId: activeId });
+  const working = status?.type !== undefined && status.type !== "idle";
 
   // Auto-scroll setup
   useEffect(() => {
-    const viewport = scrollRef.current?.querySelector<HTMLElement>("[data-radix-scroll-area-viewport]")
-    if (!viewport) return
-    viewportRef.current = viewport
+    const viewport = scrollRef.current?.querySelector<HTMLElement>("[data-radix-scroll-area-viewport]");
+    if (!viewport) return;
+    viewportRef.current = viewport;
     const onScroll = () => {
-      stickRef.current = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 100
-    }
-    viewport.addEventListener("scroll", onScroll, { passive: true })
-    return () => viewport.removeEventListener("scroll", onScroll)
-  }, [])
+      stickRef.current = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 100;
+    };
+    viewport.addEventListener("scroll", onScroll, { passive: true });
+    return () => viewport.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     if (stickRef.current && viewportRef.current) {
-      viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight, behavior: "smooth" })
+      viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight, behavior: "smooth" });
     }
-  }, [messages.length, permissions.length])
+  }, [messages.length, permissions.length]);
 
   // Prefill initial prompt into the input (don't auto-send)
   useEffect(() => {
-    if (!initialPrompt || prefilledRef.current) return
-    const text = initialPrompt.trim()
-    if (!text) return
-    if (!inputValue) setInputValue(text)
-    prefilledRef.current = true
+    if (!initialPrompt || prefilledRef.current) return;
+    const text = initialPrompt.trim();
+    if (!text) return;
+    if (!inputValue) setInputValue(text);
+    prefilledRef.current = true;
 
     try {
-      const params = new URLSearchParams(searchParams?.toString?.() || "")
+      const params = new URLSearchParams(searchParams?.toString?.() || "");
       if (params.has("initial")) {
-        params.delete("initial")
-        router.replace(params.toString() ? `${pathname}?${params}` : pathname, { scroll: false })
+        params.delete("initial");
+        router.replace(params.toString() ? `${pathname}?${params}` : pathname, { scroll: false });
       }
     } catch {}
-  }, [initialPrompt, inputValue, pathname, router, searchParams])
+  }, [initialPrompt, inputValue, pathname, router, searchParams]);
 
   const handleSend = (text: string, files?: FilePart[], model?: string, providerID?: string) => {
-    if (!activeId || (!text.trim() && !files?.length) || working) return
-    lastSentRef.current = text.trim()
-    setInputValue("")
-    send.mutate({ sessionId: activeId, text: text.trim(), agent: mode, files, model, providerID })
-  }
+    if (!activeId || (!text.trim() && !files?.length) || working) return;
+    lastSentRef.current = text.trim();
+    setInputValue("");
+    send.mutate({ sessionId: activeId, text: text.trim(), agent: mode, files, model, providerID });
+  };
 
   const handleAbort = () => {
-    if (!activeId || !projectId) return
-    abort.mutate({ projectId, sessionId: activeId })
+    if (!activeId || !projectId) return;
+    abort.mutate({ projectId, sessionId: activeId });
     // Restore the last sent message back to the input
     if (lastSentRef.current) {
-      setInputValue(lastSentRef.current)
-      lastSentRef.current = ""
+      setInputValue(lastSentRef.current);
+      lastSentRef.current = "";
     }
-  }
+  };
 
-  const handleCreate = () => create.mutateAsync().then((s) => s?.id && projectId && setActiveSession(projectId, s.id))
+  const handleCreate = () => create.mutateAsync().then((s) => s?.id && projectId && setActiveSession(projectId, s.id));
 
-  const activeSession = sessions.find((s) => s.id === activeId)
-  const sessionName = formatTitle(session?.title || activeSession?.title || "Untitled")
+  const activeSession = sessions.find((s) => s.id === activeId);
+  const sessionName = formatTitle(session?.title || activeSession?.title || "Untitled");
 
-  const assistantMessages = messages.filter((m) => m.role === "assistant")
+  const assistantMessages = messages.filter((m) => m.role === "assistant");
 
   const isContextLengthExceeded = (err: any) => {
-    if (!err) return false
-    const directCode = err.code || err.data?.code
-    if (directCode === "context_length_exceeded") return true
+    if (!err) return false;
+    const directCode = err.code || err.data?.code;
+    if (directCode === "context_length_exceeded") return true;
 
-    const responseBody = err.data?.responseBody ?? err.responseBody
+    const responseBody = err.data?.responseBody ?? err.responseBody;
     if (typeof responseBody === "string" && responseBody) {
       try {
-        const body = JSON.parse(responseBody)
+        const body = JSON.parse(responseBody);
         const code =
           body?.code ??
           body?.error?.code ??
           body?.error?.error?.code ??
           body?.error?.data?.code ??
-          body?.error?.error?.data?.code
-        if (code === "context_length_exceeded") return true
-        if (body?.type === "error" && body?.error?.code === "context_length_exceeded") return true
+          body?.error?.error?.data?.code;
+        if (code === "context_length_exceeded") return true;
+        if (body?.type === "error" && body?.error?.code === "context_length_exceeded") return true;
       } catch {}
     }
 
-    const msg = err.data?.message || err.message || err.name
+    const msg = err.data?.message || err.message || err.name;
     return (
       typeof msg === "string" &&
       (msg.toLowerCase().includes("context_length_exceeded") || msg.toLowerCase().includes("context window"))
-    )
-  }
+    );
+  };
 
   const lastAssistantError = (() => {
-    const last = assistantMessages[assistantMessages.length - 1]
-    const err = (last as any)?.error || (last as any)?.info?.error
-    if (!err) return undefined
-    const code = err.code || err.data?.code
-    const msg = err.data?.message || err.message || err.name
-    if (msg?.toLowerCase().includes("abort")) return undefined
-    const isContext = isContextLengthExceeded(err) || code === "context_length_exceeded" || msg?.includes("context")
-    return { message: isContext ? "Context limit reached. Start a new session." : msg, isContext }
-  })()
+    const last = assistantMessages[assistantMessages.length - 1];
+    const err = (last as any)?.error || (last as any)?.info?.error;
+    if (!err) return undefined;
+    const code = err.code || err.data?.code;
+    const msg = err.data?.message || err.message || err.name;
+    if (msg?.toLowerCase().includes("abort")) return undefined;
+    const isContext = isContextLengthExceeded(err) || code === "context_length_exceeded" || msg?.includes("context");
+    return { message: isContext ? "Context limit reached. Start a new session." : msg, isContext };
+  })();
 
   const { data: providers } = useQuery<ProviderList>({
     queryKey: ["providers", projectId],
     enabled: Boolean(projectId),
     staleTime: 60_000,
     queryFn: async () => (await http.get(`api/agent/${projectId}/provider`).json()) as ProviderList,
-  })
+  });
 
   // Transform providers into a flat list of models from connected providers only
   const availableModels = useMemo<ProviderModel[]>(() => {
-    if (!providers?.all || !providers.connected) return []
+    if (!providers?.all || !providers.connected) return [];
 
-    const models: ProviderModel[] = []
+    const models: ProviderModel[] = [];
     for (const provider of providers.all) {
       // Only include models from connected providers
-      if (!providers.connected.includes(provider.id)) continue
+      if (!providers.connected.includes(provider.id)) continue;
 
       for (const [modelId, modelInfo] of Object.entries(provider.models)) {
         models.push({
@@ -303,62 +309,62 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
           providerId: provider.id,
           providerName: PROVIDER_LABELS[provider.id] || provider.id,
           limit: modelInfo.limit,
-        })
+        });
       }
     }
-    return models
-  }, [providers])
+    return models;
+  }, [providers]);
 
   const handleModelChange = (modelId: string, providerId: string) => {
-    setSelectedModel({ modelId, providerId })
-  }
+    setSelectedModel({ modelId, providerId });
+  };
 
   // Reset usage cache on session change
   useEffect(() => {
-    usageRef.current = null
-  }, [activeId])
+    usageRef.current = null;
+  }, [activeId]);
 
   // Track context tokens from the last COMPLETED assistant message
   // During streaming, we keep showing the previous value to avoid flickering
   useEffect(() => {
-    const last = assistantMessages[assistantMessages.length - 1]
-    if (!last) return
+    const last = assistantMessages[assistantMessages.length - 1];
+    if (!last) return;
 
     // Calculate total cost (always summing all messages)
-    const currentCost = assistantMessages.reduce((sum, m) => sum + ("cost" in m ? m.cost : 0), 0)
+    const currentCost = assistantMessages.reduce((sum, m) => sum + ("cost" in m ? m.cost : 0), 0);
 
-    const tokens = "tokens" in last ? last.tokens.input + last.tokens.cache.read : 0
-    const contextExceeded = Boolean(lastAssistantError?.isContext) || isContextLengthExceeded(sessionError)
+    const tokens = "tokens" in last ? last.tokens.input + last.tokens.cache.read : 0;
+    const contextExceeded = Boolean(lastAssistantError?.isContext) || isContextLengthExceeded(sessionError);
 
     if (contextExceeded) {
-      usageRef.current = { ctxTokens: undefined, contextPct: undefined, costSpent: currentCost, contextExceeded: true }
-      return
+      usageRef.current = { ctxTokens: undefined, contextPct: undefined, costSpent: currentCost, contextExceeded: true };
+      return;
     }
 
     // Only update tokens if this message has them (implies it's at least partially done)
     if (tokens > 0) {
-      let pct = usageRef.current?.contextPct
+      let pct = usageRef.current?.contextPct;
 
       if ("providerID" in last && "modelID" in last) {
-        const limit = providers?.all.find((p) => p.id === last.providerID)?.models?.[last.modelID]?.limit?.context
-        if (limit) pct = Math.round((tokens / limit) * 100)
+        const limit = providers?.all.find((p) => p.id === last.providerID)?.models?.[last.modelID]?.limit?.context;
+        if (limit) pct = Math.round((tokens / limit) * 100);
       }
 
       usageRef.current = {
         ctxTokens: tokens,
         contextPct: pct,
         costSpent: currentCost,
-      }
+      };
     } else if (usageRef.current) {
       // Just update cost if we have a cache but no new tokens yet
-      usageRef.current.costSpent = currentCost
+      usageRef.current.costSpent = currentCost;
     }
-  }, [assistantMessages, providers, lastAssistantError?.isContext, sessionError])
+  }, [assistantMessages, providers, lastAssistantError?.isContext, sessionError]);
 
-  const shownTokens = usageRef.current?.ctxTokens
-  const shownPct = usageRef.current?.contextPct
-  const shownCost = usageRef.current?.costSpent ?? 0
-  const contextExceeded = usageRef.current?.contextExceeded
+  const shownTokens = usageRef.current?.ctxTokens;
+  const shownPct = usageRef.current?.contextPct;
+  const shownCost = usageRef.current?.costSpent ?? 0;
+  const contextExceeded = usageRef.current?.contextExceeded;
 
   return (
     <div className="flex flex-col h-full w-full min-w-0 @container/conversation">
@@ -406,8 +412,13 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         </div>
         {/* Context stats */}
         <div className="h-8 flex items-center px-3 gap-2 min-w-0 text-xs">
-          <span className={`size-2 rounded-full ${!connected ? "bg-muted-foreground/40" : isRetrying ? "bg-warning" : "bg-success"}`} title={!connected ? "Connecting..." : isRetrying ? "Retrying..." : "Agent connected"} />
-          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">{connected ? sessionName : "Connecting..."}</span>
+          <span
+            className={`size-2 rounded-full ${!connected ? "bg-muted-foreground/40" : isRetrying ? "bg-warning" : "bg-success"}`}
+            title={!connected ? "Connecting..." : isRetrying ? "Retrying..." : "Agent connected"}
+          />
+          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">
+            {connected ? sessionName : "Connecting..."}
+          </span>
           {connected && (
             <>
               {isRetrying && retryInfo ? (
@@ -447,11 +458,11 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         </div>
 
         {(() => {
-          if (!sessionError) return null
-          const err = sessionError as any
-          const msg = err.data?.message || err.message || err.name || String(sessionError)
-          if (msg.toLowerCase().includes("abort")) return null
-          const isContext = (err.code || err.data?.code) === "context_length_exceeded" || msg.includes("context")
+          if (!sessionError) return null;
+          const err = sessionError as any;
+          const msg = err.data?.message || err.message || err.name || String(sessionError);
+          if (msg.toLowerCase().includes("abort")) return null;
+          const isContext = (err.code || err.data?.code) === "context_length_exceeded" || msg.includes("context");
           return (
             <div
               className={cn(
@@ -467,7 +478,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                 <X className="size-3" />
               </button>
             </div>
-          )
+          );
         })()}
       </header>
 
@@ -552,5 +563,5 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
       <ProviderDialog open={providerOpen} onOpenChange={setProviderOpen} projectId={projectId} />
     </div>
-  )
+  );
 }

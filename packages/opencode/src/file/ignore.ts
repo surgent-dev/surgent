@@ -1,4 +1,4 @@
-import { sep } from "node:path"
+import { sep } from "node:path";
 
 export namespace FileIgnore {
   const FOLDERS = new Set([
@@ -30,7 +30,7 @@ export namespace FileIgnore {
     "mypy_cache",
     ".history",
     ".gradle",
-  ])
+  ]);
 
   const FILES = [
     "**/*.swp",
@@ -51,33 +51,33 @@ export namespace FileIgnore {
     // Coverage/test outputs
     "**/coverage/**",
     "**/.nyc_output/**",
-  ]
+  ];
 
-  const FILE_GLOBS = FILES.map((p) => new Bun.Glob(p))
+  const FILE_GLOBS = FILES.map((p) => new Bun.Glob(p));
 
-  export const PATTERNS = [...FILES, ...FOLDERS]
+  export const PATTERNS = [...FILES, ...FOLDERS];
 
   export function match(
     filepath: string,
     opts?: {
-      extra?: Bun.Glob[]
-      whitelist?: Bun.Glob[]
+      extra?: Bun.Glob[];
+      whitelist?: Bun.Glob[];
     },
   ) {
     for (const glob of opts?.whitelist || []) {
-      if (glob.match(filepath)) return false
+      if (glob.match(filepath)) return false;
     }
 
-    const parts = filepath.split(sep)
+    const parts = filepath.split(sep);
     for (let i = 0; i < parts.length; i++) {
-      if (FOLDERS.has(parts[i])) return true
+      if (FOLDERS.has(parts[i])) return true;
     }
 
-    const extra = opts?.extra || []
+    const extra = opts?.extra || [];
     for (const glob of [...FILE_GLOBS, ...extra]) {
-      if (glob.match(filepath)) return true
+      if (glob.match(filepath)) return true;
     }
 
-    return false
+    return false;
   }
 }

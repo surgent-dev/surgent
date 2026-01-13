@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 import { Button } from "@/components/ui/button";
 import { usePaywall, useCustomer } from "autumn-js/react";
@@ -63,12 +57,8 @@ export default function PaywallDialog(params?: PaywallDialogProps) {
       <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden gap-0">
         <DialogHeader className="p-6 pb-2">
           <div className="flex flex-col gap-1.5 text-center sm:text-left">
-            <DialogTitle className="text-xl font-semibold tracking-tight">
-              {title}
-            </DialogTitle>
-            <div className="text-sm text-muted-foreground leading-relaxed">
-              {message}
-            </div>
+            <DialogTitle className="text-xl font-semibold tracking-tight">{title}</DialogTitle>
+            <div className="text-sm text-muted-foreground leading-relaxed">{message}</div>
           </div>
         </DialogHeader>
 

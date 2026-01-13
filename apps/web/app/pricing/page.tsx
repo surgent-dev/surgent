@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { PricingTable } from 'autumn-js/react';
-import { ThemeToggle } from '@/components/theme-toggle';
-import { Button } from '@/components/ui/button';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { PricingTable } from "autumn-js/react";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 export default function PricingPage() {
   return (
@@ -20,9 +20,7 @@ export default function PricingPage() {
       </header>
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <h1 className="text-3xl font-bold mb-4">Billing</h1>
-        <p className="text-muted-foreground mb-6">
-          Upgrade to Pro using checkout.
-        </p>
+        <p className="text-muted-foreground mb-6">Upgrade to Pro using checkout.</p>
 
         <div className="space-y-4">
           <PricingTable />

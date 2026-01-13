@@ -1,5 +1,5 @@
-import { Provider } from "../provider/provider"
-import { Log } from "../util/log"
+import { Provider } from "../provider/provider";
+import { Log } from "../util/log";
 import {
   streamText,
   wrapLanguageModel,
@@ -8,36 +8,36 @@ import {
   type Tool,
   type ToolSet,
   extractReasoningMiddleware,
-} from "ai"
-import { mergeDeep, pipe } from "remeda"
-import { ProviderTransform } from "../provider/transform"
-import { Config } from "../config/config"
-import { Instance } from "../project/instance"
-import type { Agent } from "../agent/agent"
-import type { MessageV2 } from "./message-v2"
-import { SystemPrompt } from "./system"
-import { ToolRegistry } from "../tool/registry"
-import { Flag } from "../flag/flag"
+} from "ai";
+import { mergeDeep, pipe } from "remeda";
+import { ProviderTransform } from "../provider/transform";
+import { Config } from "../config/config";
+import { Instance } from "../project/instance";
+import type { Agent } from "../agent/agent";
+import type { MessageV2 } from "./message-v2";
+import { SystemPrompt } from "./system";
+import { ToolRegistry } from "../tool/registry";
+import { Flag } from "../flag/flag";
 
 export namespace LLM {
-  const log = Log.create({ service: "llm" })
+  const log = Log.create({ service: "llm" });
 
-  export const OUTPUT_TOKEN_MAX = Flag.OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
+  export const OUTPUT_TOKEN_MAX = Flag.OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000;
 
   export type StreamInput = {
-    user: MessageV2.User
-    sessionID: string
-    model: Provider.Model
-    agent: Agent.Info
-    system: string[]
-    abort: AbortSignal
-    messages: ModelMessage[]
-    small?: boolean
-    tools: Record<string, Tool>
-    retries?: number
-  }
+    user: MessageV2.User;
+    sessionID: string;
+    model: Provider.Model;
+    agent: Agent.Info;
+    system: string[];
+    abort: AbortSignal;
+    messages: ModelMessage[];
+    small?: boolean;
+    tools: Record<string, Tool>;
+    retries?: number;
+  };
 
-  export type StreamOutput = StreamTextResult<ToolSet, unknown>
+  export type StreamOutput = StreamTextResult<ToolSet, unknown>;
 
   export async function stream(input: StreamInput) {
     const l = log
@@ -46,14 +46,14 @@ export namespace LLM {
       .tag("modelID", input.model.id)
       .tag("sessionID", input.sessionID)
       .tag("small", (input.small ?? false).toString())
-      .tag("agent", input.agent.name)
+      .tag("agent", input.agent.name);
     l.info("stream", {
       modelID: input.model.id,
       providerID: input.model.providerID,
-    })
-    const [language, cfg] = await Promise.all([Provider.getLanguage(input.model), Config.get()])
+    });
+    const [language, cfg] = await Promise.all([Provider.getLanguage(input.model), Config.get()]);
 
-    const system = SystemPrompt.header(input.model.providerID)
+    const system = SystemPrompt.header(input.model.providerID);
     system.push(
       [
         // use agent prompt otherwise provider prompt
@@ -65,18 +65,18 @@ export namespace LLM {
       ]
         .filter((x) => x)
         .join("\n"),
-    )
+    );
 
-    const provider = await Provider.getProvider(input.model.providerID)
-    const small = input.small ? ProviderTransform.smallOptions(input.model) : {}
-    const variant = input.model.variants && input.user.variant ? input.model.variants[input.user.variant] : {}
+    const provider = await Provider.getProvider(input.model.providerID);
+    const small = input.small ? ProviderTransform.smallOptions(input.model) : {};
+    const variant = input.model.variants && input.user.variant ? input.model.variants[input.user.variant] : {};
     const options = pipe(
       ProviderTransform.options(input.model, input.sessionID, provider.options),
       mergeDeep(small),
       mergeDeep(input.model.options),
       mergeDeep(input.agent.options),
       mergeDeep(variant),
-    )
+    );
 
     const params = {
       temperature: input.model.capabilities.temperature
@@ -85,38 +85,38 @@ export namespace LLM {
       topP: input.agent.topP ?? ProviderTransform.topP(input.model),
       topK: ProviderTransform.topK(input.model),
       options,
-    }
+    };
 
     l.info("params", {
       params,
-    })
+    });
 
     const maxOutputTokens = ProviderTransform.maxOutputTokens(
       input.model.api.npm,
       params.options,
       input.model.limit.output,
       OUTPUT_TOKEN_MAX,
-    )
+    );
 
-    const tools = await resolveTools(input)
+    const tools = await resolveTools(input);
 
     return streamText({
       onError(error) {
         l.error("stream error", {
           error,
-        })
+        });
       },
       async experimental_repairToolCall(failed) {
-        const lower = failed.toolCall.toolName.toLowerCase()
+        const lower = failed.toolCall.toolName.toLowerCase();
         if (lower !== failed.toolCall.toolName && tools[lower]) {
           l.info("repairing tool call", {
             tool: failed.toolCall.toolName,
             repaired: lower,
-          })
+          });
           return {
             ...failed.toolCall,
             toolName: lower,
-          }
+          };
         }
         return {
           ...failed.toolCall,
@@ -125,7 +125,7 @@ export namespace LLM {
             error: failed.error.message,
           }),
           toolName: "invalid",
-        }
+        };
       },
       temperature: params.temperature,
       topP: params.topP,
@@ -163,16 +163,16 @@ export namespace LLM {
             async transformParams(args) {
               if (args.type === "stream") {
                 // @ts-expect-error
-                args.params.prompt = ProviderTransform.message(args.params.prompt, input.model)
+                args.params.prompt = ProviderTransform.message(args.params.prompt, input.model);
               }
-              return args.params
+              return args.params;
             },
           },
           extractReasoningMiddleware({ tagName: "think", startWithReasoning: false }),
         ],
       }),
       experimental_telemetry: { isEnabled: cfg.experimental?.openTelemetry },
-    })
+    });
   }
 
   async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "user">) {
@@ -180,10 +180,10 @@ export namespace LLM {
       input.agent.tools,
       mergeDeep(await ToolRegistry.enabled(input.agent)),
       mergeDeep(input.user.tools ?? {}),
-    )
+    );
     for (const [key, value] of Object.entries(enabled)) {
-      if (value === false) delete input.tools[key]
+      if (value === false) delete input.tools[key];
     }
-    return input.tools
+    return input.tools;
   }
 }

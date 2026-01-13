@@ -1,11 +1,11 @@
-import { BusEvent } from "../bus/bus-event"
-import z from "zod"
-import { Config } from "../config/config"
-import { Instance } from "../project/instance"
-import { Identifier } from "../id/id"
-import PROMPT_INITIALIZE from "./template/initialize.txt"
-import PROMPT_REVIEW from "./template/review.txt"
-import { MCP } from "../mcp"
+import { BusEvent } from "../bus/bus-event";
+import z from "zod";
+import { Config } from "../config/config";
+import { Instance } from "../project/instance";
+import { Identifier } from "../id/id";
+import PROMPT_INITIALIZE from "./template/initialize.txt";
+import PROMPT_REVIEW from "./template/review.txt";
+import { MCP } from "../mcp";
 
 export namespace Command {
   export const Event = {
@@ -18,7 +18,7 @@ export namespace Command {
         messageID: Identifier.schema("message"),
       }),
     ),
-  }
+  };
 
   export const Info = z
     .object({
@@ -33,33 +33,33 @@ export namespace Command {
     })
     .meta({
       ref: "Command",
-    })
-  export type Info = Omit<z.infer<typeof Info>, "template"> & { template: Promise<string> | string }
+    });
+  export type Info = Omit<z.infer<typeof Info>, "template"> & { template: Promise<string> | string };
 
   export function hints(template: string): string[] {
-    const result: string[] = []
-    const numbered = template.match(/\$\d+/g)
+    const result: string[] = [];
+    const numbered = template.match(/\$\d+/g);
     if (numbered) {
-      for (const match of [...new Set(numbered)].sort()) result.push(match)
+      for (const match of [...new Set(numbered)].sort()) result.push(match);
     }
-    if (template.includes("$ARGUMENTS")) result.push("$ARGUMENTS")
-    return result
+    if (template.includes("$ARGUMENTS")) result.push("$ARGUMENTS");
+    return result;
   }
 
   export const Default = {
     INIT: "init",
     REVIEW: "review",
-  } as const
+  } as const;
 
   const state = Instance.state(async () => {
-    const cfg = await Config.get()
+    const cfg = await Config.get();
 
     const result: Record<string, Info> = {
       [Default.INIT]: {
         name: Default.INIT,
         description: "create/update AGENTS.md",
         get template() {
-          return PROMPT_INITIALIZE.replace("${path}", Instance.directory)
+          return PROMPT_INITIALIZE.replace("${path}", Instance.directory);
         },
         hints: hints(PROMPT_INITIALIZE),
       },
@@ -67,12 +67,12 @@ export namespace Command {
         name: Default.REVIEW,
         description: "review changes [commit|branch|pr], defaults to uncommitted",
         get template() {
-          return PROMPT_REVIEW.replace("${path}", Instance.directory)
+          return PROMPT_REVIEW.replace("${path}", Instance.directory);
         },
         subtask: true,
         hints: hints(PROMPT_REVIEW),
       },
-    }
+    };
 
     for (const [name, command] of Object.entries(cfg.command ?? {})) {
       result[name] = {
@@ -81,11 +81,11 @@ export namespace Command {
         model: command.model,
         description: command.description,
         get template() {
-          return command.template
+          return command.template;
         },
         subtask: command.subtask,
         hints: hints(command.template),
-      }
+      };
     }
 
     for (const [name, prompt] of Object.entries(await MCP.prompts())) {
@@ -101,26 +101,26 @@ export namespace Command {
               prompt.arguments
                 ? Object.fromEntries(prompt.arguments.map((argument, i) => [argument.name, `$${i + 1}`]))
                 : {},
-            ).catch(reject)
+            ).catch(reject);
             resolve(
               template?.messages
                 .map((message) => (message.content.type === "text" ? message.content.text : ""))
                 .join("\n") || "",
-            )
-          })
+            );
+          });
         },
         hints: prompt.arguments?.map((_, i) => `$${i + 1}`) ?? [],
-      }
+      };
     }
 
-    return result
-  })
+    return result;
+  });
 
   export async function get(name: string) {
-    return state().then((x) => x[name])
+    return state().then((x) => x[name]);
   }
 
   export async function list() {
-    return state().then((x) => Object.values(x))
+    return state().then((x) => Object.values(x));
   }
 }

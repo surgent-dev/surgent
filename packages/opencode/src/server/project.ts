@@ -1,10 +1,10 @@
-import { Hono } from "hono"
-import { describeRoute, validator } from "hono-openapi"
-import { resolver } from "hono-openapi"
-import { Instance } from "../project/instance"
-import { Project } from "../project/project"
-import z from "zod"
-import { errors } from "./error"
+import { Hono } from "hono";
+import { describeRoute, validator } from "hono-openapi";
+import { resolver } from "hono-openapi";
+import { Instance } from "../project/instance";
+import { Project } from "../project/project";
+import z from "zod";
+import { errors } from "./error";
 
 export const ProjectRoute = new Hono()
   .get(
@@ -25,8 +25,8 @@ export const ProjectRoute = new Hono()
       },
     }),
     async (c) => {
-      const projects = await Project.list()
-      return c.json(projects)
+      const projects = await Project.list();
+      return c.json(projects);
     },
   )
   .get(
@@ -47,7 +47,7 @@ export const ProjectRoute = new Hono()
       },
     }),
     async (c) => {
-      return c.json(Instance.project)
+      return c.json(Instance.project);
     },
   )
   .patch(
@@ -71,9 +71,9 @@ export const ProjectRoute = new Hono()
     validator("param", z.object({ projectID: z.string() })),
     validator("json", Project.update.schema.omit({ projectID: true })),
     async (c) => {
-      const projectID = c.req.valid("param").projectID
-      const body = c.req.valid("json")
-      const project = await Project.update({ ...body, projectID })
-      return c.json(project)
+      const projectID = c.req.valid("param").projectID;
+      const body = c.req.valid("json");
+      const project = await Project.update({ ...body, projectID });
+      return c.json(project);
     },
-  )
+  );

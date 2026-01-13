@@ -11,14 +11,14 @@
  *   - With sandboxId → E2B sandbox
  *   - Without sandboxId → LocalRunner (runs locally)
  */
-import { Log } from "./util/log"
-import { Server } from "./server/server"
+import { Log } from "./util/log";
+import { Server } from "./server/server";
 
-const port = Number(process.env.PORT ?? "4096")
-const host = process.env.HOST ?? "127.0.0.1"
-const logLevel = (process.env.LOG_LEVEL ?? "INFO") as Log.Level
+const port = Number(process.env.PORT ?? "4096");
+const host = process.env.HOST ?? "127.0.0.1";
+const logLevel = (process.env.LOG_LEVEL ?? "INFO") as Log.Level;
 
-await Log.init({ print: true, level: logLevel, dev: false })
+await Log.init({ print: true, level: logLevel, dev: false });
 
-const server = Server.listen({ port, hostname: host })
-console.log(`OpenCode running at http://${host}:${server.port}`)
+const server = Server.listen({ port, hostname: host });
+console.log(`OpenCode running at http://${host}:${server.port}`);

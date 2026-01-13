@@ -20,8 +20,7 @@ export const getPaywallContent = (preview?: CheckFeaturePreview) => {
       default:
         return {
           title: "Feature Unavailable",
-          message:
-            "This feature is not available for your account. Please contact us to enable it.",
+          message: "This feature is not available for your account. Please contact us to enable it.",
         };
     }
   }
@@ -33,8 +32,8 @@ export const getPaywallContent = (preview?: CheckFeaturePreview) => {
   const title = nextProduct?.free_trial
     ? `Start trial for ${nextProduct?.name}`
     : nextProduct?.is_add_on
-    ? `Purchase ${nextProduct?.name}`
-    : `Upgrade to ${nextProduct?.name}`;
+      ? `Purchase ${nextProduct?.name}`
+      : `Upgrade to ${nextProduct?.name}`;
 
   let message = "";
   if (isAddOn) {

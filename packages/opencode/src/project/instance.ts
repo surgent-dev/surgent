@@ -1,100 +1,104 @@
-import { Log } from "../util/log"
-import { Context } from "../util/context"
-import { Project } from "./project"
-import { State } from "./state"
-import { iife } from "../util/iife"
-import { GlobalBus } from "../bus/global"
-import { create as createSandbox, createRemoteSandbox } from "../sandbox"
-import type { Sandbox } from "../sandbox"
+import { Log } from "../util/log";
+import { Context } from "../util/context";
+import { Project } from "./project";
+import { State } from "./state";
+import { iife } from "../util/iife";
+import { GlobalBus } from "../bus/global";
+import { create as createSandbox, createRemoteSandbox } from "../sandbox";
+import type { Sandbox } from "../sandbox";
 
 interface InstanceContext {
-  directory: string
-  project: Project.Info
-  sandbox: Sandbox
-  sandboxId?: string
+  directory: string;
+  project: Project.Info;
+  sandbox: Sandbox;
+  sandboxId?: string;
 }
 
-const context = Context.create<InstanceContext>("instance")
-const cache = new Map<string, Promise<InstanceContext>>()
+const context = Context.create<InstanceContext>("instance");
+const cache = new Map<string, Promise<InstanceContext>>();
 
 function key(directory: string, sandboxId?: string) {
-  return sandboxId ? `${directory}::${sandboxId}` : directory
+  return sandboxId ? `${directory}::${sandboxId}` : directory;
 }
 
 export const Instance = {
   async provide<R>(input: {
-    directory: string
-    sandboxId?: string
-    init?: () => Promise<any>
-    fn: () => R
+    directory: string;
+    sandboxId?: string;
+    init?: () => Promise<any>;
+    fn: () => R;
   }): Promise<R> {
-    const cacheKey = key(input.directory, input.sandboxId)
-    let existing = cache.get(cacheKey)
+    const cacheKey = key(input.directory, input.sandboxId);
+    let existing = cache.get(cacheKey);
 
     if (!existing) {
       Log.Default.info("creating instance", {
         directory: input.directory,
         sandboxId: input.sandboxId,
-      })
+      });
 
       existing = iife(async () => {
         const sandbox = input.sandboxId
           ? await createRemoteSandbox(input.sandboxId, input.directory)
-          : createSandbox(input.directory)
+          : createSandbox(input.directory);
 
         const project = await Project.fromDirectory(input.directory, {
           sandbox,
           sandboxId: input.sandboxId,
-        })
+        });
 
         const ctx: InstanceContext = {
           directory: input.directory,
           project,
           sandbox,
           sandboxId: input.sandboxId,
-        }
+        };
 
-        await context.provide(ctx, () => input.init?.())
-        return ctx
-      })
+        await context.provide(ctx, () => input.init?.());
+        return ctx;
+      });
 
-      cache.set(cacheKey, existing)
+      cache.set(cacheKey, existing);
     }
 
-    return context.provide(await existing, () => input.fn())
+    return context.provide(await existing, () => input.fn());
   },
 
   get directory() {
-    return context.use().directory
+    return context.use().directory;
   },
 
   get project() {
-    return context.use().project
+    return context.use().project;
   },
 
   get sandbox() {
-    return context.use().sandbox
+    return context.use().sandbox;
   },
 
   get sandboxId() {
-    return context.use().sandboxId
+    return context.use().sandboxId;
   },
 
   state<S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>): () => S {
-    return State.create(() => {
-      const { directory, sandboxId } = context.use()
-      return key(directory, sandboxId)
-    }, init, dispose)
+    return State.create(
+      () => {
+        const { directory, sandboxId } = context.use();
+        return key(directory, sandboxId);
+      },
+      init,
+      dispose,
+    );
   },
 
   async dispose() {
-    const { directory, sandboxId } = context.use()
-    const cacheKey = key(directory, sandboxId)
+    const { directory, sandboxId } = context.use();
+    const cacheKey = key(directory, sandboxId);
 
-    Log.Default.info("disposing instance", { directory, sandboxId })
+    Log.Default.info("disposing instance", { directory, sandboxId });
 
-    await State.dispose(cacheKey)
-    cache.delete(cacheKey)
+    await State.dispose(cacheKey);
+    cache.delete(cacheKey);
 
     GlobalBus.emit("event", {
       directory,
@@ -102,19 +106,19 @@ export const Instance = {
         type: "server.instance.disposed",
         properties: { directory },
       },
-    })
+    });
   },
 
   async disposeAll() {
-    Log.Default.info("disposing all instances")
+    Log.Default.info("disposing all instances");
 
     for (const [, value] of cache) {
-      const ctx = await value.catch(() => undefined)
+      const ctx = await value.catch(() => undefined);
       if (ctx) {
-        await context.provide(ctx, () => Instance.dispose())
+        await context.provide(ctx, () => Instance.dispose());
       }
     }
 
-    cache.clear()
+    cache.clear();
   },
-}
+};
