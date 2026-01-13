@@ -1,20 +1,46 @@
-"use client"
+"use client";
 
-import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from "@/components/agent/web-preview"
-import { useEffect, useMemo, useState, type ElementType } from "react"
-import { X, Database, Monitor, CreditCard, GitCompare, Terminal, ScrollText, Plus } from "lucide-react"
-import type { FileDiff, ToolPart } from "@opencode-ai/sdk"
-import { useQuery } from "@tanstack/react-query"
-import { useConvexDashboardQuery, type ConvexDashboardCredentials } from "@/queries/projects"
-import { useSessionsQuery } from "@/queries/chats"
-import DiffView from "@/components/diff/diff-view"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { cn } from "@/lib/utils"
-import { http } from "@/lib/http"
-import { useSandbox } from "@/hooks/use-sandbox"
-import useAgentStream from "@/lib/use-agent-stream"
-import { EmbeddedDashboard } from "@/components/agent/convex-dashboard"
+import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from "@/components/agent/web-preview";
+import { useEffect, useMemo, useState, type ElementType } from "react";
+import {
+  X,
+  Database,
+  Monitor,
+  CreditCard,
+  GitCompare,
+  Terminal,
+  ScrollText,
+  Plus,
+  Power,
+  RefreshCw,
+} from "lucide-react";
+import type { FileDiff, ToolPart } from "@opencode-ai/sdk";
+import { useQuery } from "@tanstack/react-query";
+
+import {
+  useConvexDashboardQuery,
+  useActivateProject,
+  useSandboxHealthQuery,
+  type ConvexDashboardCredentials,
+} from "@/queries/projects";
+import { useSessionsQuery } from "@/queries/chats";
+
+import DiffView from "@/components/diff/diff-view";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+
+import { cn } from "@/lib/utils";
+import { http } from "@/lib/http";
+import { useSandbox } from "@/hooks/use-sandbox";
+import useAgentStream from "@/lib/use-agent-stream";
+import { EmbeddedDashboard } from "@/components/agent/convex-dashboard";
+
 
 export interface PreviewTab {
   id: string
@@ -187,6 +213,43 @@ function McpContent({ entries, isLoading }: { entries: Array<{ name: string; sta
   )
 }
 
+function SandboxPausedContent({ 
+  onActivate, 
+  isActivating 
+}: { 
+  onActivate: () => void; 
+  isActivating: boolean;
+}) {
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4 text-center max-w-sm">
+        <div className="rounded-full bg-muted p-4">
+          <Power className="size-8 text-muted-foreground" strokeWidth={1.5} />
+        </div>
+        <div className="space-y-1">
+          <p className="font-medium">Sandbox Paused</p>
+          <p className="text-sm text-muted-foreground">
+            Your sandbox is paused to save resources. Activate it to resume your preview.
+          </p>
+        </div>
+        <Button onClick={onActivate} disabled={isActivating} className="gap-2">
+          {isActivating ? (
+            <>
+              <RefreshCw className="size-4 animate-spin" />
+              Activating...
+            </>
+          ) : (
+            <>
+              <Power className="size-4" />
+              Activate Sandbox
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // Get icon for tab type
 function getTabIcon(type: PreviewTab["type"]) {
   switch (type) {
@@ -330,6 +393,11 @@ export default function PreviewPanel({
 
   const [currentUrl, setCurrentUrl] = useState("")
 
+  const { data: health } = useSandboxHealthQuery(projectId, isPreviewTabActive);
+  const sandboxDown = health && health.status !== 'running';
+
+  const { mutate: activate, isPending: activating } = useActivateProject();
+
   useEffect(() => {
     onPreviewUrl?.(previewUrl ?? null)
   }, [previewUrl, onPreviewUrl])
@@ -388,8 +456,10 @@ export default function PreviewPanel({
 
       {/* Tab content */}
       <div className="flex-1 min-h-0 flex flex-col">
-        {isPreviewTabActive &&
-          (isReady && previewUrl ? (
+        {isPreviewTabActive && (
+          sandboxDown ? (
+            <SandboxPausedContent onActivate={() => projectId && activate({ id: projectId })} isActivating={activating} />
+          ) : isReady && previewUrl ? (
             <WebPreviewBody className="w-full h-full border-0" />
           ) : (
             <LoadingState message="Starting sandbox..." />
@@ -410,8 +480,8 @@ export default function PreviewPanel({
     </div>
   )
 
-  // Wrap in WebPreview context when preview is ready
-  if (isPreviewTabActive && isReady && previewUrl) {
+  // Wrap in WebPreview context when preview is ready and sandbox is up
+  if (isPreviewTabActive && isReady && previewUrl && !sandboxDown) {
     return (
       <WebPreview key={previewUrl} defaultUrl={previewUrl} onUrlChange={handleUrlChange} className="h-full border-0">
         {renderContent()}

@@ -18,13 +18,18 @@ export const config = {
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
   },
+  sandbox: {
+    provider: (env.SANDBOX_PROVIDER || "e2b") as "e2b" | "daytona",
+    defaultPort: "3000",
+  },
+  e2b: {
+    apiKey: env.E2B_API_KEY,
+    template: env.E2B_TEMPLATE,
+  },
   daytona: {
     apiKey: env.DAYTONA_API_KEY,
-    apiUrl: env.DAYTONA_API_URL,
     serverUrl: env.DAYTONA_SERVER_URL,
-    snapshot: env.DAYTONA_SNAPSHOT || "default-env:1.0.3",
-    defaultPort: env.DEFAULT_SANDBOX_PORT || "3000",
-    orgId: env.DAYTONA_ORG_ID,
+    snapshot: env.DAYTONA_SNAPSHOT,
   },
   uploads: {
     publicUrl: env.UPLOADS_PUBLIC_URL,

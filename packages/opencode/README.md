@@ -47,11 +47,11 @@ AI-powered headless coding agent.
 
 ## Current Change Review (Staged + Unstaged)
 
-File-by-file summary of the sandbox/Daytona refactor and related fixes.
+File-by-file summary of the sandbox/E2B refactor and related fixes.
 
 - `LEARNING.md`: added a concise agent loop walkthrough.
-- `bun.lock`: dependency updates for Daytona support and workspace cleanup.
-- `packages/opencode/package.json`: adds `@daytonaio/sdk`.
+- `bun.lock`: dependency updates for E2B support and workspace cleanup.
+- `packages/opencode/package.json`: adds `e2b`.
 - `packages/opencode/src/config/config.ts`: config read/write now sandbox-aware, including `{file:...}` references.
 - `packages/opencode/src/config/markdown.ts`: frontmatter parsing reads through sandbox path resolution.
 - `packages/opencode/src/file/index.ts`: file status/read/list/search use sandbox fs/proc; mime-aware encoding.
@@ -63,7 +63,7 @@ File-by-file summary of the sandbox/Daytona refactor and related fixes.
 - `packages/opencode/src/provider/models.local.json`: adds anthropic npm package; Sonnet 4 attachments enabled.
 - `packages/opencode/src/provider/provider.ts`: guards missing env list; skip custom loader if base provider missing.
 - `packages/opencode/src/pty/index.ts`: PTY feature removed.
-- `packages/opencode/src/sandbox/daytona.ts`: new Daytona sandbox; extension-based mime map.
+- `packages/opencode/src/sandbox/e2b.ts`: new E2B sandbox; extension-based mime map.
 - `packages/opencode/src/sandbox/index.ts`: new Sandbox interface + local implementation.
 - `packages/opencode/src/server/server.ts`: supports `sandboxId` routing; PTY routes removed.
 - `packages/opencode/src/session/prompt.ts`: tool execution wrapped with Instance context; shell execution via sandbox proc.

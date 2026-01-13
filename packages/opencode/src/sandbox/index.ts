@@ -258,4 +258,26 @@ export function create(root: string): Sandbox {
   }
 }
 
+export { createE2BSandbox } from "./e2b"
 export { createDaytonaSandbox } from "./daytona"
+
+export type SandboxProvider = "e2b" | "daytona"
+
+function parseSandboxId(sandboxId: string): { provider: SandboxProvider; id: string } {
+  const [prefix, ...rest] = sandboxId.split(":")
+  if (prefix === "daytona" && rest.length) return { provider: "daytona", id: rest.join(":") }
+  if (prefix === "e2b" && rest.length) return { provider: "e2b", id: rest.join(":") }
+  return { provider: "e2b", id: sandboxId }
+}
+
+export async function createRemoteSandbox(sandboxId: string, root?: string): Promise<Sandbox> {
+  const { provider, id } = parseSandboxId(sandboxId)
+
+  if (provider === "daytona") {
+    const { createDaytonaSandbox } = await import("./daytona")
+    return createDaytonaSandbox({ sandboxId: id, root })
+  }
+
+  const { createE2BSandbox } = await import("./e2b")
+  return createE2BSandbox({ sandboxId: id, root })
+}

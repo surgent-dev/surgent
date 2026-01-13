@@ -6,6 +6,8 @@ import Image from 'next/image';
 import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth-client';
+import { isWaitlistMode } from '@/lib/waitlist';
+import { WaitlistScreen } from '@/components/waitlist-screen';
 import { ChatComposer } from '@/components/chat/chat-composer';
 import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
@@ -117,11 +119,14 @@ function TemplateCard({ template }: { template: typeof templates[0] }) {
 }
 
 export default function Index() {
+  const waitlistMode = isWaitlistMode();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [promptValue, setPromptValue] = useState('');
   const router = useRouter();
   const create = useCreateProject();
   const typingPlaceholder = useTypingPlaceholder(typingPlaceholders);
+
+  if (waitlistMode) return <WaitlistScreen />;
 
   useEffect(() => {
     const load = async () => {

@@ -1,22 +1,33 @@
-import { createDaytonaProvider } from "@/apis/sandbox";
-import type { SandboxInstance } from "@/apis/sandbox";
+import { E2BProvider, DaytonaProvider } from "@/apis/sandbox";
+import type { Sandbox, SandboxProvider } from "@/apis/sandbox";
 import { config } from "@/lib/config";
-import { Daytona } from "@daytonaio/sdk";
-import path from "path";
 import { createHash } from "crypto";
+import { parse as parseDotEnv } from "dotenv";
+import path from "path";
 import stripJsonComments from "strip-json-comments";
 import * as ProjectService from "@/services/projects";
+import { buildDeploymentConfig, parseWranglerConfig, deployToDispatch } from "@/apis/deploy";
+import { auth } from "@/lib/auth";
 
 const MAX_PROJECTS_PER_USER = 2;
+
+const DEFAULT_WORKER = `export default { 
+  async fetch(request, env) { 
+    return env.ASSETS.fetch(request); 
+  } 
+};`;
+
+const DEFAULT_WRANGLER = {
+  compatibility_date: "2025-04-24",
+  assets: { binding: "ASSETS", not_found_handling: "single-page-application" },
+  observability: { enabled: true, head_sampling_rate: 0.1 },
+};
 
 export class HttpError extends Error {
   constructor(public status: number, message: string) {
     super(message);
   }
 }
-import { buildDeploymentConfig, parseWranglerConfig, deployToDispatch } from "@/apis/deploy";
-import { parse as parseDotEnv } from "dotenv";
-import { auth } from "@/lib/auth";
 
 // ============================================================================
 // Types
@@ -72,21 +83,15 @@ function buildBashCommand(cwd: string, script: string): string {
   return `bash -lc '${["set -euo pipefail", `cd ${shellQuote(cwd)}`, script].join("\n").replace(/'/g, "'\"'\"'")}'`;
 }
 
-function getDaytonaProvider() {
-  return createDaytonaProvider({
-    apiKey: config.daytona.apiKey,
-    serverUrl: config.daytona.serverUrl,
-    snapshot: config.daytona.snapshot,
-  });
-}
+type ProviderName = "e2b" | "daytona"
 
-function getDaytonaClient(): Daytona {
-  return new Daytona({ apiKey: config.daytona.apiKey, apiUrl: config.daytona.serverUrl });
-}
+const sandboxProviderName: ProviderName = config.sandbox.provider === "daytona" ? "daytona" : "e2b"
 
-function isDirectory(entry: unknown): boolean {
-  const info = entry as Record<string, any>;
-  return info?.isDir === true || info?.is_dir === true || info?.type === "directory";
+function getSandboxProvider(): SandboxProvider {
+  if (config.sandbox.provider === "daytona") {
+    return new DaytonaProvider(config.daytona.apiKey, config.daytona.serverUrl, config.daytona.snapshot)
+  }
+  return new E2BProvider(config.e2b.template)
 }
 
 function stripTrailingSlash(s: string): string {
@@ -104,43 +109,34 @@ function sanitizeScriptName(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "").slice(0, 63);
 }
 
-async function directoryExists(sandbox: SandboxInstance, dir: string): Promise<boolean> {
+async function directoryExists(sandbox: Sandbox, dir: string): Promise<boolean> {
   try {
-    return isDirectory(await sandbox.fs.getFileDetails(dir));
+    return (await sandbox.stat(dir)).isDir;
   } catch {
     return false;
   }
 }
 
-async function downloadFileSafe(sandbox: SandboxInstance, filePath: string, cwd?: string): Promise<Buffer> {
+async function downloadFileSafe(sandbox: Sandbox, filePath: string, cwd?: string): Promise<Buffer> {
   try {
-    return await sandbox.fs.downloadFile(filePath);
+    return await sandbox.read(filePath);
   } catch {
     const cmd = `base64 -w0 ${shellQuote(filePath)} 2>/dev/null || base64 ${shellQuote(filePath)}`;
-    const res = await sandbox.exec(cmd, { timeoutSeconds: 60, cwd });
-    if (res.exitCode !== 0) throw new Error(`downloadFileSafe failed: ${res.result}`);
-    return Buffer.from((res.result || '').toString().trim(), 'base64');
+    const res = await sandbox.exec(cmd, { timeout: 60_000, cwd });
+    if (res.code !== 0) throw new Error(`downloadFileSafe failed: ${res.output}`);
+    return Buffer.from((res.output || '').toString().trim(), 'base64');
   }
 }
 
-async function readFirstExistingFile(sandbox: SandboxInstance, paths: string[], cwd: string): Promise<{ path: string; content: string }> {
-  for (const p of paths) {
-    try {
-      return { path: p, content: (await downloadFileSafe(sandbox, p, cwd)).toString('utf8') };
-    } catch {}
-  }
-  throw new Error(`Required file not found. Tried: ${paths.join(", ")}`);
-}
-
-async function collectAssets(sandbox: SandboxInstance, rootDir: string) {
+async function collectAssets(sandbox: Sandbox, rootDir: string) {
   const root = stripTrailingSlash(rootDir);
   const manifest: Record<string, { hash: string; size: number }> = {};
   const files: Array<{ path: string; base64: string }> = [];
 
   async function walk(dir: string) {
-    for (const entry of await sandbox.fs.listFiles(dir)) {
+    for (const entry of await sandbox.list(dir)) {
       const entryPath = resolveEntryPath(dir, entry);
-      if (isDirectory(entry)) {
+      if (entry.isDir) {
         await walk(entryPath);
       } else {
         const buffer = await downloadFileSafe(sandbox, entryPath);
@@ -155,32 +151,32 @@ async function collectAssets(sandbox: SandboxInstance, rootDir: string) {
   return { manifest, files };
 }
 
-async function pm2JList(sandbox: SandboxInstance, cwd: string): Promise<any[]> {
+async function pm2JList(sandbox: Sandbox, cwd: string): Promise<any[]> {
   try {
-    const out = await sandbox.exec("pm2 jlist", { timeoutSeconds: 30, cwd });
-    const parsed = JSON.parse(out.result);
+    const out = await sandbox.exec("pm2 jlist", { timeout: 30_000, cwd });
+    const parsed = JSON.parse(out.output);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
-async function isPm2Online(sandbox: SandboxInstance, cwd: string, name: string): Promise<boolean> {
+async function isPm2Online(sandbox: Sandbox, cwd: string, name: string): Promise<boolean> {
   const list = await pm2JList(sandbox, cwd);
   return list.find(p => p?.name === name)?.pm2_env?.status === "online";
 }
 
-async function ensurePm2Process(sandbox: SandboxInstance, cwd: string, name: string, command: string, forceRestart = false) {
+async function ensurePm2Process(sandbox: Sandbox, cwd: string, name: string, command: string, forceRestart = false) {
   if (await isPm2Online(sandbox, cwd, name)) {
-    if (forceRestart) await sandbox.exec(`pm2 restart ${name} --update-env`, { timeoutSeconds: 60, cwd });
+    if (forceRestart) await sandbox.exec(`pm2 restart ${name} --update-env`, { timeout: 60_000, cwd });
     return;
   }
-  await sandbox.exec(`pm2 start "${command}" --name ${name} --update-env`, { timeoutSeconds: 300, cwd });
+  await sandbox.exec(`pm2 start "${command}" --name ${name} --update-env`, { timeout: 300_000, cwd });
 }
 
 async function getOrCreateSandbox(opts: { port: number; workingDirectory: string; sandboxId?: string; env?: Record<string, string>; name?: string }) {
-  const provider = getDaytonaProvider();
-  let sandbox: SandboxInstance;
+  const provider = getSandboxProvider();
+  let sandbox: Sandbox;
 
   if (opts.sandboxId) {
     try {
@@ -192,7 +188,7 @@ async function getOrCreateSandbox(opts: { port: number; workingDirectory: string
     sandbox = await provider.create(opts.env, opts.name);
   }
 
-  return { sandbox, previewUrl: await sandbox.getHost(opts.port) };
+  return { sandbox, previewUrl: await sandbox.host(opts.port) };
 }
 
 
@@ -201,107 +197,101 @@ async function getOrCreateSandbox(opts: { port: number; workingDirectory: string
 // ============================================================================
 
 export async function deployProject(args: DeployProjectArgs): Promise<void> {
-  let step = "start";
-  console.log("[deploy] start", args);
+  const { projectId, deployName: rawName } = args;
+  console.log("[deploy] start", { projectId });
 
-  const project = await ProjectService.getProjectById(args.projectId);
-  if (!project) throw new Error(`Project ${args.projectId} not found`);
+  // 1. Load project
+  const project = await ProjectService.getProjectById(projectId);
+  if (!project) throw new Error(`Project ${projectId} not found`);
+  if (!project.sandbox?.id) throw new Error("Sandbox not initialized");
 
-  const sandboxId = project.sandbox?.id;
-  if (!sandboxId) throw new Error("Project sandbox is not initialized");
-
-  const deployName = args.deployName ? sanitizeScriptName(args.deployName) : undefined;
-  const workingDir = localWorkspacePath(args.projectId);
+  const scriptName = rawName ? sanitizeScriptName(rawName) : `project-${projectId.slice(0, 8)}`;
+  const workingDir = localWorkspacePath(projectId);
 
   try {
-    step = "status:starting";
-    await ProjectService.updateDeploymentStatus(args.projectId, "starting", deployName);
+    await ProjectService.updateDeploymentStatus(projectId, "starting", scriptName);
 
-    step = "resume";
-    const sandbox = await getDaytonaProvider().resume(sandboxId);
+    // 2. Resume sandbox
+    const sandbox = await getSandboxProvider().resume(project.sandbox.id);
 
-    step = "status:building";
-    await ProjectService.updateDeploymentStatus(args.projectId, "building");
-
-    step = "build";
-    const buildResult = await sandbox.exec(`bun run build`, { cwd: workingDir, timeoutSeconds: 180_000 });
-    if (buildResult.exitCode !== 0) {
-      await ProjectService.updateDeploymentStatus(args.projectId, "build_failed");
-      throw new Error(`Build failed: ${String(buildResult.result).slice(0, 500)}`);
+    // 3. Build
+    await ProjectService.updateDeploymentStatus(projectId, "building");
+    const build = await sandbox.exec("bun run build", { cwd: workingDir, timeout: 180_000 });
+    if (build.code !== 0) {
+      await ProjectService.updateDeploymentStatus(projectId, "build_failed");
+      throw new Error(`Build failed: ${String(build.output).slice(0, 500)}`);
     }
 
-    step = "read:inputs";
-    const [wranglerCat, workerCat] = await Promise.all([
-      readFirstExistingFile(sandbox, [`${workingDir}/dist/vite_reference/wrangler.json`, `${workingDir}/wrangler.jsonc`, `${workingDir}/wrangler.json`], workingDir),
-      readFirstExistingFile(sandbox, [`${workingDir}/dist/vite_reference/index.js`, `${workingDir}/dist/index.js`], workingDir),
-    ]);
+    // 4. Find assets directory (dist/client or dist/)
+    const assetsDir = await findAssetsDir(sandbox, workingDir);
+    if (!assetsDir) throw new Error("No dist/ directory found after build");
 
-    step = "wrangler:parse";
-    let wranglerConfig = wranglerCat.content;
-    let compatibilityFlags: string[] | undefined;
-    try {
-      const parsed = JSON.parse(stripJsonComments(wranglerConfig));
-      if (deployName) parsed.name = deployName;
-      wranglerConfig = JSON.stringify(parsed);
-      if (Array.isArray(parsed?.compatibility_flags)) compatibilityFlags = parsed.compatibility_flags;
-    } catch {}
+    // 5. Collect assets
+    const { manifest, files } = await collectAssets(sandbox, assetsDir);
+    if (!Object.keys(manifest).length) throw new Error("No assets found in dist/");
 
-    step = "assets";
-    let assetsManifest: Record<string, { hash: string; size: number }> | undefined;
-    let files: Array<{ path: string; base64: string }> | undefined;
-    const assetsRoot = `${workingDir}/dist/client`;
-    if (await directoryExists(sandbox, assetsRoot)) {
-      const collected = await collectAssets(sandbox, assetsRoot);
-      if (Object.keys(collected.manifest).length) assetsManifest = collected.manifest;
-      if (collected.files.length) files = collected.files;
-    }
+    // 6. Read env vars (optional)
+    const envVars = await readEnvFile(sandbox, `${workingDir}/.env.local`);
 
-    step = "env:read";
-    let envVars: Record<string, string> | undefined;
-    try {
-      envVars = parseDotEnv(await downloadFileSafe(sandbox, `${workingDir}/.env.local`, workingDir));
-    } catch {}
+    // 7. Deploy to Cloudflare
+    await ProjectService.updateDeploymentStatus(projectId, "uploading");
 
-    step = "status:uploading";
-    await ProjectService.updateDeploymentStatus(args.projectId, "uploading");
+    const wranglerConfig = { name: scriptName, ...DEFAULT_WRANGLER };
+    const wrangler = parseWranglerConfig(JSON.stringify(wranglerConfig));
+    const deployConfig = buildDeploymentConfig(
+      wrangler, 
+      DEFAULT_WORKER, 
+      config.cloudflare.accountId!, 
+      config.cloudflare.apiToken!, 
+      manifest
+    );
 
-    step = "deploy";
-    const wrangler = parseWranglerConfig(wranglerConfig);
-    const deployConfig = buildDeploymentConfig(wrangler, workerCat.content, config.cloudflare.accountId!, config.cloudflare.apiToken!, assetsManifest, compatibilityFlags);
-    
-    if (envVars && Object.keys(envVars).length) {
-      deployConfig.vars = { ...envVars, ...deployConfig.vars };
-    }
+    if (envVars) deployConfig.vars = { ...envVars, ...deployConfig.vars };
 
-    const fileContents = files?.length ? new Map(files.map(f => [f.path, Buffer.from(f.base64, "base64")])) : undefined;
-    await deployToDispatch({ ...deployConfig, dispatchNamespace: config.cloudflare.dispatchNamespace! }, fileContents, undefined, wrangler.assets);
+    const fileContents = new Map(files.map(f => [f.path, Buffer.from(f.base64, "base64")]));
+    await deployToDispatch(
+      { ...deployConfig, dispatchNamespace: config.cloudflare.dispatchNamespace! }, 
+      fileContents, 
+      undefined, 
+      wranglerConfig.assets
+    );
 
-    step = "status:deployed";
-    await ProjectService.updateProject(args.projectId, {
-      sandbox: { ...project.sandbox, deployed: true, deployName },
-      deployment: { ...(project.deployment || {}), status: "deployed", updatedAt: new Date() },
+    // 8. Update project
+    await ProjectService.updateProject(projectId, {
+      sandbox: { ...project.sandbox, deployed: true, deployName: scriptName },
+      deployment: { status: "deployed", updatedAt: new Date() },
     });
 
-    console.log("[deploy] success", { projectId: args.projectId });
+    console.log("[deploy] success", { projectId, scriptName });
   } catch (err: any) {
-    console.error("[deploy] failed", { projectId: args.projectId, step, error: err?.message ?? err });
-    if (!step.startsWith("status:") && step !== "build") {
-      try {
-        await ProjectService.updateDeploymentStatus(args.projectId, "deploy_failed", undefined, { step, error: err?.message ?? String(err) });
-      } catch {}
-    }
+    console.error("[deploy] failed", { projectId, error: err?.message });
+    await ProjectService.updateDeploymentStatus(projectId, "deploy_failed").catch(() => {});
     throw err;
   }
 }
 
-export async function setRunIndefinitely(sandboxId: string): Promise<{ sandboxId: string }> {
-  const sandbox = await getDaytonaClient().get(sandboxId);
-  await sandbox.setAutostopInterval(0);
-  return { sandboxId };
+async function findAssetsDir(sandbox: Sandbox, workingDir: string): Promise<string | null> {
+  const clientDir = `${workingDir}/dist/client`;
+  const distDir = `${workingDir}/dist`;
+  
+  if (await directoryExists(sandbox, clientDir)) return clientDir;
+  if (await directoryExists(sandbox, distDir)) return distDir;
+  return null;
 }
 
+async function readEnvFile(sandbox: Sandbox, path: string): Promise<Record<string, string> | undefined> {
+  try {
+    return parseDotEnv(await downloadFileSafe(sandbox, path));
+  } catch {
+    return undefined;
+  }
+}
+
+
 export async function initializeProject(args: InitializeProjectArgs): Promise<{ projectId: string; sandboxId: string; previewUrl: string }> {
+  console.log("[init] starting...", { userId: args.userId, githubUrl: args.githubUrl });
   const projectCount = await ProjectService.countProjectsByUserId(args.userId);
+  console.log("[init] project count:", projectCount);
   if (projectCount >= MAX_PROJECTS_PER_USER) {
     throw new HttpError(400, `Project limit reached. Maximum ${MAX_PROJECTS_PER_USER} projects per user.`);
   }
@@ -312,26 +302,38 @@ export async function initializeProject(args: InitializeProjectArgs): Promise<{ 
 
   const apiKeyResult = await auth.api.createApiKey({ body: { name: `p-${projectId.slice(0, 8)}` }, headers: args.headers });
 
+  console.log("[init] creating sandbox...");
   const { sandbox, previewUrl } = await getOrCreateSandbox({
     port: 3000,
     workingDirectory,
     name: "server",
     env: { SURGENT_API_KEY: apiKeyResult.key, SURGENT_AI_BASE_URL: "https://ai.surgent.dev" },
   });
+  console.log("[init] sandbox created:", sandbox.id, "provider:", sandboxProviderName);
 
-  if (args.githubUrl) await sandbox.git.clone(args.githubUrl, workingDirectory);
+  if (args.githubUrl) {
+    console.log("[init] cloning repo...");
+    await sandbox.clone(args.githubUrl, workingDirectory);
+    console.log("[init] clone complete");
+  }
 
   let initScript: string | undefined;
   let devScript: string | undefined;
   let processName = `${projectId}-vite-server`;
   try {
-    const cfg = JSON.parse(stripJsonComments((await sandbox.exec(`cat ${workingDirectory}/surgent.json`, { timeoutSeconds: 10 })).result));
+    console.log("[init] reading surgent.json...");
+    const content = (await sandbox.read(`${workingDirectory}/surgent.json`)).toString("utf8");
+    console.log("[init] surgent.json found, parsing...");
+    const cfg = JSON.parse(stripJsonComments(content));
     initScript = cfg?.scripts?.init;
     devScript = cfg?.scripts?.dev;
     if (cfg?.name?.trim()) processName = cfg.name.trim();
-  } catch {}
+    console.log("[init] config:", { initScript, devScript, processName });
+  } catch (err) {
+    console.log("[init] no surgent.json or parse error:", err);
+  }
 
-  if (initScript) await sandbox.exec(buildBashCommand(workingDirectory, initScript), { timeoutSeconds: 1800 });
+  if (initScript) await sandbox.exec(buildBashCommand(workingDirectory, initScript), { timeout: 600_000 });
 
   if (devScript) {
     await ensurePm2Process(sandbox, workingDirectory, processName, devScript);
@@ -339,10 +341,10 @@ export async function initializeProject(args: InitializeProjectArgs): Promise<{ 
 
   await ProjectService.updateProject(projectId, {
     metadata: { workingDirectory, processName, startCommand: devScript },
-    sandbox: { id: sandbox.sandboxId, previewUrl, status: "started", isInitialized: true },
+    sandbox: { id: sandbox.id, provider: sandboxProviderName, previewUrl, status: "started", isInitialized: true },
   });
 
-  return { projectId, sandboxId: sandbox.sandboxId, previewUrl };
+  return { projectId, sandboxId: sandbox.id, previewUrl };
 }
 
 export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxId: string; previewUrl: string }> {
@@ -361,7 +363,7 @@ export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxI
     console.log("[resume] pm2 start error", err);
   }
 
-  return { sandboxId: sandbox.sandboxId, previewUrl };
+  return { sandboxId: sandbox.id, previewUrl };
 }
 
 export async function deployConvexProd(args: { projectId: string }): Promise<void> {
@@ -371,11 +373,11 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
   const sandboxId = project.sandbox?.id;
   if (!sandboxId) throw new Error("Sandbox not found");
 
-  const sandbox = await getDaytonaProvider().resume(sandboxId);
+  const sandbox = await getSandboxProvider().resume(sandboxId);
   const cwd = project.metadata?.workingDirectory || localWorkspacePath(args.projectId);
 
-  const res = await sandbox.exec('bunx convex deploy -y', { cwd, timeoutSeconds: 180_000 });
-  if (res.exitCode !== 0) throw new Error(`convex deploy failed: ${res.result}`);
+  const res = await sandbox.exec('bunx convex deploy -y', { cwd, timeout: 180_000 });
+  if (res.code !== 0) throw new Error(`convex deploy failed: ${res.output}`);
 }
 
 export async function downloadProject(projectId: string): Promise<{ buffer: Buffer; filename: string }> {
@@ -385,7 +387,7 @@ export async function downloadProject(projectId: string): Promise<{ buffer: Buff
   const sandboxId = project.sandbox?.id;
   if (!sandboxId) throw new HttpError(400, "Sandbox not initialized");
 
-  const sandbox = await getDaytonaProvider().resume(sandboxId);
+  const sandbox = await getSandboxProvider().resume(sandboxId);
   const workingDir = (project.metadata as any)?.workingDirectory || localWorkspacePath(projectId);
   const archivePath = `/tmp/${projectId}-download.tar.gz`;
 
@@ -402,9 +404,9 @@ export async function downloadProject(projectId: string): Promise<{ buffer: Buff
     '.',
   ].join(' ');
 
-  const result = await sandbox.exec(tarCmd, { cwd: workingDir, timeoutSeconds: 180 });
-  if (result.exitCode !== 0) {
-    throw new HttpError(500, `Failed to create archive: ${result.result}`);
+  const result = await sandbox.exec(tarCmd, { cwd: workingDir, timeout: 180_000 });
+  if (result.code !== 0) {
+    throw new HttpError(500, `Failed to create archive: ${result.output}`);
   }
 
   const buffer = await downloadFileSafe(sandbox, archivePath, workingDir);
@@ -424,7 +426,7 @@ export async function deleteSandbox(args: DeleteProjectArgs): Promise<void> {
   if (!sandboxId) return;
 
   try {
-    await getDaytonaProvider().delete(sandboxId);
+    await getSandboxProvider().kill(sandboxId);
     console.log("[delete] sandbox deleted", { projectId: args.projectId, sandboxId });
   } catch (err) {
     console.error("[delete] sandbox deletion failed", { projectId: args.projectId, sandboxId, error: err });

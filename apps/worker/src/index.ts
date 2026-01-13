@@ -1,14 +1,15 @@
-import { Hono } from "hono"
-import { cors } from "hono/cors"
-import projects from "./routes/projects"
-import preview from "./routes/preview"
-import agent from "./routes/agent"
-import upload from "./routes/upload"
-import github from "./routes/github"
-import mcp from "./routes/mcp"
-import { auth } from "./lib/auth"
-import { config } from "./lib/config"
-import type { AppContext } from "@/types/application"
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import projects from './routes/projects'
+import preview from './routes/preview'
+import agent from './routes/agent'
+import upload from './routes/upload'
+import github from './routes/github'
+import mcp from './routes/mcp'
+import admin from './routes/admin'
+import { auth } from './lib/auth'
+import { config } from './lib/config'
+import type { AppContext } from '@/types/application'
 
 function isPreviewSubdomain(sub: string): boolean {
   return sub.startsWith("preview-") || /^\d+-/.test(sub)
@@ -103,6 +104,7 @@ app.route("/api/agent", agent)
 app.route("/api/upload", upload)
 app.route("/api/github", github)
 app.route("/api/mcp", mcp)
+app.route("/api/admin", admin)
 app.route("/mcp", mcp)
 app.route("/preview", preview)
 

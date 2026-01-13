@@ -8,7 +8,7 @@
  *   LOG_LEVEL - DEBUG | INFO | WARN | ERROR (default: INFO)
  *
  * Runner is resolved per-request based on x-sandbox-id header:
- *   - With sandboxId → DaytonaRunner (runs in Daytona sandbox)
+ *   - With sandboxId → E2B sandbox
  *   - Without sandboxId → LocalRunner (runs locally)
  */
 import { Log } from "./util/log"

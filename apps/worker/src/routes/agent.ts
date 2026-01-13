@@ -24,7 +24,7 @@ agent.all('/:id/*', requireAuth, async (c) => {
     return c.json({ error: 'Forbidden' }, 403)
   }
 
-  const sandbox = project.sandbox as { id?: string } | null
+  const sandbox = project.sandbox as { id?: string; provider?: string } | null
   if (!sandbox?.id) {
     return c.json({ error: 'Sandbox not found' }, 400)
   }
@@ -36,8 +36,11 @@ agent.all('/:id/*', requireAuth, async (c) => {
   targetUrl.pathname = pathname
   targetUrl.search = url.search
 
+  // Prefix sandbox ID with provider for opencode (e.g., "e2b:abc123" or "daytona:xyz")
+  const prefixedSandboxId = sandbox.provider ? `${sandbox.provider}:${sandbox.id}` : sandbox.id
+
   const headers = new Headers(c.req.raw.headers)
-  headers.set('x-sandbox-id', sandbox.id)
+  headers.set('x-sandbox-id', prefixedSandboxId)
   headers.set('x-opencode-directory', localWorkspacePath(projectId))
   headers.delete('host')
 
