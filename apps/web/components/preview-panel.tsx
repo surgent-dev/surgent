@@ -1,7 +1,7 @@
-"use client";
+"use client"
 
-import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from "@/components/agent/web-preview";
-import { useEffect, useMemo, useState, type ElementType } from "react";
+import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from "@/components/agent/web-preview"
+import { useEffect, useMemo, useState, type ElementType } from "react"
 import {
   X,
   Database,
@@ -13,34 +13,28 @@ import {
   Plus,
   Power,
   RefreshCw,
-} from "lucide-react";
-import type { FileDiff, ToolPart } from "@opencode-ai/sdk";
-import { useQuery } from "@tanstack/react-query";
+} from "lucide-react"
+import type { FileDiff, ToolPart } from "@opencode-ai/sdk"
+import { useQuery } from "@tanstack/react-query"
 
 import {
   useConvexDashboardQuery,
   useActivateProject,
   useSandboxHealthQuery,
   type ConvexDashboardCredentials,
-} from "@/queries/projects";
-import { useSessionsQuery } from "@/queries/chats";
+} from "@/queries/projects"
+import { useSessionsQuery } from "@/queries/chats"
 
-import DiffView from "@/components/diff/diff-view";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+import DiffView from "@/components/diff/diff-view"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Button } from "@/components/ui/button"
 
-import { cn } from "@/lib/utils";
-import { http } from "@/lib/http";
-import { useSandbox } from "@/hooks/use-sandbox";
-import useAgentStream from "@/lib/use-agent-stream";
-import { EmbeddedDashboard } from "@/components/agent/convex-dashboard";
-
+import { cn } from "@/lib/utils"
+import { http } from "@/lib/http"
+import { useSandbox } from "@/hooks/use-sandbox"
+import useAgentStream from "@/lib/use-agent-stream"
+import { EmbeddedDashboard } from "@/components/agent/convex-dashboard"
 
 export interface PreviewTab {
   id: string
@@ -213,13 +207,7 @@ function McpContent({ entries, isLoading }: { entries: Array<{ name: string; sta
   )
 }
 
-function SandboxPausedContent({ 
-  onActivate, 
-  isActivating 
-}: { 
-  onActivate: () => void; 
-  isActivating: boolean;
-}) {
+function SandboxPausedContent({ onActivate, isActivating }: { onActivate: () => void; isActivating: boolean }) {
   return (
     <div className="w-full h-full flex items-center justify-center">
       <div className="flex flex-col items-center gap-4 text-center max-w-sm">
@@ -247,7 +235,7 @@ function SandboxPausedContent({
         </Button>
       </div>
     </div>
-  );
+  )
 }
 
 // Get icon for tab type
@@ -393,10 +381,10 @@ export default function PreviewPanel({
 
   const [currentUrl, setCurrentUrl] = useState("")
 
-  const { data: health } = useSandboxHealthQuery(projectId, isPreviewTabActive);
-  const sandboxDown = health && health.status !== 'running';
+  const { data: health } = useSandboxHealthQuery(projectId, isPreviewTabActive)
+  const sandboxDown = health && health.status !== "running"
 
-  const { mutate: activate, isPending: activating } = useActivateProject();
+  const { mutate: activate, isPending: activating } = useActivateProject()
 
   useEffect(() => {
     onPreviewUrl?.(previewUrl ?? null)
@@ -420,32 +408,33 @@ export default function PreviewPanel({
       <div className="flex h-10 items-stretch border-b bg-muted/30 dark:bg-background shrink-0">
         <div className="flex min-w-0 flex-1 overflow-x-auto">
           {tabs.map((tab) => (
-            <TabButton
-              key={tab.id}
-              tab={tab}
-              isActive={activeTabId === tab.id}
-              onSelect={() => onTabChange?.(tab.id)}
-              onClose={onCloseTab ? () => onCloseTab(tab.id) : undefined}
-            />
+            <div key={tab.id} className="flex items-stretch">
+              <TabButton
+                tab={tab}
+                isActive={activeTabId === tab.id}
+                onSelect={() => onTabChange?.(tab.id)}
+                onClose={onCloseTab ? () => onCloseTab(tab.id) : undefined}
+              />
+            </div>
           ))}
+          {onAddTab && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center px-2.5 text-sm border-l text-muted-foreground hover:bg-muted/50">
+                  <Plus className="size-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onAddTab("mcp")} disabled={hasMcp}>
+                  MCP
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onAddTab("logs")} disabled={hasLogs}>
+                  Logs
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
-        {onAddTab && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center px-2.5 text-sm border-l text-muted-foreground hover:bg-muted/50">
-                <Plus className="size-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onAddTab("mcp")} disabled={hasMcp}>
-                MCP
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onAddTab("logs")} disabled={hasLogs}>
-                Logs
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
         {/* Nav controls on the right - only when preview tab is active and ready */}
         {isPreviewTabActive && isReady && previewUrl && (
           <div className="flex items-center pr-2">
@@ -456,9 +445,12 @@ export default function PreviewPanel({
 
       {/* Tab content */}
       <div className="flex-1 min-h-0 flex flex-col">
-        {isPreviewTabActive && (
-          sandboxDown ? (
-            <SandboxPausedContent onActivate={() => projectId && activate({ id: projectId })} isActivating={activating} />
+        {isPreviewTabActive &&
+          (sandboxDown ? (
+            <SandboxPausedContent
+              onActivate={() => projectId && activate({ id: projectId })}
+              isActivating={activating}
+            />
           ) : isReady && previewUrl ? (
             <WebPreviewBody className="w-full h-full border-0" />
           ) : (
