@@ -421,13 +421,7 @@ function AllProjectsTable({
   projects,
   pagination,
 }: {
-  projects: Array<{
-    id: string
-    name: string
-    userId: string
-    createdAt: string
-    userEmail: string
-  }>
+  projects: AdminOverview["allProjects"]
   pagination: AdminOverview["pagination"]
 }) {
   const router = useRouter()
