@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { isWaitlistMode } from "@/lib/waitlist";
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -13,9 +14,14 @@ export default function LoginPage() {
     setIsLoading(true);
     setError("");
     try {
+      const base = process.env.NEXT_PUBLIC_APP_URL;
+      const callbackURL = base
+        ? new URL(isWaitlistMode() ? "/waitlist" : "/dashboard", base).toString()
+        : undefined;
+
       await authClient.signIn.social({
         provider: "google",
-        callbackURL: `${process.env.NEXT_PUBLIC_APP_URL}`,
+        callbackURL,
       });
     } catch (err) {
       setError("Failed to login with Google");
@@ -36,7 +42,7 @@ export default function LoginPage() {
           </div>
           
           <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-            Log in to Surgent
+            {isWaitlistMode() ? "Join the waitlist" : "Log in to Surgent"}
           </h2>
         </div>
 

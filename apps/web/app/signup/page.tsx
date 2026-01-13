@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { isWaitlistMode } from "@/lib/waitlist";
 
 export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -13,9 +14,14 @@ export default function SignupPage() {
     setIsLoading(true);
     setError("");
     try {
+      const base = process.env.NEXT_PUBLIC_APP_URL;
+      const callbackURL = base
+        ? new URL(isWaitlistMode() ? "/waitlist" : "/dashboard", base).toString()
+        : undefined;
+
       await authClient.signIn.social({
         provider: "google",
-        callbackURL: `${process.env.NEXT_PUBLIC_APP_URL}`,
+        callbackURL,
       });
     } catch (err) {
       setError("Failed to sign up with Google");
@@ -34,7 +40,7 @@ export default function SignupPage() {
             <h1 className="text-4xl font-bold text-foreground">Surgent</h1>
           </div>
           <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-            Create your account
+            {isWaitlistMode() ? "Join the waitlist" : "Create your account"}
           </h2>
         </div>
 
