@@ -144,12 +144,12 @@ export function WaitlistScreen() {
           {/* Integrations */}
           <div className="space-y-4">
             <p className="text-xs uppercase tracking-widest text-muted-foreground/70">Integrations</p>
-            <div className="flex items-center gap-8">
-              <Image src="/Whop_logo.svg.png" alt="Whop" width={90} height={28} className="h-7 w-auto object-contain opacity-50 hover:opacity-100 transition-opacity" />
-              <Image src="/stripe-logo.svg" alt="Stripe" width={70} height={28} className="h-7 w-auto object-contain opacity-50 hover:opacity-100 transition-opacity" />
-              <Image src="/convex-logo.svg" alt="Convex" width={120} height={32} className="h-8 w-auto object-contain opacity-50 hover:opacity-100 transition-opacity" />
-              <Image src="/supabase-logo-wordmark--light.svg" alt="Supabase" width={140} height={32} className="h-7 w-auto object-contain opacity-50 hover:opacity-100 transition-opacity" />
-              <Image src="/betterauth-logo.svg" alt="Better Auth" width={32} height={32} className="h-7 w-7 object-contain opacity-50 hover:opacity-100 transition-opacity rounded" />
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6 md:gap-8">
+              <Image src="/Whop_logo.svg.png" alt="Whop" width={90} height={28} className="h-5 sm:h-6 md:h-7 w-auto object-contain opacity-50 hover:opacity-100 transition-opacity" />
+              <Image src="/stripe-logo.svg" alt="Stripe" width={70} height={28} className="h-5 sm:h-6 md:h-7 w-auto object-contain opacity-50 hover:opacity-100 transition-opacity" />
+              <Image src="/convex-logo.svg" alt="Convex" width={120} height={32} className="h-6 sm:h-7 md:h-8 w-auto object-contain opacity-50 hover:opacity-100 transition-opacity" />
+              <Image src="/supabase-logo-wordmark--light.svg" alt="Supabase" width={140} height={32} className="h-5 sm:h-6 md:h-7 w-auto object-contain opacity-50 hover:opacity-100 transition-opacity" />
+              <Image src="/betterauth-logo.svg" alt="Better Auth" width={32} height={32} className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 object-contain opacity-50 hover:opacity-100 transition-opacity rounded" />
             </div>
           </div>
           
