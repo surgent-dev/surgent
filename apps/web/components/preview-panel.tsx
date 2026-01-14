@@ -1,7 +1,7 @@
 "use client"
 
 import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from "@/components/agent/web-preview"
-import { useEffect, useMemo, useState, type ElementType } from "react"
+import { useEffect, useMemo, type ElementType } from "react"
 import {
   X,
   Database,
@@ -319,10 +319,10 @@ export default function PreviewPanel({
   onAddTab,
 }: PreviewPanelProps) {
   const activeTab = tabs.find((t) => t.id === activeTabId)
+  const tab = activeTab ?? tabs[0]
+  const type = tab?.type ?? "preview"
+
   const hasConvex = Boolean((project?.metadata as any)?.convex)
-  const isConvexTabActive = activeTab?.type === "convex"
-  const isPreviewTabActive = activeTab?.type === "preview"
-  const isMcpTabActive = activeTab?.type === "mcp"
   const hasMcp = tabs.some((tab) => tab.type === "mcp")
   const hasLogs = tabs.some((tab) => tab.type === "logs")
 
@@ -333,12 +333,12 @@ export default function PreviewPanel({
 
   const { data: convexCredentials, isLoading: convexLoading } = useConvexDashboardQuery(
     projectId,
-    hasConvex && isConvexTabActive,
+    hasConvex && type === "convex",
   )
 
   const { data: mcpStatus, isLoading: mcpLoading } = useQuery<McpStatus>({
     queryKey: ["mcp-status"],
-    enabled: isMcpTabActive,
+    enabled: type === "mcp",
     queryFn: async () => (await http.get("mcp").json()) as McpStatus,
   })
 
@@ -373,36 +373,52 @@ export default function PreviewPanel({
     return `${title}\n${text}`.trim()
   }, [messages, parts])
 
-  const proxyHost = process.env.NEXT_PUBLIC_PROXY_URL
-  const sandboxId = project?.sandbox?.id
-  // Preview availability should not depend on SSE connectivity.
-  const isReady = Boolean(sandboxId && proxyHost)
-  const previewUrl = isReady ? `https://3000-${sandboxId}.${proxyHost}` : undefined
+  const url = project?.sandbox?.previewUrl
+  const ready = Boolean(url)
 
-  const [currentUrl, setCurrentUrl] = useState("")
-
-  const { data: health } = useSandboxHealthQuery(projectId, isPreviewTabActive)
-  const sandboxDown = health && health.status !== "running"
+  const { data: health } = useSandboxHealthQuery(projectId, type === "preview")
+  const down = Boolean(health && health.status !== "running")
 
   const { mutate: activate, isPending: activating } = useActivateProject()
 
   useEffect(() => {
-    onPreviewUrl?.(previewUrl ?? null)
-  }, [previewUrl, onPreviewUrl])
-
-  useEffect(() => {
-    if (!previewUrl) return
-    if (currentUrl) return
-    setCurrentUrl(previewUrl)
-  }, [currentUrl, previewUrl])
+    onPreviewUrl?.(url ?? null)
+  }, [url, onPreviewUrl])
 
   const handleUrlChange = (u: string) => {
-    setCurrentUrl(u)
     onPreviewUrl?.(u || null)
   }
 
-  // Content without WebPreview wrapper (for non-preview tabs)
-  const renderContent = () => (
+  const nav = type === "preview" && ready && !down
+
+  const body = (() => {
+    switch (type) {
+      case "preview": {
+        if (down) {
+          return (
+            <SandboxPausedContent
+              onActivate={() => projectId && activate({ id: projectId })}
+              isActivating={activating}
+            />
+          )
+        }
+        if (ready) return <WebPreviewBody className="w-full h-full border-0" />
+        return <LoadingState message="Starting sandbox..." />
+      }
+      case "convex":
+        return <ConvexContent credentials={convexCredentials} isLoading={convexLoading} path={tab?.convexPath} />
+      case "payments":
+        return <PaymentsContent />
+      case "changes":
+        return tab?.diffs?.length ? <ChangesContent diffs={tab.diffs} /> : null
+      case "mcp":
+        return <McpContent entries={mcpEntries} isLoading={mcpLoading} />
+      case "logs":
+        return <LogsContent text={devLogsText} />
+    }
+  })()
+
+  const content = (
     <div className="h-full flex flex-col relative">
       {/* Tab bar */}
       <div className="flex h-10 items-stretch border-b bg-muted/30 dark:bg-background shrink-0">
@@ -434,8 +450,8 @@ export default function PreviewPanel({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        {/* Nav controls on the right - only when preview tab is active and ready */}
-        {isPreviewTabActive && isReady && previewUrl && (
+        {/* Nav controls - only render inside WebPreview context */}
+        {nav && (
           <div className="flex items-center pr-2">
             <PreviewNavControls />
           </div>
@@ -444,41 +460,19 @@ export default function PreviewPanel({
 
       {/* Tab content */}
       <div className="flex-1 min-h-0 flex flex-col">
-        {isPreviewTabActive &&
-          (sandboxDown ? (
-            <SandboxPausedContent
-              onActivate={() => projectId && activate({ id: projectId })}
-              isActivating={activating}
-            />
-          ) : isReady && previewUrl ? (
-            <WebPreviewBody className="w-full h-full border-0" />
-          ) : (
-            <LoadingState message="Starting sandbox..." />
-          ))}
-
-        {activeTab?.type === "convex" && (
-          <ConvexContent credentials={convexCredentials} isLoading={convexLoading} path={activeTab.convexPath} />
-        )}
-
-        {activeTab?.type === "payments" && <PaymentsContent />}
-
-        {activeTab?.type === "changes" && activeTab.diffs?.length && <ChangesContent diffs={activeTab.diffs} />}
-
-        {activeTab?.type === "mcp" && <McpContent entries={mcpEntries} isLoading={mcpLoading} />}
-
-        {activeTab?.type === "logs" && <LogsContent text={devLogsText} />}
+        {body}
       </div>
     </div>
   )
 
-  // Wrap in WebPreview context when preview is ready and sandbox is up
-  if (isPreviewTabActive && isReady && previewUrl && !sandboxDown) {
+  // Always wrap in WebPreview when we have a preview URL - keeps context stable
+  if (url) {
     return (
-      <WebPreview key={previewUrl} defaultUrl={previewUrl} onUrlChange={handleUrlChange} className="h-full border-0">
-        {renderContent()}
+      <WebPreview key={url} defaultUrl={url} onUrlChange={handleUrlChange} className="h-full border-0">
+        {content}
       </WebPreview>
     )
   }
 
-  return renderContent()
+  return content
 }
