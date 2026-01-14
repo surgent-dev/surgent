@@ -249,10 +249,6 @@ function getTabIcon(type: PreviewTab["type"]) {
       return CreditCard
     case "changes":
       return GitCompare
-    case "mcp":
-      return Terminal
-    case "logs":
-      return ScrollText
   }
 }
 
@@ -269,7 +265,9 @@ function TabButton({
   onClose?: () => void
 }) {
   const isClosable = tab.type !== "preview" && tab.type !== "convex" && tab.type !== "payments"
-  const Icon = getTabIcon(tab.type)
+  const Icon = tab.type === "mcp" ? undefined : getTabIcon(tab.type)
+  const isLogs = tab.type === "logs"
+  const isMcp = tab.type === "mcp"
 
   return (
     <button
@@ -280,6 +278,8 @@ function TabButton({
       )}
     >
       {Icon && <Icon className="size-4 shrink-0" />}
+      {isLogs ? <span className="text-sm leading-none text-muted-foreground">📜︎</span> : null}
+      {isMcp ? <span className="text-base leading-none font-mono text-muted-foreground">&gt;_</span> : null}
       <span className="truncate max-w-32">{tab.title}</span>
       {isClosable && onClose && (
         <span
@@ -338,7 +338,7 @@ export default function PreviewPanel({
 
   const { data: mcpStatus, isLoading: mcpLoading } = useQuery<McpStatus>({
     queryKey: ["mcp-status"],
-    enabled: type === "mcp",
+    enabled: hasMcp,
     queryFn: async () => (await http.get("mcp").json()) as McpStatus,
   })
 
@@ -351,6 +351,22 @@ export default function PreviewPanel({
       return { name, status }
     })
   }, [mcpStatus])
+
+  const mcpTabStatus = useMemo(() => {
+    if (!mcpEntries.length) return "unknown"
+    const statuses = mcpEntries.map((entry) => entry.status)
+    const errorStatus = statuses.find((status) =>
+      ["error", "failed", "offline", "disconnected", "down"].includes(status.toLowerCase()),
+    )
+    if (errorStatus) return errorStatus
+    const warningStatus = statuses.find((status) => ["warning", "degraded"].includes(status.toLowerCase()))
+    if (warningStatus) return warningStatus
+    const healthyStatus = statuses.find((status) =>
+      ["ready", "running", "connected", "online", "ok", "healthy"].includes(status.toLowerCase()),
+    )
+    if (healthyStatus) return healthyStatus
+    return statuses[0]
+  }, [mcpEntries])
 
   const isCompletedDevLog = (
     part: ToolPart,
@@ -390,6 +406,24 @@ export default function PreviewPanel({
   }
 
   const nav = type === "preview" && ready && !down
+
+  const addTabMenu = onAddTab ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex h-full items-center px-2.5 text-sm border-r text-muted-foreground hover:bg-muted/50">
+          <Plus className="size-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuItem onClick={() => onAddTab("mcp")} disabled={hasMcp}>
+          MCP
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAddTab("logs")} disabled={hasLogs}>
+          Server Logs
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : null
 
   const body = (() => {
     switch (type) {
@@ -432,24 +466,8 @@ export default function PreviewPanel({
               onClose={onCloseTab ? () => onCloseTab(tab.id) : undefined}
             />
           ))}
+          {addTabMenu}
         </div>
-        {onAddTab && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center px-2.5 text-sm border-l text-muted-foreground hover:bg-muted/50">
-                <Plus className="size-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onAddTab("mcp")} disabled={hasMcp}>
-                MCP
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onAddTab("logs")} disabled={hasLogs}>
-                Logs
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
         {/* Nav controls - only render inside WebPreview context */}
         {nav && (
           <div className="flex items-center pr-2">
@@ -459,9 +477,7 @@ export default function PreviewPanel({
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 min-h-0 flex flex-col">
-        {body}
-      </div>
+      <div className="flex-1 min-h-0 flex flex-col">{body}</div>
     </div>
   )
 
