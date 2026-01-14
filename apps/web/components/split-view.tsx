@@ -57,7 +57,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
       if (type !== "mcp" && type !== "logs") return prev
       if (prev.some((tab) => tab.type === type)) return prev
       tabCounter.current += 1
-      const title = type === "mcp" ? "MCP" : "Logs"
+      const title = type === "mcp" ? "MCP" : "Server Logs"
       const id = `${type}-${tabCounter.current}`
       return [...prev, { id, type, title }]
     })
