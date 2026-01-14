@@ -24,7 +24,7 @@ export const config = {
   },
   e2b: {
     apiKey: env.E2B_API_KEY,
-    template: env.E2B_TEMPLATE,
+    template: env.E2B_TEMPLATE || "surgent-v1-0-0",
   },
   daytona: {
     apiKey: env.DAYTONA_API_KEY,

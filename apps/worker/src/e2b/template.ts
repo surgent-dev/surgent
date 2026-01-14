@@ -1,6 +1,7 @@
 import { Template, waitForTimeout } from "e2b"
+import { config } from "@/lib/config"
 
-export const templateName = "surgent-sandbox"
+export const templateName = config.e2b.template
 
 export const template = Template()
   .fromNodeImage("lts-slim")
