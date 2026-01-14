@@ -28,7 +28,7 @@
 - AVOID `let` statements
 - PREFER single word variable names where possible
 - Use as many bun apis as possible like Bun.file()
-- GIT COMMIT - Never commit changes unless explicitly asked to do so. And focus on why and what something was done rather than what was done. And only commit changes that are related to the task at hand.
+- GIT COMMIT - Never commit changes unless explicitly asked to do so. Keep commit messages short (one line, no description body). Focus on why something was done. Only commit changes related to the task at hand.
 
 ## Debugging
 
