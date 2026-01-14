@@ -6,4 +6,4 @@ if [ "$CURRENT_VERSION" != "$EXPECTED_VERSION" ]; then
   echo "Error: Bun version $CURRENT_VERSION does not match expected version $EXPECTED_VERSION from package.json"
   exit 1
 fi
-bun typecheck
+bun install && bun typecheck
