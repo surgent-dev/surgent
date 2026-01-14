@@ -55,15 +55,10 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   const handleAddTab = useCallback((type: PreviewTab["type"]) => {
     setTabs((prev) => {
       if (type !== "mcp" && type !== "logs") return prev
-      const existing = prev.find((tab) => tab.type === type)
-      if (existing) {
-        setActiveTabId(existing.id)
-        return prev
-      }
+      if (prev.some((tab) => tab.type === type)) return prev
       tabCounter.current += 1
       const title = type === "mcp" ? "MCP" : "Logs"
       const id = `${type}-${tabCounter.current}`
-      setActiveTabId(id)
       return [...prev, { id, type, title }]
     })
   }, [])
