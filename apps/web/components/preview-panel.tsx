@@ -415,10 +415,12 @@ export default function PreviewPanel({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        <DropdownMenuItem onClick={() => onAddTab("mcp")} disabled={hasMcp}>
+        <DropdownMenuItem onClick={() => onAddTab("mcp")} disabled={hasMcp} className="gap-2">
+          <span className="text-base leading-none font-mono text-muted-foreground">&gt;_</span>
           MCP
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAddTab("logs")} disabled={hasLogs}>
+        <DropdownMenuItem onClick={() => onAddTab("logs")} disabled={hasLogs} className="gap-2">
+          <span className="text-sm leading-none text-muted-foreground">📜︎</span>
           Server Logs
         </DropdownMenuItem>
       </DropdownMenuContent>
