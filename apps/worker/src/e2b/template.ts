@@ -18,7 +18,7 @@ export const template = Template()
     BUN_INSTALL: "/root/.bun",
     PATH: "/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
   })
-  .runCmd("/root/.bun/bin/bun add -g @ast-grep/cli @anthropic-ai/claude-code pm2")
+  .runCmd("/root/.bun/bin/bun add -g @ast-grep/cli @anthropic-ai/claude-code opencode-ai pm2")
   .runCmd([
     'git config --global user.name "Surgent Dev"',
     'git config --global user.email "bot@surgent.dev"',

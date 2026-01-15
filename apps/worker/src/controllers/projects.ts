@@ -151,27 +151,14 @@ async function collectAssets(sandbox: Sandbox, rootDir: string) {
   return { manifest, files };
 }
 
-async function pm2JList(sandbox: Sandbox, cwd: string): Promise<any[]> {
-  try {
-    const out = await sandbox.exec("pm2 jlist", { timeout: 30_000, cwd });
-    const parsed = JSON.parse(out.output);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+async function ensurePm2Process(sandbox: Sandbox, cwd: string, name: string, command: string) {
+  await sandbox.exec(`pm2 delete ${name} 2>/dev/null; pm2 start "${command}" --name ${name}`, { timeout: 300_000, cwd });
 }
 
-async function isPm2Online(sandbox: Sandbox, cwd: string, name: string): Promise<boolean> {
-  const list = await pm2JList(sandbox, cwd);
-  return list.find(p => p?.name === name)?.pm2_env?.status === "online";
-}
-
-async function ensurePm2Process(sandbox: Sandbox, cwd: string, name: string, command: string, forceRestart = false) {
-  if (await isPm2Online(sandbox, cwd, name)) {
-    if (forceRestart) await sandbox.exec(`pm2 restart ${name} --update-env`, { timeout: 60_000, cwd });
-    return;
-  }
-  await sandbox.exec(`pm2 start "${command}" --name ${name} --update-env`, { timeout: 300_000, cwd });
+async function startOpencodeServer(sandbox: Sandbox, cwd: string) {
+  console.log("[opencode] starting server...", { sandboxId: sandbox.id, cwd });
+  await ensurePm2Process(sandbox, cwd, "opencode-server", "opencode serve --hostname 0.0.0.0 --port 4096");
+  console.log("[opencode] server started on port 4096");
 }
 
 async function getOrCreateSandbox(opts: { port: number; workingDirectory: string; sandboxId?: string; env?: Record<string, string>; name?: string }) {
@@ -335,9 +322,9 @@ export async function initializeProject(args: InitializeProjectArgs): Promise<{ 
 
   if (initScript) await sandbox.exec(buildBashCommand(workingDirectory, initScript), { timeout: 600_000 });
 
-  if (devScript) {
-    await ensurePm2Process(sandbox, workingDirectory, processName, devScript);
-  }
+  if (devScript) await ensurePm2Process(sandbox, workingDirectory, processName, devScript);
+
+  await startOpencodeServer(sandbox, workingDirectory);
 
   await ProjectService.updateProject(projectId, {
     metadata: { workingDirectory, processName, startCommand: devScript },
@@ -359,8 +346,10 @@ export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxI
     if (startCommand && processName) {
       await ensurePm2Process(sandbox, workingDirectory, processName, startCommand);
     }
+
+    await startOpencodeServer(sandbox, workingDirectory);
   } catch (err) {
-    console.log("[resume] pm2 start error", err);
+    console.log("[resume] error", err);
   }
 
   return { sandboxId: sandbox.id, previewUrl };

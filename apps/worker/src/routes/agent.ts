@@ -1,13 +1,62 @@
 import { Hono } from 'hono'
+import { Sandbox as E2BSandbox } from 'e2b'
+import { Configuration, SandboxApi } from '@daytonaio/api-client'
 import { db } from '@/lib/db'
 import { requireAuth } from '../middleware/auth'
 import type { AppContext } from '@/types/application'
 import { config } from '@/lib/config'
-import { localWorkspacePath } from '@/lib/workspace'
+
+type Preview = { url: string; headers: Record<string, string> }
+
+async function getE2BPreview(sandboxId: string, port: number): Promise<Preview> {
+  const sbx = await E2BSandbox.connect(sandboxId)
+  return { url: `https://${sbx.getHost(port)}`, headers: {} }
+}
+
+async function getDaytonaPreview(sandboxId: string, port: number): Promise<Preview> {
+  const api = new SandboxApi(
+    new Configuration({
+      basePath: config.daytona.serverUrl || 'https://app.daytona.io/api',
+      baseOptions: { headers: { Authorization: `Bearer ${config.daytona.apiKey}` } },
+    })
+  )
+  const { data } = await api.getPortPreviewUrl(sandboxId, port)
+
+  return {
+    url: data.url as string,
+    headers: {
+      'x-daytona-preview-token': data.token as string,
+      'x-daytona-skip-preview-warning': 'true',
+    },
+  }
+}
+
+async function getPreview(provider: string, sandboxId: string, port: number): Promise<Preview> {
+  if (provider === 'daytona') return getDaytonaPreview(sandboxId, port)
+  return getE2BPreview(sandboxId, port)
+}
+
+function buildTargetUrl(baseUrl: string, originalUrl: URL, projectId: string) {
+  const path = originalUrl.pathname.replace(`/api/agent/${projectId}`, '')
+  const target = new URL(baseUrl)
+  target.pathname = target.pathname.replace(/\/$/, '') + path
+  target.search = originalUrl.search
+  return target
+}
+
+function buildHeaders(original: Headers, extra: Record<string, string>) {
+  const headers = new Headers(original)
+  for (const [k, v] of Object.entries(extra)) headers.set(k, v)
+  headers.delete('host')
+  return headers
+}
+
+function isSSE(headers: Headers, path: string) {
+  return headers.get('accept')?.includes('text/event-stream') || path.includes('/event')
+}
 
 const agent = new Hono<AppContext>()
 
-// Proxy all OpenCode endpoints: /api/agent/:id/* → local opencode server with x-sandbox-id header
 agent.all('/:id/*', requireAuth, async (c) => {
   const projectId = c.req.param('id')
 
@@ -17,38 +66,21 @@ agent.all('/:id/*', requireAuth, async (c) => {
     .where('id', '=', projectId)
     .executeTakeFirst()
 
-  if (!project) {
-    return c.json({ error: 'Project not found' }, 404)
-  }
-  if (project.userId !== c.get('user')?.id) {
-    return c.json({ error: 'Forbidden' }, 403)
-  }
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  if (project.userId !== c.get('user')?.id) return c.json({ error: 'Forbidden' }, 403)
 
   const sandbox = project.sandbox as { id?: string; provider?: string } | null
-  if (!sandbox?.id) {
-    return c.json({ error: 'Sandbox not found' }, 400)
-  }
-
-  const url = new URL(c.req.url)
-  const pathname = url.pathname.replace(`/api/agent/${projectId}`, '')
-
-  const targetUrl = new URL(config.opencode.url)
-  targetUrl.pathname = pathname
-  targetUrl.search = url.search
-
-  // Prefix sandbox ID with provider for opencode (e.g., "e2b:abc123" or "daytona:xyz")
-  const prefixedSandboxId = sandbox.provider ? `${sandbox.provider}:${sandbox.id}` : sandbox.id
-
-  const headers = new Headers(c.req.raw.headers)
-  headers.set('x-sandbox-id', prefixedSandboxId)
-  headers.set('x-opencode-directory', localWorkspacePath(projectId))
-  headers.delete('host')
-
-  const accept = headers.get('accept') || ''
-  const isSse = accept.includes('text/event-stream') || pathname === '/event' || pathname === '/global/event'
+  if (!sandbox?.id) return c.json({ error: 'Sandbox not found' }, 400)
 
   try {
-    const upstreamResp = await fetch(
+    const provider = sandbox.provider || config.sandbox.provider
+    const preview = await getPreview(provider, sandbox.id, 4096)
+
+    const reqUrl = new URL(c.req.url)
+    const targetUrl = buildTargetUrl(preview.url, reqUrl, projectId)
+    const headers = buildHeaders(c.req.raw.headers, preview.headers)
+
+    const resp = await fetch(
       new Request(targetUrl.toString(), {
         method: c.req.method,
         headers,
@@ -57,18 +89,12 @@ agent.all('/:id/*', requireAuth, async (c) => {
       })
     )
 
-    if (!isSse) {
-      return upstreamResp
-    }
+    const path = reqUrl.pathname.replace(`/api/agent/${projectId}`, '')
+    if (!isSSE(headers, path)) return resp
 
-    // Prevent buffering for SSE streams
-    const outHeaders = new Headers(upstreamResp.headers)
+    const outHeaders = new Headers(resp.headers)
     outHeaders.set('cache-control', 'no-cache, no-transform')
-
-    return new Response(upstreamResp.body, {
-      status: upstreamResp.status,
-      headers: outHeaders,
-    })
+    return new Response(resp.body, { status: resp.status, headers: outHeaders })
   } catch {
     return c.text('Upstream unavailable', 502)
   }

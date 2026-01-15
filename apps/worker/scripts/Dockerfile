@@ -24,7 +24,7 @@ ENV BUN_INSTALL=/root/.bun
 ENV PATH=$BUN_INSTALL/bin:$PATH
 
 # Install global dependencies with bun
-RUN bun add -g @anthropic-ai/claude-code pm2
+RUN bun add -g @anthropic-ai/claude-code opencode-ai pm2
 
 # Configure global git identity for non-interactive commits
 RUN git config --global user.name "Surgent Dev" \
