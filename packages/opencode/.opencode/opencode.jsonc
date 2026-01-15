@@ -10,6 +10,16 @@
       "options": {}
     }
   },
+  "mcp": {
+    "convex": {
+      "type": "remote",
+      "url": "http://localhost:4000/api/mcp/convex",
+      "oauth": false,
+      "headers": {
+        "x-api-key": "{env:SURGENT_API_KEY}"
+      }
+    }
+  },
   "tools": {
     // "convex_*": false
   }
