@@ -20,7 +20,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { useDeployVersion, useDeploymentLogsQuery, useProjectVersionsQuery, useUploadVersion } from "@/queries/projects"
+import {
+  useDeployVersion,
+  useDeploymentHistoryQuery,
+  useProjectVersionsQuery,
+  useRollbackDeployment,
+  useUploadVersion,
+} from "@/queries/projects"
 
 const statusVariant = (status?: string) =>
   status?.includes("failed") ? "destructive" : status === "deployed" ? "default" : "secondary"
@@ -44,20 +50,24 @@ export default function DeploymentBoardPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const projectId = searchParams.get("projectId") || ""
-  const { data: logs = [], isLoading: isLogsLoading } = useDeploymentLogsQuery(projectId || undefined)
+  const { data: deployments = [], isLoading: isDeploymentsLoading } = useDeploymentHistoryQuery(projectId || undefined)
   const { data: versions = [], isLoading: isVersionsLoading } = useProjectVersionsQuery(projectId || undefined)
   const uploadVersion = useUploadVersion()
   const deployVersion = useDeployVersion()
+  const rollbackDeployment = useRollbackDeployment()
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [workerContent, setWorkerContent] = useState("")
   const [selectedFileName, setSelectedFileName] = useState("")
   const hasProject = Boolean(projectId)
   const isUploading = uploadVersion.isPending
   const activeDeployVersionId = deployVersion.variables?.versionId
-  const visibleLogs = [...logs]
+  const activeRollbackDeploymentId = rollbackDeployment.variables?.deploymentId
+  const visibleDeployments = [...deployments]
     .sort((first, second) => {
-      const firstTime = first.createdAt ? new Date(first.createdAt).getTime() : 0
-      const secondTime = second.createdAt ? new Date(second.createdAt).getTime() : 0
+      const firstDate = first.createdAt || first.log?.createdAt
+      const secondDate = second.createdAt || second.log?.createdAt
+      const firstTime = firstDate ? new Date(firstDate).getTime() : 0
+      const secondTime = secondDate ? new Date(secondDate).getTime() : 0
       return secondTime - firstTime
     })
     .slice(0, 10)
@@ -95,6 +105,11 @@ export default function DeploymentBoardPage() {
   const handleDeployVersion = (versionId?: string) => {
     if (!projectId || !versionId) return
     deployVersion.mutate({ id: projectId, versionId })
+  }
+
+  const handleRollbackDeployment = (deploymentId?: string) => {
+    if (!projectId || !deploymentId) return
+    rollbackDeployment.mutate({ id: projectId, deploymentId })
   }
 
   return (
@@ -148,43 +163,84 @@ export default function DeploymentBoardPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Status</TableHead>
-                      <TableHead>Message</TableHead>
+                      <TableHead>Deployment</TableHead>
+                      <TableHead>Site</TableHead>
                       <TableHead>Time</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {isLogsLoading
+                    {isDeploymentsLoading
                       ? [1, 2, 3].map((row) => (
                           <TableRow key={`deployment-log-skeleton-${row}`}>
                             <TableCell>
                               <Skeleton className="h-5 w-20 rounded-full" />
                             </TableCell>
                             <TableCell>
-                              <Skeleton className="h-4 w-40" />
+                              <Skeleton className="h-4 w-36" />
                             </TableCell>
                             <TableCell>
                               <Skeleton className="h-4 w-24" />
                             </TableCell>
-                          </TableRow>
-                        ))
-                      : null}
-                    {!isLogsLoading
-                      ? visibleLogs.map((log) => (
-                          <TableRow key={log.id || `${log.status}-${log.createdAt}`}>
                             <TableCell>
-                              <Badge variant={statusVariant(log.status)} className="capitalize">
-                                {formatStatus(log.status)}
-                              </Badge>
+                              <Skeleton className="h-4 w-24" />
                             </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{log.message || "—"}</TableCell>
-                            <TableCell className="text-muted-foreground">{formatDate(log.createdAt)}</TableCell>
+                            <TableCell className="text-right">
+                              <Skeleton className="h-8 w-24 ml-auto" />
+                            </TableCell>
                           </TableRow>
                         ))
                       : null}
-                    {!isLogsLoading && logs.length === 0 ? (
+                    {!isDeploymentsLoading
+                      ? visibleDeployments.map((deployment) => {
+                          const isRollingBack =
+                            rollbackDeployment.isPending && activeRollbackDeploymentId === deployment.id
+                          const siteUrl =
+                            deployment.url ||
+                            deployment.previewUrl ||
+                            (deployment.name ? `https://${deployment.name}.surgent.site` : "")
+                          return (
+                            <TableRow key={deployment.id || deployment.createdAt || "deployment-row"}>
+                              <TableCell>
+                                <Badge variant={statusVariant(deployment.status)} className="capitalize">
+                                  {formatStatus(deployment.status)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm font-medium">
+                                {deployment.name || formatId(deployment.id)}
+                              </TableCell>
+                              <TableCell>
+                                {siteUrl ? (
+                                  <Button variant="link" size="sm" className="h-auto px-0" asChild>
+                                    <a href={siteUrl} target="_blank" rel="noreferrer">
+                                      Open
+                                    </a>
+                                  </Button>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {formatDate(deployment.createdAt || deployment.log?.createdAt)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleRollbackDeployment(deployment.id)}
+                                  disabled={!deployment.id || rollbackDeployment.isPending}
+                                >
+                                  {isRollingBack ? "Rewinding..." : "Rewind"}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })
+                      : null}
+                    {!isDeploymentsLoading && deployments.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground">
-                          No deployment logs yet.
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                          No deployments yet.
                         </TableCell>
                       </TableRow>
                     ) : null}

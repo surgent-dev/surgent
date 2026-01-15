@@ -68,6 +68,11 @@ const DeploymentHistorySchema = z.array(
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
     error: z.string().optional(),
+    log: z
+      .object({
+        createdAt: z.string().optional(),
+      })
+      .optional(),
   }),
 )
 
