@@ -17,5 +17,5 @@ export POSTGRES_TYPE="pg"
 bun db:migrate
 
 cloudflare token permissions zero trust
-curl "https://api.cloudflare.com/client/v4/accounts/44756fda18d37b7accae2ce6baf0ac6a/tokens/verify" \
--H "Authorization: Bearer BhvMq4nG0WXfxfGm-3yD6R61xJBHsyJm1wrecJ8r"
+curl "https://api.cloudflare.com/client/v4/accounts/xxxxxxxx/tokens/verify" \
+-H "Authorization: Bearer xxxxxxxxxxxx"
