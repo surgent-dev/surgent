@@ -19,6 +19,7 @@
   "devDependencies": {
     "@tsconfig/bun": "1.0.10",
     "husky": "9.1.7",
+    "lint-staged": "^16.1.0",
     "prettier": "^3.6.2",
     "turbo": "^2.5.6",
     "typescript": "5.9.2"
@@ -51,7 +52,11 @@
   },
   "prettier": {
     "semi": false,
+    "singleQuote": true,
     "printWidth": 120
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json,md}": "prettier --write"
   },
   "catalog": {
     "@tsconfig/bun": "^1.0.7",

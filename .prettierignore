@@ -1,1 +1,8 @@
 sst-env.d.ts
+
+**/.next/**
+**/.turbo/**
+**/dist/**
+**/build/**
+**/coverage/**
+**/node_modules/**
