@@ -4,9 +4,9 @@ const env = process.env
 export const config = {
   env,
   server: {
-    port: env.PORT || "4000",
-    clientOrigin: env.CLIENT_ORIGIN || "http://localhost:3000",
-    trustedOrigins: (env.TRUSTED_ORIGINS || env.CLIENT_ORIGIN || "http://localhost:3000").split(","),
+    port: env.PORT || '4000',
+    clientOrigin: env.CLIENT_ORIGIN || 'http://localhost:3000',
+    trustedOrigins: (env.TRUSTED_ORIGINS || env.CLIENT_ORIGIN || 'http://localhost:3000').split(','),
   },
   database: {
     url: env.DATABASE_URL,
@@ -19,12 +19,12 @@ export const config = {
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
   },
   sandbox: {
-    provider: (env.SANDBOX_PROVIDER || "e2b") as "e2b" | "daytona",
-    defaultPort: "3000",
+    provider: (env.SANDBOX_PROVIDER || 'e2b') as 'e2b' | 'daytona',
+    defaultPort: '3000',
   },
   e2b: {
     apiKey: env.E2B_API_KEY,
-    template: env.E2B_TEMPLATE || "surgent-v1-0-0",
+    template: env.E2B_TEMPLATE || 'surgent-v1-0-0',
   },
   daytona: {
     apiKey: env.DAYTONA_API_KEY,
@@ -56,7 +56,7 @@ export const config = {
     deployUrl: env.CLOUDFLARE_DEPLOY_URL,
   },
   convex: {
-    host: env.CONVEX_HOST || "https://api.convex.dev",
+    host: env.CONVEX_HOST || 'https://api.convex.dev',
     teamId: env.CONVEX_TEAM_ID,
     teamToken: env.CONVEX_TEAM_TOKEN,
   },
@@ -77,5 +77,7 @@ export const config = {
   },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
+    configRepoUrl: env.OPENCODE_CONFIG_REPO_URL || 'https://github.com/surgent-dev/opencode-config.git',
+    configDir: env.OPENCODE_CONFIG_DIR || '/home/user/opencode-config',
   },
 } as const
