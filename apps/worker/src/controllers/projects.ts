@@ -483,3 +483,27 @@ export async function deleteSandbox(args: DeleteProjectArgs): Promise<void> {
     console.error('[delete] sandbox deletion failed', { projectId: args.projectId, sandboxId, error: err })
   }
 }
+
+export async function getSandboxLogs(projectId: string, lines = 100): Promise<{ app: string; opencode: string }> {
+  const project = await ProjectService.getProjectById(projectId)
+  if (!project) throw new HttpError(404, 'Project not found')
+
+  const sandboxId = project.sandbox?.id
+  if (!sandboxId) throw new HttpError(400, 'Sandbox not initialized')
+
+  const sandbox = await getSandboxProvider().resume(sandboxId)
+  const processName = (project.metadata as any)?.processName
+
+  const [app, opencode] = await Promise.all([
+    processName
+      ? sandbox.exec(`pm2 logs ${processName} --nostream --lines ${lines} 2>&1 || echo "No app logs"`, {
+          timeout: 10_000,
+        })
+      : Promise.resolve({ code: 0, output: 'No app process configured' }),
+    sandbox.exec(`pm2 logs opencode-server --nostream --lines ${lines} 2>&1 || echo "No opencode logs"`, {
+      timeout: 10_000,
+    }),
+  ])
+
+  return { app: app.output, opencode: opencode.output }
+}

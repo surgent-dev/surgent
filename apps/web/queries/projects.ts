@@ -29,7 +29,8 @@ export function useProjectsQuery() {
 export function useCreateProject() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (args: { githubUrl: string; name?: string; initConvex: boolean }) => postProject(args.githubUrl, args.name ?? '', args.initConvex),
+    mutationFn: (args: { githubUrl: string; name?: string; initConvex: boolean }) =>
+      postProject(args.githubUrl, args.name ?? '', args.initConvex),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
   })
 }
@@ -164,5 +165,25 @@ export function useConvexDashboardQuery(id?: string, enabled = true) {
     queryFn: () => fetchConvexDashboard(id!),
     enabled: Boolean(id) && enabled,
     staleTime: 1000 * 60 * 5, // 5 minutes
+  })
+}
+
+// Sandbox PM2 logs
+export interface SandboxLogs {
+  app: string
+  opencode: string
+}
+
+async function fetchSandboxLogs(id: string): Promise<SandboxLogs> {
+  return http.get(`api/projects/${id}/logs`).json()
+}
+
+export function useSandboxLogsQuery(id?: string, enabled = true) {
+  return useQuery({
+    queryKey: ['sandbox-logs', id],
+    queryFn: () => fetchSandboxLogs(id!),
+    enabled: Boolean(id) && enabled,
+    refetchInterval: 5000,
+    staleTime: 2000,
   })
 }
