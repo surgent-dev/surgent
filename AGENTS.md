@@ -7,7 +7,6 @@
 
 - Keep fixes minimal and readable; avoid adding complexity unless it solves a real problem.
 
-
 -Plase dont do extra type checkes and type conversion unless there is issue in lint. do not overengineer types. Just write concise elegant minimalistic code.
 
 -Use shadcn/ui for UI styling.
@@ -29,6 +28,7 @@
 - PREFER single word variable names where possible
 - Use as many bun apis as possible like Bun.file()
 - GIT COMMIT - Never commit changes unless explicitly asked to do so. Keep commit messages short (one line, no description body). Focus on why something was done. Only commit changes related to the task at hand.
+- **Follow how prior code was written** to maintain consistency, including how ; and " are used in files. use semi colons and double quotations marks whenever possible
 
 ## Debugging
 
@@ -41,4 +41,3 @@ To regenerate the javascript SDK, run ./packages/sdk/js/script/build.ts
 ## Tool Calling
 
 - ALWAYS USE PARALLEL TOOLS WHEN APPLICABLE.
-
