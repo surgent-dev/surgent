@@ -355,14 +355,14 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                         ? 'Publishing...'
                         : status === 'deployed'
                           ? 'Publish'
-                          : 'Deploy'}
+                          : 'Publish'}
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={handlePublishClick}>
                     <Rocket className="h-4 w-4 mr-2" />
-                    {status === 'deployed' ? 'Deploy' : 'Deploy'}
+                    {status === 'deployed' ? 'Publish' : 'Publish'}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => projectId && router.push(`/deploymentboard/${projectId}`)}
