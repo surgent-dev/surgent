@@ -299,7 +299,10 @@ export default function DashboardPage() {
                       </Badge>
                     )}
                     <Button
-                      onClick={(e) => handleDeployClick(e, project)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/project/${project.id}`)
+                      }}
                       className="w-full cursor-pointer bg-blue-500 hover:bg-blue-600 text-white"
                     >
                       <Play className="mr-2 h-4 w-4" />
