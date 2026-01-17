@@ -89,10 +89,42 @@ async function deployProjectReq({ id, deployName }: { id: string; deployName?: s
   return ScheduledSchema.parse(data)
 }
 
+async function confirmHostnameReq({ id, name }: { id: string; name: string }) {
+  const data = await http.post(`api/projects/${id}/deployment/confirm-hostname`, { json: { name } }).json()
+  return data as { confirmed: boolean; name: string; previewUrl: string }
+}
+
 export function useDeployProject() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: deployProjectReq,
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+async function undeployProjectReq({ id }: { id: string }) {
+  const data = await http.post(`api/projects/${id}/undeploy`).json()
+  return ScheduledSchema.parse(data)
+}
+
+export function useUndeployProject() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: undeployProjectReq,
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+export function useConfirmHostname() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: confirmHostnameReq,
     onSuccess: (_res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
@@ -185,5 +217,33 @@ export function useSandboxLogsQuery(id?: string, enabled = true) {
     enabled: Boolean(id) && enabled,
     refetchInterval: 5000,
     staleTime: 2000,
+  })
+}
+
+// Deployment history
+const DeploymentItemSchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  createdAt: z.string(),
+  startedAt: z.string().optional(),
+  deployedAt: z.string().optional(),
+  error: z.string().optional(),
+})
+
+const DeploymentHistorySchema = z.array(DeploymentItemSchema)
+
+export type DeploymentItem = z.infer<typeof DeploymentItemSchema>
+
+async function fetchDeploymentHistory(id: string): Promise<DeploymentItem[]> {
+  const data = await http.get(`api/projects/${id}/deployments`).json()
+  return DeploymentHistorySchema.parse(data)
+}
+
+export function useDeploymentHistoryQuery(id?: string, enabled = true) {
+  return useQuery({
+    queryKey: ['deployment-history', id],
+    queryFn: () => fetchDeploymentHistory(id!),
+    enabled: Boolean(id) && enabled,
+    staleTime: 30000,
   })
 }

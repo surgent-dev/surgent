@@ -6,6 +6,7 @@ import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../middleware/auth'
 import {
   deployProject,
+  undeployProject,
   initializeProject,
   resumeProject,
   deployConvexProd,
@@ -169,6 +170,7 @@ projects.post(
         .set({
           deployment: {
             ...((row.deployment as any) || {}),
+            projectId: id,
             status: 'queued',
             name,
             previewUrl,
@@ -189,6 +191,108 @@ projects.post(
       return c.json({ scheduled: true })
     } catch (err: any) {
       console.error('[deploy] request failed', {
+        userId: c.get('user')?.id,
+        error: err?.message ?? String(err),
+      })
+      return c.json({ error: 'Internal Server Error' }, 500)
+    }
+  },
+)
+
+// GET /projects/:id/deployments - Get deployment history for a project
+projects.get('/:id/deployments', zValidator('param', idParam), async (c) => {
+  const { id } = c.req.valid('param')
+  const result = await getOwnedProject(id, c.get('user')!.id)
+  if ('error' in result) {
+    return c.json({ error: result.error }, result.status)
+  }
+
+  const deployments = await db
+    .selectFrom('deployment_history')
+    .selectAll()
+    .where('projectId', '=', id)
+    .orderBy('createdAt', 'desc')
+    .execute()
+
+  return c.json(deployments)
+})
+
+// POST /projects/:id/undeploy - Undeploy project from Cloudflare
+projects.post('/:id/undeploy', zValidator('param', idParam), async (c) => {
+  try {
+    const { id } = c.req.valid('param')
+
+    console.log('[undeploy] request', {
+      projectId: id,
+      userId: c.get('user')?.id,
+    })
+
+    const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
+    if (!row) return c.json({ error: 'Project not found' }, 404)
+    if (row.userId !== c.get('user')!.id) return c.json({ error: 'Forbidden' }, 403)
+
+    undeployProject({ projectId: id }).catch((err) => {
+      console.error('[undeploy] background failed', {
+        projectId: id,
+        error: err?.stack ?? err?.message ?? String(err),
+      })
+    })
+
+    console.log('[undeploy] scheduled', { projectId: id })
+    return c.json({ scheduled: true })
+  } catch (err: any) {
+    console.error('[undeploy] request failed', {
+      userId: c.get('user')?.id,
+      error: err?.message ?? String(err),
+    })
+    return c.json({ error: 'Internal Server Error' }, 500)
+  }
+})
+
+// POST /projects/:id/deployment/confirm-hostname - Confirm hostname change without deploying
+projects.post(
+  '/:id/deployment/confirm-hostname',
+  zValidator('param', idParam),
+  zValidator('json', z.object({ name: z.string().min(1).max(63) })),
+  async (c) => {
+    try {
+      const { id } = c.req.valid('param')
+      const { name } = c.req.valid('json')
+
+      console.log('[confirm-hostname] request', {
+        projectId: id,
+        userId: c.get('user')?.id,
+        name,
+      })
+
+      const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
+      if (!row) return c.json({ error: 'Project not found' }, 404)
+      if (row.userId !== c.get('user')!.id) return c.json({ error: 'Forbidden' }, 403)
+
+      const sanitized = sanitizeDeployName(name)
+      const previewUrl = `https://${sanitized}.surgent.site`
+      const currentDeployment = (row.deployment as any) || {}
+
+      await db
+        .updateTable('project')
+        .set({
+          deployment: {
+            ...currentDeployment,
+            projectId: id,
+            name: sanitized,
+            previewUrl,
+            status: currentDeployment.status || 'idle',
+            updatedAt: new Date(),
+          },
+          updatedAt: new Date(),
+        })
+        .where('id', '=', id)
+        .execute()
+
+      console.log('[confirm-hostname] success', { projectId: id, name: sanitized })
+      return c.json({ confirmed: true, name: sanitized, previewUrl })
+    } catch (err: any) {
+      console.error('[confirm-hostname] request failed', {
         userId: c.get('user')?.id,
         error: err?.message ?? String(err),
       })
