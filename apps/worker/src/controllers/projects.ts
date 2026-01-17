@@ -439,12 +439,6 @@ export async function initializeProject(
 
   if (initScript) await sandbox.exec(buildBashCommand(workingDirectory, initScript), { timeout: 600_000 })
 
-  if (devScript)
-    await ensurePm2Process(sandbox, workingDirectory, processName, devScript, {
-      VITE_ALLOWED_HOSTS: 'all',
-      VITE_SERVER_ALLOWED_HOSTS: 'all',
-    })
-
   const opencodeConfigDir = config.opencode.configDir
   await ensureOpencodeConfigRepo(sandbox, config.opencode.configRepoUrl, opencodeConfigDir)
   await startOpencodeServer(sandbox, workingDirectory, { OPENCODE_CONFIG_DIR: opencodeConfigDir })
@@ -470,13 +464,6 @@ export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxI
   try {
     const project = await ProjectService.getProjectById(args.projectId)
     const { startCommand, processName } = (project?.metadata ?? {}) as any
-
-    if (startCommand && processName) {
-      await ensurePm2Process(sandbox, workingDirectory, processName, startCommand, {
-        VITE_ALLOWED_HOSTS: 'all',
-        VITE_SERVER_ALLOWED_HOSTS: 'all',
-      })
-    }
 
     const opencodeConfigDir = config.opencode.configDir
     await ensureOpencodeConfigRepo(sandbox, config.opencode.configRepoUrl, opencodeConfigDir)
