@@ -9,6 +9,7 @@ import * as ProjectService from '@/services/projects'
 import { buildDeploymentConfig, parseWranglerConfig, deployToDispatch } from '@/apis/deployer/deploy'
 import { auth } from '@/lib/auth'
 import { WorkerDeployer } from '@/apis/deployer/deployer'
+import Cloudflare from 'cloudflare'
 
 const MAX_PROJECTS_PER_USER = 2
 
@@ -567,4 +568,39 @@ export async function getSandboxLogs(projectId: string, lines = 100): Promise<{ 
   ])
 
   return { app: app.output, opencode: opencode.output }
+}
+
+export async function getRecentDeployments(accountId: string, scriptName: string) {
+  const client = new Cloudflare({ apiToken: config.cloudflare.apiToken })
+
+  const deployments: any = await client.workers.scripts.deployments.list(scriptName, {
+    account_id: accountId,
+  })
+
+  const result = Array.isArray(deployments) ? deployments : deployments.result || []
+
+  return result.slice(0, 10).map((d: any) => ({
+    id: d.id,
+    created_on: d.created_on,
+    version_id: d.versions?.[0]?.version_id,
+    metadata: d.metadata,
+  }))
+}
+
+export async function redeployVersion(accountId: string, scriptName: string, versionId: string) {
+  const client = new Cloudflare({ apiToken: config.cloudflare.apiToken })
+
+  await (client.workers.scripts.deployments.create as any)(scriptName, {
+    account_id: accountId,
+    strategy: 'all_at_once',
+    versions: [
+      {
+        version_id: versionId,
+        percentage: 100,
+      },
+    ],
+    metadata: {
+      deployment_message: `Rollback to version ${versionId}`,
+    },
+  })
 }

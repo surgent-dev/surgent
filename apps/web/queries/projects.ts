@@ -247,3 +247,42 @@ export function useDeploymentHistoryQuery(id?: string, enabled = true) {
     staleTime: 30000,
   })
 }
+
+// Cloudflare deployments
+const CloudflareDeploymentSchema = z.object({
+  id: z.string(),
+  created_on: z.string(),
+  version_id: z.string(),
+  metadata: z.any().optional(),
+})
+
+export type CloudflareDeployment = z.infer<typeof CloudflareDeploymentSchema>
+
+async function fetchCloudflareDeployments(id: string): Promise<CloudflareDeployment[]> {
+  const data = await http.get(`api/projects/${id}/cloudflare-deployments`).json()
+  return z.array(CloudflareDeploymentSchema).parse(data)
+}
+
+export function useCloudflareDeploymentsQuery(projectId: string) {
+  return useQuery({
+    queryKey: ['cloudflare-deployments', projectId],
+    queryFn: () => fetchCloudflareDeployments(projectId),
+    enabled: Boolean(projectId),
+  })
+}
+
+async function redeployVersionReq({ id, versionId }: { id: string; versionId: string }) {
+  const data = await http.post(`api/projects/${id}/cloudflare-redeploy`, { json: { versionId } }).json()
+  return ScheduledSchema.parse(data)
+}
+
+export function useRedeployVersion() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: redeployVersionReq,
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
+      queryClient.invalidateQueries({ queryKey: ['cloudflare-deployments', vars.id] })
+    },
+  })
+}
