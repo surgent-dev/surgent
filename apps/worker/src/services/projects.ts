@@ -1,32 +1,28 @@
-import { db } from "@/lib/db";
+import { db } from '@/lib/db'
 
 export function getProjectById(projectId: string) {
-  return db
-    .selectFrom("project")
-    .selectAll()
-    .where("id", "=", projectId)
-    .executeTakeFirst();
+  return db.selectFrom('project').selectAll().where('id', '=', projectId).executeTakeFirst()
 }
 
 export async function countProjectsByUserId(userId: string): Promise<number> {
   const result = await db
-    .selectFrom("project")
-    .select(db.fn.countAll().as("count"))
-    .where("userId", "=", userId)
-    .executeTakeFirst();
+    .selectFrom('project')
+    .select(db.fn.countAll().as('count'))
+    .where('userId', '=', userId)
+    .executeTakeFirst()
 
-  return Number(result?.count ?? 0);
+  return Number(result?.count ?? 0)
 }
 
 export async function createProject(args: {
-  userId: string;
-  name: string;
-  githubUrl?: string;
+  userId: string
+  name: string
+  githubUrl?: string
 }): Promise<{ id: string }> {
-  const now = new Date();
+  const now = new Date()
 
   const row = await db
-    .insertInto("project")
+    .insertInto('project')
     .values({
       userId: args.userId,
       name: args.name,
@@ -34,45 +30,47 @@ export async function createProject(args: {
       settings: null,
       metadata: null,
       deployment: null,
-      sandbox: { status: "pending", isInitialized: false } as any,
+      sandbox: { status: 'pending', isInitialized: false } as any,
       createdAt: now,
       updatedAt: now,
     })
-    .returning(["id"])
-    .executeTakeFirstOrThrow();
+    .returning(['id'])
+    .executeTakeFirstOrThrow()
 
-  return { id: row.id as string };
+  return { id: row.id as string }
 }
 
-export async function updateProject(
-  projectId: string,
-  data: { metadata?: any; sandbox?: any; deployment?: any }
-) {
+export async function updateProject(projectId: string, data: { metadata?: any; sandbox?: any; deployment?: any }) {
   await db
-    .updateTable("project")
+    .updateTable('project')
     .set({ ...data, updatedAt: new Date() })
-    .where("id", "=", projectId)
-    .execute();
+    .where('id', '=', projectId)
+    .execute()
 }
 
 export async function updateDeploymentStatus(
   projectId: string,
   status: string,
   name?: string,
-  meta?: { step?: string; error?: string }
+  meta?: { step?: string; error?: string; startedAt?: Date; deployedAt?: Date },
 ) {
-  const project = await getProjectById(projectId);
-  if (!project) return;
+  const project = await getProjectById(projectId)
+  if (!project) return
+
+  const currentDeployment = project.deployment || {}
 
   await updateProject(projectId, {
     deployment: {
-      ...(project.deployment || {}),
+      ...currentDeployment,
+      projectId: projectId,
       status,
       ...(name ? { name } : {}),
       ...(meta?.step ? { step: meta.step } : {}),
       ...(meta?.error ? { error: meta.error } : {}),
+      ...(meta?.startedAt ? { startedAt: meta.startedAt.toISOString() } : {}),
+      ...(meta?.deployedAt ? { deployedAt: meta.deployedAt.toISOString() } : {}),
+      ...(currentDeployment.startedAt && !meta?.startedAt ? { startedAt: currentDeployment.startedAt } : {}),
       updatedAt: new Date(),
     },
-  });
+  })
 }
-

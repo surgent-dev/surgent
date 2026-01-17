@@ -1,13 +1,13 @@
-'use client';
+'use client'
 
-import { useEffect, useState } from 'react';
-import { Toaster, toast } from 'react-hot-toast';
-import { useRouter } from 'next/navigation';
-import { authClient } from '@/lib/auth-client';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useEffect, useState } from 'react'
+import { Toaster, toast } from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
+import { authClient } from '@/lib/auth-client'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,88 +15,88 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Plus, MoreVertical, Code2, Clock, Activity, CreditCard, Pencil, Trash2 } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { useProjectsQuery, useRenameProject, useDeleteProject } from '@/queries/projects';
-import type { Project } from '@/types/project';
-import { useCustomer } from 'autumn-js/react';
+} from '@/components/ui/dropdown-menu'
+import { Plus, MoreVertical, Code2, Clock, Activity, CreditCard, Pencil, Trash2 } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { useProjectsQuery, useRenameProject, useDeleteProject } from '@/queries/projects'
+import type { Project } from '@/types/project'
+import { useCustomer } from 'autumn-js/react'
 
 // Project type moved to '@/types/project'
 
 interface User {
-  id: string;
-  email: string;
-  name?: string;
-  image?: string;
+  id: string
+  email: string
+  name?: string
+  image?: string
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const { data: projects = [], isLoading } = useProjectsQuery();
-  const rename = useRenameProject();
-  const deleteProject = useDeleteProject();
-  const { customer } = useCustomer();
+  const router = useRouter()
+  const [user, setUser] = useState<User | null>(null)
+  const { data: projects = [], isLoading } = useProjectsQuery()
+  const rename = useRenameProject()
+  const deleteProject = useDeleteProject()
+  const { customer } = useCustomer()
 
-  const [projectToRename, setProjectToRename] = useState<Project | null>(null);
-  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
-  const [newName, setNewName] = useState('');
+  const [projectToRename, setProjectToRename] = useState<Project | null>(null)
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
+  const [newName, setNewName] = useState('')
 
   useEffect(() => {
-    checkAuth();
-  }, []);
+    checkAuth()
+  }, [])
 
   const checkAuth = async () => {
-    const { data, error } = await authClient.getSession();
+    const { data, error } = await authClient.getSession()
     if (error || !data?.user) {
-      router.push('/login');
-      return;
+      router.push('/login')
+      return
     }
-    setUser(data.user as User);
-  };
+    setUser(data.user as User)
+  }
 
   const handleSignOut = async () => {
-    await authClient.signOut();
-    router.push('/login');
-  };
+    await authClient.signOut()
+    router.push('/login')
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
-    });
-  };
+    })
+  }
 
   const handleRename = () => {
-    if (!projectToRename || !newName.trim()) return;
+    if (!projectToRename || !newName.trim()) return
     rename.mutate(
       { id: projectToRename.id, name: newName.trim() },
       {
-        onSuccess: () => { toast.success('Project renamed'); setProjectToRename(null); },
+        onSuccess: () => {
+          toast.success('Project renamed')
+          setProjectToRename(null)
+        },
         onError: () => toast.error('Failed to rename project'),
-      }
-    );
-  };
+      },
+    )
+  }
 
   const handleDelete = () => {
-    if (!projectToDelete) return;
+    if (!projectToDelete) return
     deleteProject.mutate(
       { id: projectToDelete.id },
       {
-        onSuccess: () => { toast.success('Project deleted'); setProjectToDelete(null); },
+        onSuccess: () => {
+          toast.success('Project deleted')
+          setProjectToDelete(null)
+        },
         onError: () => toast.error('Failed to delete project'),
-      }
-    );
-  };
+      },
+    )
+  }
 
   if (isLoading) {
     return (
@@ -126,7 +126,7 @@ export default function DashboardPage() {
         </div>
         <Toaster position="top-right" />
       </div>
-    );
+    )
   }
 
   return (
@@ -136,27 +136,25 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <h1 className="text-2xl font-medium">Surgent</h1>
-            <Badge variant="secondary" className="text-xs rounded-full px-2 py-0.5">Beta</Badge>
+            <Badge variant="secondary" className="text-xs rounded-full px-2 py-0.5">
+              Beta
+            </Badge>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                   <Avatar className="h-10 w-10">
                     <AvatarImage src={user?.image} alt={user?.name || user?.email} />
-                    <AvatarFallback>
-                      {user?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
-                    </AvatarFallback>
+                    <AvatarFallback>{user?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="py-3">
                   <div className="flex flex-col space-y-1">
-                    <span className="font-medium text-base">
-                      {user?.name || user?.email}
-                    </span>
+                    <span className="font-medium text-base">{user?.name || user?.email}</span>
                     {customer && (
                       <span className="text-xs rounded-full bg-muted px-2 py-0.5 w-fit text-brand font-semibold mt-1">
                         {customer.products[0]?.name || 'Free'} Plan
@@ -170,9 +168,7 @@ export default function DashboardPage() {
                   Billing & Plans
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
-                  Sign out
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -183,22 +179,15 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-3xl font-light mb-3">
-            Welcome back{user?.name ? `, ${user.name}` : ''}
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            Create and manage your Claude-powered projects
-          </p>
+          <h2 className="text-3xl font-light mb-3">Welcome back{user?.name ? `, ${user.name}` : ''}</h2>
+          <p className="text-muted-foreground text-sm">Create and manage your Claude-powered projects</p>
         </div>
 
         {/* Projects Section */}
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-medium">Your Projects</h3>
-            <Button 
-              onClick={() => router.push('/')}
-              className="flex items-center gap-2 rounded-full"
-            >
+            <Button onClick={() => router.push('/')} className="flex items-center gap-2 rounded-full">
               <Plus className="h-4 w-4" />
               New Project
             </Button>
@@ -211,13 +200,8 @@ export default function DashboardPage() {
               <div className="flex flex-col items-center justify-center text-center">
                 <Code2 className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-medium mb-2">No projects yet</h3>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Create your first project to get started
-                </p>
-                <Button 
-                  onClick={() => router.push('/')}
-                  className="flex items-center gap-2 rounded-full"
-                >
+                <p className="text-muted-foreground text-sm mb-6">Create your first project to get started</p>
+                <Button onClick={() => router.push('/')} className="flex items-center gap-2 rounded-full">
                   <Plus className="h-4 w-4" />
                   Create Project
                 </Button>
@@ -225,7 +209,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {projects.map((project: Project) => (
+              {projects.map((project: Project) => (
                 <div
                   key={project.id}
                   className="rounded-3xl border border-border/50 bg-muted/30 p-6 hover:bg-muted/50 hover:border-border/70 transition-all cursor-pointer group"
@@ -233,24 +217,39 @@ export default function DashboardPage() {
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="space-y-1">
-                      <h4 className="text-base font-medium group-hover:text-foreground transition-colors">{project.name}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Created {formatDate(project.createdAt)}
-                      </p>
+                      <h4 className="text-base font-medium group-hover:text-foreground transition-colors">
+                        {project.name}
+                      </h4>
+                      <p className="text-sm text-muted-foreground">Created {formatDate(project.createdAt)}</p>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
                           <MoreVertical className="h-4 w-4 text-muted-foreground" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setNewName(project.name); setProjectToRename(project); }}>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setNewName(project.name)
+                            setProjectToRename(project)
+                          }}
+                        >
                           <Pencil className="mr-2 h-4 w-4" />
                           Rename
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); setProjectToDelete(project); }}>
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setProjectToDelete(project)
+                          }}
+                        >
                           <Trash2 className="mr-2 h-4 w-4" />
                           Delete
                         </DropdownMenuItem>
@@ -261,9 +260,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1.5">
                         <Activity className="h-3 w-3" />
-                        <span>
-                          {project.sandbox?.id ? 'Active' : 'Not initialized'}
-                        </span>
+                        <span>{project.sandbox?.id ? 'Active' : 'Not initialized'}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Clock className="h-3 w-3" />
@@ -289,9 +286,16 @@ export default function DashboardPage() {
           <DialogHeader>
             <DialogTitle>Rename Project</DialogTitle>
           </DialogHeader>
-          <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Project name" onKeyDown={(e) => e.key === 'Enter' && handleRename()} />
+          <Input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Project name"
+            onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+          />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setProjectToRename(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setProjectToRename(null)}>
+              Cancel
+            </Button>
             <Button onClick={handleRename} disabled={rename.isPending || !newName.trim()}>
               {rename.isPending ? 'Saving...' : 'Save'}
             </Button>
@@ -306,10 +310,13 @@ export default function DashboardPage() {
             <DialogTitle>Delete Project</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete <span className="font-medium text-foreground">{projectToDelete?.name}</span>? This action cannot be undone.
+            Are you sure you want to delete <span className="font-medium text-foreground">{projectToDelete?.name}</span>
+            ? This action cannot be undone.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setProjectToDelete(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setProjectToDelete(null)}>
+              Cancel
+            </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleteProject.isPending}>
               {deleteProject.isPending ? 'Deleting...' : 'Delete'}
             </Button>
@@ -319,5 +326,5 @@ export default function DashboardPage() {
 
       <Toaster position="top-right" />
     </div>
-  );
+  )
 }

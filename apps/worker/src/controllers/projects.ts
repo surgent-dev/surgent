@@ -8,6 +8,7 @@ import stripJsonComments from 'strip-json-comments'
 import * as ProjectService from '@/services/projects'
 import { buildDeploymentConfig, parseWranglerConfig, deployToDispatch } from '@/apis/deploy'
 import { auth } from '@/lib/auth'
+import { CloudflareAPI } from '@/apis/deployer/api/cloudflare-api'
 
 const MAX_PROJECTS_PER_USER = 2
 
@@ -62,6 +63,10 @@ export interface RunAgentArgs {
 export interface DeployProjectArgs {
   projectId: string
   deployName?: string
+}
+
+export interface UndeployProjectArgs {
+  projectId: string
 }
 
 export interface DeleteProjectArgs {
@@ -241,7 +246,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
   const workingDir = localWorkspacePath(projectId)
 
   try {
-    await ProjectService.updateDeploymentStatus(projectId, 'starting', scriptName)
+    await ProjectService.updateDeploymentStatus(projectId, 'starting', scriptName, { startedAt: new Date() })
 
     // 2. Resume sandbox
     const sandbox = await getSandboxProvider().resume(project.sandbox.id)
@@ -288,16 +293,53 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       wranglerConfig.assets,
     )
 
-    // 8. Update project
+    // 8. Update project with deployed timestamp
+    const previewUrl = `https://${scriptName}.surgent.site`
     await ProjectService.updateProject(projectId, {
       sandbox: { ...project.sandbox, deployed: true, deployName: scriptName },
-      deployment: { status: 'deployed', updatedAt: new Date() },
+      deployment: {
+        status: 'deployed',
+        name: scriptName,
+        previewUrl,
+        projectId,
+        updatedAt: new Date(),
+      },
     })
+    await ProjectService.updateDeploymentStatus(projectId, 'deployed', scriptName, { deployedAt: new Date() })
 
     console.log('[deploy] success', { projectId, scriptName })
   } catch (err: any) {
     console.error('[deploy] failed', { projectId, error: err?.message })
     await ProjectService.updateDeploymentStatus(projectId, 'deploy_failed').catch(() => {})
+    throw err
+  }
+}
+
+export async function undeployProject(args: UndeployProjectArgs): Promise<void> {
+  const { projectId } = args
+  console.log('[undeploy] start', { projectId })
+
+  const project = await ProjectService.getProjectById(projectId)
+  if (!project) throw new Error(`Project ${projectId} not found`)
+
+  const scriptName = project.deployment?.name
+  if (!scriptName) throw new Error('No deployment name found')
+
+  try {
+    await ProjectService.updateDeploymentStatus(projectId, 'undeploying')
+
+    const api = new CloudflareAPI(config.cloudflare.accountId!, config.cloudflare.apiToken!)
+    await api.deleteWorker(scriptName, config.cloudflare.dispatchNamespace!)
+
+    await ProjectService.updateProject(projectId, {
+      sandbox: { ...project.sandbox, deployed: false, deployName: null },
+      deployment: null,
+    })
+
+    console.log('[undeploy] success', { projectId, scriptName })
+  } catch (err: any) {
+    console.error('[undeploy] failed', { projectId, error: err?.message })
+    await ProjectService.updateDeploymentStatus(projectId, 'undeploy_failed').catch(() => {})
     throw err
   }
 }
