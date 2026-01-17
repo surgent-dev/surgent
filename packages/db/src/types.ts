@@ -12,6 +12,7 @@ export interface Database {
   whop_transfers: WhopTransfersTable
   whop_webhook_events: WhopWebhookEventsTable
   github_installations: GitHubInstallationsTable
+  deployment_history: DeploymentHistoryTable
 }
 
 export interface UserTable {
@@ -59,7 +60,6 @@ export interface VerificationTable {
   createdAt?: Date
   updatedAt?: Date
 }
-
 
 export interface ProjectTable {
   id: string | null
@@ -176,4 +176,16 @@ export interface GitHubInstallationsTable {
   userRefreshTokenExpiresAt: Date | null
   createdAt?: Date
   updatedAt?: Date
+}
+
+export interface DeploymentHistoryTable {
+  id: string | null
+  projectId: string
+  name: string
+  previewUrl: string
+  status: string
+  error: string | null
+  startedAt: Date
+  deployedAt: Date | null
+  createdAt?: Date
 }

@@ -16,12 +16,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, MoreVertical, Code2, Clock, Activity, CreditCard, Pencil, Trash2 } from 'lucide-react'
+import { Plus, MoreVertical, Code2, Clock, Activity, CreditCard, Pencil, Trash2, Play } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { useProjectsQuery, useRenameProject, useDeleteProject } from '@/queries/projects'
+import { useProjectsQuery, useRenameProject, useDeleteProject, useDeployProject } from '@/queries/projects'
 import type { Project } from '@/types/project'
 import { useCustomer } from 'autumn-js/react'
+import DeployDialog from '@/components/deploy-dialog'
 
 // Project type moved to '@/types/project'
 
@@ -38,10 +39,13 @@ export default function DashboardPage() {
   const { data: projects = [], isLoading } = useProjectsQuery()
   const rename = useRenameProject()
   const deleteProject = useDeleteProject()
+  const deploy = useDeployProject()
   const { customer } = useCustomer()
 
   const [projectToRename, setProjectToRename] = useState<Project | null>(null)
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
+  const [projectToDeploy, setProjectToDeploy] = useState<Project | null>(null)
+  const [deployDialogOpen, setDeployDialogOpen] = useState(false)
   const [newName, setNewName] = useState('')
 
   useEffect(() => {
@@ -96,6 +100,28 @@ export default function DashboardPage() {
         onError: () => toast.error('Failed to delete project'),
       },
     )
+  }
+
+  const handleDeployClick = (e: React.MouseEvent, project: Project) => {
+    e.stopPropagation()
+    if (project.deployment?.status === 'deployed') {
+      router.push(`/project/${project.id}`)
+    } else {
+      setProjectToDeploy(project)
+      setDeployDialogOpen(true)
+    }
+  }
+
+  const handleDeployConfirm = async (sanitizedName: string) => {
+    if (!projectToDeploy) return
+    try {
+      await deploy.mutateAsync({ id: projectToDeploy.id, deployName: sanitizedName })
+      toast.success('Deployment started')
+      setDeployDialogOpen(false)
+      setProjectToDeploy(null)
+    } catch {
+      toast.error('Failed to start deployment')
+    }
   }
 
   if (isLoading) {
@@ -272,6 +298,13 @@ export default function DashboardPage() {
                         {project.github.repo}
                       </Badge>
                     )}
+                    <Button
+                      onClick={(e) => handleDeployClick(e, project)}
+                      className="w-full cursor-pointer bg-blue-500 hover:bg-blue-600 text-white"
+                    >
+                      <Play className="mr-2 h-4 w-4" />
+                      View Project
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -323,6 +356,14 @@ export default function DashboardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Deploy Dialog */}
+      <DeployDialog
+        open={deployDialogOpen}
+        onOpenChange={setDeployDialogOpen}
+        onConfirm={handleDeployConfirm}
+        isSubmitting={deploy.isPending}
+      />
 
       <Toaster position="top-right" />
     </div>

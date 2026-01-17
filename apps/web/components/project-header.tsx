@@ -26,6 +26,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { authClient } from '@/lib/auth-client'
 import { useConfirmHostname, useDeployProject, useRenameProject } from '@/queries/projects'
 import { http } from '@/lib/http'
@@ -50,6 +58,7 @@ interface ProjectHeaderProps {
       name?: string
       status?: string
       error?: string
+      previewUrl?: string
     }
   }
 }
@@ -71,6 +80,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const [isDownloadPaywallOpen, setIsDownloadPaywallOpen] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
+  const [isDeploymentSuccessOpen, setIsDeploymentSuccessOpen] = useState(false)
+  const [deployedHostname, setDeployedHostname] = useState<string | null>(null)
   const { data: githubStatus } = useGitHubStatus(projectId, {
     enabled: isGitHubDialogOpen,
   })
@@ -121,7 +132,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               setIsDialogOpen(false)
               toast.success('Hostname updated')
               setIsDeploying(false)
-              router.push(`/deploymentboard/${projectId}`)
+              setDeployedHostname(name)
+              setIsDeploymentSuccessOpen(true)
             },
             onError: () => {
               toast.error('Failed to update hostname')
@@ -138,7 +150,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             setIsDialogOpen(false)
             toast.success('Deployment started!')
             setIsDeploying(false)
-            router.push(`/deploymentboard/${projectId}`)
+            setDeployedHostname(name)
+            setIsDeploymentSuccessOpen(true)
           },
           onError: () => {
             toast.error('Failed to start deployment')
@@ -147,11 +160,31 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         },
       )
     },
-    [confirmHostname, deployProject, deploymentName, isDeploying, projectId, router],
+    [confirmHostname, deployProject, deploymentName, isDeploying, projectId],
   )
 
   const handlePublishClick = useCallback(() => {
     if (!projectId || isCheckingAccess) return
+
+    if (status === 'deployed' && deploymentName) {
+      setIsDeploying(true)
+      deployProject.mutate(
+        { id: projectId, deployName: deploymentName },
+        {
+          onSuccess: () => {
+            toast.success('Redeployment started')
+            setIsDeploying(false)
+            setDeployedHostname(deploymentName)
+            setIsDeploymentSuccessOpen(true)
+          },
+          onError: () => {
+            toast.error('Failed to start deployment')
+            setIsDeploying(false)
+          },
+        },
+      )
+      return
+    }
 
     setIsCheckingAccess(true)
     const { data } = check({ featureId: 'publish_your_app' })
@@ -163,7 +196,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     }
 
     setIsCheckingAccess(false)
-  }, [projectId, isCheckingAccess, check])
+  }, [projectId, isCheckingAccess, check, status, deploymentName, deployProject])
 
   const performDownload = useCallback(async () => {
     if (!projectId) return
@@ -283,16 +316,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               {status === 'deployed' ? 'Live' : isFailed ? 'Failed' : isInProgress ? 'Deploying' : null}
             </div>
           )}
-          {status === 'deployed' && deploymentName && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => window.open(`https://${deploymentName}.surgent.site`, '_blank')}
-            >
-              <ExternalLink className="h-4 w-4" />
-              Open
-            </Button>
-          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="outline" size="sm" onClick={handleDownloadClick} disabled={!projectId || downloading}>
@@ -324,6 +347,15 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   : 'Push code to GitHub'}
             </TooltipContent>
           </Tooltip>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => projectId && router.push(`/deploymentboard/${projectId}`)}
+            disabled={!projectId}
+          >
+            Deployment Page
+          </Button>
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -393,6 +425,18 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       <PaywallDialog open={isDownloadPaywallOpen} setOpen={setIsDownloadPaywallOpen} featureId="download_code" />
 
       <GitHubDialog open={isGitHubDialogOpen} onOpenChange={setIsGitHubDialogOpen} projectId={projectId} />
+
+      <Dialog open={isDeploymentSuccessOpen} onOpenChange={setIsDeploymentSuccessOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Deployment Successful</DialogTitle>
+            <DialogDescription>{deployedHostname} has been deployed</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setIsDeploymentSuccessOpen(false)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

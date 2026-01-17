@@ -219,3 +219,31 @@ export function useSandboxLogsQuery(id?: string, enabled = true) {
     staleTime: 2000,
   })
 }
+
+// Deployment history
+const DeploymentItemSchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  createdAt: z.string(),
+  startedAt: z.string().optional(),
+  deployedAt: z.string().optional(),
+  error: z.string().optional(),
+})
+
+const DeploymentHistorySchema = z.array(DeploymentItemSchema)
+
+export type DeploymentItem = z.infer<typeof DeploymentItemSchema>
+
+async function fetchDeploymentHistory(id: string): Promise<DeploymentItem[]> {
+  const data = await http.get(`api/projects/${id}/deployments`).json()
+  return DeploymentHistorySchema.parse(data)
+}
+
+export function useDeploymentHistoryQuery(id?: string, enabled = true) {
+  return useQuery({
+    queryKey: ['deployment-history', id],
+    queryFn: () => fetchDeploymentHistory(id!),
+    enabled: Boolean(id) && enabled,
+    staleTime: 30000,
+  })
+}

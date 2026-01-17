@@ -199,6 +199,24 @@ projects.post(
   },
 )
 
+// GET /projects/:id/deployments - Get deployment history for a project
+projects.get('/:id/deployments', zValidator('param', idParam), async (c) => {
+  const { id } = c.req.valid('param')
+  const result = await getOwnedProject(id, c.get('user')!.id)
+  if ('error' in result) {
+    return c.json({ error: result.error }, result.status)
+  }
+
+  const deployments = await db
+    .selectFrom('deployment_history')
+    .selectAll()
+    .where('projectId', '=', id)
+    .orderBy('createdAt', 'desc')
+    .execute()
+
+  return c.json(deployments)
+})
+
 // POST /projects/:id/undeploy - Undeploy project from Cloudflare
 projects.post('/:id/undeploy', zValidator('param', idParam), async (c) => {
   try {

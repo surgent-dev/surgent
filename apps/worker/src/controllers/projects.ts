@@ -6,9 +6,9 @@ import { parse as parseDotEnv } from 'dotenv'
 import path from 'path'
 import stripJsonComments from 'strip-json-comments'
 import * as ProjectService from '@/services/projects'
-import { buildDeploymentConfig, parseWranglerConfig, deployToDispatch } from '@/apis/deploy'
+import { buildDeploymentConfig, parseWranglerConfig, deployToDispatch } from '@/apis/deployer/deploy'
 import { auth } from '@/lib/auth'
-import { CloudflareAPI } from '@/apis/deployer/api/cloudflare-api'
+import { WorkerDeployer } from '@/apis/deployer/deployer'
 
 const MAX_PROJECTS_PER_USER = 2
 
@@ -244,6 +244,16 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
 
   const scriptName = rawName ? sanitizeScriptName(rawName) : `project-${projectId.slice(0, 8)}`
   const workingDir = localWorkspacePath(projectId)
+  const previewUrl = `https://${scriptName}.surgent.site`
+
+  // Insert deployment history record
+  const deploymentHistory = await ProjectService.createDeploymentHistory({
+    projectId,
+    name: scriptName,
+    previewUrl,
+    status: 'queued',
+    startedAt: new Date(),
+  })
 
   try {
     await ProjectService.updateDeploymentStatus(projectId, 'starting', scriptName, { startedAt: new Date() })
@@ -255,8 +265,13 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     await ProjectService.updateDeploymentStatus(projectId, 'building')
     const build = await sandbox.exec('bun run build', { cwd: workingDir, timeout: 180_000 })
     if (build.code !== 0) {
+      const error = `Build failed: ${String(build.output).slice(0, 500)}`
+      await ProjectService.updateDeploymentHistory(deploymentHistory.id, {
+        status: 'build_failed',
+        error,
+      })
       await ProjectService.updateDeploymentStatus(projectId, 'build_failed')
-      throw new Error(`Build failed: ${String(build.output).slice(0, 500)}`)
+      throw new Error(error)
     }
 
     // 4. Find assets directory (dist/client or dist/)
@@ -294,7 +309,6 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     )
 
     // 8. Update project with deployed timestamp
-    const previewUrl = `https://${scriptName}.surgent.site`
     await ProjectService.updateProject(projectId, {
       sandbox: { ...project.sandbox, deployed: true, deployName: scriptName },
       deployment: {
@@ -305,11 +319,19 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
         updatedAt: new Date(),
       },
     })
+    await ProjectService.updateDeploymentHistory(deploymentHistory.id, {
+      status: 'deployed',
+      deployedAt: new Date(),
+    })
     await ProjectService.updateDeploymentStatus(projectId, 'deployed', scriptName, { deployedAt: new Date() })
 
     console.log('[deploy] success', { projectId, scriptName })
   } catch (err: any) {
     console.error('[deploy] failed', { projectId, error: err?.message })
+    await ProjectService.updateDeploymentHistory(deploymentHistory.id, {
+      status: 'deploy_failed',
+      error: err?.message || 'Deployment failed',
+    }).catch(() => {})
     await ProjectService.updateDeploymentStatus(projectId, 'deploy_failed').catch(() => {})
     throw err
   }
@@ -328,8 +350,8 @@ export async function undeployProject(args: UndeployProjectArgs): Promise<void> 
   try {
     await ProjectService.updateDeploymentStatus(projectId, 'undeploying')
 
-    const api = new CloudflareAPI(config.cloudflare.accountId!, config.cloudflare.apiToken!)
-    await api.deleteWorker(scriptName, config.cloudflare.dispatchNamespace!)
+    const deployer = new WorkerDeployer()
+    await deployer.deleteWorker(scriptName, config.cloudflare.dispatchNamespace!)
 
     await ProjectService.updateProject(projectId, {
       sandbox: { ...project.sandbox, deployed: false, deployName: null },

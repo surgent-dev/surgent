@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import HostnameChangeConfirmDialog from '@/components/hostname-change-confirm-dialog'
 
 interface DeployDialogProps {
   open: boolean
@@ -127,22 +128,13 @@ export default function DeployDialog({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm hostname change</DialogTitle>
-            <DialogDescription>You are about to change the public URL for this deployment. Continue?</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setConfirmOpen(false)} disabled={Boolean(isSubmitting)}>
-              No
-            </Button>
-            <Button onClick={handleFinalConfirm} disabled={Boolean(isSubmitting)}>
-              Yes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <HostnameChangeConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        originalHostname={defaultName ? `${sanitize(defaultName)}.surgent.site` : 'No hostname'}
+        newHostname={pendingName ? `${pendingName}.surgent.site` : ''}
+        onConfirm={handleFinalConfirm}
+      />
     </>
   )
 }

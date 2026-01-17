@@ -74,3 +74,40 @@ export async function updateDeploymentStatus(
     },
   })
 }
+
+export async function createDeploymentHistory(args: {
+  projectId: string
+  name: string
+  previewUrl: string
+  status: string
+  startedAt: Date
+}) {
+  const row = await db
+    .insertInto('deployment_history')
+    .values({
+      projectId: args.projectId,
+      name: args.name,
+      previewUrl: args.previewUrl,
+      status: args.status,
+      startedAt: args.startedAt,
+    })
+    .returning(['id'])
+    .executeTakeFirstOrThrow()
+
+  return { id: row.id as string }
+}
+
+export async function updateDeploymentHistory(
+  deploymentHistoryId: string,
+  data: { status: string; deployedAt?: Date; error?: string },
+) {
+  await db
+    .updateTable('deployment_history')
+    .set({
+      status: data.status,
+      ...(data.deployedAt ? { deployedAt: data.deployedAt } : {}),
+      ...(data.error ? { error: data.error } : {}),
+    })
+    .where('id', '=', deploymentHistoryId)
+    .execute()
+}
