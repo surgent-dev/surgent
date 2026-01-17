@@ -14,6 +14,8 @@ import {
   AlertTriangle,
   X,
   Github,
+  ChevronDown,
+  Settings,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -308,23 +310,12 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
         {/* Right side */}
         <div className="flex items-center gap-2">
-          {status && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span
-                className={`h-2 w-2 rounded-full ${status === 'deployed' ? 'bg-success' : isFailed ? 'bg-danger' : 'bg-warning animate-pulse'}`}
-              />
-              {status === 'deployed' ? 'Live' : isFailed ? 'Failed' : isInProgress ? 'Deploying' : null}
-            </div>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" size="sm" onClick={handleDownloadClick} disabled={!projectId || downloading}>
-                {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                {downloading ? 'Preparing...' : 'Download Code'}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Download project source code</TooltipContent>
-          </Tooltip>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span
+              className={`h-3 w-3 rounded-full ${status === 'deployed' ? 'bg-success' : isFailed ? 'bg-danger' : status ? 'bg-warning animate-pulse' : 'border-2 border-muted'}`}
+            />
+            {status === 'deployed' ? 'Live' : isFailed ? 'Failed' : status ? 'Deploying' : 'Inactive'}
+          </div>
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -348,32 +339,48 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             </TooltipContent>
           </Tooltip>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => projectId && router.push(`/deploymentboard/${projectId}`)}
-            disabled={!projectId}
-          >
-            Deployment Page
-          </Button>
-
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                className="bg-brand hover:bg-brand/90 text-brand-foreground"
-                onClick={handlePublishClick}
-                disabled={!projectId || isDeploying || isInProgress || isCheckingAccess}
-              >
-                <Rocket className="h-4 w-4" />
-                {isCheckingAccess
-                  ? 'Checking...'
-                  : isInProgress
-                    ? 'Publishing...'
-                    : status === 'deployed'
-                      ? 'Republish'
-                      : 'Publish'}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    className="bg-brand hover:bg-brand/90 text-brand-foreground gap-1"
+                    disabled={!projectId || isDeploying || isInProgress || isCheckingAccess}
+                  >
+                    <Rocket className="h-4 w-4" />
+                    {isCheckingAccess
+                      ? 'Checking...'
+                      : isInProgress
+                        ? 'Publishing...'
+                        : status === 'deployed'
+                          ? 'Publish'
+                          : 'Deploy'}
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handlePublishClick}>
+                    <Rocket className="h-4 w-4 mr-2" />
+                    {status === 'deployed' ? 'Deploy' : 'Deploy'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => projectId && router.push(`/deploymentboard/${projectId}`)}
+                    disabled={!projectId}
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleDownloadClick} disabled={!projectId || downloading}>
+                    {downloading ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-2" />
+                    )}
+                    Download Code
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </TooltipTrigger>
             {errorMsg && <TooltipContent>{errorMsg}</TooltipContent>}
           </Tooltip>
