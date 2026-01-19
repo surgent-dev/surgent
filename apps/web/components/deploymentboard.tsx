@@ -127,7 +127,7 @@ export default function DeploymentBoard({ projectId }: DeploymentBoardProps) {
     <div className="min-h-screen bg-background">
       <header className="h-14 border-b flex items-center px-6 bg-background">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')}>
+          <Button variant="ghost" size="icon" onClick={() => router.push(`/project/${projectId}`)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="font-medium">{project?.name || 'Project'}</h1>
