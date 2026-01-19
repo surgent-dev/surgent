@@ -303,7 +303,7 @@ function TabButton({
             e.stopPropagation()
             onClose()
           }}
-          className="p-0.5 rounded hover:bg-muted-foreground/20 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="hidden group-hover:block p-0.5 rounded hover:bg-muted-foreground/20"
         >
           <X className="size-3" />
         </span>
@@ -390,11 +390,11 @@ export default function PreviewPanel({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        <DropdownMenuItem onClick={() => onAddTab("mcp")} disabled={hasMcp} className="gap-2">
+        <DropdownMenuItem onClick={() => onAddTab('mcp')} disabled={hasMcp} className="gap-2">
           <span className="text-base leading-none font-mono text-muted-foreground">&gt;_</span>
           MCP
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAddTab("logs")} disabled={hasLogs} className="gap-2">
+        <DropdownMenuItem onClick={() => onAddTab('logs')} disabled={hasLogs} className="gap-2">
           <span className="text-sm leading-none text-muted-foreground">📜︎</span>
           Server Logs
         </DropdownMenuItem>

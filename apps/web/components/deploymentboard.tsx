@@ -146,7 +146,7 @@ export default function DeploymentBoard({ projectId }: DeploymentBoardProps) {
                   </p>
                 )}
               </div>
-              <Badge variant={getStatusBadgeVariant(status)}>{displayStatus}</Badge>
+              {displayStatus !== 'Inactive' && <Badge variant={getStatusBadgeVariant(status)}>{displayStatus}</Badge>}
             </div>
 
             {hostname && previewUrl && (

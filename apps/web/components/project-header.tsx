@@ -361,12 +361,14 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
         {/* Right side */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span
-              className={`h-3 w-3 rounded-full ${status === 'deployed' ? 'bg-success' : isFailed ? 'bg-danger' : status ? 'bg-warning animate-pulse' : 'border-2 border-muted'}`}
-            />
-            {status === 'deployed' ? 'Live' : isFailed ? 'Failed' : status ? 'Deploying' : 'Inactive'}
-          </div>
+          {(status || isFailed) && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span
+                className={`h-3 w-3 rounded-full ${status === 'deployed' ? 'bg-success' : isFailed ? 'bg-danger' : status ? 'bg-warning animate-pulse' : 'border-2 border-muted'}`}
+              />
+              {status === 'deployed' ? 'Live' : isFailed ? 'Failed' : status ? 'Deploying' : 'Inactive'}
+            </div>
+          )}
 
           <Tooltip>
             <TooltipTrigger asChild>
