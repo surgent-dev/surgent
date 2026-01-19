@@ -187,5 +187,6 @@ export interface DeploymentHistoryTable {
   error: string | null
   startedAt: Date
   deployedAt: Date | null
+  versionId: string | null
   createdAt?: Date
 }

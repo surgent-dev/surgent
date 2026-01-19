@@ -228,6 +228,7 @@ const DeploymentItemSchema = z.object({
   startedAt: z.string().optional(),
   deployedAt: z.string().optional(),
   error: z.string().optional(),
+  versionId: z.string().optional(),
 })
 
 const DeploymentHistorySchema = z.array(DeploymentItemSchema)
@@ -248,31 +249,8 @@ export function useDeploymentHistoryQuery(id?: string, enabled = true) {
   })
 }
 
-// Cloudflare deployments
-const CloudflareDeploymentSchema = z.object({
-  id: z.string(),
-  created_on: z.string(),
-  version_id: z.string(),
-  metadata: z.any().optional(),
-})
-
-export type CloudflareDeployment = z.infer<typeof CloudflareDeploymentSchema>
-
-async function fetchCloudflareDeployments(id: string): Promise<CloudflareDeployment[]> {
-  const data = await http.get(`api/projects/${id}/cloudflare-deployments`).json()
-  return z.array(CloudflareDeploymentSchema).parse(data)
-}
-
-export function useCloudflareDeploymentsQuery(projectId: string) {
-  return useQuery({
-    queryKey: ['cloudflare-deployments', projectId],
-    queryFn: () => fetchCloudflareDeployments(projectId),
-    enabled: Boolean(projectId),
-  })
-}
-
-async function redeployVersionReq({ id, versionId }: { id: string; versionId: string }) {
-  const data = await http.post(`api/projects/${id}/cloudflare-redeploy`, { json: { versionId } }).json()
+async function redeployVersionReq({ id, deploymentId }: { id: string; deploymentId: string }) {
+  const data = await http.post(`api/projects/${id}/cloudflare-redeploy`, { json: { deploymentId } }).json()
   return ScheduledSchema.parse(data)
 }
 
@@ -282,7 +260,7 @@ export function useRedeployVersion() {
     mutationFn: redeployVersionReq,
     onSuccess: (_res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
-      queryClient.invalidateQueries({ queryKey: ['cloudflare-deployments', vars.id] })
+      queryClient.invalidateQueries({ queryKey: ['deployment-history', vars.id] })
     },
   })
 }

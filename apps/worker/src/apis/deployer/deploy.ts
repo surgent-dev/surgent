@@ -49,11 +49,11 @@ export async function deployWorker(
   additionalModules?: Map<string, string>,
   assetsConfig?: WranglerConfig['assets'],
   dispatchNamespace?: string,
-): Promise<void> {
+): Promise<string | undefined> {
   const deployer = new WorkerDeployer()
 
   if (deployConfig.assets && fileContents) {
-    await deployer.deployWithAssets(
+    return await deployer.deployWithAssets(
       deployConfig.scriptName,
       deployConfig.workerContent,
       deployConfig.compatibilityDate,
@@ -67,7 +67,7 @@ export async function deployWorker(
       deployConfig.compatibilityFlags,
     )
   } else {
-    await deployer.deploySimple(
+    return await deployer.deploySimple(
       deployConfig.scriptName,
       deployConfig.workerContent,
       deployConfig.compatibilityDate,
@@ -88,6 +88,6 @@ export async function deployToDispatch(
   fileContents?: Map<string, Buffer>,
   additionalModules?: Map<string, string>,
   assetsConfig?: WranglerConfig['assets'],
-): Promise<void> {
-  await deployWorker(deployConfig, fileContents, additionalModules, assetsConfig, deployConfig.dispatchNamespace)
+): Promise<string | undefined> {
+  return await deployWorker(deployConfig, fileContents, additionalModules, assetsConfig, deployConfig.dispatchNamespace)
 }

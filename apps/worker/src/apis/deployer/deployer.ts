@@ -9,6 +9,7 @@ interface DeploymentResult {
   success: boolean
   error?: string
   output?: string
+  versionId?: string
 }
 
 /**
@@ -37,7 +38,7 @@ export class WorkerDeployer {
     assetsConfig?: WranglerConfig['assets'],
     additionalModules?: Map<string, string>,
     compatibilityFlags?: string[],
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     logger.info('🚀 Starting deployment process...')
     logger.info(`📦 Worker: ${scriptName}`)
     if (dispatchNamespace) {
@@ -70,9 +71,10 @@ export class WorkerDeployer {
       await fs.writeFile(wranglerPath, wranglerConfig)
 
       // Deploy with Wrangler
-      await this.runWranglerDeploy(scriptName, dispatchNamespace, deployDir)
+      const result = await this.runWranglerDeploy(scriptName, dispatchNamespace, deployDir)
 
       logger.info('✅ Deployment completed successfully')
+      return result.versionId
     } finally {
       // Cleanup temporary directory
       await this.cleanupDeployDir(deployDir)
@@ -91,7 +93,7 @@ export class WorkerDeployer {
     dispatchNamespace?: string,
     additionalModules?: Map<string, string>,
     compatibilityFlags?: string[],
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     logger.info('🚀 Starting simple deployment (no assets)...')
     logger.info(`📦 Worker: ${scriptName}`)
     if (dispatchNamespace) {
@@ -115,9 +117,10 @@ export class WorkerDeployer {
       const wranglerPath = path.join(deployDir, 'wrangler.toml')
       await fs.writeFile(wranglerPath, wranglerConfig)
 
-      await this.runWranglerDeploy(scriptName, dispatchNamespace, deployDir)
+      const result = await this.runWranglerDeploy(scriptName, dispatchNamespace, deployDir)
 
       logger.info('✅ Simple deployment completed successfully')
+      return result.versionId
     } finally {
       await this.cleanupDeployDir(deployDir)
     }
@@ -210,7 +213,12 @@ not_found_handling = "${assetsConfig?.not_found_handling || 'single-page-applica
       throw new Error(`Wrangler deploy failed (exit code ${exitCode}): ${stderr}`)
     }
 
-    return { success: true, output: stdout }
+    // Parse versionId from stdout
+    // Expected format: "Current Version ID: <uuid>"
+    const versionIdMatch = stdout.match(/Current Version ID:\s*([a-f0-9-]{36})/i)
+    const versionId = versionIdMatch ? versionIdMatch[1] : undefined
+
+    return { success: true, output: stdout, versionId }
   }
 
   /**

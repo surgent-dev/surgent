@@ -81,6 +81,7 @@ export async function createDeploymentHistory(args: {
   previewUrl: string
   status: string
   startedAt: Date
+  versionId?: string
 }) {
   const row = await db
     .insertInto('deployment_history')
@@ -90,6 +91,7 @@ export async function createDeploymentHistory(args: {
       previewUrl: args.previewUrl,
       status: args.status,
       startedAt: args.startedAt,
+      ...(args.versionId ? { versionId: args.versionId } : {}),
     })
     .returning(['id'])
     .executeTakeFirstOrThrow()
@@ -99,7 +101,7 @@ export async function createDeploymentHistory(args: {
 
 export async function updateDeploymentHistory(
   deploymentHistoryId: string,
-  data: { status: string; deployedAt?: Date; error?: string },
+  data: { status: string; deployedAt?: Date; error?: string; versionId?: string },
 ) {
   await db
     .updateTable('deployment_history')
@@ -107,7 +109,12 @@ export async function updateDeploymentHistory(
       status: data.status,
       ...(data.deployedAt ? { deployedAt: data.deployedAt } : {}),
       ...(data.error ? { error: data.error } : {}),
+      ...(data.versionId ? { versionId: data.versionId } : {}),
     })
     .where('id', '=', deploymentHistoryId)
     .execute()
+}
+
+export async function getDeploymentHistoryById(deploymentHistoryId: string) {
+  return db.selectFrom('deployment_history').selectAll().where('id', '=', deploymentHistoryId).executeTakeFirst()
 }

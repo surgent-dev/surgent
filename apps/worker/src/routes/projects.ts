@@ -15,7 +15,6 @@ import {
   downloadProject,
   getSandboxLogs,
   HttpError,
-  getRecentDeployments,
   redeployVersion,
 } from '@/controllers/projects'
 import { listDeploymentEnvVars, setDeploymentEnvVars, buildDashboardCredentials } from '@/apis/convex'
@@ -252,53 +251,41 @@ projects.post('/:id/undeploy', zValidator('param', idParam), async (c) => {
   }
 })
 
-// GET /projects/:id/cloudflare-deployments - Get recent Cloudflare deployments
-projects.get('/:id/cloudflare-deployments', zValidator('param', idParam), async (c) => {
-  const { id } = c.req.valid('param')
-  const result = await getOwnedProject(id, c.get('user')!.id)
-  if ('error' in result) {
-    return c.json({ error: result.error }, result.status)
-  }
-
-  const scriptName = (result.project.sandbox as any)?.deployName || `project-${id.slice(0, 8)}`
-  const accountId = config.cloudflare.accountId
-  if (!accountId) return c.json({ error: 'Cloudflare account not configured' }, 500)
-
-  try {
-    const deployments = await getRecentDeployments(accountId, scriptName)
-    return c.json({ deployments })
-  } catch (err) {
-    const status = err instanceof HttpError ? err.status : 500
-    const message = err instanceof Error ? err.message : 'Failed to fetch deployments'
-    console.error('[cloudflare-deployments] failed', { projectId: id, error: message })
-    return c.json({ error: message }, status as 400 | 500)
-  }
-})
-
 // POST /projects/:id/cloudflare-redeploy - Redeploy specific version
 projects.post(
   '/:id/cloudflare-redeploy',
   zValidator('param', idParam),
-  zValidator('json', z.object({ versionId: z.string() })),
+  zValidator('json', z.object({ deploymentId: z.string() })),
   async (c) => {
     const { id } = c.req.valid('param')
-    const { versionId } = c.req.valid('json')
+    const { deploymentId } = c.req.valid('json')
     const result = await getOwnedProject(id, c.get('user')!.id)
     if ('error' in result) {
       return c.json({ error: result.error }, result.status)
     }
 
-    const scriptName = (result.project.sandbox as any)?.deployName || `project-${id.slice(0, 8)}`
     const accountId = config.cloudflare.accountId
     if (!accountId) return c.json({ error: 'Cloudflare account not configured' }, 500)
 
     try {
-      await redeployVersion(accountId, scriptName, versionId)
+      const { getDeploymentHistoryById } = await import('@/services/projects')
+      const deployment = await getDeploymentHistoryById(deploymentId)
+      if (!deployment) {
+        return c.json({ error: 'Deployment not found' }, 404)
+      }
+
+      const versionId = deployment.versionId
+      if (!versionId) {
+        return c.json({ error: 'Version ID not available for this deployment' }, 400)
+      }
+
+      const scriptName = deployment.name || (result.project.sandbox as any)?.deployName || `project-${id.slice(0, 8)}`
+      await redeployVersion(accountId, scriptName, versionId, config.cloudflare.dispatchNamespace)
       return c.json({ redeployed: true, versionId })
     } catch (err) {
       const status = err instanceof HttpError ? err.status : 500
       const message = err instanceof Error ? err.message : 'Failed to redeploy version'
-      console.error('[cloudflare-redeploy] failed', { projectId: id, versionId, error: message })
+      console.error('[cloudflare-redeploy] failed', { projectId: id, deploymentId, error: message })
       return c.json({ error: message }, status as 400 | 500)
     }
   },

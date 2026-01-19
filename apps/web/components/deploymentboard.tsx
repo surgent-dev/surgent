@@ -202,6 +202,7 @@ export default function DeploymentBoard({ projectId }: DeploymentBoardProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Status</TableHead>
+                    <TableHead>Version ID</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Duration</TableHead>
                   </TableRow>
@@ -211,6 +212,9 @@ export default function DeploymentBoard({ projectId }: DeploymentBoardProps) {
                     <TableRow key={item.id}>
                       <TableCell>
                         <Badge variant={getStatusBadgeVariant(item.status)}>{item.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs font-mono">{item.versionId || '-'}</span>
                       </TableCell>
                       <TableCell>{formatRelativeTime(item.createdAt)}</TableCell>
                       <TableCell>

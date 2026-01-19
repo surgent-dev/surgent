@@ -16,7 +16,6 @@ import {
   Github,
   ChevronDown,
   Settings,
-  Clock,
   RotateCcw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -28,9 +27,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -46,9 +42,8 @@ import {
   useConfirmHostname,
   useDeployProject,
   useRenameProject,
-  useCloudflareDeploymentsQuery,
+  useDeploymentHistoryQuery,
   useRedeployVersion,
-  type CloudflareDeployment,
 } from '@/queries/projects'
 import { http } from '@/lib/http'
 import DeployDialog from '@/components/deploy-dialog'
@@ -87,6 +82,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const deployProject = useDeployProject()
   const confirmHostname = useConfirmHostname()
   const renameProject = useRenameProject()
+  const redeployVersion = useRedeployVersion()
   const { customer, check } = useCustomer()
   const [isCheckingAccess, setIsCheckingAccess] = useState(false)
   const [isPaywallOpen, setIsPaywallOpen] = useState(false)
@@ -96,16 +92,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
   const [isDeploymentSuccessOpen, setIsDeploymentSuccessOpen] = useState(false)
   const [deployedHostname, setDeployedHostname] = useState<string | null>(null)
-  const [redeployingVersionId, setRedeployingVersionId] = useState<string | null>(null)
   const { data: githubStatus } = useGitHubStatus(projectId, {
     enabled: isGitHubDialogOpen,
   })
-  const {
-    data: deployments,
-    isLoading: isLoadingDeployments,
-    error: deploymentsError,
-  } = useCloudflareDeploymentsQuery(projectId || '')
-  const redeployVersion = useRedeployVersion()
+  const { data: history = [] } = useDeploymentHistoryQuery(projectId || '')
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => {
@@ -271,27 +261,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     })
   }
 
-  const handleRedeploy = (versionId: string) => {
-    if (!projectId || redeployingVersionId) return
-    setRedeployingVersionId(versionId)
-    redeployVersion.mutate(
-      { id: projectId, versionId },
-      {
-        onSuccess: () => {
-          toast.success('Redeployment started')
-          setRedeployingVersionId(null)
-        },
-        onError: () => {
-          toast.error('Failed to start redeployment')
-          setRedeployingVersionId(null)
-        },
-      },
-    )
-  }
-
-  const sortedDeployments =
-    deployments?.slice(0, 10).sort((a, b) => new Date(b.created_on).getTime() - new Date(a.created_on).getTime()) || []
-
   return (
     <>
       {/* Warning banner */}
@@ -430,55 +399,55 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     )}
                     Download Code
                   </DropdownMenuItem>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>
-                      <Clock className="h-4 w-4 mr-2" />
-                      Deploy History
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-80 max-h-96 overflow-y-auto">
-                      {isLoadingDeployments ? (
-                        <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Loading deployments...
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Recent Deployments</DropdownMenuLabel>
+                  {history.length === 0 ? (
+                    <DropdownMenuItem disabled>No deployments yet</DropdownMenuItem>
+                  ) : (
+                    history.slice(0, 2).map((deployment) => (
+                      <div key={deployment.id} className="px-2 py-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span
+                            className={`text-xs ${
+                              deployment.status === 'deployed'
+                                ? 'text-success'
+                                : deployment.status.includes('failed')
+                                  ? 'text-danger'
+                                  : 'text-warning'
+                            }`}
+                          >
+                            {deployment.status}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{formatDate(deployment.createdAt)}</span>
                         </div>
-                      ) : deploymentsError ? (
-                        <div className="py-8 text-sm text-center text-muted-foreground">Failed to load deployments</div>
-                      ) : sortedDeployments.length === 0 ? (
-                        <div className="py-8 text-sm text-center text-muted-foreground">No deployments yet</div>
-                      ) : (
-                        sortedDeployments.map((deployment: CloudflareDeployment) => (
-                          <div key={deployment.id} className="flex flex-col p-2 hover:bg-muted">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex flex-col min-w-0">
-                                <span className="text-xs font-mono text-muted-foreground truncate">
-                                  {deployment.version_id.slice(0, 12)}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {formatDate(deployment.created_on)}
-                                </span>
-                              </div>
+                        {deployment.versionId && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground font-mono">{deployment.versionId}</span>
+                            {deployment.status === 'deployed' && (
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-7 px-2 text-xs shrink-0"
-                                onClick={() => handleRedeploy(deployment.version_id)}
-                                disabled={redeployingVersionId === deployment.version_id}
+                                className="h-6 px-2 text-[10px]"
+                                disabled={redeployVersion.isPending}
+                                onClick={() =>
+                                  redeployVersion.mutate(
+                                    { id: projectId as string, deploymentId: deployment.id },
+                                    {
+                                      onSuccess: () => toast.success('Redeployment started'),
+                                      onError: () => toast.error('Failed to start redeployment'),
+                                    },
+                                  )
+                                }
                               >
-                                {redeployingVersionId === deployment.version_id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <>
-                                    <RotateCcw className="h-3 w-3 mr-1" />
-                                    Redeploy
-                                  </>
-                                )}
+                                <RotateCcw className="h-3 w-3 mr-1" />
+                                Redeploy
                               </Button>
-                            </div>
+                            )}
                           </div>
-                        ))
-                      )}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </TooltipTrigger>
