@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, product_id as \"product_id!\", name, description, price_amount as \"price_amount?\",\n               price_currency as \"price_currency?\", recurring_interval as \"recurring_interval: RecurringInterval\", is_default as \"is_default?\"\n        FROM product_price\n        WHERE product_id = ANY($1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "product_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "price_amount?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "price_currency?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "recurring_interval: RecurringInterval",
+        "type_info": {
+          "Custom": {
+            "name": "recurring_interval",
+            "kind": {
+              "Enum": ["day", "week", "month", "year"]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "is_default?",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": ["UuidArray"]
+    },
+    "nullable": [false, true, true, true, false, false, true, true]
+  },
+  "hash": "a406af5e0e89d22ef1f12b096699ea2a3e514b5c36dd883fa6b52747c4bdc8f4"
+}

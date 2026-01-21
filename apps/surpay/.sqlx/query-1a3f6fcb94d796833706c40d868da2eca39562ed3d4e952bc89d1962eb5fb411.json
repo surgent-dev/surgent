@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO customer (id, project_id, email, name, processor_customer_id)\n        VALUES ($1, $2, $3, $4, $5)\n        ON CONFLICT (project_id, email) DO UPDATE\n        SET processor_customer_id = COALESCE(EXCLUDED.processor_customer_id, customer.processor_customer_id),\n            name = COALESCE(EXCLUDED.name, customer.name),\n            updated_at = NOW()\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": ["Uuid", "Uuid", "Varchar", "Text", "Text"]
+    },
+    "nullable": [false]
+  },
+  "hash": "1a3f6fcb94d796833706c40d868da2eca39562ed3d4e952bc89d1962eb5fb411"
+}

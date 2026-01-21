@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO subscription (id, project_id, product_id, product_price_id, customer_id,\n            processor, processor_subscription_id, processor_customer_id, created_at, status)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), 'active')\n        ON CONFLICT (processor, processor_subscription_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": ["Uuid", "Uuid", "Uuid", "Uuid", "Uuid", "Text", "Text", "Text"]
+    },
+    "nullable": []
+  },
+  "hash": "cb700bfd4981bd324c056d6fea42abeb73658bf630e85199ff55ff6912fa0e30"
+}

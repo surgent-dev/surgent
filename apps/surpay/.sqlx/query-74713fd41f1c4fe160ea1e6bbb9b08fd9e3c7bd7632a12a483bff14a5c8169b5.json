@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, processor_checkout_id, organization_id, project_id, product_id, price_id, status as \"status: CheckoutStatus\"\n        FROM checkout_session\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "processor_checkout_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "organization_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "product_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "price_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "status: CheckoutStatus",
+        "type_info": {
+          "Custom": {
+            "name": "checkout_status",
+            "kind": {
+              "Enum": ["open", "complete", "expired"]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": ["Uuid"]
+    },
+    "nullable": [false, false, false, false, false, false, false]
+  },
+  "hash": "74713fd41f1c4fe160ea1e6bbb9b08fd9e3c7bd7632a12a483bff14a5c8169b5"
+}

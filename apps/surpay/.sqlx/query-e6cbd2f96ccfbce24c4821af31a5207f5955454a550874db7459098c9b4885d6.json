@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO customer (id, project_id, email, name)\n        VALUES ($1, $2, $3, $4)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": ["Uuid", "Uuid", "Varchar", "Text"]
+    },
+    "nullable": []
+  },
+  "hash": "e6cbd2f96ccfbce24c4821af31a5207f5955454a550874db7459098c9b4885d6"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE account SET status = 'deauthorized' WHERE processor_account_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": ["Text"]
+    },
+    "nullable": []
+  },
+  "hash": "2bf0bb255941cb15d50b7c42a4f55655c250d379e864b0f61e00bc21bdb02f73"
+}

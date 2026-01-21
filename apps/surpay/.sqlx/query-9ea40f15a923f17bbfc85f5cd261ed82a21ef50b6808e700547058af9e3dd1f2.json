@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT email, name, processor_customer_id FROM customer WHERE project_id = $1 AND email = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "processor_customer_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": ["Uuid", "Text"]
+    },
+    "nullable": [false, true, true]
+  },
+  "hash": "9ea40f15a923f17bbfc85f5cd261ed82a21ef50b6808e700547058af9e3dd1f2"
+}

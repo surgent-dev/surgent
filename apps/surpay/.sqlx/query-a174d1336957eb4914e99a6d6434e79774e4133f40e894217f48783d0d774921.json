@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO processed_webhook_event (processor, processor_event_id, event_type, processed_at)\n            VALUES ($1, $2, $3, NOW())\n            ON CONFLICT (processor, processor_event_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": ["Text", "Text", "Text"]
+    },
+    "nullable": []
+  },
+  "hash": "a174d1336957eb4914e99a6d6434e79774e4133f40e894217f48783d0d774921"
+}

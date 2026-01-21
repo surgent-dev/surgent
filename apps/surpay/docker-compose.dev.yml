@@ -1,0 +1,38 @@
+# Development Docker Compose - PGMQ PostgreSQL only
+#
+# Usage:
+#   Start:  docker-compose -f docker-compose.dev.yml up -d
+#   Stop:   docker-compose -f docker-compose.dev.yml down
+#   Logs:   docker-compose -f docker-compose.dev.yml logs -f postgres
+#
+# The app runs on your host machine (via `cargo run`) and connects
+# to this PostgreSQL container via localhost:5432.
+#
+# DATABASE_URL for your local development:
+#   postgres://surpay:password@localhost/surpay
+#
+# Data persistence:
+#   A named volume is used so data survives container restarts.
+#   To completely reset: docker-compose -f docker-compose.dev.yml down -v
+
+services:
+  postgres:
+    image: ghcr.io/pgmq/pg18-pgmq:latest
+    container_name: pgmq-dev
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: surpay
+      POSTGRES_USER: surpay
+      POSTGRES_PASSWORD: password
+    volumes:
+      - pgmq_data:/var/lib/postgresql/data/18
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U surpay -d surpay"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgmq_data:

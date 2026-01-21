@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO product_price (\n            id,\n            product_id,\n            name,\n            description,\n            price_amount,\n            price_currency,\n            recurring_interval,\n            is_default,\n            processor_price_id\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4",
+        "Varchar",
+        {
+          "Custom": {
+            "name": "recurring_interval",
+            "kind": {
+              "Enum": ["day", "week", "month", "year"]
+            }
+          }
+        },
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "55ec465382b59b52c94f1937bda0d33c9970263a1ae70fec767087e71d4c8bce"
+}

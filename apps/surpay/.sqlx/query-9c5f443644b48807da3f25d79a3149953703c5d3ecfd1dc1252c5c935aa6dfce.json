@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO checkout_session (\n            id,\n            processor_checkout_id,\n            organization_id,\n            project_id,\n            product_id,\n            price_id,\n            status,\n            success_url,\n            cancel_url\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "checkout_status",
+            "kind": {
+              "Enum": ["open", "complete", "expired"]
+            }
+          }
+        },
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9c5f443644b48807da3f25d79a3149953703c5d3ecfd1dc1252c5c935aa6dfce"
+}
