@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, processor_price_id, price_amount, recurring_interval as \"recurring_interval: Option<RecurringInterval>\"\n        FROM product_price\n        WHERE id = $1 AND product_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "processor_price_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "price_amount",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "recurring_interval: Option<RecurringInterval>",
+        "type_info": {
+          "Custom": {
+            "name": "recurring_interval",
+            "kind": {
+              "Enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "69b1a595789416979e69d169b30ade63a99b30497d6a1932fd64b6105e9fdb45"
+}

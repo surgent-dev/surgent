@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT organization_id, country, currency, processor, processor_account_id, status, business_type FROM account WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "organization_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "country",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "currency",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "processor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "processor_account_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "business_type",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "b1827fc41718aea934ac7168c1496e9758acd61af20f7a12a808c5c61d805938"
+}

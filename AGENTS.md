@@ -41,3 +41,9 @@ To regenerate the javascript SDK, run ./packages/sdk/js/script/build.ts
 ## Tool Calling
 
 - ALWAYS USE PARALLEL TOOLS WHEN APPLICABLE.
+
+## Plans
+
+- For plans, write them into docs/plans with the suffix <plan-name>.plan.md, include references to internal/external sources of reference.
+- When designing planning documents, challenge the user on design decisions, ask them critical questions and ask for more information if missing.
+- When implementing plans, start by asking the user questions to clarify if the design doc isn't specific, also ask the user which are the most important references to read through if plan does not specify.

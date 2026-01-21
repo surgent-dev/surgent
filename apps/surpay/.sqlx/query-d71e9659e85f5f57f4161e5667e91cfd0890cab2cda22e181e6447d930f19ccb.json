@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT ON (p.product_group_id)\n            p.id, p.product_group_id, p.name, p.description,\n            p.project_id, p.slug, p.version, p.is_archived, p.is_default, p.processor_product_id\n        FROM product p\n        WHERE p.project_id = $1\n        ORDER BY p.product_group_id, p.version DESC NULLS LAST\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "product_group_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_archived",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "is_default",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "processor_product_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "d71e9659e85f5f57f4161e5667e91cfd0890cab2cda22e181e6447d930f19ccb"
+}

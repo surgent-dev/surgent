@@ -1,15 +1,11 @@
 import * as path from 'path'
 import { promises as fs } from 'fs'
-import { Migrator, FileMigrationProvider } from 'kysely'
+import { Migrator, FileMigrationProvider, Kysely } from 'kysely'
 import { createClient } from './kysely_db'
 
-export async function runMigrations() {
-  const url = process.env.DATABASE_URL
-  if (!url) throw new Error('DATABASE_URL not set')
-
-  const client = createClient(url, process.env.POSTGRES_TYPE)
+export async function migrate(db: Kysely<any>) {
   const migrator = new Migrator({
-    db: client.db,
+    db,
     provider: new FileMigrationProvider({
       fs,
       path,
@@ -18,15 +14,40 @@ export async function runMigrations() {
     }),
   })
 
+  const result = await migrator.migrateToLatest()
+  return result
+}
+
+export async function rollback(db: Kysely<any>) {
+  const migrator = new Migrator({
+    db,
+    provider: new FileMigrationProvider({
+      fs,
+      path,
+      // This needs to be an absolute path.
+      migrationFolder: path.join(__dirname, 'migrations'),
+    }),
+  })
+
+  const result = await migrator.migrateDown()
+  return result
+}
+
+export async function runMigrations() {
+  const url = process.env.DATABASE_URL
+  if (!url) throw new Error('DATABASE_URL not set')
+
+  const client = createClient(url, process.env.POSTGRES_TYPE)
+
   const command = process.argv[2]
 
   let result
   if (command === 'down') {
     console.log('🔄 Rolling back latest migration...')
-    result = await migrator.migrateDown()
+    result = await rollback(client.db)
   } else {
     console.log('🔄 Running migrations...')
-    result = await migrator.migrateToLatest()
+    result = await migrate(client.db)
   }
 
   const { error, results } = result
@@ -49,4 +70,4 @@ export async function runMigrations() {
   console.log('🎉 Migration completed successfully')
 }
 
-runMigrations()
+if (import.meta.main) runMigrations()

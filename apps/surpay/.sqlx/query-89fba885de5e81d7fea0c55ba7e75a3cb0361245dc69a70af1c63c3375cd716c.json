@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE checkout_session\n        SET customer_id = $1, processor_customer_id = $2, customer_email = $3,\n            completed_at = NOW(), status = $4, mode = $5,\n            processor_payment_id = $6, processor_subscription_id = $7\n        WHERE id = $8\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Varchar",
+        {
+          "Custom": {
+            "name": "checkout_status",
+            "kind": {
+              "Enum": [
+                "open",
+                "complete",
+                "expired"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "checkout_mode",
+            "kind": {
+              "Enum": [
+                "payment",
+                "subscription",
+                "setup"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "89fba885de5e81d7fea0c55ba7e75a3cb0361245dc69a70af1c63c3375cd716c"
+}

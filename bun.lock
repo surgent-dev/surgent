@@ -43,6 +43,10 @@
         "wrangler": "^4.54.0",
       },
     },
+    "apps/surpay": {
+      "name": "surpay",
+      "version": "0.2.0",
+    },
     "apps/web": {
       "name": "web",
       "version": "0.1.0",
@@ -164,6 +168,7 @@
         "pako": "^2.1.0",
         "pg": "8.16.3",
         "strip-json-comments": "^5.0.1",
+        "surpay": "0.1.0",
         "stripe": "18.0.0",
         "wrangler": "^4.0.0",
         "zod": "^4.1.12",
@@ -2629,6 +2634,8 @@
 
     "supports-color": ["supports-color@7.2.0", "", { "dependencies": { "has-flag": "^4.0.0" } }, "sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw=="],
 
+    "surpay": ["surpay@workspace:apps/surpay"],
+
     "swr": ["swr@2.3.8", "", { "dependencies": { "dequal": "^2.0.3", "use-sync-external-store": "^1.6.0" }, "peerDependencies": { "react": "^16.11.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-gaCPRVoMq8WGDcWj9p4YWzCMPHzE0WNl6W8ADIx9c3JBEIdMkJGMzW+uzXvxHMltwcYACr9jP+32H8/hgwMR7w=="],
 
     "tailwind-merge": ["tailwind-merge@3.4.0", "", {}, "sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g=="],
@@ -3151,6 +3158,7 @@
 
     "worker/@types/node": ["@types/node@18.19.130", "", { "dependencies": { "undici-types": "~5.26.4" } }, "sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg=="],
 
+    "worker/surpay": ["surpay@0.1.0", "", {}, "sha512-71Uw0FCfOT3ejCUIXiaT4yWUGdIVnH00A7jMkEtrHJyYNM3xsnB4K9IMpW43WZVJTMcYDmSzvsmz3KLhJcUlsA=="],
     "worker/e2b": ["e2b@2.9.1", "", { "dependencies": { "@bufbuild/protobuf": "^2.6.2", "@connectrpc/connect": "2.0.0-rc.3", "@connectrpc/connect-web": "2.0.0-rc.3", "chalk": "^5.3.0", "compare-versions": "^6.1.0", "dockerfile-ast": "^0.7.1", "glob": "^11.1.0", "openapi-fetch": "^0.14.1", "platform": "^1.3.6", "tar": "^7.5.2" } }, "sha512-Vh1T7YRR/wePafeXcWbcWevmmCjeQBpZ3fV1sI3UAt/i8gkzb9uHx3HaoIkrLG0khcKfddkJvD9m1NC5rNQoAA=="],
 
     "worker/pg": ["pg@8.16.3", "", { "dependencies": { "pg-connection-string": "^2.9.1", "pg-pool": "^3.10.1", "pg-protocol": "^1.10.3", "pg-types": "2.2.0", "pgpass": "1.0.5" }, "optionalDependencies": { "pg-cloudflare": "^1.2.7" }, "peerDependencies": { "pg-native": ">=3.0.1" }, "optionalPeers": ["pg-native"] }, "sha512-enxc1h0jA/aq5oSDMvqyW3q89ra6XIIDZgCX9vkMrnz5DFTw/Ny3Li2lFQ+pt3L6MCgm/5o2o8HW9hiJji+xvw=="],

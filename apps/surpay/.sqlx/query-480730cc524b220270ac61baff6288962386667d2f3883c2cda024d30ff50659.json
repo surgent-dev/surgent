@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                name,\n                slug,\n                api_key,\n                api_key_prefix\n            FROM api_key\n            WHERE api_key_prefix = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "api_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "api_key_prefix",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "480730cc524b220270ac61baff6288962386667d2f3883c2cda024d30ff50659"
+}

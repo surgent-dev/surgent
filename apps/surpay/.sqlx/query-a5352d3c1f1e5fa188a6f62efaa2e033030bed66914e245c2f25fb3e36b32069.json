@@ -1,0 +1,67 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            s.id,\n            s.created_at,\n            s.current_period_start,\n            s.current_period_end,\n            s.status as \"status: SubscriptionStatus\",\n            s.processor_subscription_id\n        FROM subscription s\n        WHERE s.customer_id = $1\n        ORDER BY s.created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "current_period_start",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "current_period_end",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "status: SubscriptionStatus",
+        "type_info": {
+          "Custom": {
+            "name": "subscription_status",
+            "kind": {
+              "Enum": [
+                "active",
+                "past_due",
+                "canceled",
+                "unpaid",
+                "trialing",
+                "incomplete",
+                "incomplete_expired"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "processor_subscription_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "a5352d3c1f1e5fa188a6f62efaa2e033030bed66914e245c2f25fb3e36b32069"
+}

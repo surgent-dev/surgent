@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT p.id, p.processor_product_id\n        FROM product p\n        INNER JOIN project proj ON p.project_id = proj.id\n        WHERE p.product_group_id = $1\n          AND proj.id = $2\n          AND proj.organization_id = $3\n        ORDER BY p.version DESC NULLS LAST\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "processor_product_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "7ed2f6a367cfd4135f7330fbc5746fd63634e68aac72538717638790b8f38e2e"
+}

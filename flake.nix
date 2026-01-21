@@ -4,6 +4,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -11,6 +15,7 @@
       self,
       nixpkgs,
       flake-utils,
+      fenix,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -18,13 +23,15 @@
         pkgs = import nixpkgs {
           inherit system;
         };
+        fenixLib = fenix.packages.${system};
+        rustToolchain = fenixLib.stable.toolchain;
       in
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             # Primary runtimes
             bun
-            nodejs_20
+            nodejs_25
             typescript
 
             # Build tools
@@ -39,7 +46,15 @@
             # Optional dev tools
             nodePackages.typescript-language-server
             nodePackages.prettier
+
+            # Rust tooling
+            rustToolchain
+            rust-analyzer
+            sqlx-cli
+            cargo-nextest
           ];
+
+          env.RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
 
           shellHook = ''
             echo "Surgent development environment"
@@ -47,7 +62,7 @@
             echo "Bun: $(bun --version)"
             echo "Node: $(node --version)"
             echo "TypeScript: $(tsc --version)"
-            echo ""
+            echo "Rust (Cargo): $(cargo --version)"
             export NODE_ENV=development
             export SHELL=${pkgs.zsh}/bin/zsh
             exec $SHELL
