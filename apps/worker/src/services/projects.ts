@@ -1,75 +1,69 @@
 import { db } from '@/lib/db'
 
-export function getProjectById(projectId: string) {
-  return db.selectFrom('project').selectAll().where('id', '=', projectId).executeTakeFirst()
+export function getProjectById(id: string) {
+  return db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
 }
 
-export async function countProjectsByUserId(userId: string): Promise<number> {
-  const result = await db
+export async function countProjectsByOrganizationId(organizationId: string) {
+  const row = await db
     .selectFrom('project')
     .select(db.fn.countAll().as('count'))
-    .where('userId', '=', userId)
+    .where('organizationId', '=', organizationId)
     .executeTakeFirst()
-
-  return Number(result?.count ?? 0)
+  return Number(row?.count ?? 0)
 }
 
 export async function createProject(args: {
   userId: string
+  organizationId: string
   name: string
   githubUrl?: string
-}): Promise<{ id: string }> {
+}) {
   const now = new Date()
-
   const row = await db
     .insertInto('project')
     .values({
       userId: args.userId,
+      organizationId: args.organizationId,
       name: args.name,
       github: { url: args.githubUrl } as any,
-      settings: null,
-      metadata: null,
-      deployment: null,
       sandbox: { status: 'pending', isInitialized: false } as any,
       createdAt: now,
       updatedAt: now,
     })
     .returning(['id'])
     .executeTakeFirstOrThrow()
-
   return { id: row.id as string }
 }
 
-export async function updateProject(projectId: string, data: { metadata?: any; sandbox?: any; deployment?: any }) {
+export async function updateProject(id: string, data: { metadata?: any; sandbox?: any; deployment?: any }) {
   await db
     .updateTable('project')
     .set({ ...data, updatedAt: new Date() })
-    .where('id', '=', projectId)
+    .where('id', '=', id)
     .execute()
 }
 
 export async function updateDeploymentStatus(
-  projectId: string,
+  id: string,
   status: string,
   name?: string,
   meta?: { step?: string; error?: string; startedAt?: Date; deployedAt?: Date },
 ) {
-  const project = await getProjectById(projectId)
+  const project = await getProjectById(id)
   if (!project) return
 
-  const currentDeployment = project.deployment || {}
-
-  await updateProject(projectId, {
+  const prev = (project.deployment as Record<string, any>) || {}
+  await updateProject(id, {
     deployment: {
-      ...currentDeployment,
-      projectId: projectId,
+      ...prev,
+      projectId: id,
       status,
-      ...(name ? { name } : {}),
-      ...(meta?.step ? { step: meta.step } : {}),
-      ...(meta?.error ? { error: meta.error } : {}),
-      ...(meta?.startedAt ? { startedAt: meta.startedAt.toISOString() } : {}),
-      ...(meta?.deployedAt ? { deployedAt: meta.deployedAt.toISOString() } : {}),
-      ...(currentDeployment.startedAt && !meta?.startedAt ? { startedAt: currentDeployment.startedAt } : {}),
+      name: name ?? prev.name,
+      step: meta?.step ?? prev.step,
+      error: meta?.error ?? prev.error,
+      startedAt: meta?.startedAt?.toISOString() ?? prev.startedAt,
+      deployedAt: meta?.deployedAt?.toISOString() ?? prev.deployedAt,
       updatedAt: new Date(),
     },
   })
@@ -82,32 +76,10 @@ export async function createDeploymentHistory(args: {
   status: string
   startedAt: Date
 }) {
-  const row = await db
-    .insertInto('deployment_history')
-    .values({
-      projectId: args.projectId,
-      name: args.name,
-      previewUrl: args.previewUrl,
-      status: args.status,
-      startedAt: args.startedAt,
-    })
-    .returning(['id'])
-    .executeTakeFirstOrThrow()
-
+  const row = await db.insertInto('deployment_history').values(args).returning(['id']).executeTakeFirstOrThrow()
   return { id: row.id as string }
 }
 
-export async function updateDeploymentHistory(
-  deploymentHistoryId: string,
-  data: { status: string; deployedAt?: Date; error?: string },
-) {
-  await db
-    .updateTable('deployment_history')
-    .set({
-      status: data.status,
-      ...(data.deployedAt ? { deployedAt: data.deployedAt } : {}),
-      ...(data.error ? { error: data.error } : {}),
-    })
-    .where('id', '=', deploymentHistoryId)
-    .execute()
+export async function updateDeploymentHistory(id: string, data: { status: string; deployedAt?: Date; error?: string }) {
+  await db.updateTable('deployment_history').set(data).where('id', '=', id).execute()
 }

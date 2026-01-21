@@ -3,6 +3,12 @@ export interface Database {
   session: SessionTable
   account: AccountTable
   verification: VerificationTable
+  organization: OrganizationTable
+  member: MemberTable
+  organizationRole: OrganizationRoleTable
+  team: TeamTable
+  teamMember: TeamMemberTable
+  invitation: InvitationTable
   apikey: ApiKeyTable
   billing: BillingTable
   subscription: SubscriptionTable
@@ -35,6 +41,8 @@ export interface SessionTable {
   expiresAt: Date
   ipAddress: string | null
   userAgent: string | null
+  activeOrganizationId: string | null
+  activeTeamId: string | null
   createdAt?: Date
   updatedAt: Date
 }
@@ -64,6 +72,60 @@ export interface VerificationTable {
   updatedAt?: Date
 }
 
+export interface OrganizationTable {
+  id: string
+  name: string
+  slug: string
+  logo: string | null
+  metadata: any | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface MemberTable {
+  id: string
+  userId: string
+  organizationId: string
+  role: string
+  createdAt?: Date
+}
+
+export interface InvitationTable {
+  id: string
+  email: string
+  inviterId: string
+  organizationId: string
+  teamId: string | null
+  role: string
+  status: string
+  createdAt?: Date
+  expiresAt: Date
+}
+
+export interface OrganizationRoleTable {
+  id: string
+  organizationId: string
+  role: string
+  permission: string
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface TeamTable {
+  id: string
+  name: string
+  organizationId: string
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface TeamMemberTable {
+  id: string
+  teamId: string
+  userId: string
+  createdAt?: Date
+}
+
 export interface ApiKeyTable {
   id: string
   name: string | null
@@ -72,6 +134,7 @@ export interface ApiKeyTable {
   key: string
   userId: string
   projectId: string | null
+  organizationId: string | null
   refillInterval: number | null
   refillAmount: number | null
   lastRefillAt: Date | null
@@ -91,7 +154,7 @@ export interface ApiKeyTable {
 
 export interface BillingTable {
   id: string
-  projectId: string
+  organizationId: string
   customerId: string | null
   paymentMethodId: string | null
   paymentMethodType: string | null
@@ -117,7 +180,7 @@ export interface BillingTable {
 
 export interface SubscriptionTable {
   id: string
-  projectId: string
+  organizationId: string
   userId: string
   rollingUsage: string | null
   fixedUsage: string | null
@@ -131,6 +194,7 @@ export interface SubscriptionTable {
 export interface PaymentTable {
   id: string
   projectId: string
+  organizationId: string
   customerId: string | null
   invoiceId: string | null
   paymentId: string | null
@@ -197,6 +261,7 @@ export interface IpRateLimitTable {
 export interface ProjectTable {
   id: string | null
   userId: string
+  organizationId: string
   name: string
   github: any | null
   settings: any | null
