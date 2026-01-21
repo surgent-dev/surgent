@@ -24,7 +24,7 @@
           buildInputs = with pkgs; [
             # Primary runtimes
             bun
-            nodejs_20
+            nodejs_25
             typescript
 
             # Build tools

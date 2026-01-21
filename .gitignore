@@ -81,3 +81,6 @@ target
 # Local dev files
 opencode-dev
 logs/
+
+# plans
+docs/plans
