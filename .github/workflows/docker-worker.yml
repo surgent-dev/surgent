@@ -15,18 +15,6 @@ on:
       - bun.lock
       - bunfig.toml
       - .github/workflows/docker-worker.yml
-  pull_request:
-    branches:
-      - main
-    paths:
-      - apps/worker/**
-      - apps/worker/Dockerfile
-      - packages/db/**
-      - packages/typescript-config/**
-      - package.json
-      - bun.lock
-      - bunfig.toml
-      - .github/workflows/docker-worker.yml
 
 permissions:
   contents: read
