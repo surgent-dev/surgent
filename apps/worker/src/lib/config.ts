@@ -76,7 +76,8 @@ export const config = {
     platformFeeFixed: env.PLATFORM_FEE_FIXED,
   },
   surpay: {
-    apiKey: env.SURPAY_API_KEY,
+    masterKey: env.SURPAY_MASTER_KEY,
+    baseUrl: env.SURPAY_BASE_URL ?? 'http://localhost:8090',
   },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',

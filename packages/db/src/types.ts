@@ -13,6 +13,7 @@ export interface Database {
   whop_webhook_events: WhopWebhookEventsTable
   github_installations: GitHubInstallationsTable
   deployment_history: DeploymentHistoryTable
+  surpay_organizations: SurpayOrganizationsTable
 }
 
 export interface UserTable {
@@ -70,6 +71,7 @@ export interface ProjectTable {
   deployment: any | null
   sandbox: any | null
   metadata: any | null
+  surpayProjectId: string | null
   createdAt?: Date
   updatedAt?: Date
 }
@@ -188,4 +190,13 @@ export interface DeploymentHistoryTable {
   startedAt: Date
   deployedAt: Date | null
   createdAt?: Date
+}
+
+export interface SurpayOrganizationsTable {
+  id: string | null
+  userId: string
+  surpayOrgId: string
+  apiKey: string
+  createdAt?: Date
+  updatedAt?: Date
 }
