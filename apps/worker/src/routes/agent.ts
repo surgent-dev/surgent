@@ -18,7 +18,7 @@ async function getDaytonaPreview(sandboxId: string, port: number): Promise<Previ
     new Configuration({
       basePath: config.daytona.serverUrl || 'https://app.daytona.io/api',
       baseOptions: { headers: { Authorization: `Bearer ${config.daytona.apiKey}` } },
-    })
+    }),
   )
   const { data } = await api.getPortPreviewUrl(sandboxId, port)
 
@@ -62,12 +62,18 @@ agent.all('/:id/*', requireAuth, async (c) => {
 
   const project = await db
     .selectFrom('project')
-    .select(['sandbox', 'userId'])
+    .select(['sandbox', 'organizationId'])
     .where('id', '=', projectId)
     .executeTakeFirst()
 
   if (!project) return c.json({ error: 'Project not found' }, 404)
-  if (project.userId !== c.get('user')?.id) return c.json({ error: 'Forbidden' }, 403)
+  const membership = await db
+    .selectFrom('member')
+    .select('id')
+    .where('organizationId', '=', project.organizationId)
+    .where('userId', '=', c.get('user')!.id)
+    .executeTakeFirst()
+  if (!membership) return c.json({ error: 'Forbidden' }, 403)
 
   const sandbox = project.sandbox as { id?: string; provider?: string } | null
   if (!sandbox?.id) return c.json({ error: 'Sandbox not found' }, 400)
@@ -86,7 +92,7 @@ agent.all('/:id/*', requireAuth, async (c) => {
         headers,
         body: c.req.raw.body,
         signal: c.req.raw.signal,
-      })
+      }),
     )
 
     const path = reqUrl.pathname.replace(`/api/agent/${projectId}`, '')

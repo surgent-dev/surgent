@@ -8,10 +8,11 @@ import stripJsonComments from 'strip-json-comments'
 import * as ProjectService from '@/services/projects'
 import { buildDeploymentConfig, parseWranglerConfig, deployToDispatch } from '@/apis/deployer/deploy'
 import { auth } from '@/lib/auth'
+import { db } from '@/lib/db'
 import { WorkerDeployer } from '@/apis/deployer/deployer'
 import Cloudflare from 'cloudflare'
 
-const MAX_PROJECTS_PER_USER = 2
+const MAX_PROJECTS_PER_ORG = 2
 
 const DEFAULT_WORKER = `export default { 
   async fetch(request, env) { 
@@ -41,6 +42,7 @@ export class HttpError extends Error {
 export interface InitializeProjectArgs {
   githubUrl: string
   userId: string
+  organizationId: string
   name?: string
   initConvex?: boolean
   headers?: Headers
@@ -388,14 +390,15 @@ export async function initializeProject(
   args: InitializeProjectArgs,
 ): Promise<{ projectId: string; sandboxId: string; previewUrl: string }> {
   console.log('[init] starting...', { userId: args.userId, githubUrl: args.githubUrl })
-  const projectCount = await ProjectService.countProjectsByUserId(args.userId)
+  const projectCount = await ProjectService.countProjectsByOrganizationId(args.organizationId)
   console.log('[init] project count:', projectCount)
-  if (projectCount >= MAX_PROJECTS_PER_USER) {
-    throw new HttpError(400, `Project limit reached. Maximum ${MAX_PROJECTS_PER_USER} projects per user.`)
+  if (projectCount >= MAX_PROJECTS_PER_ORG) {
+    throw new HttpError(400, `Project limit reached. Maximum ${MAX_PROJECTS_PER_ORG} projects per organization.`)
   }
 
   const created = await ProjectService.createProject({
     userId: args.userId,
+    organizationId: args.organizationId,
     name: args.name || 'app',
     githubUrl: args.githubUrl,
   })
@@ -406,6 +409,16 @@ export async function initializeProject(
     body: { name: `p-${projectId.slice(0, 8)}` },
     headers: args.headers,
   })
+
+  const apiKeyUpdate = await db
+    .updateTable('apikey')
+    .set({ projectId, organizationId: args.organizationId })
+    .where('id', '=', apiKeyResult.id)
+    .executeTakeFirst()
+
+  if (!apiKeyUpdate || apiKeyUpdate.numUpdatedRows === 0n) {
+    throw new Error('Failed to attach API key to project')
+  }
 
   console.log('[init] creating sandbox...')
   const { sandbox, previewUrl } = await getOrCreateSandbox({

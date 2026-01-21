@@ -33,12 +33,25 @@ projects.use('*', async (c, next) => {
 
 // Helper to fetch project and verify ownership
 async function getOwnedProject(id: string, userId: string) {
-  const project = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
+  const row = await db
+    .selectFrom('project')
+    .leftJoin('member', (join) =>
+      join.onRef('member.organizationId', '=', 'project.organizationId').on('member.userId', '=', userId),
+    )
+    .selectAll('project')
+    .select('member.id as memberId')
+    .where('project.id', '=', id)
+    .executeTakeFirst()
 
-  if (!project) return { error: 'Project not found', status: 404 as const }
-  if (project.userId !== userId) return { error: 'Forbidden', status: 403 as const }
+  if (!row) return { error: 'Project not found', status: 404 as const }
+  if (!row.memberId) return { error: 'Forbidden', status: 403 as const }
 
+  const { memberId: _memberId, ...project } = row
   return { project }
+}
+
+async function getProject(id: string, userId: string) {
+  return getOwnedProject(id, userId)
 }
 
 function sanitizeDeployName(input: string): string {
@@ -54,11 +67,16 @@ function sanitizeDeployName(input: string): string {
 
 // GET /projects - List all projects for user
 projects.get('/', requireAuth, async (c) => {
+  const organizationId = c.get('session')?.activeOrganizationId
+  if (!organizationId) return c.json({ error: 'No active organization' }, 400)
+
   const rows = await db
     .selectFrom('project')
-    .selectAll()
-    .where('userId', '=', c.get('user')!.id)
-    .orderBy('createdAt', 'desc')
+    .innerJoin('member', 'member.organizationId', 'project.organizationId')
+    .selectAll('project')
+    .where('member.userId', '=', c.get('user')!.id)
+    .where('project.organizationId', '=', organizationId)
+    .orderBy('project.createdAt', 'desc')
     .execute()
   return c.json(rows)
 })
@@ -66,11 +84,9 @@ projects.get('/', requireAuth, async (c) => {
 // GET /projects/:id - Get single project
 projects.get('/:id', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
-
-  if (!row) return c.json({ error: 'Project not found' }, 404)
-  if (row.userId !== c.get('user')!.id) return c.json({ error: 'Forbidden' }, 403)
-  return c.json(row)
+  const result = await getProject(id, c.get('user')!.id)
+  if ('error' in result) return c.json({ error: result.error }, result.status)
+  return c.json(result.project)
 })
 
 // PATCH /projects/:id - Rename project
@@ -82,7 +98,7 @@ projects.patch(
     const { id } = c.req.valid('param')
     const { name } = c.req.valid('json')
 
-    const result = await getOwnedProject(id, c.get('user')!.id)
+    const result = await getProject(id, c.get('user')!.id)
     if ('error' in result) {
       return c.json({ error: result.error }, result.status)
     }
@@ -97,7 +113,7 @@ projects.patch(
 projects.delete('/:id', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
 
-  const result = await getOwnedProject(id, c.get('user')!.id)
+  const result = await getProject(id, c.get('user')!.id)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -124,10 +140,25 @@ projects.post(
   async (c) => {
     try {
       const { githubUrl, name, initConvex } = c.req.valid('json')
+      const userId = c.get('user')!.id
+      const organizationId = c.get('session')?.activeOrganizationId
+      if (!organizationId) return c.json({ error: 'No active organization' }, 400)
+
+      const member = await db
+        .selectFrom('member')
+        .select('id')
+        .where('userId', '=', userId)
+        .where('organizationId', '=', organizationId)
+        .executeTakeFirst()
+
+      if (!member) {
+        return c.json({ error: 'Forbidden' }, 403)
+      }
 
       const result = await initializeProject({
         githubUrl,
-        userId: c.get('user')!.id,
+        userId,
+        organizationId,
         name,
         initConvex,
         headers: c.req.raw.headers,
@@ -161,9 +192,9 @@ projects.post(
         deployName,
       })
 
-      const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
-      if (!row) return c.json({ error: 'Project not found' }, 404)
-      if (row.userId !== c.get('user')!.id) return c.json({ error: 'Forbidden' }, 403)
+      const result = await getProject(id, c.get('user')!.id)
+      if ('error' in result) return c.json({ error: result.error }, result.status)
+      const row = result.project
 
       const name = deployName ? sanitizeDeployName(deployName) : undefined
       const previewUrl = name ? `https://${name}.surgent.site` : undefined
@@ -205,7 +236,7 @@ projects.post(
 // GET /projects/:id/deployments - Get deployment history for a project
 projects.get('/:id/deployments', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getOwnedProject(id, c.get('user')!.id)
+  const result = await getProject(id, c.get('user')!.id)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -230,9 +261,9 @@ projects.post('/:id/undeploy', zValidator('param', idParam), async (c) => {
       userId: c.get('user')?.id,
     })
 
-    const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
-    if (!row) return c.json({ error: 'Project not found' }, 404)
-    if (row.userId !== c.get('user')!.id) return c.json({ error: 'Forbidden' }, 403)
+    const result = await getProject(id, c.get('user')!.id)
+    if ('error' in result) return c.json({ error: result.error }, result.status)
+    const row = result.project
 
     undeployProject({ projectId: id }).catch((err) => {
       console.error('[undeploy] background failed', {
@@ -255,7 +286,7 @@ projects.post('/:id/undeploy', zValidator('param', idParam), async (c) => {
 // GET /projects/:id/cloudflare-deployments - Get recent Cloudflare deployments
 projects.get('/:id/cloudflare-deployments', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getOwnedProject(id, c.get('user')!.id)
+  const result = await getProject(id, c.get('user')!.id)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -283,7 +314,7 @@ projects.post(
   async (c) => {
     const { id } = c.req.valid('param')
     const { versionId } = c.req.valid('json')
-    const result = await getOwnedProject(id, c.get('user')!.id)
+    const result = await getProject(id, c.get('user')!.id)
     if ('error' in result) {
       return c.json({ error: result.error }, result.status)
     }
@@ -320,9 +351,9 @@ projects.post(
         name,
       })
 
-      const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
-      if (!row) return c.json({ error: 'Project not found' }, 404)
-      if (row.userId !== c.get('user')!.id) return c.json({ error: 'Forbidden' }, 403)
+      const result = await getProject(id, c.get('user')!.id)
+      if ('error' in result) return c.json({ error: result.error }, result.status)
+      const row = result.project
 
       const sanitized = sanitizeDeployName(name)
       const previewUrl = `https://${sanitized}.surgent.site`
@@ -359,9 +390,9 @@ projects.post(
 // POST /projects/:id/activate - Resume project sandbox (alias)
 projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
-  if (!row) return c.json({ error: 'Project not found' }, 404)
-  if (row.userId !== c.get('user')!.id) return c.json({ error: 'Forbidden' }, 403)
+  const result = await getProject(id, c.get('user')!.id)
+  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const row = result.project
 
   const sandboxId = row.sandbox?.id
   if (!sandboxId) return c.json({ error: 'Sandbox not found' }, 400)
@@ -374,7 +405,7 @@ projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
 // GET /projects/:id/logs - Get PM2 logs from sandbox
 projects.get('/:id/logs', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getOwnedProject(id, c.get('user')!.id)
+  const result = await getProject(id, c.get('user')!.id)
   if ('error' in result) return c.json({ error: result.error }, result.status)
 
   try {
@@ -390,9 +421,9 @@ projects.get('/:id/logs', zValidator('param', idParam), async (c) => {
 // GET /projects/:id/health - Check if sandbox preview is reachable
 projects.get('/:id/health', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
-  if (!row) return c.json({ status: 'not_found' }, 404)
-  if (row.userId !== c.get('user')!.id) return c.json({ status: 'forbidden' }, 403)
+  const result = await getProject(id, c.get('user')!.id)
+  if ('error' in result) return c.json({ status: result.status === 404 ? 'not_found' : 'forbidden' }, result.status)
+  const row = result.project
 
   const previewUrl = row.sandbox?.previewUrl
   if (!previewUrl) return c.json({ status: 'no_sandbox' })
@@ -412,7 +443,7 @@ projects.get('/:id/health', zValidator('param', idParam), async (c) => {
 projects.get('/:id/download', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
 
-  const result = await getOwnedProject(id, c.get('user')!.id)
+  const result = await getProject(id, c.get('user')!.id)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -438,9 +469,8 @@ projects.get('/:id/download', zValidator('param', idParam), async (c) => {
 // Convex prod deploy (promote)
 projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
-  if (!row) return c.json({ error: 'Project not found' }, 404)
-  if (row.userId !== c.get('user')!.id) return c.json({ error: 'Forbidden' }, 403)
+  const result = await getProject(id, c.get('user')!.id)
+  if ('error' in result) return c.json({ error: result.error }, result.status)
 
   await deployConvexProd({ projectId: id })
   return c.json({ deployed: true })
@@ -449,9 +479,9 @@ projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c)
 // GET /projects/:id/convex/env - List all environment variables
 projects.get('/:id/convex/env', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
-  if (!row) return c.json({ error: 'Project not found' }, 404)
-  if (row.userId !== c.get('user')!.id) return c.json({ error: 'Forbidden' }, 403)
+  const result = await getProject(id, c.get('user')!.id)
+  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const row = result.project
 
   const convex = (row.metadata as any)?.convex
   if (!convex?.deploymentUrl || !convex?.deployKey) {
@@ -471,9 +501,9 @@ projects.post(
     const { id } = c.req.valid('param')
     const { vars } = c.req.valid('json')
 
-    const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
-    if (!row) return c.json({ error: 'Project not found' }, 404)
-    if (row.userId !== c.get('user')!.id) return c.json({ error: 'Forbidden' }, 403)
+    const result = await getProject(id, c.get('user')!.id)
+    if ('error' in result) return c.json({ error: result.error }, result.status)
+    const row = result.project
 
     const convex = (row.metadata as any)?.convex
     if (!convex?.deploymentUrl || !convex?.deployKey) {
@@ -488,9 +518,9 @@ projects.post(
 // GET /projects/:id/convex/dashboard - Get dashboard embed credentials
 projects.get('/:id/convex/dashboard', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const row = await db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
-  if (!row) return c.json({ error: 'Project not found' }, 404)
-  if (row.userId !== c.get('user')!.id) return c.json({ error: 'Forbidden' }, 403)
+  const result = await getProject(id, c.get('user')!.id)
+  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const row = result.project
 
   const convex = (row.metadata as any)?.convex
   if (!convex?.deploymentName || !convex?.deploymentUrl || !convex?.deployKey) {
@@ -524,7 +554,7 @@ projects.get('/:id/github/status', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getOwnedProject(id, userId)
+  const result = await getProject(id, userId)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -583,7 +613,7 @@ projects.get('/:id/github/install-url', zValidator('param', idParam), async (c) 
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getOwnedProject(id, userId)
+  const result = await getProject(id, userId)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -602,7 +632,7 @@ projects.get('/:id/github/repos', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getOwnedProject(id, userId)
+  const result = await getProject(id, userId)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -649,7 +679,7 @@ projects.post(
     const { owner, repo, repoId, defaultBranch } = c.req.valid('json')
     const userId = c.get('user')!.id
 
-    const result = await getOwnedProject(id, userId)
+    const result = await getProject(id, userId)
     if ('error' in result) {
       return c.json({ error: result.error }, result.status)
     }
@@ -683,7 +713,7 @@ projects.post('/:id/github/disconnect', zValidator('param', idParam), async (c) 
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getOwnedProject(id, userId)
+  const result = await getProject(id, userId)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -715,7 +745,7 @@ projects.post(
     const { name, description, private: isPrivate, installationId } = c.req.valid('json')
     const userId = c.get('user')!.id
 
-    const result = await getOwnedProject(id, userId)
+    const result = await getProject(id, userId)
     if ('error' in result) {
       return c.json({ error: result.error }, result.status)
     }
@@ -820,7 +850,7 @@ projects.post('/:id/github/push', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getOwnedProject(id, userId)
+  const result = await getProject(id, userId)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
