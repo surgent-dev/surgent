@@ -18,6 +18,10 @@ export const config = {
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
   },
+  stripe: {
+    secretKey: env.STRIPE_SECRET_KEY,
+    webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+  },
   sandbox: {
     provider: (env.SANDBOX_PROVIDER || 'e2b') as 'e2b' | 'daytona',
     defaultPort: '3000',
@@ -67,13 +71,6 @@ export const config = {
   },
   vercel: {
     apiKey: env.VERCEL_API_KEY,
-  },
-  whop: {
-    apiKey: env.WHOP_API_KEY,
-    webhookSecret: env.WHOP_WEBHOOK_SECRET,
-    platformCompanyId: env.PLATFORM_COMPANY_ID,
-    platformFeeBps: env.PLATFORM_FEE_BPS,
-    platformFeeFixed: env.PLATFORM_FEE_FIXED,
   },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',

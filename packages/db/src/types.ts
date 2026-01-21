@@ -3,14 +3,17 @@ export interface Database {
   session: SessionTable
   account: AccountTable
   verification: VerificationTable
+  apikey: ApiKeyTable
+  billing: BillingTable
+  subscription: SubscriptionTable
+  payment: PaymentTable
+  usage: UsageTable
+  provider: ProviderTable
+  model: ModelTable
+  ip: IpTable
+  ip_rate_limit: IpRateLimitTable
   project: ProjectTable
   chats: ChatsTable
-  merchants: MerchantsTable
-  products: ProductsTable
-  product_prices: ProductPricesTable
-  orders: OrdersTable
-  whop_transfers: WhopTransfersTable
-  whop_webhook_events: WhopWebhookEventsTable
   github_installations: GitHubInstallationsTable
   deployment_history: DeploymentHistoryTable
 }
@@ -61,6 +64,136 @@ export interface VerificationTable {
   updatedAt?: Date
 }
 
+export interface ApiKeyTable {
+  id: string
+  name: string | null
+  start: string | null
+  prefix: string | null
+  key: string
+  userId: string
+  projectId: string | null
+  refillInterval: number | null
+  refillAmount: number | null
+  lastRefillAt: Date | null
+  enabled: boolean
+  rateLimitEnabled: boolean
+  rateLimitTimeWindow: number | null
+  rateLimitMax: number | null
+  requestCount: number
+  remaining: number | null
+  lastRequest: Date | null
+  expiresAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+  permissions: string | null
+  metadata: any | null
+}
+
+export interface BillingTable {
+  id: string
+  projectId: string
+  customerId: string | null
+  paymentMethodId: string | null
+  paymentMethodType: string | null
+  paymentMethodLast4: string | null
+  balance: string
+  monthlyLimit: number | null
+  monthlyUsage: string | null
+  timeMonthlyUsageUpdated: Date | null
+  reload: boolean | null
+  reloadTrigger: number | null
+  reloadAmount: number | null
+  reloadError: string | null
+  timeReloadError: Date | null
+  timeReloadLockedTill: Date | null
+  subscription: any | null
+  subscriptionId: string | null
+  subscriptionPlan: string | null
+  timeSubscriptionBooked: Date | null
+  createdAt?: Date
+  updatedAt?: Date
+  deletedAt: Date | null
+}
+
+export interface SubscriptionTable {
+  id: string
+  projectId: string
+  userId: string
+  rollingUsage: string | null
+  fixedUsage: string | null
+  timeRollingUpdated: Date | null
+  timeFixedUpdated: Date | null
+  createdAt?: Date
+  updatedAt?: Date
+  deletedAt: Date | null
+}
+
+export interface PaymentTable {
+  id: string
+  projectId: string
+  customerId: string | null
+  invoiceId: string | null
+  paymentId: string | null
+  amount: string
+  timeRefunded: Date | null
+  enrichment: any | null
+  createdAt?: Date
+  updatedAt?: Date
+  deletedAt: Date | null
+}
+
+export interface UsageTable {
+  id: string
+  projectId: string
+  model: string
+  provider: string
+  inputTokens: number
+  outputTokens: number
+  reasoningTokens: number | null
+  cacheReadTokens: number | null
+  cacheWrite5mTokens: number | null
+  cacheWrite1hTokens: number | null
+  cost: string
+  keyId: string | null
+  enrichment: any | null
+  createdAt?: Date
+  updatedAt?: Date
+  deletedAt: Date | null
+}
+
+export interface ProviderTable {
+  id: string
+  projectId: string
+  provider: string
+  credentials: string
+  createdAt?: Date
+  updatedAt?: Date
+  deletedAt: Date | null
+}
+
+export interface ModelTable {
+  id: string
+  projectId: string
+  model: string
+  createdAt?: Date
+  updatedAt?: Date
+  deletedAt: Date | null
+}
+
+export interface IpTable {
+  ip: string
+  usage: number | null
+  createdAt?: Date
+  updatedAt?: Date
+  deletedAt: Date | null
+}
+
+export interface IpRateLimitTable {
+  ip: string
+  interval: string
+  count: number
+}
+
 export interface ProjectTable {
   id: string | null
   userId: string
@@ -83,85 +216,6 @@ export interface ChatsTable {
   stats: any | null
   createdAt?: Date
   updatedAt?: Date
-}
-
-export interface MerchantsTable {
-  id: string
-  email: string | null
-  name: string
-  whopCompanyId: string | null
-  metadata: any | null
-  createdAt?: Date
-  updatedAt?: Date
-}
-
-export interface ProductsTable {
-  id: string | null
-  merchantId: string
-  title: string
-  slug: string
-  projectId: string
-  description: string | null
-  status: string
-  metadata: any | null
-  createdAt?: Date
-  updatedAt?: Date
-}
-
-export interface ProductPricesTable {
-  id: string | null
-  productId: string
-  code: string
-  amount: number
-  currency: string
-  active: boolean
-  metadata: any | null
-  createdAt?: Date
-  updatedAt?: Date
-}
-
-export interface OrdersTable {
-  id: string | null
-  merchantId: string
-  customerId: string
-  productId: string
-  priceId: string
-  amount: number
-  currency: string
-  status: string
-  whopPaymentId: string | null
-  whopPaymentStatus: string | null
-  metadata: any | null
-  createdAt?: Date
-  updatedAt?: Date
-}
-
-export interface WhopTransfersTable {
-  id: string | null
-  orderId: string
-  whopTransferId: string | null
-  idempotencyKey: string
-  originWhopCompanyId: string
-  destinationWhopCompanyId: string
-  amount: number
-  currency: string
-  status: string
-  raw: any | null
-  createdAt?: Date
-  updatedAt?: Date
-}
-
-export interface WhopWebhookEventsTable {
-  id: string | null
-  webhookId: string
-  type: string
-  whopCompanyId: string | null
-  payload: any
-  receivedAt?: Date
-  processedAt: Date | null
-  status: string
-  attempts: number
-  error: string | null
 }
 
 export interface GitHubInstallationsTable {
