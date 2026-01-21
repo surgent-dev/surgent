@@ -4,7 +4,18 @@
   "describe": {
     "columns": [],
     "parameters": {
-      "Left": ["Uuid", "Int8", "Varchar", "Text", "Uuid", "Uuid", "Uuid", "Uuid", "Uuid", "Text"]
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Varchar",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
     },
     "nullable": []
   },

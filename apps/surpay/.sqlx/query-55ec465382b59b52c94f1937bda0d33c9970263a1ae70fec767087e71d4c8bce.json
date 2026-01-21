@@ -15,7 +15,12 @@
           "Custom": {
             "name": "recurring_interval",
             "kind": {
-              "Enum": ["day", "week", "month", "year"]
+              "Enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
             }
           }
         },

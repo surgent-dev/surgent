@@ -7,21 +7,24 @@ import upload from './routes/upload'
 import github from './routes/github'
 import mcp from './routes/mcp'
 import admin from './routes/admin'
+import surpay from './routes/surpay'
 import { auth } from './lib/auth'
 import { config } from './lib/config'
+import { db } from './lib/db'
+import { migrate } from '@repo/db'
 import type { AppContext } from '@/types/application'
 
 function isPreviewSubdomain(sub: string): boolean {
-  return sub.startsWith("preview-") || /^\d+-/.test(sub)
+  return sub.startsWith('preview-') || /^\d+-/.test(sub)
 }
 
 const app = new Hono<AppContext>({
   getPath: (req) => {
     const url = new URL(req.url)
     const path = url.pathname
-    const [subdomain] = url.hostname.split(".")
+    const [subdomain] = url.hostname.split('.')
 
-    if (path.startsWith("/server") || path.startsWith("/preview")) {
+    if (path.startsWith('/server') || path.startsWith('/preview')) {
       return path
     }
 
@@ -34,7 +37,7 @@ const app = new Hono<AppContext>({
 })
 
 app.use(
-  "*",
+  '*',
   cors({
     origin: (origin) => {
       if (origin && config.server.trustedOrigins.includes(origin)) {
@@ -42,18 +45,18 @@ app.use(
       }
       return null
     },
-    allowMethods: ["GET", "HEAD", "PUT", "POST", "DELETE", "PATCH", "OPTIONS"],
-    exposeHeaders: ["Content-Length", "Content-Disposition"],
+    allowMethods: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'PATCH', 'OPTIONS'],
+    exposeHeaders: ['Content-Length', 'Content-Disposition'],
     maxAge: 600,
     credentials: true,
   }),
 )
 
 // Ensure CORS headers are present even if downstream returns a raw Response (e.g. Better Auth)
-app.use("*", async (c, next) => {
+app.use('*', async (c, next) => {
   await next()
 
-  const origin = c.req.header("origin")
+  const origin = c.req.header('origin')
   if (!origin) {
     return
   }
@@ -61,59 +64,82 @@ app.use("*", async (c, next) => {
     return
   }
 
-  c.res.headers.set("Access-Control-Allow-Origin", origin)
-  c.res.headers.set("Access-Control-Allow-Credentials", "true")
-  c.res.headers.set("Access-Control-Expose-Headers", "Content-Length, Content-Disposition")
-  c.header("Vary", "Origin", { append: true })
+  c.res.headers.set('Access-Control-Allow-Origin', origin)
+  c.res.headers.set('Access-Control-Allow-Credentials', 'true')
+  c.res.headers.set('Access-Control-Expose-Headers', 'Content-Length, Content-Disposition')
+  c.header('Vary', 'Origin', { append: true })
 })
 
 // Better Auth handler
-app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw))
+app.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw))
 
 // Session middleware
-app.use("*", async (c, next) => {
+app.use('*', async (c, next) => {
   const session = await auth.api.getSession({ headers: c.req.raw.headers })
 
   if (session) {
-    c.set("user", session.user)
-    c.set("session", session.session)
+    c.set('user', session.user)
+    c.set('session', session.session)
   } else {
-    c.set("user", null)
-    c.set("session", null)
+    c.set('user', null)
+    c.set('session', null)
   }
 
   return next()
 })
 
-app.get("/health", (c) => c.text("ok"))
+app.get('/health', (c) => c.text('ok'))
 
-app.get("/api/session", (c) => {
-  const user = c.get("user")
-  const session = c.get("session")
+app.get('/api/session', (c) => {
+  const user = c.get('user')
+  const session = c.get('session')
 
   if (!user) {
-    return c.json({ error: "Unauthorized" }, 401)
+    return c.json({ error: 'Unauthorized' }, 401)
   }
 
   return c.json({ session, user })
 })
 
 // Routes
-app.route("/api/projects", projects)
-app.route("/api/agent", agent)
-app.route("/api/upload", upload)
-app.route("/api/github", github)
-app.route("/api/mcp", mcp)
-app.route("/api/admin", admin)
-app.route("/mcp", mcp)
-app.route("/preview", preview)
+app.route('/api/projects', projects)
+app.route('/api/agent', agent)
+app.route('/api/upload', upload)
+app.route('/api/github', github)
+app.route('/api/mcp', mcp)
+app.route('/api/admin', admin)
+app.route('/api/surpay', surpay)
+app.route('/mcp', mcp)
+app.route('/preview', preview)
 
 // Start server
 const port = Number(config.server.port)
 
-Bun.serve({
-  port,
-  fetch: (req) => app.fetch(req),
-})
+;(async () => {
+  console.log('🔄 Running migrations...')
+  const result = await migrate(db)
+  const { error, results } = result
 
-console.log(`[worker] listening on http://localhost:${port}`)
+  results?.forEach((it) => {
+    if (it.status === 'Success') {
+      console.log(`✅ Migration "${it.migrationName}" was executed successfully`)
+    } else if (it.status === 'Error') {
+      console.error(`❌ Failed to execute migration "${it.migrationName}"`)
+    }
+  })
+
+  if (error) {
+    console.error('💥 Failed to run migrations on startup')
+    console.error(error)
+    process.exit(1)
+  }
+
+  console.log('🎉 Migrations completed successfully')
+
+  Bun.serve({
+    port,
+    fetch: (req) => app.fetch(req),
+  })
+
+  console.log(`[worker] listening on http://localhost:${port}`)
+})()

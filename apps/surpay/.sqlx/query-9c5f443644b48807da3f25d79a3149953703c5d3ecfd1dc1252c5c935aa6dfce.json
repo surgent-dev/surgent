@@ -15,7 +15,11 @@
           "Custom": {
             "name": "checkout_status",
             "kind": {
-              "Enum": ["open", "complete", "expired"]
+              "Enum": [
+                "open",
+                "complete",
+                "expired"
+              ]
             }
           }
         },

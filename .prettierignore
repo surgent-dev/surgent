@@ -6,3 +6,4 @@ sst-env.d.ts
 **/build/**
 **/coverage/**
 **/node_modules/**
+**/.sqlx/**

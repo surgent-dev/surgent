@@ -75,16 +75,41 @@
           "Custom": {
             "name": "subscription_status",
             "kind": {
-              "Enum": ["active", "past_due", "canceled", "unpaid", "trialing", "incomplete", "incomplete_expired"]
+              "Enum": [
+                "active",
+                "past_due",
+                "canceled",
+                "unpaid",
+                "trialing",
+                "incomplete",
+                "incomplete_expired"
+              ]
             }
           }
         }
       }
     ],
     "parameters": {
-      "Left": ["Uuid"]
+      "Left": [
+        "Uuid"
+      ]
     },
-    "nullable": [false, true, true, true, true, true, true, false, true, true, true, true, true, false]
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
   },
   "hash": "a2f93f34829395c2600af239be7380a483bef5205155888b5d997533994eb5f8"
 }

@@ -40,7 +40,12 @@
           "Custom": {
             "name": "recurring_interval",
             "kind": {
-              "Enum": ["day", "week", "month", "year"]
+              "Enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
             }
           }
         }
@@ -52,9 +57,20 @@
       }
     ],
     "parameters": {
-      "Left": ["UuidArray"]
+      "Left": [
+        "UuidArray"
+      ]
     },
-    "nullable": [false, true, true, true, false, false, true, true]
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true
+    ]
   },
   "hash": "a406af5e0e89d22ef1f12b096699ea2a3e514b5c36dd883fa6b52747c4bdc8f4"
 }

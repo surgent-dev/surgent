@@ -10,7 +10,11 @@
           "Custom": {
             "name": "checkout_status",
             "kind": {
-              "Enum": ["open", "complete", "expired"]
+              "Enum": [
+                "open",
+                "complete",
+                "expired"
+              ]
             }
           }
         }
@@ -37,9 +41,17 @@
       }
     ],
     "parameters": {
-      "Left": ["Uuid"]
+      "Left": [
+        "Uuid"
+      ]
     },
-    "nullable": [false, true, true, true, true]
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
   },
   "hash": "d21eaadffaa5e05df4788ab11c3b177be19c0d744eba1235a7e9bad243d505ac"
 }

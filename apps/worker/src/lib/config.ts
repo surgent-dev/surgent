@@ -75,6 +75,9 @@ export const config = {
     platformFeeBps: env.PLATFORM_FEE_BPS,
     platformFeeFixed: env.PLATFORM_FEE_FIXED,
   },
+  surpay: {
+    apiKey: env.SURPAY_API_KEY,
+  },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
     configRepoUrl: env.OPENCODE_CONFIG_REPO_URL || 'https://github.com/surgent-dev/opencode-config.git',

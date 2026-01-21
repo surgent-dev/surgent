@@ -10,7 +10,14 @@
           "Custom": {
             "name": "transaction_type",
             "kind": {
-              "Enum": ["payment", "processor_fee", "refund", "dispute", "balance", "payout"]
+              "Enum": [
+                "payment",
+                "processor_fee",
+                "refund",
+                "dispute",
+                "balance",
+                "payout"
+              ]
             }
           }
         }
@@ -32,9 +39,16 @@
       }
     ],
     "parameters": {
-      "Left": ["Uuid"]
+      "Left": [
+        "Uuid"
+      ]
     },
-    "nullable": [false, false, false, false]
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
   },
   "hash": "3769f5caffeeb963dd7294dbc32d222ad0fbb5e10796918c4686fa1584b98985"
 }

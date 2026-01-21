@@ -20,7 +20,14 @@
           "Custom": {
             "name": "transaction_type",
             "kind": {
-              "Enum": ["payment", "processor_fee", "refund", "dispute", "balance", "payout"]
+              "Enum": [
+                "payment",
+                "processor_fee",
+                "refund",
+                "dispute",
+                "balance",
+                "payout"
+              ]
             }
           }
         }
@@ -182,7 +189,9 @@
       }
     ],
     "parameters": {
-      "Left": ["Uuid"]
+      "Left": [
+        "Uuid"
+      ]
     },
     "nullable": [
       false,

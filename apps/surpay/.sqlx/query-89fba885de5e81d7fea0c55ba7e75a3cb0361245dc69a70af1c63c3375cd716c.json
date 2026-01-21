@@ -12,7 +12,11 @@
           "Custom": {
             "name": "checkout_status",
             "kind": {
-              "Enum": ["open", "complete", "expired"]
+              "Enum": [
+                "open",
+                "complete",
+                "expired"
+              ]
             }
           }
         },
@@ -20,7 +24,11 @@
           "Custom": {
             "name": "checkout_mode",
             "kind": {
-              "Enum": ["payment", "subscription", "setup"]
+              "Enum": [
+                "payment",
+                "subscription",
+                "setup"
+              ]
             }
           }
         },
