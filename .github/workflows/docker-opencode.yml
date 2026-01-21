@@ -15,18 +15,6 @@ on:
       - bun.lock
       - bunfig.toml
       - .github/workflows/docker-opencode.yml
-  pull_request:
-    branches:
-      - main
-    paths:
-      - packages/opencode/**
-      - packages/opencode/Dockerfile
-      - packages/util/**
-      - packages/typescript-config/**
-      - package.json
-      - bun.lock
-      - bunfig.toml
-      - .github/workflows/docker-opencode.yml
 
 permissions:
   contents: read
