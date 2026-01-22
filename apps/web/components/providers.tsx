@@ -1,26 +1,21 @@
-'use client';
+'use client'
 
-import type { ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
-import { AutumnProvider } from 'autumn-js/react';
-import { ThemeProvider } from 'next-themes';
+import type { ReactNode } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useState } from 'react'
+import { ThemeProvider } from 'next-themes'
 
 type ProvidersProps = {
-  children: ReactNode;
-};
+  children: ReactNode
+}
 
 export default function Providers({ children }: ProvidersProps) {
-  const [client] = useState(() => new QueryClient());
+  const [client] = useState(() => new QueryClient())
   return (
     <QueryClientProvider client={client}>
       <ThemeProvider attribute="class" defaultTheme="light">
-        <AutumnProvider betterAuthUrl={process.env.NEXT_PUBLIC_BACKEND_URL!}>
-          {children}
-        </AutumnProvider>
+        {children}
       </ThemeProvider>
     </QueryClientProvider>
-  );
+  )
 }
-
-

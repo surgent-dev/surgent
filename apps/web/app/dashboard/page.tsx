@@ -16,12 +16,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, MoreVertical, Code2, Clock, Activity, CreditCard, Pencil, Trash2, Play } from 'lucide-react'
+import { Plus, MoreVertical, Code2, Clock, Activity, Pencil, Trash2, Play } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useProjectsQuery, useRenameProject, useDeleteProject, useDeployProject } from '@/queries/projects'
 import type { Project } from '@/types/project'
-import { useCustomer } from 'autumn-js/react'
 import DeployDialog from '@/components/deploy-dialog'
 
 // Project type moved to '@/types/project'
@@ -40,7 +39,6 @@ export default function DashboardPage() {
   const rename = useRenameProject()
   const deleteProject = useDeleteProject()
   const deploy = useDeployProject()
-  const { customer } = useCustomer()
 
   const [projectToRename, setProjectToRename] = useState<Project | null>(null)
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
@@ -181,18 +179,8 @@ export default function DashboardPage() {
                 <DropdownMenuLabel className="py-3">
                   <div className="flex flex-col space-y-1">
                     <span className="font-medium text-base">{user?.name || user?.email}</span>
-                    {customer && (
-                      <span className="text-xs rounded-full bg-muted px-2 py-0.5 w-fit text-brand font-semibold mt-1">
-                        {customer.products[0]?.name || 'Free'} Plan
-                      </span>
-                    )}
                   </div>
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push('/pricing')}>
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Billing & Plans
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
               </DropdownMenuContent>
