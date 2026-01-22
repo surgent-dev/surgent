@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE checkout_session SET status = 'expired' WHERE processor_checkout_id = $1 AND status != 'complete'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a7790885d23b3840b99d2cdd25e679210b9d30bda473422975ee6dd848341301"
+}
