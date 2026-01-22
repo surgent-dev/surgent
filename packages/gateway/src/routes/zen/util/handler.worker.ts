@@ -2,7 +2,6 @@ import type { Context } from 'hono'
 import { sql } from 'kysely'
 import type { AppContext } from '../../../types'
 import { getDb } from '../../../db'
-import { centsToMicroCents } from './price'
 import { loadZenData, ZenData } from './zenData'
 import { createLogger } from './logger'
 import { verifyApiKey } from '../../../auth'
@@ -44,6 +43,10 @@ type AuthInfo = {
   userId: string
   provider: ProviderInfo | null
   isDisabled: boolean
+}
+
+function centsToMicroCents(amount: number) {
+  return Math.round(amount * 1_000_000)
 }
 
 export async function handleZenRequest(
@@ -229,9 +232,10 @@ export async function handleZenRequest(
               const value = binaryDecoder ? binaryDecoder(rawValue) : rawValue
               if (!value) return
 
+              const chunk = decoder.decode(value, { stream: true })
               responseLength += value.length
-              buffer += decoder.decode(value, { stream: true })
-              dataDumper?.provideStream(buffer)
+              buffer += chunk
+              dataDumper?.provideStream(chunk)
 
               const parts = buffer.split(providerInfo.streamSeparator)
               buffer = parts.pop() ?? ''

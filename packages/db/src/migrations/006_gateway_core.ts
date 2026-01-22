@@ -21,14 +21,12 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('deletedAt', 'timestamptz')
     .execute()
-
   await db.schema
     .createIndex('usage_project_created_idx')
     .ifNotExists()
     .on('usage')
     .columns(['projectId', 'createdAt'])
     .execute()
-
   await db.schema
     .createTable('provider')
     .ifNotExists()
@@ -40,7 +38,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('deletedAt', 'timestamptz')
     .execute()
-
   await db.schema
     .createIndex('provider_project_provider_uq')
     .ifNotExists()
@@ -48,7 +45,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .columns(['projectId', 'provider'])
     .unique()
     .execute()
-
   await db.schema
     .createTable('model')
     .ifNotExists()
@@ -59,7 +55,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('deletedAt', 'timestamptz')
     .execute()
-
   await db.schema
     .createIndex('model_project_model_uq')
     .ifNotExists()
@@ -67,7 +62,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .columns(['projectId', 'model'])
     .unique()
     .execute()
-
   await db.schema
     .createTable('ip')
     .ifNotExists()
@@ -77,7 +71,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('deletedAt', 'timestamptz')
     .execute()
-
   await db.schema
     .createTable('ip_rate_limit')
     .ifNotExists()
@@ -87,7 +80,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addPrimaryKeyConstraint('ip_rate_limit_pk', ['ip', 'interval'])
     .execute()
 }
-
 export async function down(db: Kysely<any>): Promise<void> {
   await db.schema.dropTable('ip_rate_limit').ifExists().execute()
   await db.schema.dropTable('ip').ifExists().execute()
