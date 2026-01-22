@@ -530,7 +530,7 @@ async fn handle_normalized_event(
                 r#"
                 UPDATE payout
                 SET status = $1::payout_status
-                WHERE processor_payout_id = $2
+                WHERE processor_payout_id = $2 AND status != 'paid'
                 "#,
             )
             .bind("failed")
@@ -555,7 +555,7 @@ async fn handle_normalized_event(
                 r#"
                 UPDATE transfer
                 SET status = 'paid'
-                WHERE processor_transfer_id = $1
+                WHERE processor_transfer_id = $1 AND status != 'reversed'
                 "#,
             )
             .bind(transfer_id)
@@ -630,7 +630,7 @@ async fn handle_checkout_expired(pool: &PgPool, payload: &Value) -> Result<(), S
         .ok_or("Missing session id")?;
 
     sqlx::query!(
-        "UPDATE checkout_session SET status = 'expired' WHERE processor_checkout_id = $1",
+        "UPDATE checkout_session SET status = 'expired' WHERE processor_checkout_id = $1 AND status != 'complete'",
         session_id
     )
     .execute(pool)
@@ -809,7 +809,7 @@ async fn handle_checkout_completed(
         SET customer_id = $1, processor_customer_id = $2, customer_email = $3,
             completed_at = NOW(), status = $4, mode = $5,
             processor_payment_id = $6, processor_subscription_id = $7
-        WHERE id = $8
+        WHERE id = $8 AND status != 'complete'
         "#,
         customer_id,
         data.processor_customer_id,
@@ -1034,7 +1034,7 @@ pub async fn sync_stripe_customer_data(
             )
             ON CONFLICT (processor, processor_subscription_id) DO UPDATE
             SET
-                status = EXCLUDED.status,
+                status = CASE WHEN $12::text = 'canceled' THEN $12 ELSE EXCLUDED.status END,
                 current_period_start = EXCLUDED.current_period_start,
                 current_period_end = EXCLUDED.current_period_end,
                 cancel_at_period_end = EXCLUDED.cancel_at_period_end,
