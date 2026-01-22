@@ -121,6 +121,9 @@ projects.delete('/:id', zValidator('param', idParam), async (c) => {
   // Delete sandbox before removing project
   await deleteSandbox({ projectId: id })
 
+  // Delete apikeys before removing project
+  await db.deleteFrom('apikey').where('projectId', '=', id).execute()
+
   await db.deleteFrom('project').where('id', '=', id).execute()
 
   return c.json({ deleted: true })
