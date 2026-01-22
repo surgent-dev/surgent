@@ -52,6 +52,9 @@
             rust-analyzer
             sqlx-cli
             cargo-nextest
+
+            # Stripe test tools
+            stripe-cli
           ];
 
           env.RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";

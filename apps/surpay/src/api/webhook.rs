@@ -275,6 +275,9 @@ impl WebhookWorker {
                 Ok(messages) => {
                     consecutive_queue_errors = 0;
                     if let Some(msg) = messages.first() {
+                        if let Some(message_id) = msg.message_id() {
+                            tracing::debug!("Received webhook message from queue: {}", message_id);
+                        }
                         if let Err(e) = self.process_message_with_retry(msg.clone()).await {
                             tracing::error!("Error processing webhook message: {}", e);
                         }
@@ -348,6 +351,7 @@ impl WebhookWorker {
         .await
         .map_err(|e| format!("Failed to mark event as processed: {}", e))?;
 
+        tracing::debug!("Successfully processed webhook event {}", payload.event_id);
         let receipt_handle = msg.receipt_handle().ok_or("Missing receipt handle")?;
         self.delete_message(receipt_handle).await;
         Ok(())
