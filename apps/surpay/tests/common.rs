@@ -305,6 +305,11 @@ pub async fn create_test_state(pool: PgPool) -> AppState {
             .unwrap_or_else(|_| "whsec_test_secret".to_string()),
         surpay_base_url: "http://localhost:3000".to_string(),
         cargo_crate_name: "surpay".to_string(),
+        sqs_endpoint_url: std::env::var("SQS_ENDPOINT_URL").ok(),
+        sqs_webhooks_queue_url: std::env::var("SQS_WEBHOOKS_QUEUE_URL")
+            .unwrap_or_else(|_| "http://localhost:9324/queue/webhooks".to_string()),
+        sqs_webhooks_dlq_url: std::env::var("SQS_WEBHOOKS_DLQ_URL")
+            .unwrap_or_else(|_| "http://localhost:9324/queue/webhooks_dlq".to_string()),
     };
 
     // Register Stripe processor
@@ -326,10 +331,13 @@ pub async fn create_test_state(pool: PgPool) -> AppState {
         .await
         .expect("Failed to register Mock Connect processor");
 
+    let sqs_client = surpay::core::sqs::create_client(config.sqs_endpoint_url.as_deref()).await;
+
     AppState {
         pool,
         registry,
         config,
+        sqs_client,
     }
 }
 
@@ -352,6 +360,11 @@ pub async fn create_test_state_real_stripe(pool: PgPool) -> AppState {
             .unwrap_or_else(|_| "whsec_test_secret".to_string()),
         surpay_base_url: "http://localhost:3000".to_string(),
         cargo_crate_name: "surpay".to_string(),
+        sqs_endpoint_url: std::env::var("SQS_ENDPOINT_URL").ok(),
+        sqs_webhooks_queue_url: std::env::var("SQS_WEBHOOKS_QUEUE_URL")
+            .unwrap_or_else(|_| "http://localhost:9324/queue/webhooks".to_string()),
+        sqs_webhooks_dlq_url: std::env::var("SQS_WEBHOOKS_DLQ_URL")
+            .unwrap_or_else(|_| "http://localhost:9324/queue/webhooks_dlq".to_string()),
     };
 
     // Register Stripe processor as BOTH PaymentProcessor AND ConnectProcessor
@@ -370,10 +383,13 @@ pub async fn create_test_state_real_stripe(pool: PgPool) -> AppState {
         .await
         .expect("Failed to register Stripe connect processor");
 
+    let sqs_client = surpay::core::sqs::create_client(config.sqs_endpoint_url.as_deref()).await;
+
     AppState {
         pool,
         registry,
         config,
+        sqs_client,
     }
 }
 

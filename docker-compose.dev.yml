@@ -1,12 +1,9 @@
-# Development Docker Compose - PostgreSQL only
+# Development Docker Compose
 #
 # Usage:
 #   Start:  docker-compose -f docker-compose.dev.yml up -d
 #   Stop:   docker-compose -f docker-compose.dev.yml down
 #   Logs:   docker-compose -f docker-compose.dev.yml logs -f postgres
-#
-# The app runs on your host machine (via `cargo run`) and connects
-# to this PostgreSQL container via localhost:5433.
 #
 # DATABASE_URL for your local development:
 #   postgres://surgent:password@localhost:5433/surgent
@@ -29,9 +26,27 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/18
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U surpay -d surpay']
+      test: ['CMD-SHELL', 'pg_isready -U surgent -d surgent']
       interval: 10s
       timeout: 5s
+      retries: 5
+
+  sqs:
+    image: softwaremill/elasticmq-native:latest
+    container_name: elasticmq
+    ports:
+      - '9324:9324' # SQS-compatible REST endpoint
+      - '9325:9325' # (optional) UI / additional port depending on image
+    environment:
+      # dev environment so listen on all
+      - ELASTICMQ_NODE_ADDRESS=0.0.0.0
+    volumes:
+      - ./elasticmq.conf:/opt/elasticmq.conf:ro
+    command: ['-Dconfig.file=/opt/elasticmq.conf']
+    healthcheck:
+      test: ['CMD-SHELL', 'nc -z localhost 9324 || exit 1']
+      interval: 10s
+      timeout: 2s
       retries: 5
 
 volumes:

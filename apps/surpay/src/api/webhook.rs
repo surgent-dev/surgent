@@ -51,6 +51,7 @@ pub enum WebhookError {
     MissingHeader,
     VerificationFailed,
     MissingEventId,
+    EnqueueFailed,
 }
 
 impl axum::response::IntoResponse for WebhookError {
@@ -63,15 +64,15 @@ impl axum::response::IntoResponse for WebhookError {
             WebhookError::MissingEventId => {
                 (StatusCode::BAD_REQUEST, "Missing event id in payload").into_response()
             }
+            WebhookError::EnqueueFailed => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
+            }
         }
     }
 }
 
-const MAX_RETRIES: i32 = 3;
 const VISIBILITY_TIMEOUT_SECS: i32 = 30;
 const MAX_QUEUE_ERRORS: i32 = 5;
-const WEBHOOKS_QUEUE_NAME: &str = "webhooks";
-const WEBHOOKS_DLQ_NAME: &str = "webhooks_dlq";
 
 // lifetime here is required because it contains 2 borrowed Strings
 // thus they cannot outlive the original objects
@@ -169,7 +170,6 @@ pub async fn webhook_handler(
         WebhookError::MissingEventId
     })?;
 
-    let queue = pgmq::PGMQueue::new_with_pool(state.pool.clone()).await;
     let message = WebhookMessage {
         processor: processor.clone(),
         event_id: event_id.clone(),
@@ -178,13 +178,16 @@ pub async fn webhook_handler(
         received_at: Utc::now(),
     };
 
-    queue
-        .send(WEBHOOKS_QUEUE_NAME, &message)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to enqueue webhook for {}: {}", processor, e);
-            WebhookError::VerificationFailed
-        })?;
+    crate::core::sqs::send_message(
+        &state.sqs_client,
+        &state.config.sqs_webhooks_queue_url,
+        &message,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to enqueue webhook for {}: {}", processor, e);
+        WebhookError::EnqueueFailed
+    })?;
 
     tracing::info!(
         "Enqueued webhook event {} for processor {}",
@@ -240,16 +243,17 @@ fn get_event_type_name(event: &NormalizedEvent) -> String {
 
 pub struct WebhookWorker {
     pool: PgPool,
-    queue: pgmq::PGMQueue,
+    sqs_client: aws_sdk_sqs::Client,
+    webhooks_queue_url: String,
     config: Config,
 }
 
 impl WebhookWorker {
-    pub async fn new(pool: PgPool, config: Config) -> Self {
-        let queue = pgmq::PGMQueue::new_with_pool(pool.clone()).await;
+    pub async fn new(pool: PgPool, sqs_client: aws_sdk_sqs::Client, config: Config) -> Self {
         Self {
             pool,
-            queue,
+            sqs_client,
+            webhooks_queue_url: config.sqs_webhooks_queue_url.clone(),
             config,
         }
     }
@@ -259,21 +263,24 @@ impl WebhookWorker {
         let mut consecutive_queue_errors = 0;
 
         loop {
-            let msg_result = self
-                .queue
-                .read::<WebhookMessage>(WEBHOOKS_QUEUE_NAME, Some(VISIBILITY_TIMEOUT_SECS))
-                .await;
+            let msg_result = crate::core::sqs::receive_messages(
+                &self.sqs_client,
+                &self.webhooks_queue_url,
+                VISIBILITY_TIMEOUT_SECS,
+                1,
+            )
+            .await;
 
             match msg_result {
-                Ok(Some(msg)) => {
+                Ok(messages) => {
                     consecutive_queue_errors = 0;
-                    if let Err(e) = self.process_message_with_retry(msg).await {
-                        tracing::error!("Error processing webhook message: {}", e);
+                    if let Some(msg) = messages.first() {
+                        if let Err(e) = self.process_message_with_retry(msg.clone()).await {
+                            tracing::error!("Error processing webhook message: {}", e);
+                        }
+                    } else {
+                        sleep(Duration::from_secs(1)).await;
                     }
-                }
-                Ok(None) => {
-                    consecutive_queue_errors = 0;
-                    sleep(Duration::from_secs(1)).await;
                 }
                 Err(e) => {
                     consecutive_queue_errors += 1;
@@ -294,27 +301,25 @@ impl WebhookWorker {
         }
     }
 
-    async fn process_message(&self, msg: &pgmq::Message<WebhookMessage>) -> Result<(), String> {
-        let payload = &msg.message;
+    async fn process_message(&self, msg: &aws_sdk_sqs::types::Message) -> Result<(), String> {
+        let payload: WebhookMessage = serde_json::from_str(msg.body().unwrap_or_default()).map_err(|e| {
+            format!("Failed to parse message body: {}", e)
+        })?;
 
-        // Deduplication check
-        let result = sqlx::query!(
-            r#"
-            INSERT INTO processed_webhook_event (processor, processor_event_id, event_type, processed_at)
-            VALUES ($1, $2, $3, NOW())
-            ON CONFLICT (processor, processor_event_id) DO NOTHING
-            "#,
+        // Check if already processed (don't insert yet)
+        let existing = sqlx::query!(
+            "SELECT 1 as exists FROM processed_webhook_event WHERE processor = $1 AND processor_event_id = $2",
             &payload.processor,
-            &payload.event_id,
-            &get_event_type_name(&payload.event)
+            &payload.event_id
         )
-        .execute(&self.pool)
+        .fetch_optional(&self.pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
 
-        if result.rows_affected() == 0 {
+        if existing.is_some() {
             tracing::info!("Event {} already processed, skipping", payload.event_id);
-            self.archive_message(msg.msg_id).await;
+            let receipt_handle = msg.receipt_handle().ok_or("Missing receipt handle")?;
+            self.delete_message(receipt_handle).await;
             return Ok(());
         }
 
@@ -328,40 +333,47 @@ impl WebhookWorker {
         )
         .await?;
 
-        self.archive_message(msg.msg_id).await;
+        // Mark as processed AFTER successful processing
+        sqlx::query!(
+            r#"
+            INSERT INTO processed_webhook_event (processor, processor_event_id, event_type, processed_at)
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (processor, processor_event_id) DO NOTHING
+            "#,
+            &payload.processor,
+            &payload.event_id,
+            &get_event_type_name(&payload.event)
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| format!("Failed to mark event as processed: {}", e))?;
+
+        let receipt_handle = msg.receipt_handle().ok_or("Missing receipt handle")?;
+        self.delete_message(receipt_handle).await;
         Ok(())
     }
 
-    async fn archive_message(&self, msg_id: i64) {
-        if let Err(e) = self.queue.archive(WEBHOOKS_QUEUE_NAME, msg_id).await {
-            tracing::error!("Failed to archive message {}: {}", msg_id, e);
+    async fn delete_message(&self, receipt_handle: &str) {
+        if let Err(e) = crate::core::sqs::delete_message(
+            &self.sqs_client,
+            &self.webhooks_queue_url,
+            receipt_handle,
+        )
+        .await
+        {
+            tracing::error!("Failed to delete message: {}", e);
         }
-    }
-
-    async fn move_to_dlq(&self, msg: pgmq::Message<WebhookMessage>) {
-        tracing::warn!("Moving message {} to DLQ", msg.msg_id);
-        if let Err(e) = self.queue.send(WEBHOOKS_DLQ_NAME, &msg.message).await {
-            tracing::error!("Failed to send to DLQ: {}", e);
-        }
-        self.archive_message(msg.msg_id).await;
     }
 
     async fn process_message_with_retry(
         &self,
-        msg: pgmq::Message<WebhookMessage>,
+        msg: aws_sdk_sqs::types::Message,
     ) -> Result<(), String> {
-        let read_ct = msg.read_ct;
-        let event_id = msg.message.event_id.clone();
-
         match self.process_message(&msg).await {
             Ok(()) => Ok(()),
             Err(e) => {
-                tracing::error!("Error processing webhook event {}: {}", event_id, e);
-                if read_ct >= MAX_RETRIES {
-                    tracing::error!("Max retries exceeded for event {}, moving to DLQ", event_id);
-                    self.move_to_dlq(msg).await;
-                    return Err("Max retries exceeded, moved to DLQ".to_string());
-                }
+                // Don't delete - SQS will retry based on visibility timeout
+                // After maxReceiveCount, SQS moves to DLQ automatically
                 Err(e)
             }
         }
@@ -374,7 +386,25 @@ pub async fn process_webhook_message_directly(
     config: &Config,
     msg: WebhookMessage,
 ) -> Result<(), String> {
-    let result = sqlx::query!(
+    // Check if already processed (don't insert yet)
+    let existing = sqlx::query!(
+        "SELECT 1 as exists FROM processed_webhook_event WHERE processor = $1 AND processor_event_id = $2",
+        &msg.processor,
+        &msg.event_id
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+
+    if existing.is_some() {
+        return Ok(());
+    }
+
+    // Process the normalized event
+    handle_normalized_event(pool, config, &msg.processor, &msg.event, &msg.raw_payload).await?;
+
+    // Mark as processed AFTER successful processing
+    sqlx::query!(
         r#"
         INSERT INTO processed_webhook_event (processor, processor_event_id, event_type, processed_at)
         VALUES ($1, $2, $3, NOW())
@@ -386,13 +416,9 @@ pub async fn process_webhook_message_directly(
     )
     .execute(pool)
     .await
-    .map_err(|e| format!("Database error: {}", e))?;
+    .map_err(|e| format!("Failed to mark event as processed: {}", e))?;
 
-    if result.rows_affected() == 0 {
-        return Ok(());
-    }
-
-    handle_normalized_event(pool, config, &msg.processor, &msg.event, &msg.raw_payload).await
+    Ok(())
 }
 
 fn extract_customer_id_from_payload(payload: &Value) -> Result<&str, String> {
@@ -530,7 +556,7 @@ async fn handle_normalized_event(
                 r#"
                 UPDATE payout
                 SET status = $1::payout_status
-                WHERE processor_payout_id = $2
+                WHERE processor_payout_id = $2 AND status != 'paid'
                 "#,
             )
             .bind("failed")
@@ -555,7 +581,7 @@ async fn handle_normalized_event(
                 r#"
                 UPDATE transfer
                 SET status = 'paid'
-                WHERE processor_transfer_id = $1
+                WHERE processor_transfer_id = $1 AND status != 'reversed'
                 "#,
             )
             .bind(transfer_id)
@@ -630,7 +656,7 @@ async fn handle_checkout_expired(pool: &PgPool, payload: &Value) -> Result<(), S
         .ok_or("Missing session id")?;
 
     sqlx::query!(
-        "UPDATE checkout_session SET status = 'expired' WHERE processor_checkout_id = $1",
+        "UPDATE checkout_session SET status = 'expired' WHERE processor_checkout_id = $1 AND status != 'complete'",
         session_id
     )
     .execute(pool)
@@ -809,7 +835,7 @@ async fn handle_checkout_completed(
         SET customer_id = $1, processor_customer_id = $2, customer_email = $3,
             completed_at = NOW(), status = $4, mode = $5,
             processor_payment_id = $6, processor_subscription_id = $7
-        WHERE id = $8
+        WHERE id = $8 AND status != 'complete'
         "#,
         customer_id,
         data.processor_customer_id,
@@ -1034,7 +1060,7 @@ pub async fn sync_stripe_customer_data(
             )
             ON CONFLICT (processor, processor_subscription_id) DO UPDATE
             SET
-                status = EXCLUDED.status,
+                status = CASE WHEN $12::text = 'canceled' THEN $12 ELSE EXCLUDED.status END,
                 current_period_start = EXCLUDED.current_period_start,
                 current_period_end = EXCLUDED.current_period_end,
                 cancel_at_period_end = EXCLUDED.cancel_at_period_end,

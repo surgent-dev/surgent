@@ -16,6 +16,10 @@ pub struct Config {
 
     pub surpay_base_url: String,
 
+    pub sqs_endpoint_url: Option<String>,
+    pub sqs_webhooks_queue_url: String,
+    pub sqs_webhooks_dlq_url: String,
+
     pub cargo_crate_name: String,
 }
 
@@ -44,6 +48,12 @@ impl Config {
                 .expect("STRIPE_WEBHOOK_SECRET must be set"),
 
             surpay_base_url: env::var("SURPAY_BASE_URL").expect("SURPAY_BASE_URL must be set"),
+
+            sqs_endpoint_url: env::var("SQS_ENDPOINT_URL").ok(),
+            sqs_webhooks_queue_url: env::var("SQS_WEBHOOKS_QUEUE_URL")
+                .expect("SQS_WEBHOOKS_QUEUE_URL must be set"),
+            sqs_webhooks_dlq_url: env::var("SQS_WEBHOOKS_DLQ_URL")
+                .expect("SQS_WEBHOOKS_DLQ_URL must be set"),
 
             cargo_crate_name: env!("CARGO_CRATE_NAME").to_string(),
         })

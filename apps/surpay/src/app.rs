@@ -1,6 +1,7 @@
 use sqlx::PgPool;
 use std::sync::Arc;
 
+use aws_sdk_sqs::Client as SqsClient;
 use crate::core::config::Config;
 use crate::integrations::ProcessorRegistry;
 
@@ -9,6 +10,7 @@ pub struct AppState {
     pub pool: PgPool,
     pub config: Config,
     pub registry: Arc<ProcessorRegistry>,
+    pub sqs_client: SqsClient,
 }
 
 impl axum::extract::FromRef<AppState> for PgPool {
