@@ -1,9 +1,9 @@
 use sqlx::PgPool;
 use std::sync::Arc;
 
-use aws_sdk_sqs::Client as SqsClient;
 use crate::core::config::Config;
 use crate::integrations::ProcessorRegistry;
+use aws_sdk_sqs::Client as SqsClient;
 
 #[derive(Clone)]
 pub struct AppState {

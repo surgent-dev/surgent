@@ -55,7 +55,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let config = config.clone();
         async move {
             loop {
-                let worker = WebhookWorker::new(pool.clone(), sqs_client.clone(), config.clone()).await;
+                let worker =
+                    WebhookWorker::new(pool.clone(), sqs_client.clone(), config.clone()).await;
                 if let Err(e) = worker.run().await {
                     tracing::error!("Webhook worker error: {}", e);
                 }

@@ -185,7 +185,13 @@ pub async fn webhook_handler(
     )
     .await
     .map_err(|e| {
-        tracing::error!("Failed to enqueue webhook for {}: {}", processor, e);
+        tracing::error!(
+            "Failed to enqueue webhook for processor {} (event: {}, queue: {}): {}",
+            processor,
+            event_id,
+            state.config.sqs_webhooks_queue_url,
+            e
+        );
         WebhookError::EnqueueFailed
     })?;
 
@@ -288,14 +294,15 @@ impl WebhookWorker {
                 Err(e) => {
                     consecutive_queue_errors += 1;
                     tracing::error!(
-                        "Error reading from queue ({}): {}",
+                        "Error receiving from queue {} (attempt {}): {}",
+                        self.webhooks_queue_url,
                         consecutive_queue_errors,
                         e
                     );
                     if consecutive_queue_errors >= MAX_QUEUE_ERRORS {
                         return Err(format!(
-                            "Fatal: {} consecutive queue read failures: {}",
-                            MAX_QUEUE_ERRORS, e
+                            "Fatal: {} consecutive queue read failures from {}: {}",
+                            MAX_QUEUE_ERRORS, self.webhooks_queue_url, e
                         ));
                     }
                     sleep(Duration::from_secs(1)).await;
@@ -305,9 +312,8 @@ impl WebhookWorker {
     }
 
     async fn process_message(&self, msg: &aws_sdk_sqs::types::Message) -> Result<(), String> {
-        let payload: WebhookMessage = serde_json::from_str(msg.body().unwrap_or_default()).map_err(|e| {
-            format!("Failed to parse message body: {}", e)
-        })?;
+        let payload: WebhookMessage = serde_json::from_str(msg.body().unwrap_or_default())
+            .map_err(|e| format!("Failed to parse message body: {}", e))?;
 
         // Check if already processed (don't insert yet)
         let existing = sqlx::query!(
@@ -365,7 +371,11 @@ impl WebhookWorker {
         )
         .await
         {
-            tracing::error!("Failed to delete message: {}", e);
+            tracing::error!(
+                "Failed to delete message from queue {}: {}",
+                self.webhooks_queue_url,
+                e
+            );
         }
     }
 
