@@ -17,6 +17,7 @@ Surpay is a high-performance payment processing platform API built in Rust. It i
 - **Web Framework**: [Axum](https://github.com/tokio-rs/axum)
 - **Database**: [PostgreSQL](https://www.postgresql.org/)
 - **SQL Toolkit**: [SQLx](https://github.com/launchbadge/sqlx)
+- **Message Queue**: [AWS SQS](https://aws.amazon.com/sqs/) (ElasticMQ for local development)
 - **Runtime**: [Tokio](https://tokio.rs/)
 
 ## Prerequisites
@@ -36,13 +37,13 @@ cd surpay
 
 ### 2. Start the Development Database
 
-Surpay requires a PGMQ-enabled PostgreSQL database. You can start one using Docker Compose:
+Surpay requires PostgreSQL and ElasticMQ (SQS-compatible queue) for local development. You can start them using Docker Compose:
 
 ```bash
 docker-compose -f docker-compose.dev.yml up -d
 ```
 
-This starts a PostgreSQL container on `localhost:5432` with the required extensions.
+This starts PostgreSQL on `localhost:5432` and ElasticMQ on `localhost:9324`.
 
 **Database URL:** `postgres://surpay:password@localhost/surpay`
 
@@ -68,6 +69,14 @@ DATABASE_MIN_CONNECTIONS=1
 
 SERVICE_PORT=8090
 SERVICE_HOST=0.0.0.0
+
+# SQS Configuration (ElasticMQ for local dev)
+SQS_ENDPOINT_URL=http://localhost:9324
+SQS_WEBHOOKS_QUEUE_URL=http://localhost:9324/queue/webhooks
+SQS_WEBHOOKS_DLQ_URL=http://localhost:9324/queue/webhooks_dlq
+AWS_ACCESS_KEY_ID=local
+AWS_SECRET_ACCESS_KEY=local
+AWS_REGION=us-east-1
 ```
 
 ### 4. Run Migrations

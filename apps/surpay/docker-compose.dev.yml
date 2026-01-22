@@ -1,4 +1,4 @@
-# Development Docker Compose - PGMQ PostgreSQL only
+# Development Docker Compose - PostgreSQL + ElasticMQ (SQS-compatible)
 #
 # Usage:
 #   Start:  docker-compose -f docker-compose.dev.yml up -d
@@ -21,7 +21,7 @@ services:
     container_name: pgmq-dev
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - '5432:5432'
     environment:
       POSTGRES_DB: surpay
       POSTGRES_USER: surpay
@@ -29,10 +29,21 @@ services:
     volumes:
       - pgmq_data:/var/lib/postgresql/data/18
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U surpay -d surpay"]
+      test: ['CMD-SHELL', 'pg_isready -U surpay -d surpay']
       interval: 10s
       timeout: 5s
       retries: 5
+
+  elasticmq:
+    image: softwaremill/elasticmq-native
+    container_name: elasticmq-dev
+    restart: unless-stopped
+    ports:
+      - '9324:9324'
+      - '9325:9325'
+    volumes:
+      - ./elasticmq.conf:/opt/custom-elasticmq.conf:ro
+    command: ['-config-file', '/opt/custom-elasticmq.conf']
 
 volumes:
   pgmq_data:

@@ -10,6 +10,7 @@ use surpay::{
     api::create_router,
     api::webhook::WebhookWorker,
     core::config::Config,
+    core::sqs::create_client,
     integrations::{ProcessorRegistry, StripeProcessor},
 };
 
@@ -44,13 +45,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .await
         .expect("Migrations failed");
 
+    // Create SQS client
+    let sqs_client = create_client(config.sqs_endpoint_url.as_deref()).await;
+
     // Spawn webhook worker
     tokio::spawn({
         let pool = pool.clone();
+        let sqs_client = sqs_client.clone();
         let config = config.clone();
         async move {
             loop {
-                let worker = WebhookWorker::new(pool.clone(), config.clone()).await;
+                let worker = WebhookWorker::new(pool.clone(), sqs_client.clone(), config.clone()).await;
                 if let Err(e) = worker.run().await {
                     tracing::error!("Webhook worker error: {}", e);
                 }
@@ -82,6 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         pool,
         config,
         registry,
+        sqs_client,
     };
     let app = create_router(state);
 

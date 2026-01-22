@@ -58,10 +58,20 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      elasticmq:
+        image: softwaremill/elasticmq-native
+        ports:
+          - 9324:9324
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/surpay_test
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
       STRIPE_WEBHOOK_SECRET: whsec_test
+      SQS_ENDPOINT_URL: http://localhost:9324
+      SQS_WEBHOOKS_QUEUE_URL: http://localhost:9324/queue/webhooks
+      SQS_WEBHOOKS_DLQ_URL: http://localhost:9324/queue/webhooks_dlq
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

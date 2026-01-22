@@ -10,6 +10,13 @@ variable "ghcr_token" {
   description = "GitHub Container Registry authentication token"
 }
 
+variable "sqs_webhooks_queue_url" {
+  description = "SQS webhooks queue URL"
+}
+
+variable "sqs_webhooks_dlq_url" {
+  description = "SQS webhooks DLQ URL"
+}
 
 job "surpay" {
   datacenters = ["dc1"]
@@ -100,6 +107,9 @@ DATABASE_MIN_CONNECTIONS=1
 SERVICE_HOST=0.0.0.0
 STRIPE_SECRET_KEY={{ env "NOMAD_VAR_stripe_secret_key" }}
 STRIPE_WEBHOOK_SECRET={{ env "NOMAD_VAR_stripe_webhook_secret" }}
+SQS_WEBHOOKS_QUEUE_URL={{ env "NOMAD_VAR_sqs_webhooks_queue_url" }}
+SQS_WEBHOOKS_DLQ_URL={{ env "NOMAD_VAR_sqs_webhooks_dlq_url" }}
+AWS_REGION=us-east-1
 EOH
         destination = "local/.env"
         env         = true
