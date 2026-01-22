@@ -3,6 +3,7 @@ import { Kysely, sql } from 'kysely'
 export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable('deployment_history')
+    .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id').onDelete('cascade'))
     .addColumn('name', 'text', (col) => col.notNull())
@@ -14,7 +15,12 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('createdAt', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
 
-  await db.schema.createIndex('deployment_history_projectId_idx').on('deployment_history').column('projectId').execute()
+  await db.schema
+    .createIndex('deployment_history_projectId_idx')
+    .ifNotExists()
+    .on('deployment_history')
+    .column('projectId')
+    .execute()
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
