@@ -67,8 +67,6 @@
             echo "TypeScript: $(tsc --version)"
             echo "Rust (Cargo): $(cargo --version)"
             export NODE_ENV=development
-            export SHELL=${pkgs.zsh}/bin/zsh
-            exec $SHELL
           '';
         };
       }
