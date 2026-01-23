@@ -52,6 +52,7 @@ import {
 import { http } from '@/lib/http'
 import DeployDialog from '@/components/deploy-dialog'
 import GitHubDialog from '@/components/github-dialog'
+import { useCustomer, usePricingTable } from 'autumn-js/react'
 import { useGitHubStatus } from '@/queries/github'
 
 interface User {
@@ -84,6 +85,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const deployProject = useDeployProject()
   const confirmHostname = useConfirmHostname()
   const renameProject = useRenameProject()
+  const { customer, check } = useCustomer()
+  const { products } = usePricingTable()
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false)
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
@@ -473,6 +478,11 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               <DropdownMenuLabel className="py-3">
                 <div className="flex flex-col space-y-1">
                   <span className="font-medium text-base">{user?.name || user?.email}</span>
+                  {customer && (
+                    <span className="text-xs rounded-full bg-muted px-2 py-0.5 w-fit text-brand font-semibold mt-1">
+                      {products?.find((p) => p.scenario === 'active')?.name || 'Free'} Plan
+                    </span>
+                  )}
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />

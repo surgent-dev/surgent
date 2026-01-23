@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input'
 import { useProjectsQuery, useRenameProject, useDeleteProject, useDeployProject } from '@/queries/projects'
 import type { Project } from '@/types/project'
+import { useCustomer, usePricingTable } from 'autumn-js/react'
 import DeployDialog from '@/components/deploy-dialog'
 
 // Project type moved to '@/types/project'
@@ -39,6 +40,8 @@ export default function DashboardPage() {
   const rename = useRenameProject()
   const deleteProject = useDeleteProject()
   const deploy = useDeployProject()
+  const { customer } = useCustomer()
+  const { products } = usePricingTable()
 
   const [projectToRename, setProjectToRename] = useState<Project | null>(null)
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
@@ -179,6 +182,11 @@ export default function DashboardPage() {
                 <DropdownMenuLabel className="py-3">
                   <div className="flex flex-col space-y-1">
                     <span className="font-medium text-base">{user?.name || user?.email}</span>
+                    {customer && (
+                      <span className="text-xs rounded-full bg-muted px-2 py-0.5 w-fit text-brand font-semibold mt-1">
+                        {products?.find((p) => p.scenario === 'active')?.name || 'Free'} Plan
+                      </span>
+                    )}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
