@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT type as \"type_: String\", amount, currency, processor FROM transaction WHERE \"checkoutSessionId\" = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "type_: String",
+        "type_info": {
+          "Custom": {
+            "name": "transaction_type",
+            "kind": {
+              "Enum": [
+                "payment",
+                "processor_fee",
+                "refund",
+                "dispute",
+                "balance",
+                "payout"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "currency",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "processor",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "009337086b57152bfe6c7969732ba3f54abcf9a9efb98a2f04a360873c9b459c"
+}

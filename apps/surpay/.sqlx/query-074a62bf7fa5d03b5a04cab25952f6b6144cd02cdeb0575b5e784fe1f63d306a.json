@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                o.id,\n                o.name,\n                o.slug,\n                o.\"createdBy\",\n                o.\"platformFeePercent\",\n                o.\"platformFeeFixed\",\n                a.\"key\"\n            FROM organization o\n            JOIN apikey a ON a.\"organizationId\" = o.id\n            WHERE a.prefix = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "createdBy",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "platformFeePercent",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "platformFeeFixed",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "074a62bf7fa5d03b5a04cab25952f6b6144cd02cdeb0575b5e784fe1f63d306a"
+}

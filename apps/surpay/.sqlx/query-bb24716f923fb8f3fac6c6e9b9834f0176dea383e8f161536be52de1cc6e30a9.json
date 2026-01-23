@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            t.id,\n            t.\"createdAt\",\n            t.type as \"type_: TransactionType\",\n            t.amount,\n            t.currency\n        FROM transaction t\n        WHERE t.\"customerId\" = $1\n          AND t.type = 'payment'\n        ORDER BY t.\"createdAt\" DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "createdAt",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "type_: TransactionType",
+        "type_info": {
+          "Custom": {
+            "name": "transaction_type",
+            "kind": {
+              "Enum": [
+                "payment",
+                "processor_fee",
+                "refund",
+                "dispute",
+                "balance",
+                "payout"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "currency",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "bb24716f923fb8f3fac6c6e9b9834f0176dea383e8f161536be52de1cc6e30a9"
+}
