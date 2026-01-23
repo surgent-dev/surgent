@@ -1,16 +1,16 @@
-import { Kysely } from 'kysely'
+import { Kysely, sql } from 'kysely'
 
 export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable('apikey')
     .ifNotExists()
-    .addColumn('id', 'text', (col) => col.primaryKey())
+    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('name', 'text')
     .addColumn('start', 'text')
     .addColumn('prefix', 'text')
     .addColumn('key', 'text', (col) => col.notNull())
-    .addColumn('userId', 'text', (col) => col.notNull().references('user.id'))
-    .addColumn('organizationId', 'text', (col) => col.references('organization.id'))
+    .addColumn('userId', 'uuid', (col) => col.notNull().references('user.id'))
+    .addColumn('organizationId', 'uuid', (col) => col.references('organization.id'))
     .addColumn('projectId', 'uuid', (col) => col.references('project.id'))
     .addColumn('refillInterval', 'integer')
     .addColumn('refillAmount', 'integer')

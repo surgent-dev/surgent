@@ -4,7 +4,7 @@ export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable('usage')
     .ifNotExists()
-    .addColumn('id', 'text', (col) => col.primaryKey())
+    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id'))
     .addColumn('model', 'text', (col) => col.notNull())
     .addColumn('provider', 'text', (col) => col.notNull())
@@ -15,7 +15,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('cacheWrite5mTokens', 'integer')
     .addColumn('cacheWrite1hTokens', 'integer')
     .addColumn('cost', 'bigint', (col) => col.notNull())
-    .addColumn('keyId', 'text', (col) => col.references('apikey.id'))
+    .addColumn('keyId', 'uuid', (col) => col.references('apikey.id'))
     .addColumn('enrichment', 'jsonb')
     .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
@@ -30,7 +30,7 @@ export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable('provider')
     .ifNotExists()
-    .addColumn('id', 'text', (col) => col.primaryKey())
+    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id'))
     .addColumn('provider', 'text', (col) => col.notNull())
     .addColumn('credentials', 'text', (col) => col.notNull())
@@ -48,7 +48,7 @@ export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable('model')
     .ifNotExists()
-    .addColumn('id', 'text', (col) => col.primaryKey())
+    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id'))
     .addColumn('model', 'text', (col) => col.notNull())
     .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
