@@ -6,7 +6,6 @@ import { toast } from 'react-hot-toast'
 import {
   ArrowLeft,
   Rocket,
-  CreditCard,
   Pencil,
   ExternalLink,
   Download,
@@ -52,9 +51,7 @@ import {
 } from '@/queries/projects'
 import { http } from '@/lib/http'
 import DeployDialog from '@/components/deploy-dialog'
-import PaywallDialog from '@/components/autumn/paywall-dialog'
 import GitHubDialog from '@/components/github-dialog'
-import { useCustomer } from 'autumn-js/react'
 import { useGitHubStatus } from '@/queries/github'
 
 interface User {
@@ -87,11 +84,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const deployProject = useDeployProject()
   const confirmHostname = useConfirmHostname()
   const renameProject = useRenameProject()
-  const { customer, check } = useCustomer()
-  const [isCheckingAccess, setIsCheckingAccess] = useState(false)
-  const [isPaywallOpen, setIsPaywallOpen] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const [isDownloadPaywallOpen, setIsDownloadPaywallOpen] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
   const [isDeploymentSuccessOpen, setIsDeploymentSuccessOpen] = useState(false)
@@ -185,7 +178,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   )
 
   const handlePublishClick = useCallback(() => {
-    if (!projectId || isCheckingAccess) return
+    if (!projectId) return
 
     if (status === 'deployed' && deploymentName) {
       setIsDeploying(true)
@@ -206,18 +199,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       )
       return
     }
-
-    setIsCheckingAccess(true)
-    const { data } = check({ featureId: 'publish_your_app' })
-
-    if (data?.allowed) {
-      setIsDialogOpen(true)
-    } else {
-      setIsPaywallOpen(true)
-    }
-
-    setIsCheckingAccess(false)
-  }, [projectId, isCheckingAccess, check, status, deploymentName, deployProject])
+    setIsDialogOpen(true)
+  }, [projectId, status, deploymentName, deployProject])
 
   const performDownload = useCallback(async () => {
     if (!projectId) return
@@ -246,14 +229,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
   const handleDownloadClick = useCallback(() => {
     if (downloading || !projectId) return
-
-    const { data } = check({ featureId: 'download_code' })
-    if (data?.allowed) {
-      performDownload()
-    } else {
-      setIsDownloadPaywallOpen(true)
-    }
-  }, [downloading, projectId, check, performDownload])
+    performDownload()
+  }, [downloading, projectId, performDownload])
 
   const handleSignOut = async () => {
     await authClient.signOut()
@@ -399,16 +376,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   <Button
                     size="sm"
                     className="bg-brand hover:bg-brand/90 text-brand-foreground gap-1"
-                    disabled={!projectId || isDeploying || isInProgress || isCheckingAccess}
+                    disabled={!projectId || isDeploying || isInProgress}
                   >
                     <Rocket className="h-4 w-4" />
-                    {isCheckingAccess
-                      ? 'Checking...'
-                      : isInProgress
-                        ? 'Publishing...'
-                        : status === 'deployed'
-                          ? 'Publish'
-                          : 'Publish'}
+                    {isInProgress ? 'Publishing...' : 'Publish'}
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -502,18 +473,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               <DropdownMenuLabel className="py-3">
                 <div className="flex flex-col space-y-1">
                   <span className="font-medium text-base">{user?.name || user?.email}</span>
-                  {customer && (
-                    <span className="text-xs rounded-full bg-muted px-2 py-0.5 w-fit text-brand font-semibold mt-1">
-                      {customer.products[0]?.name || 'Free'} Plan
-                    </span>
-                  )}
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push('/pricing')}>
-                <CreditCard className="mr-2 h-4 w-4" />
-                Billing & Plans
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
             </DropdownMenuContent>
@@ -528,10 +489,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         onConfirm={handleConfirmDeploy}
         isSubmitting={isDeploying}
       />
-
-      <PaywallDialog open={isPaywallOpen} setOpen={setIsPaywallOpen} featureId="publish_your_app" />
-
-      <PaywallDialog open={isDownloadPaywallOpen} setOpen={setIsDownloadPaywallOpen} featureId="download_code" />
 
       <GitHubDialog open={isGitHubDialogOpen} onOpenChange={setIsGitHubDialogOpen} projectId={projectId} />
 

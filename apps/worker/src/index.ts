@@ -7,6 +7,7 @@ import upload from './routes/upload'
 import github from './routes/github'
 import mcp from './routes/mcp'
 import admin from './routes/admin'
+import providers from './routes/providers'
 import surpay from './routes/surpay'
 import { auth } from './lib/auth'
 import { config } from './lib/config'
@@ -35,7 +36,6 @@ const app = new Hono<AppContext>({
     return path
   },
 })
-
 app.use(
   '*',
   cors({
@@ -77,14 +77,14 @@ app.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw))
 app.use('*', async (c, next) => {
   const session = await auth.api.getSession({ headers: c.req.raw.headers })
 
-  if (session) {
-    c.set('user', session.user)
-    c.set('session', session.session)
-  } else {
+  if (!session) {
     c.set('user', null)
     c.set('session', null)
+    return next()
   }
 
+  c.set('user', session.user)
+  c.set('session', session.session)
   return next()
 })
 
@@ -108,6 +108,7 @@ app.route('/api/upload', upload)
 app.route('/api/github', github)
 app.route('/api/mcp', mcp)
 app.route('/api/admin', admin)
+app.route('/api/providers', providers)
 app.route('/api/surpay', surpay)
 app.route('/mcp', mcp)
 app.route('/preview', preview)

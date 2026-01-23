@@ -10,9 +10,6 @@ export interface Database {
   teamMember: TeamMemberTable
   invitation: InvitationTable
   apikey: ApiKeyTable
-  billing: BillingTable
-  subscription: SubscriptionTable
-  payment: PaymentTable
   usage: UsageTable
   provider: ProviderTable
   model: ModelTable
@@ -151,60 +148,6 @@ export interface ApiKeyTable {
   updatedAt: Date
   permissions: string | null
   metadata: any | null
-}
-
-export interface BillingTable {
-  id: string
-  organizationId: string
-  customerId: string | null
-  paymentMethodId: string | null
-  paymentMethodType: string | null
-  paymentMethodLast4: string | null
-  balance: string
-  monthlyLimit: number | null
-  monthlyUsage: string | null
-  timeMonthlyUsageUpdated: Date | null
-  reload: boolean | null
-  reloadTrigger: number | null
-  reloadAmount: number | null
-  reloadError: string | null
-  timeReloadError: Date | null
-  timeReloadLockedTill: Date | null
-  subscription: any | null
-  subscriptionId: string | null
-  subscriptionPlan: string | null
-  timeSubscriptionBooked: Date | null
-  createdAt?: Date
-  updatedAt?: Date
-  deletedAt: Date | null
-}
-
-export interface SubscriptionTable {
-  id: string
-  organizationId: string
-  userId: string
-  rollingUsage: string | null
-  fixedUsage: string | null
-  timeRollingUpdated: Date | null
-  timeFixedUpdated: Date | null
-  createdAt?: Date
-  updatedAt?: Date
-  deletedAt: Date | null
-}
-
-export interface PaymentTable {
-  id: string
-  projectId: string
-  organizationId: string
-  customerId: string | null
-  invoiceId: string | null
-  paymentId: string | null
-  amount: string
-  timeRefunded: Date | null
-  enrichment: any | null
-  createdAt?: Date
-  updatedAt?: Date
-  deletedAt: Date | null
 }
 
 export interface UsageTable {

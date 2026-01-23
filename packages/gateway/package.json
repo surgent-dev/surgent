@@ -1,0 +1,24 @@
+{
+  "name": "@repo/gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bunx wrangler dev --port 8080 --inspector-port 9231",
+    "start": "bunx wrangler dev --verbose --port 8080 --inspector-port 9231",
+    "deploy": "bunx wrangler deploy",
+    "generate-types": "bunx wrangler types"
+  },
+  "dependencies": {
+    "@repo/db": "*",
+    "@smithy/eventstream-codec": "4.2.8",
+    "@smithy/util-utf8": "4.2.0",
+    "better-auth": "^1.3.33",
+    "hono": "4.10.7",
+    "kysely": "^0.28.8",
+    "zod": "4.1.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20251008.0",
+    "typescript": "^5.9.2"
+  }
+}

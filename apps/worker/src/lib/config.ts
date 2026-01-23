@@ -18,10 +18,6 @@ export const config = {
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
   },
-  stripe: {
-    secretKey: env.STRIPE_SECRET_KEY,
-    webhookSecret: env.STRIPE_WEBHOOK_SECRET,
-  },
   sandbox: {
     provider: (env.SANDBOX_PROVIDER || 'e2b') as 'e2b' | 'daytona',
     defaultPort: '3000',
@@ -32,8 +28,10 @@ export const config = {
   },
   daytona: {
     apiKey: env.DAYTONA_API_KEY,
+    apiUrl: env.DAYTONA_API_URL,
     serverUrl: env.DAYTONA_SERVER_URL,
     snapshot: env.DAYTONA_SNAPSHOT,
+    defaultPort: env.DAYTONA_DEFAULT_PORT || '3000',
   },
   uploads: {
     publicUrl: env.UPLOADS_PUBLIC_URL,

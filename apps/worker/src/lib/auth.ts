@@ -1,5 +1,4 @@
 import { betterAuth } from 'better-auth'
-import { autumn } from 'autumn-js/better-auth'
 import { apiKey, organization } from 'better-auth/plugins'
 import { createAccessControl } from 'better-auth/plugins/access'
 import { db, dialect } from '@/lib/db'
@@ -72,7 +71,6 @@ export const auth = betterAuth({
   trustedOrigins: config.server.trustedOrigins,
 
   plugins: [
-    autumn(),
     organization({
       ac,
       teams: { enabled: true },
