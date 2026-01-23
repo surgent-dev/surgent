@@ -7,11 +7,14 @@ use uuid::Uuid;
 use crate::core::auth::AuthenticatedOrganization;
 
 #[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Project {
     pub id: Uuid,
+    #[sqlx(rename = "organizationId")]
     pub organization_id: Option<Uuid>,
     pub name: String,
     pub slug: String,
+    #[sqlx(rename = "externalId")]
     pub external_id: Option<Uuid>,
 }
 
@@ -59,10 +62,10 @@ pub async fn create_project(
         r#"
         INSERT INTO project (
             id,
-            organization_id,
+            "organizationId",
             name,
             slug,
-            external_id
+            "externalId"
         )
         VALUES ($1, $2, $3, $4, $5)
         "#,
@@ -110,15 +113,14 @@ pub async fn list_projects(
     State(pool): State<PgPool>,
     AuthenticatedOrganization { organization: org }: AuthenticatedOrganization,
 ) -> Result<(StatusCode, Json<ListProjectsResponse>), (StatusCode, String)> {
-    let projects = sqlx::query_as!(
-        Project,
+    let projects = sqlx::query_as::<_, Project>(
         r#"
-        SELECT id, organization_id, name, slug, external_id
+        SELECT id, "organizationId", name, slug, "externalId"
         FROM project
-        WHERE organization_id = $1
+        WHERE "organizationId" = $1
         "#,
-        org.id
     )
+    .bind(org.id)
     .fetch_all(&pool)
     .await
     .map_err(|e| {

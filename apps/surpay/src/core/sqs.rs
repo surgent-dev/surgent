@@ -1,6 +1,6 @@
 use aws_sdk_sqs::Client;
-use aws_sdk_sqs::types::Message;
 use aws_sdk_sqs::operation::RequestId;
+use aws_sdk_sqs::types::Message;
 
 /// Creates an SQS client, optionally pointing to a custom endpoint (e.g., ElasticMQ).
 pub async fn create_client(endpoint_url: Option<&str>) -> Client {

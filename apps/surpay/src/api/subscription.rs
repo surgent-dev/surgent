@@ -13,19 +13,32 @@ use crate::core::auth::{AuthenticatedOrganization, validate_project_ownership};
 use crate::types::SubscriptionStatus;
 
 #[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Subscription {
     pub id: Uuid,
+    #[sqlx(rename = "projectId")]
     pub project_id: Option<Uuid>,
+    #[sqlx(rename = "productId")]
     pub product_id: Option<Uuid>,
+    #[sqlx(rename = "productPriceId")]
     pub product_price_id: Option<Uuid>,
+    #[sqlx(rename = "customerId")]
     pub customer_id: Option<Uuid>,
+    #[sqlx(rename = "processorSubscriptionId")]
     pub processor_subscription_id: Option<String>,
+    #[sqlx(rename = "processorCustomerId")]
     pub processor_customer_id: Option<String>,
+    #[sqlx(rename = "createdAt")]
     pub created_at: chrono::DateTime<chrono::Utc>,
+    #[sqlx(rename = "deletedAt")]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[sqlx(rename = "currentPeriodStart")]
     pub current_period_start: Option<chrono::DateTime<chrono::Utc>>,
+    #[sqlx(rename = "currentPeriodEnd")]
     pub current_period_end: Option<chrono::DateTime<chrono::Utc>>,
+    #[sqlx(rename = "canceledAt")]
     pub canceled_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[sqlx(rename = "endedAt")]
     pub ended_at: Option<chrono::DateTime<chrono::Utc>>,
     pub status: SubscriptionStatus,
 }
@@ -57,19 +70,18 @@ pub async fn list_subscriptions(
     let pool = &state.pool;
     validate_project_ownership(pool, project_id, &org).await?;
 
-    let subscriptions = sqlx::query_as!(
-        Subscription,
+    let subscriptions = sqlx::query_as::<_, Subscription>(
         r#"
-        SELECT id, project_id, product_id, product_price_id, customer_id,
-               processor_subscription_id, processor_customer_id,
-               created_at, deleted_at, current_period_start, current_period_end,
-               canceled_at, ended_at, status as "status: SubscriptionStatus"
+        SELECT id, "projectId", "productId", "productPriceId", "customerId",
+               "processorSubscriptionId", "processorCustomerId",
+               "createdAt", "deletedAt", "currentPeriodStart", "currentPeriodEnd",
+               "canceledAt", "endedAt", status as "status: SubscriptionStatus"
         FROM subscription
-        WHERE project_id = $1
-        ORDER BY created_at DESC
+        WHERE "projectId" = $1
+        ORDER BY "createdAt" DESC
         "#,
-        project_id
     )
+    .bind(project_id)
     .fetch_all(pool)
     .await
     .map_err(|e| {

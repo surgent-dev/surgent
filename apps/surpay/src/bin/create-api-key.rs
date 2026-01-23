@@ -17,6 +17,10 @@ struct Args {
     /// A unique slug identifier for the API key
     #[arg(long)]
     slug: String,
+
+    /// The user ID to associate with this API key
+    #[arg(long)]
+    user_id: Uuid,
 }
 
 fn generate_api_key() -> (String, String, String) {
@@ -61,20 +65,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     sqlx::query!(
         r#"
-        INSERT INTO api_key (
+        INSERT INTO apikey (
             id,
             name,
-            slug,
-            api_key,
-            api_key_prefix
+            "key",
+            prefix,
+            "userId",
+            "createdAt",
+            "updatedAt"
         )
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
         "#,
         api_key_id,
         args.name,
-        args.slug,
         secret_hash,
-        prefix
+        prefix,
+        args.user_id
     )
     .execute(&pool)
     .await

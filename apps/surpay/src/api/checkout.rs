@@ -82,10 +82,10 @@ pub async fn create_checkout_session(
     // Validate product belongs to the authenticated organization
     let product = sqlx::query!(
         r#"
-        SELECT p.id, p.project_id
+        SELECT p.id, p."projectId"
         FROM product p
-        INNER JOIN project proj ON p.project_id = proj.id
-        WHERE p.id = $1 AND proj.organization_id = $2
+        INNER JOIN project proj ON p."projectId" = proj.id
+        WHERE p.id = $1 AND proj."organizationId" = $2
         "#,
         req.product_id,
         org.id
@@ -104,17 +104,17 @@ pub async fn create_checkout_session(
         "Product not found or does not belong to this organization".to_string(),
     ))?;
 
-    let project_id = product.project_id.ok_or((
+    let project_id = product.projectId.ok_or((
         StatusCode::BAD_REQUEST,
-        "Product must have a project_id".to_string(),
+        "Product must have a projectId".to_string(),
     ))?;
 
     // Same with price
     let price = sqlx::query!(
         r#"
-        SELECT id, processor_price_id, price_amount, recurring_interval as "recurring_interval: Option<RecurringInterval>"
+        SELECT id, "processorPriceId", "priceAmount", "recurringInterval" as "recurring_interval: Option<RecurringInterval>"
         FROM product_price
-        WHERE id = $1 AND product_id = $2
+        WHERE id = $1 AND "productId" = $2
         "#,
         req.price_id,
         req.product_id
@@ -133,9 +133,9 @@ pub async fn create_checkout_session(
         "Price not found for this product".to_string(),
     ))?;
 
-    let processor_price_id = price.processor_price_id.ok_or((
+    let processor_price_id = price.processorPriceId.ok_or((
         StatusCode::BAD_REQUEST,
-        "Price must have a processor_price_id".to_string(),
+        "Price must have a processorPriceId".to_string(),
     ))?;
 
     let mode = if price.recurring_interval.is_some() {
@@ -147,9 +147,9 @@ pub async fn create_checkout_session(
     // Look up org's connected account for destination charges
     let destination_account = sqlx::query_scalar!(
         r#"
-        SELECT processor_account_id
-        FROM account
-        WHERE organization_id = $1 AND processor_account_id IS NOT NULL
+        SELECT "processorAccountId"
+        FROM connect_account
+        WHERE "organizationId" = $1 AND "processorAccountId" IS NOT NULL
         LIMIT 1
         "#,
         org.id
@@ -166,7 +166,7 @@ pub async fn create_checkout_session(
 
     // Calculate platform fee from org config
     let application_fee_amount = if destination_account.is_some() {
-        let price_amount = price.price_amount as i64;
+        let price_amount = price.priceAmount as i64;
         let percent_fee = org
             .platform_fee_percent
             .map(|p| (price_amount * p as i64) / 100)
@@ -227,14 +227,14 @@ pub async fn create_checkout_session(
         r#"
         INSERT INTO checkout_session (
             id,
-            processor_checkout_id,
-            organization_id,
-            project_id,
-            product_id,
-            price_id,
+            "processorCheckoutId",
+            "organizationId",
+            "projectId",
+            "productId",
+            "priceId",
             status,
-            success_url,
-            cancel_url
+            "successUrl",
+            "cancelUrl"
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
@@ -311,7 +311,7 @@ pub async fn checkout_success(
     }
 
     let checkout_row = sqlx::query!(
-        "SELECT success_url FROM checkout_session WHERE processor_checkout_id = $1",
+        "SELECT \"successUrl\" FROM checkout_session WHERE \"processorCheckoutId\" = $1",
         session_id
     )
     .fetch_optional(&pool)
@@ -324,15 +324,13 @@ pub async fn checkout_success(
         )
     })?;
 
-    let success_url = checkout_row
-        .and_then(|row| row.success_url)
-        .ok_or_else(|| {
-            tracing::warn!("No success_url found for session {}", session_id);
-            (
-                StatusCode::NOT_FOUND,
-                "Checkout session not found or missing success_url".to_string(),
-            )
-        })?;
+    let success_url = checkout_row.and_then(|row| row.successUrl).ok_or_else(|| {
+        tracing::warn!("No successUrl found for session {}", session_id);
+        (
+            StatusCode::NOT_FOUND,
+            "Checkout session not found or missing successUrl".to_string(),
+        )
+    })?;
 
     tracing::info!("Redirecting to success URL for session {}", session_id);
     Ok(Redirect::temporary(&success_url))
@@ -357,7 +355,7 @@ pub async fn checkout_cancel(
     State(pool): State<PgPool>,
 ) -> Result<Redirect, (StatusCode, String)> {
     let checkout_row = sqlx::query!(
-        "SELECT cancel_url FROM checkout_session WHERE processor_checkout_id = $1",
+        "SELECT \"cancelUrl\" FROM checkout_session WHERE \"processorCheckoutId\" = $1",
         session_id
     )
     .fetch_optional(&pool)
@@ -370,11 +368,11 @@ pub async fn checkout_cancel(
         )
     })?;
 
-    let cancel_url = checkout_row.and_then(|row| row.cancel_url).ok_or_else(|| {
-        tracing::warn!("No cancel_url found for session {}", session_id);
+    let cancel_url = checkout_row.and_then(|row| row.cancelUrl).ok_or_else(|| {
+        tracing::warn!("No cancelUrl found for session {}", session_id);
         (
             StatusCode::NOT_FOUND,
-            "Checkout session not found or missing cancel_url".to_string(),
+            "Checkout session not found or missing cancelUrl".to_string(),
         )
     })?;
 

@@ -317,7 +317,7 @@ impl WebhookWorker {
 
         // Check if already processed (don't insert yet)
         let existing = sqlx::query!(
-            "SELECT 1 as exists FROM processed_webhook_event WHERE processor = $1 AND processor_event_id = $2",
+            r#"SELECT 1 as exists FROM processed_webhook_event WHERE processor = $1 AND "processorEventId" = $2"#,
             &payload.processor,
             &payload.event_id
         )
@@ -344,15 +344,15 @@ impl WebhookWorker {
 
         // Mark as processed AFTER successful processing
         sqlx::query!(
-            r#"
-            INSERT INTO processed_webhook_event (processor, processor_event_id, event_type, processed_at)
-            VALUES ($1, $2, $3, NOW())
-            ON CONFLICT (processor, processor_event_id) DO NOTHING
-            "#,
-            &payload.processor,
-            &payload.event_id,
-            &get_event_type_name(&payload.event)
-        )
+        r#"
+        INSERT INTO processed_webhook_event (processor, "processorEventId", "eventType", "processedAt")
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (processor, "processorEventId") DO NOTHING
+        "#,
+        &payload.processor,
+        &payload.event_id,
+        &get_event_type_name(&payload.event)
+    )
         .execute(&self.pool)
         .await
         .map_err(|e| format!("Failed to mark event as processed: {}", e))?;
@@ -402,7 +402,7 @@ pub async fn process_webhook_message_directly(
 ) -> Result<(), String> {
     // Check if already processed (don't insert yet)
     let existing = sqlx::query!(
-        "SELECT 1 as exists FROM processed_webhook_event WHERE processor = $1 AND processor_event_id = $2",
+        r#"SELECT 1 as exists FROM processed_webhook_event WHERE processor = $1 AND "processorEventId" = $2"#,
         &msg.processor,
         &msg.event_id
     )
@@ -420,9 +420,9 @@ pub async fn process_webhook_message_directly(
     // Mark as processed AFTER successful processing
     sqlx::query!(
         r#"
-        INSERT INTO processed_webhook_event (processor, processor_event_id, event_type, processed_at)
+        INSERT INTO processed_webhook_event (processor, "processorEventId", "eventType", "processedAt")
         VALUES ($1, $2, $3, NOW())
-        ON CONFLICT (processor, processor_event_id) DO NOTHING
+        ON CONFLICT (processor, "processorEventId") DO NOTHING
         "#,
         &msg.processor,
         &msg.event_id,
@@ -489,15 +489,15 @@ async fn handle_normalized_event(
         } => {
             let result = sqlx::query(
                 r#"
-                UPDATE account
-                SET charges_enabled = $1,
-                    details_submitted = $2,
-                    is_payouts_enabled = $3,
+                UPDATE connect_account
+                SET "chargesEnabled" = $1,
+                    "detailsSubmitted" = $2,
+                    "isPayoutsEnabled" = $3,
                     status = CASE
                         WHEN $1 AND $3 AND $4 AND $5 THEN 'active'
                         ELSE status
                     END
-                WHERE processor_account_id = $6
+                WHERE "processorAccountId" = $6
                 "#,
             )
             .bind(charges_enabled)
@@ -523,7 +523,7 @@ async fn handle_normalized_event(
         }
         NormalizedEvent::AccountDeauthorized { account_id } => {
             let result = sqlx::query!(
-                "UPDATE account SET status = 'deauthorized' WHERE processor_account_id = $1",
+                r#"UPDATE connect_account SET status = 'deauthorized' WHERE "processorAccountId" = $1"#,
                 account_id
             )
             .execute(pool)
@@ -548,8 +548,8 @@ async fn handle_normalized_event(
                 r#"
                 UPDATE payout
                 SET status = $1::payout_status,
-                    paid_at = NOW()
-                WHERE processor_payout_id = $2
+                    "paidAt" = NOW()
+                WHERE "processorPayoutId" = $2
                 "#,
             )
             .bind("paid")
@@ -570,7 +570,7 @@ async fn handle_normalized_event(
                 r#"
                 UPDATE payout
                 SET status = $1::payout_status
-                WHERE processor_payout_id = $2 AND status != 'paid'
+                WHERE "processorPayoutId" = $2 AND status != 'paid'
                 "#,
             )
             .bind("failed")
@@ -595,7 +595,7 @@ async fn handle_normalized_event(
                 r#"
                 UPDATE transfer
                 SET status = 'paid'
-                WHERE processor_transfer_id = $1 AND status != 'reversed'
+                WHERE "processorTransferId" = $1 AND status != 'reversed'
                 "#,
             )
             .bind(transfer_id)
@@ -618,9 +618,9 @@ async fn handle_normalized_event(
                 r#"
                 UPDATE transfer
                 SET status = 'reversed',
-                    reversal_id = $1,
-                    reversed_at = NOW()
-                WHERE processor_transfer_id = $2
+                    "reversalId" = $1,
+                    "reversedAt" = NOW()
+                WHERE "processorTransferId" = $2
                 "#,
             )
             .bind(reversal_id)
@@ -670,7 +670,7 @@ async fn handle_checkout_expired(pool: &PgPool, payload: &Value) -> Result<(), S
         .ok_or("Missing session id")?;
 
     sqlx::query!(
-        "UPDATE checkout_session SET status = 'expired' WHERE processor_checkout_id = $1 AND status != 'complete'",
+        r#"UPDATE checkout_session SET status = 'expired' WHERE "processorCheckoutId" = $1 AND status != 'complete'"#,
         session_id
     )
     .execute(pool)
@@ -728,12 +728,12 @@ async fn find_or_create_customer(
     let new_customer_id = Uuid::new_v4();
     let result = sqlx::query!(
         r#"
-        INSERT INTO customer (id, project_id, email, name, processor_customer_id)
+        INSERT INTO customer (id, "projectId", email, name, "processorCustomerId")
         VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (project_id, email) DO UPDATE
-        SET processor_customer_id = COALESCE(EXCLUDED.processor_customer_id, customer.processor_customer_id),
+        ON CONFLICT ("projectId", email) DO UPDATE
+        SET "processorCustomerId" = COALESCE(EXCLUDED."processorCustomerId", customer."processorCustomerId"),
             name = COALESCE(EXCLUDED.name, customer.name),
-            updated_at = NOW()
+            "updatedAt" = NOW()
         RETURNING id
         "#,
         new_customer_id,
@@ -756,9 +756,9 @@ async fn create_payment_transaction(
     let transaction_id = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO transaction (id, created_at, type, amount, currency, processor,
-            project_id, customer_id, product_id, product_price_id,
-            checkout_session_id, charge_id, succeeded_at)
+        INSERT INTO transaction (id, "createdAt", type, amount, currency, processor,
+            "projectId", "customerId", "productId", "productPriceId",
+            "checkoutSessionId", "chargeId", "succeededAt")
         VALUES ($1, NOW(), 'payment', $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
         "#,
         transaction_id,
@@ -786,10 +786,10 @@ async fn create_subscription_record(
     let new_subscription_id = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO subscription (id, project_id, product_id, product_price_id, customer_id,
-            processor, processor_subscription_id, processor_customer_id, created_at, status)
+        INSERT INTO subscription (id, "projectId", "productId", "productPriceId", "customerId",
+            processor, "processorSubscriptionId", "processorCustomerId", "createdAt", status)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), 'active')
-        ON CONFLICT (processor, processor_subscription_id) DO NOTHING
+        ON CONFLICT (processor, "processorSubscriptionId") DO NOTHING
         "#,
         new_subscription_id,
         params.project_id,
@@ -815,7 +815,7 @@ async fn handle_checkout_completed(
     let data = parse_checkout_data(payload)?;
 
     let checkout_row = sqlx::query!(
-        "SELECT id, project_id, product_id, price_id FROM checkout_session WHERE processor_checkout_id = $1",
+        r#"SELECT id, "projectId", "productId", "priceId" FROM checkout_session WHERE "processorCheckoutId" = $1"#,
         data.processor_checkout_id
     )
     .fetch_optional(pool)
@@ -823,7 +823,7 @@ async fn handle_checkout_completed(
     .map_err(|e| format!("Failed to fetch checkout session: {}", e))?;
 
     let (checkout_id, project_id, product_id, price_id) = match checkout_row {
-        Some(row) => (row.id, row.project_id, row.product_id, row.price_id),
+        Some(row) => (row.id, row.projectId, row.productId, row.priceId),
         None => {
             tracing::warn!(
                 "Checkout session {} not found, skipping",
@@ -846,9 +846,9 @@ async fn handle_checkout_completed(
     sqlx::query!(
         r#"
         UPDATE checkout_session
-        SET customer_id = $1, processor_customer_id = $2, customer_email = $3,
-            completed_at = NOW(), status = $4, mode = $5,
-            processor_payment_id = $6, processor_subscription_id = $7
+        SET "customerId" = $1, "processorCustomerId" = $2, "customerEmail" = $3,
+            "completedAt" = NOW(), status = $4, mode = $5,
+            "processorPaymentId" = $6, "processorSubscriptionId" = $7
         WHERE id = $8 AND status != 'complete'
         "#,
         customer_id,
@@ -937,9 +937,9 @@ pub async fn sync_stripe_customer_data(
 
     let customer_row = sqlx::query(
         r#"
-        SELECT id, project_id
+        SELECT id, "projectId"
         FROM customer
-        WHERE processor_customer_id = $1
+        WHERE "processorCustomerId" = $1
         "#,
     )
     .bind(stripe_customer_id)
@@ -953,7 +953,7 @@ pub async fn sync_stripe_customer_data(
                 .try_get("id")
                 .map_err(|e| format!("Failed to get customer_id: {}", e))?;
             let pid: Uuid = row
-                .try_get("project_id")
+                .try_get("projectId")
                 .map_err(|e| format!("Failed to get project_id: {}", e))?;
             (id, pid)
         }
@@ -997,7 +997,7 @@ pub async fn sync_stripe_customer_data(
         let (product_id, product_price_id): (Option<Uuid>, Option<Uuid>) =
             if let Some(ref stripe_price) = stripe_price_id {
                 let price_row = sqlx::query(
-                    "SELECT id, product_id FROM product_price WHERE processor_price_id = $1",
+                    r#"SELECT id, "productId" FROM product_price WHERE "processorPriceId" = $1"#,
                 )
                 .bind(stripe_price)
                 .fetch_optional(pool)
@@ -1010,7 +1010,7 @@ pub async fn sync_stripe_customer_data(
                             .try_get("id")
                             .map_err(|e| format!("Failed to get price id: {}", e))?;
                         let prod_id: Option<Uuid> = row
-                            .try_get("product_id")
+                            .try_get("productId")
                             .map_err(|e| format!("Failed to get product_id: {}", e))?;
                         (prod_id, Some(price_id))
                     }
@@ -1063,25 +1063,25 @@ pub async fn sync_stripe_customer_data(
         sqlx::query(
             r#"
             INSERT INTO subscription (
-                id, project_id, product_id, product_price_id, customer_id,
-                processor, processor_subscription_id, processor_customer_id, created_at,
-                current_period_start, current_period_end, cancel_at_period_end,
-                payment_method_brand, payment_method_last4, status
+                id, "projectId", "productId", "productPriceId", "customerId",
+                processor, "processorSubscriptionId", "processorCustomerId", "createdAt",
+                "currentPeriodStart", "currentPeriodEnd", "cancelAtPeriodEnd",
+                "paymentMethodBrand", "paymentMethodLast4", status
             )
             VALUES (
                 gen_random_uuid(), $1, $2, $3, $4, 'stripe', $5, $6, NOW(),
                 $7, $8, $9, $10, $11, $12
             )
-            ON CONFLICT (processor, processor_subscription_id) DO UPDATE
+            ON CONFLICT (processor, "processorSubscriptionId") DO UPDATE
             SET
                 status = CASE WHEN $12::text = 'canceled' THEN $12 ELSE EXCLUDED.status END,
-                current_period_start = EXCLUDED.current_period_start,
-                current_period_end = EXCLUDED.current_period_end,
-                cancel_at_period_end = EXCLUDED.cancel_at_period_end,
-                payment_method_brand = EXCLUDED.payment_method_brand,
-                payment_method_last4 = EXCLUDED.payment_method_last4,
-                product_id = EXCLUDED.product_id,
-                product_price_id = EXCLUDED.product_price_id
+                "currentPeriodStart" = EXCLUDED."currentPeriodStart",
+                "currentPeriodEnd" = EXCLUDED."currentPeriodEnd",
+                "cancelAtPeriodEnd" = EXCLUDED."cancelAtPeriodEnd",
+                "paymentMethodBrand" = EXCLUDED."paymentMethodBrand",
+                "paymentMethodLast4" = EXCLUDED."paymentMethodLast4",
+                "productId" = EXCLUDED."productId",
+                "productPriceId" = EXCLUDED."productPriceId"
             "#,
         )
         .bind(project_id)

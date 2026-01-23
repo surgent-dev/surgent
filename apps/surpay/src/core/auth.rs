@@ -6,9 +6,12 @@ use axum::{
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::api::{ApiKey, Organization};
+use crate::api::Organization;
 
-pub struct AuthenticatedApiKey(pub ApiKey);
+pub struct AuthenticatedApiKey {
+    pub user_id: Uuid,
+}
+
 pub struct AuthenticatedOrganization {
     pub organization: Organization,
 }
@@ -73,17 +76,17 @@ where
 
         let pool = PgPool::from_ref(state);
 
-        let api_key = sqlx::query_as!(
-            ApiKey,
+        let api_key = sqlx::query!(
             r#"
             SELECT
-                id,
-                name,
-                slug,
-                api_key,
-                api_key_prefix
-            FROM api_key
-            WHERE api_key_prefix = $1
+                "key",
+                prefix,
+                "userId"
+            FROM apikey
+            WHERE prefix = $1
+              AND "organizationId" IS NULL
+              AND "projectId" IS NULL
+              AND enabled = true
             "#,
             parsed.prefix
         )
@@ -93,19 +96,18 @@ where
         .ok_or((StatusCode::UNAUTHORIZED, "Invalid API key"))?;
 
         // Verify the secret against the stored hash
-        let stored_hash = api_key
-            .api_key
-            .as_ref()
-            .ok_or((StatusCode::UNAUTHORIZED, "Invalid API key"))?;
+        let stored_hash = api_key.key;
 
-        let parsed_hash = PasswordHash::new(stored_hash)
+        let parsed_hash = PasswordHash::new(&stored_hash)
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid stored hash"))?;
 
         Argon2::default()
             .verify_password(parsed.secret.as_bytes(), &parsed_hash)
             .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid API key"))?;
 
-        Ok(AuthenticatedApiKey(api_key))
+        Ok(AuthenticatedApiKey {
+            user_id: api_key.userId,
+        })
     }
 }
 
@@ -135,20 +137,19 @@ where
 
         let pool = PgPool::from_ref(state);
 
-        let organization = sqlx::query_as!(
-            Organization,
+        let organization = sqlx::query!(
             r#"
             SELECT
-                id,
-                name,
-                slug,
-                created_by,
-                api_key,
-                api_key_prefix,
-                platform_fee_percent,
-                platform_fee_fixed
-            FROM organization
-            WHERE api_key_prefix = $1
+                o.id,
+                o.name,
+                o.slug,
+                o."createdBy",
+                o."platformFeePercent",
+                o."platformFeeFixed",
+                a."key"
+            FROM organization o
+            JOIN apikey a ON a."organizationId" = o.id
+            WHERE a.prefix = $1
             "#,
             parsed.prefix
         )
@@ -157,19 +158,25 @@ where
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Database error"))?
         .ok_or((StatusCode::UNAUTHORIZED, "Invalid API key"))?;
 
-        let stored_hash = organization
-            .api_key
-            .as_ref()
-            .ok_or((StatusCode::UNAUTHORIZED, "Invalid API key"))?;
+        let stored_hash = organization.key;
 
-        let parsed_hash = PasswordHash::new(stored_hash)
+        let parsed_hash = PasswordHash::new(&stored_hash)
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid stored hash"))?;
 
         Argon2::default()
             .verify_password(parsed.secret.as_bytes(), &parsed_hash)
             .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid API key"))?;
 
-        Ok(AuthenticatedOrganization { organization })
+        Ok(AuthenticatedOrganization {
+            organization: Organization {
+                id: organization.id,
+                name: organization.name,
+                slug: organization.slug,
+                created_by: organization.createdBy,
+                platform_fee_percent: organization.platformFeePercent,
+                platform_fee_fixed: organization.platformFeeFixed,
+            },
+        })
     }
 }
 
@@ -186,7 +193,7 @@ pub async fn validate_project_ownership(
         SELECT id
         FROM project
         WHERE id = $1
-          AND organization_id = $2
+          AND "organizationId" = $2
         "#,
         project_id,
         org.id

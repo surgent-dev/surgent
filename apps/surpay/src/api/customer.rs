@@ -12,12 +12,17 @@ use uuid::Uuid;
 use crate::core::auth::AuthenticatedOrganization;
 use crate::types::{SubscriptionStatus, TransactionType};
 
+use super::subscription::Subscription;
+
 #[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Customer {
     pub id: Uuid,
+    #[sqlx(rename = "projectId")]
     pub project_id: Option<Uuid>,
     pub email: String,
     pub name: Option<String>,
+    #[sqlx(rename = "processorCustomerId")]
     pub processor_customer_id: Option<String>,
 }
 
@@ -34,13 +39,17 @@ pub struct TransactionSummary {
 pub struct SubscriptionSummary {
     id: Uuid,
     created_at: chrono::DateTime<chrono::Utc>,
+    #[serde(rename = "currentPeriodStart")]
     current_period_start: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(rename = "currentPeriodEnd")]
     current_period_end: Option<chrono::DateTime<chrono::Utc>>,
     status: SubscriptionStatus,
+    #[serde(rename = "processorSubscriptionId")]
     processor_subscription_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CustomerWithDetails {
     pub id: Uuid,
     pub project_id: Option<Uuid>,
@@ -75,23 +84,22 @@ pub async fn list_customers(
     }: AuthenticatedOrganization,
     Path(project_id): Path<Uuid>,
 ) -> Result<Json<Vec<Customer>>, (StatusCode, String)> {
-    let customers = sqlx::query_as!(
-        Customer,
+    let customers = sqlx::query_as::<_, Customer>(
         r#"
         SELECT
             c.id,
-            c.project_id,
+            c."projectId",
             c.email,
             c.name,
-            c.processor_customer_id
+            c."processorCustomerId"
         FROM customer c
-        INNER JOIN project p ON c.project_id = p.id
-        WHERE c.project_id = $1
-          AND p.organization_id = $2
+        INNER JOIN project p ON c."projectId" = p.id
+        WHERE c."projectId" = $1
+          AND p."organizationId" = $2
         "#,
-        project_id,
-        org.id
     )
+    .bind(project_id)
+    .bind(org.id)
     .fetch_all(&pool)
     .await
     .map_err(|e| {
@@ -130,25 +138,24 @@ pub async fn get_customer(
     }: AuthenticatedOrganization,
     Path((project_id, customer_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<CustomerWithDetails>, (StatusCode, String)> {
-    let customer = sqlx::query_as!(
-        Customer,
+    let customer = sqlx::query_as::<_, Customer>(
         r#"
         SELECT
             c.id,
-            c.project_id,
+            c."projectId",
             c.email,
             c.name,
-            c.processor_customer_id
+            c."processorCustomerId"
         FROM customer c
-        INNER JOIN project p ON c.project_id = p.id
+        INNER JOIN project p ON c."projectId" = p.id
         WHERE c.id = $1
-          AND c.project_id = $2
-          AND p.organization_id = $3
+          AND c."projectId" = $2
+          AND p."organizationId" = $3
         "#,
-        customer_id,
-        project_id,
-        org.id
     )
+    .bind(customer_id)
+    .bind(project_id)
+    .bind(org.id)
     .fetch_optional(&pool)
     .await
     .map_err(|e| {
@@ -164,14 +171,14 @@ pub async fn get_customer(
         r#"
         SELECT
             t.id,
-            t.created_at,
+            t."createdAt",
             t.type as "type_: TransactionType",
             t.amount,
             t.currency
         FROM transaction t
-        WHERE t.customer_id = $1
+        WHERE t."customerId" = $1
           AND t.type = 'payment'
-        ORDER BY t.created_at DESC
+        ORDER BY t."createdAt" DESC
         "#,
         customer_id
     )
@@ -184,21 +191,29 @@ pub async fn get_customer(
         )
     })?;
 
-    let subscriptions = sqlx::query!(
+    let subscriptions = sqlx::query_as::<_, Subscription>(
         r#"
         SELECT
             s.id,
-            s.created_at,
-            s.current_period_start,
-            s.current_period_end,
-            s.status as "status: SubscriptionStatus",
-            s.processor_subscription_id
+            s."projectId",
+            s."productId",
+            s."productPriceId",
+            s."customerId",
+            s."processorSubscriptionId",
+            s."processorCustomerId",
+            s."createdAt",
+            s."deletedAt",
+            s."currentPeriodStart",
+            s."currentPeriodEnd",
+            s."canceledAt",
+            s."endedAt",
+            s.status as "status: SubscriptionStatus"
         FROM subscription s
-        WHERE s.customer_id = $1
-        ORDER BY s.created_at DESC
+        WHERE s."customerId" = $1
+        ORDER BY s."createdAt" DESC
         "#,
-        customer_id
     )
+    .bind(customer_id)
     .fetch_all(&pool)
     .await
     .map_err(|e| {
@@ -218,7 +233,7 @@ pub async fn get_customer(
             .into_iter()
             .map(|t| TransactionSummary {
                 id: t.id,
-                created_at: t.created_at,
+                created_at: t.createdAt,
                 type_: t.type_,
                 amount: t.amount,
                 currency: t.currency,
