@@ -40,10 +40,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .connect(&config.database_url)
         .await
         .expect("Failed to connect to database");
-    sqlx::migrate!()
-        .run(&pool)
-        .await
-        .expect("Migrations failed");
+    //sqlx::migrate!()
+    //    .run(&pool)
+    //    .await
+    //    .expect("Migrations failed");
 
     // Create SQS client
     let sqs_client = create_client(config.sqs_endpoint_url.as_deref()).await;
