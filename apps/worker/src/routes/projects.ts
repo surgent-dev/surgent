@@ -24,7 +24,7 @@ import { ungzip } from 'pako'
 
 const projects = new Hono<AppContext>()
 
-const idParam = z.object({ id: z.string() })
+const idParam = z.object({ id: z.string().uuid() })
 
 projects.use('*', async (c, next) => {
   if (!c.get('user')) return c.json({ error: 'Unauthorized' }, 401)
