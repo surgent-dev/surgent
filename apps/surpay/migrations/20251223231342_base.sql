@@ -44,367 +44,362 @@ CREATE TABLE IF NOT EXISTS organization (
   id UUID PRIMARY KEY,
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
-  created_by TEXT,
-  api_key TEXT UNIQUE,
-  api_key_prefix VARCHAR(8) UNIQUE,
-  platform_fee_percent INTEGER,
-  platform_fee_fixed INTEGER,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  "createdBy" TEXT,
+  "apiKey" TEXT UNIQUE,
+  "apiKeyPrefix" VARCHAR(8) UNIQUE,
+  "platformFeePercent" INTEGER,
+  "platformFeeFixed" INTEGER,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS project (
   id UUID PRIMARY KEY,
-  organization_id UUID REFERENCES organization(id),
+  "organizationId" UUID REFERENCES organization(id),
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
-  external_id UUID,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  "externalId" UUID,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS api_key (
   id UUID PRIMARY KEY,
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
-  api_key TEXT UNIQUE,
-  api_key_prefix VARCHAR(8) UNIQUE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  "apiKey" TEXT UNIQUE,
+  "apiKeyPrefix" VARCHAR(8) UNIQUE,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS account (
+CREATE TABLE IF NOT EXISTS connect_account (
   id UUID PRIMARY KEY,
-  organization_id UUID REFERENCES organization(id),
+  "organizationId" UUID REFERENCES organization(id),
   country VARCHAR(2) NOT NULL,
   currency VARCHAR(3) NOT NULL,
-  is_payouts_enabled BOOLEAN NOT NULL,
+  "isPayoutsEnabled" BOOLEAN NOT NULL,
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_account_id TEXT,
+  "processorAccountId" TEXT,
   status TEXT NOT NULL DEFAULT 'pending',
-  details_submitted BOOLEAN NOT NULL DEFAULT FALSE,
-  charges_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-  business_type TEXT,
+  "detailsSubmitted" BOOLEAN NOT NULL DEFAULT FALSE,
+  "chargesEnabled" BOOLEAN NOT NULL DEFAULT FALSE,
+  "businessType" TEXT,
   data JSONB NOT NULL DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS product (
   id UUID PRIMARY KEY,
-  product_group_id UUID NOT NULL,
+  "productGroupId" UUID NOT NULL,
   name TEXT NOT NULL,
   description TEXT,
-  project_id UUID REFERENCES project(id),
+  "projectId" UUID REFERENCES project(id),
   slug TEXT NOT NULL,
   version INTEGER,
-  is_archived BOOLEAN DEFAULT FALSE,
-  is_default BOOLEAN,
+  "isArchived" BOOLEAN DEFAULT FALSE,
+  "isDefault" BOOLEAN,
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_product_id TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  "processorProductId" TEXT,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS product_price (
   id UUID PRIMARY KEY,
-  product_id UUID REFERENCES product(id),
+  "productId" UUID REFERENCES product(id),
   name TEXT,
   description TEXT,
-  price_amount INTEGER NOT NULL,
-  price_currency VARCHAR(3) NOT NULL,
-  recurring_interval recurring_interval,
-  is_default BOOLEAN,
+  "priceAmount" INTEGER NOT NULL,
+  "priceCurrency" VARCHAR(3) NOT NULL,
+  "recurringInterval" recurring_interval,
+  "isDefault" BOOLEAN,
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_price_id TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  "processorPriceId" TEXT,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- customer table (payment_method FK added after payment_method table is created)
 CREATE TABLE IF NOT EXISTS customer (
   id UUID PRIMARY KEY,
-  project_id UUID REFERENCES project(id),
+  "projectId" UUID REFERENCES project(id),
   email VARCHAR(320) NOT NULL,
   name TEXT,
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_customer_id TEXT,
-  CONSTRAINT customer_project_id_email_key UNIQUE (project_id, email),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  "processorCustomerId" TEXT,
+  CONSTRAINT customer_project_id_email_key UNIQUE ("projectId", email),
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS checkout_session (
   id UUID PRIMARY KEY,
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_checkout_id TEXT NOT NULL,
-  organization_id UUID NOT NULL REFERENCES organization(id),
-  project_id UUID NOT NULL REFERENCES project(id),
-  product_id UUID NOT NULL REFERENCES product(id),
-  price_id UUID NOT NULL REFERENCES product_price(id),
+  "processorCheckoutId" TEXT NOT NULL,
+  "organizationId" UUID NOT NULL REFERENCES organization(id),
+  "projectId" UUID NOT NULL REFERENCES project(id),
+  "productId" UUID NOT NULL REFERENCES product(id),
+  "priceId" UUID NOT NULL REFERENCES product_price(id),
   status checkout_status NOT NULL DEFAULT 'open',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  customer_id UUID REFERENCES customer(id),
-  customer_email VARCHAR(320),
-  processor_customer_id TEXT,
-  processor_payment_id TEXT,
-  processor_subscription_id TEXT,
-  success_url TEXT,
-  cancel_url TEXT,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "customerId" UUID REFERENCES customer(id),
+  "customerEmail" VARCHAR(320),
+  "processorCustomerId" TEXT,
+  "processorPaymentId" TEXT,
+  "processorSubscriptionId" TEXT,
+  "successUrl" TEXT,
+  "cancelUrl" TEXT,
   mode checkout_mode,
-  completed_at TIMESTAMPTZ,
-  CONSTRAINT checkout_session_processor_checkout_id_key UNIQUE (processor, processor_checkout_id)
+  "completedAt" TIMESTAMPTZ,
+  CONSTRAINT checkout_session_processor_checkout_id_key UNIQUE (processor, "processorCheckoutId")
 );
 
 -- Payment method table (reusable cards, bank accounts)
 CREATE TABLE IF NOT EXISTS payment_method (
   id UUID PRIMARY KEY,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  deleted_at TIMESTAMPTZ,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "deletedAt" TIMESTAMPTZ,
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_id TEXT NOT NULL,
+  "processorId" TEXT NOT NULL,
   type TEXT NOT NULL,
-  method_metadata JSONB NOT NULL DEFAULT '{}',
-  customer_id UUID NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
-  CONSTRAINT payment_method_processor_customer_key UNIQUE (processor, processor_id, customer_id)
+  "methodMetadata" JSONB NOT NULL DEFAULT '{}',
+  "customerId" UUID NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
+  CONSTRAINT payment_method_processor_customer_key UNIQUE (processor, "processorId", "customerId")
 );
 
 -- subscription table (payment_method_id included)
 CREATE TABLE IF NOT EXISTS subscription (
   id UUID PRIMARY KEY,
-  project_id UUID REFERENCES project(id),
-  product_id UUID REFERENCES product(id),
-  product_price_id UUID REFERENCES product_price(id),
-  customer_id UUID REFERENCES customer(id),
-  created_at TIMESTAMPTZ NOT NULL,
-  deleted_at TIMESTAMPTZ,
-  current_period_start TIMESTAMPTZ,
-  current_period_end TIMESTAMPTZ,
-  canceled_at TIMESTAMPTZ,
-  ended_at TIMESTAMPTZ,
+  "projectId" UUID REFERENCES project(id),
+  "productId" UUID REFERENCES product(id),
+  "productPriceId" UUID REFERENCES product_price(id),
+  "customerId" UUID REFERENCES customer(id),
+  "createdAt" TIMESTAMPTZ NOT NULL,
+  "deletedAt" TIMESTAMPTZ,
+  "currentPeriodStart" TIMESTAMPTZ,
+  "currentPeriodEnd" TIMESTAMPTZ,
+  "canceledAt" TIMESTAMPTZ,
+  "endedAt" TIMESTAMPTZ,
   status subscription_status NOT NULL,
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_subscription_id TEXT,
-  processor_customer_id TEXT,
-  cancel_at_period_end BOOLEAN DEFAULT FALSE,
-  payment_method_brand VARCHAR(20),
-  payment_method_last4 VARCHAR(4),
-  payment_method_id UUID REFERENCES payment_method(id) ON DELETE SET NULL,
-  CONSTRAINT subscription_processor_subscription_id_key UNIQUE (processor, processor_subscription_id)
+  "processorSubscriptionId" TEXT,
+  "processorCustomerId" TEXT,
+  "cancelAtPeriodEnd" BOOLEAN DEFAULT FALSE,
+  "paymentMethodBrand" VARCHAR(20),
+  "paymentMethodLast4" VARCHAR(4),
+  "paymentMethodId" UUID REFERENCES payment_method(id) ON DELETE SET NULL,
+  CONSTRAINT subscription_processor_subscription_id_key UNIQUE (processor, "processorSubscriptionId")
 );
 
 -- Payment table (tracks Stripe PaymentIntent lifecycle for SCA/3DS flows)
 CREATE TABLE IF NOT EXISTS payment (
   id UUID PRIMARY KEY,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  deleted_at TIMESTAMPTZ,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "deletedAt" TIMESTAMPTZ,
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_id TEXT NOT NULL,
+  "processorId" TEXT NOT NULL,
   status payment_status NOT NULL,
   amount BIGINT NOT NULL,
   currency VARCHAR(3) NOT NULL,
   method TEXT NOT NULL,
-  method_metadata JSONB NOT NULL DEFAULT '{}',
-  customer_id UUID REFERENCES customer(id),
-  customer_email VARCHAR(320),
-  organization_id UUID NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
-  project_id UUID REFERENCES project(id),
-  checkout_session_id UUID REFERENCES checkout_session(id) ON DELETE SET NULL,
-  payment_method_id UUID REFERENCES payment_method(id) ON DELETE SET NULL,
-  decline_reason TEXT,
-  decline_message TEXT,
-  risk_level TEXT,
-  risk_score SMALLINT,
-  processor_metadata JSONB NOT NULL DEFAULT '{}',
-  authorized_at TIMESTAMPTZ,
-  captured_at TIMESTAMPTZ,
-  canceled_at TIMESTAMPTZ,
-  CONSTRAINT payment_processor_id_key UNIQUE (processor, processor_id)
+  "methodMetadata" JSONB NOT NULL DEFAULT '{}',
+  "customerId" UUID REFERENCES customer(id),
+  "customerEmail" VARCHAR(320),
+  "organizationId" UUID NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  "projectId" UUID REFERENCES project(id),
+  "checkoutSessionId" UUID REFERENCES checkout_session(id) ON DELETE SET NULL,
+  "paymentMethodId" UUID REFERENCES payment_method(id) ON DELETE SET NULL,
+  "declineReason" TEXT,
+  "declineMessage" TEXT,
+  "riskLevel" TEXT,
+  "riskScore" SMALLINT,
+  "processorMetadata" JSONB NOT NULL DEFAULT '{}',
+  "authorizedAt" TIMESTAMPTZ,
+  "capturedAt" TIMESTAMPTZ,
+  "canceledAt" TIMESTAMPTZ,
+  CONSTRAINT payment_processor_id_key UNIQUE (processor, "processorId")
 );
 
 -- refund table (expanded with status, processor, payment_id, etc.)
 CREATE TABLE IF NOT EXISTS refund (
   id UUID PRIMARY KEY,
-  created_at TIMESTAMPTZ NOT NULL,
-  deleted_at TIMESTAMPTZ,
+  "createdAt" TIMESTAMPTZ NOT NULL,
+  "deletedAt" TIMESTAMPTZ,
   amount BIGINT NOT NULL,
   currency VARCHAR(3) NOT NULL,
   reason TEXT,
   status refund_status NOT NULL DEFAULT 'succeeded',
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_id TEXT,
-  payment_id UUID REFERENCES payment(id),
-  organization_id UUID REFERENCES organization(id),
-  customer_id UUID REFERENCES customer(id)
+  "processorId" TEXT,
+  "paymentId" UUID REFERENCES payment(id),
+  "organizationId" UUID REFERENCES organization(id),
+  "customerId" UUID REFERENCES customer(id)
 );
 
 CREATE TABLE IF NOT EXISTS payout (
   id UUID PRIMARY KEY,
-  created_at TIMESTAMPTZ NOT NULL,
-  account_id UUID REFERENCES account(id),
+  "createdAt" TIMESTAMPTZ NOT NULL,
+  "accountId" UUID REFERENCES connect_account(id),
   amount BIGINT NOT NULL,
   currency VARCHAR(3) NOT NULL,
   status payout_status NOT NULL,
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_payout_id TEXT,
-  paid_at TIMESTAMPTZ
+  "processorPayoutId" TEXT,
+  "paidAt" TIMESTAMPTZ
 );
 
 -- transaction table (payment_id included)
 CREATE TABLE IF NOT EXISTS transaction (
   id UUID PRIMARY KEY,
-  created_at TIMESTAMPTZ NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL,
   type transaction_type NOT NULL,
   amount BIGINT NOT NULL,
   currency VARCHAR(3) NOT NULL,
-  tax_amount BIGINT DEFAULT 0,
-  account_id UUID REFERENCES account(id),
-  account_amount BIGINT,
-  account_currency VARCHAR(3),
-  presentment_amount BIGINT,
-  presentment_currency VARCHAR(3),
-  presentment_tax_amount BIGINT,
-  tax_filing_amount BIGINT,
-  tax_filing_currency VARCHAR(3),
-  tax_country VARCHAR(2),
-  tax_state VARCHAR(2),
+  "taxAmount" BIGINT DEFAULT 0,
+  "accountId" UUID REFERENCES connect_account(id),
+  "accountAmount" BIGINT,
+  "accountCurrency" VARCHAR(3),
+  "presentmentAmount" BIGINT,
+  "presentmentCurrency" VARCHAR(3),
+  "presentmentTaxAmount" BIGINT,
+  "taxFilingAmount" BIGINT,
+  "taxFilingCurrency" VARCHAR(3),
+  "taxCountry" VARCHAR(2),
+  "taxState" VARCHAR(2),
   processor TEXT NOT NULL,
-  charge_id TEXT,
-  transfer_id TEXT,
-  refund_id UUID REFERENCES refund(id),
-  payout_id UUID REFERENCES payout(id),
-  payment_transaction_id UUID REFERENCES transaction(id),
-  incurred_by_transaction_id UUID REFERENCES transaction(id),
-  payout_transaction_id UUID REFERENCES transaction(id),
-  project_id UUID REFERENCES project(id),
-  customer_id UUID REFERENCES customer(id),
-  product_id UUID REFERENCES product(id),
-  product_price_id UUID REFERENCES product_price(id),
-  subscription_id UUID REFERENCES subscription(id),
-  checkout_session_id UUID REFERENCES checkout_session(id),
-  processor_invoice_id TEXT,
-  payment_method_brand VARCHAR(20),
-  payment_method_last4 VARCHAR(4),
+  "chargeId" TEXT,
+  "transferId" TEXT,
+  "refundId" UUID REFERENCES refund(id),
+  "payoutId" UUID REFERENCES payout(id),
+  "paymentTransactionId" UUID REFERENCES transaction(id),
+  "incurredByTransactionId" UUID REFERENCES transaction(id),
+  "payoutTransactionId" UUID REFERENCES transaction(id),
+  "projectId" UUID REFERENCES project(id),
+  "customerId" UUID REFERENCES customer(id),
+  "productId" UUID REFERENCES product(id),
+  "productPriceId" UUID REFERENCES product_price(id),
+  "subscriptionId" UUID REFERENCES subscription(id),
+  "checkoutSessionId" UUID REFERENCES checkout_session(id),
+  "processorInvoiceId" TEXT,
+  "paymentMethodBrand" VARCHAR(20),
+  "paymentMethodLast4" VARCHAR(4),
   metadata JSONB DEFAULT '{}',
-  succeeded_at TIMESTAMPTZ,
-  refunded_at TIMESTAMPTZ,
-  payment_id UUID REFERENCES payment(id)
+  "succeededAt" TIMESTAMPTZ,
+  "refundedAt" TIMESTAMPTZ,
+  "paymentId" UUID REFERENCES payment(id)
 );
 
 CREATE TABLE IF NOT EXISTS transfer (
   id UUID PRIMARY KEY,
   processor TEXT NOT NULL,
-  processor_transfer_id TEXT NOT NULL,
+  "processorTransferId" TEXT NOT NULL,
   amount BIGINT NOT NULL,
   currency VARCHAR(3) NOT NULL,
-  destination_account_id UUID NOT NULL REFERENCES account(id),
-  source_transaction_id UUID REFERENCES transaction(id),
-  reversal_id TEXT,
-  reversed_at TIMESTAMPTZ,
+  "destinationAccountId" UUID NOT NULL REFERENCES connect_account(id),
+  "sourceTransactionId" UUID REFERENCES transaction(id),
+  "reversalId" TEXT,
+  "reversedAt" TIMESTAMPTZ,
   status TEXT NOT NULL DEFAULT 'pending',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT transfer_processor_transfer_id_key UNIQUE (processor, processor_transfer_id)
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT transfer_processor_transfer_id_key UNIQUE (processor, "processorTransferId")
 );
 
 CREATE TABLE IF NOT EXISTS held_balance (
   id UUID PRIMARY KEY,
-  organization_id UUID NOT NULL REFERENCES organization(id),
-  connected_account_id UUID REFERENCES account(id),
-  source_transaction_id UUID REFERENCES transaction(id),
+  "organizationId" UUID NOT NULL REFERENCES organization(id),
+  "connectedAccountId" UUID REFERENCES connect_account(id),
+  "sourceTransactionId" UUID REFERENCES transaction(id),
   amount BIGINT NOT NULL,
   currency VARCHAR(3) NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- processed_webhook_event table (expanded with api_version, data, task_name, etc.)
 CREATE TABLE IF NOT EXISTS processed_webhook_event (
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_event_id TEXT NOT NULL,
-  event_type TEXT NOT NULL,
-  processed_at TIMESTAMPTZ DEFAULT NOW(),
-  api_version TEXT,
+  "processorEventId" TEXT NOT NULL,
+  "eventType" TEXT NOT NULL,
+  "processedAt" TIMESTAMPTZ DEFAULT NOW(),
+  "apiVersion" TEXT,
   data JSONB,
-  task_name TEXT,
-  handled_at TIMESTAMPTZ,
-  request_id TEXT,
-  PRIMARY KEY (processor, processor_event_id)
+  "taskName" TEXT,
+  "handledAt" TIMESTAMPTZ,
+  "requestId" TEXT,
+  PRIMARY KEY (processor, "processorEventId")
 );
 
 -- Dispute table (chargebacks)
 CREATE TABLE IF NOT EXISTS dispute (
   id UUID PRIMARY KEY,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  deleted_at TIMESTAMPTZ,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "deletedAt" TIMESTAMPTZ,
   status dispute_status NOT NULL,
   amount BIGINT NOT NULL,
   currency VARCHAR(3) NOT NULL,
   processor TEXT NOT NULL DEFAULT 'stripe',
-  processor_id TEXT,
+  "processorId" TEXT,
   reason TEXT,
-  reason_message TEXT,
-  payment_id UUID NOT NULL REFERENCES payment(id),
-  organization_id UUID NOT NULL REFERENCES organization(id),
-  customer_id UUID REFERENCES customer(id),
-  evidence_due_by TIMESTAMPTZ,
-  evidence_submitted_at TIMESTAMPTZ,
-  resolved_at TIMESTAMPTZ,
-  CONSTRAINT dispute_processor_id_key UNIQUE (processor, processor_id)
+  "reasonMessage" TEXT,
+  "paymentId" UUID NOT NULL REFERENCES payment(id),
+  "organizationId" UUID NOT NULL REFERENCES organization(id),
+  "customerId" UUID REFERENCES customer(id),
+  "evidenceDueBy" TIMESTAMPTZ,
+  "evidenceSubmittedAt" TIMESTAMPTZ,
+  "resolvedAt" TIMESTAMPTZ,
+  CONSTRAINT dispute_processor_id_key UNIQUE (processor, "processorId")
 );
 
 -- Add default_payment_method_id FK to customer (after payment_method table exists)
 ALTER TABLE customer
-  ADD COLUMN default_payment_method_id UUID REFERENCES payment_method(id) ON DELETE SET NULL;
+  ADD COLUMN "defaultPaymentMethodId" UUID REFERENCES payment_method(id) ON DELETE SET NULL;
 
 -- Indexes from base migration
-CREATE INDEX IF NOT EXISTS idx_product_project_id ON product(project_id);
-CREATE INDEX IF NOT EXISTS idx_project_organization_id ON project(organization_id);
+CREATE INDEX IF NOT EXISTS idx_product_project_id ON product("projectId");
+CREATE INDEX IF NOT EXISTS idx_project_organization_id ON project("organizationId");
 
-CREATE INDEX IF NOT EXISTS idx_checkout_session_processor_checkout_id ON checkout_session(processor_checkout_id);
-CREATE INDEX IF NOT EXISTS idx_checkout_session_org_id ON checkout_session(organization_id);
+CREATE INDEX IF NOT EXISTS idx_checkout_session_processor_checkout_id ON checkout_session("processorCheckoutId");
+CREATE INDEX IF NOT EXISTS idx_checkout_session_org_id ON checkout_session("organizationId");
 
-CREATE INDEX IF NOT EXISTS idx_transaction_project_id ON transaction(project_id);
-CREATE INDEX IF NOT EXISTS idx_transaction_customer_id ON transaction(customer_id);
-CREATE INDEX IF NOT EXISTS idx_transaction_charge_id ON transaction(charge_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_project_id ON transaction("projectId");
+CREATE INDEX IF NOT EXISTS idx_transaction_customer_id ON transaction("customerId");
+CREATE INDEX IF NOT EXISTS idx_transaction_charge_id ON transaction("chargeId");
 
-CREATE INDEX IF NOT EXISTS idx_subscription_processor_subscription_id ON subscription(processor_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_subscription_processor_subscription_id ON subscription("processorSubscriptionId");
 
-CREATE INDEX IF NOT EXISTS idx_processed_webhook_event_type ON processed_webhook_event(event_type);
+CREATE INDEX IF NOT EXISTS idx_processed_webhook_event_type ON processed_webhook_event("eventType");
 
-CREATE UNIQUE INDEX IF NOT EXISTS account_org_processor_key ON account(organization_id, processor);
-CREATE UNIQUE INDEX IF NOT EXISTS account_processor_account_id_key ON account(processor, processor_account_id) WHERE processor_account_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_connected_account_org ON account(organization_id);
+CREATE UNIQUE INDEX IF NOT EXISTS account_org_processor_key ON connect_account("organizationId", processor);
+CREATE UNIQUE INDEX IF NOT EXISTS account_processor_account_id_key ON connect_account(processor, "processorAccountId") WHERE "processorAccountId" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_connected_account_org ON connect_account("organizationId");
 
-CREATE INDEX IF NOT EXISTS idx_transfer_destination ON transfer(destination_account_id);
+CREATE INDEX IF NOT EXISTS idx_transfer_destination ON transfer("destinationAccountId");
 
-CREATE UNIQUE INDEX IF NOT EXISTS payout_processor_payout_id_key ON payout(processor, processor_payout_id) WHERE processor_payout_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_connect_payout_account ON payout(account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS payout_processor_payout_id_key ON payout(processor, "processorPayoutId") WHERE "processorPayoutId" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_connect_payout_account ON payout("accountId");
 
-CREATE INDEX IF NOT EXISTS idx_held_balance_org ON held_balance(organization_id);
-CREATE INDEX IF NOT EXISTS idx_held_balance_connected_account ON held_balance(connected_account_id);
+CREATE INDEX IF NOT EXISTS idx_held_balance_org ON held_balance("organizationId");
+CREATE INDEX IF NOT EXISTS idx_held_balance_connected_account ON held_balance("connectedAccountId");
 
 -- Expression index for OAuth callback performance
-CREATE INDEX IF NOT EXISTS idx_account_connect_state ON account ((data->>'connect_state')) WHERE data->>'connect_state' IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_account_connect_state ON connect_account ((data->>'connect_state')) WHERE data->>'connect_state' IS NOT NULL;
 
 -- Indexes from payment_tables migration
-CREATE INDEX IF NOT EXISTS ix_payment_method_customer_id ON payment_method(customer_id);
+CREATE INDEX IF NOT EXISTS ix_payment_method_customer_id ON payment_method("customerId");
 
 CREATE INDEX IF NOT EXISTS ix_payment_status ON payment(status);
-CREATE INDEX IF NOT EXISTS ix_payment_customer_id ON payment(customer_id);
-CREATE INDEX IF NOT EXISTS ix_payment_organization_id ON payment(organization_id);
+CREATE INDEX IF NOT EXISTS ix_payment_customer_id ON payment("customerId");
+CREATE INDEX IF NOT EXISTS ix_payment_organization_id ON payment("organizationId");
 
 CREATE INDEX IF NOT EXISTS ix_dispute_status ON dispute(status);
-CREATE INDEX IF NOT EXISTS ix_dispute_payment_id ON dispute(payment_id);
-CREATE INDEX IF NOT EXISTS ix_dispute_organization_id ON dispute(organization_id);
+CREATE INDEX IF NOT EXISTS ix_dispute_payment_id ON dispute("paymentId");
+CREATE INDEX IF NOT EXISTS ix_dispute_organization_id ON dispute("organizationId");
 
 CREATE INDEX IF NOT EXISTS ix_refund_status ON refund(status);
-CREATE INDEX IF NOT EXISTS ix_refund_payment_id ON refund(payment_id);
-CREATE UNIQUE INDEX IF NOT EXISTS ix_refund_processor_id ON refund(processor_id) WHERE processor_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ix_refund_payment_id ON refund("paymentId");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_refund_processor_id ON refund("processorId") WHERE "processorId" IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS ix_processed_webhook_event_handled_at ON processed_webhook_event(handled_at);
-CREATE INDEX IF NOT EXISTS ix_processed_webhook_event_unprocessed ON processed_webhook_event(processed_at) WHERE handled_at IS NULL;
+CREATE INDEX IF NOT EXISTS ix_processed_webhook_event_handled_at ON processed_webhook_event("handledAt");
+CREATE INDEX IF NOT EXISTS ix_processed_webhook_event_unprocessed ON processed_webhook_event("processedAt") WHERE "handledAt" IS NULL;
 
--- pgmq extension and queues
-CREATE EXTENSION IF NOT EXISTS pgmq;
-
-SELECT pgmq.create('webhooks');
-SELECT pgmq.create('webhooks_dlq');
