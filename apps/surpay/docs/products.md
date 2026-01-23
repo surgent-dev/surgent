@@ -38,21 +38,21 @@ Creates a new product and its first version. This also automatically creates a c
 
 #### Request Body
 
-| Field              | Type    | Required | Description                                                     |
-| :----------------- | :------ | :------- | :-------------------------------------------------------------- |
-| `project_id`       | UUID    | Yes      | The ID of the project this product belongs to.                  |
-| `product_group_id` | UUID    | Yes      | A unique ID you generate to group all versions of this product. |
-| `name`             | String  | Yes      | The name of the product.                                        |
-| `slug`             | String  | Yes      | A URL-friendly identifier for the product.                      |
-| `description`      | String  | No       | A brief description of the product.                             |
-| `is_default`       | Boolean | No       | Whether this is the default product for the project.            |
+| Field            | Type    | Required | Description                                                     |
+| :--------------- | :------ | :------- | :-------------------------------------------------------------- |
+| `projectId`      | UUID    | Yes      | The ID of the project this product belongs to.                  |
+| `productGroupId` | UUID    | Yes      | A unique ID you generate to group all versions of this product. |
+| `name`           | String  | Yes      | The name of the product.                                        |
+| `slug`           | String  | Yes      | A URL-friendly identifier for the product.                      |
+| `description`    | String  | No       | A brief description of the product.                             |
+| `isDefault`      | Boolean | No       | Whether this is the default product for the project.            |
 
 #### Response Body (201 Created)
 
 ```json
 {
-  "product_id": "uuid",
-  "product_group_id": "uuid",
+  "productId": "uuid",
+  "productGroupId": "uuid",
   "version": 1
 }
 ```
@@ -64,12 +64,12 @@ curl -X POST https://api.surpay.com/product \
   -H "Authorization: Bearer sp_test_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "project_id": "550e8400-e29b-41d4-a716-446655440000",
-    "product_group_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "projectId": "550e8400-e29b-41d4-a716-446655440000",
+    "productGroupId": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
     "name": "Pro Plan",
     "slug": "pro-plan",
     "description": "Unlimited access to all features",
-    "is_default": true
+    "isDefault": true
   }'
 ```
 
@@ -77,10 +77,10 @@ curl -X POST https://api.surpay.com/product \
 
 ### 2. Update Product
 
-Creates a new version of an existing product. The `product_group_id` remains the same, but a new `product_id` is generated and the `version` is incremented.
+Creates a new version of an existing product. The `productGroupId` remains the same, but a new `productId` is generated and the `version` is incremented.
 
 **HTTP Method:** `PUT`  
-**Path:** `/product/{product_id}`
+**Path:** `/product/{productId}`
 
 #### Request Body
 
@@ -91,15 +91,15 @@ All fields are optional. If not provided, the value from the previous version is
 | `name`        | String  | Updated name.                          |
 | `description` | String  | Updated description.                   |
 | `slug`        | String  | Updated slug.                          |
-| `is_default`  | Boolean | Update default status.                 |
-| `is_archived` | Boolean | Whether to archive this product group. |
+| `isDefault`   | Boolean | Update default status.                 |
+| `isArchived`  | Boolean | Whether to archive this product group. |
 
 #### Response Body (201 Created)
 
 ```json
 {
-  "product_id": "uuid (new)",
-  "product_group_id": "uuid (same)",
+  "productId": "uuid (new)",
+  "productGroupId": "uuid (same)",
   "version": 2
 }
 ```
@@ -127,22 +127,22 @@ Adds a pricing tier to a product. Prices are linked to the _latest version_ of t
 
 #### Request Body
 
-| Field                | Type    | Required | Description                                                 |
-| :------------------- | :------ | :------- | :---------------------------------------------------------- |
-| `project_id`         | UUID    | Yes      | The ID of the project.                                      |
-| `base_product_id`    | UUID    | Yes      | The `product_group_id` of the product.                      |
-| `price`              | Integer | Yes      | Amount in the smallest currency unit (e.g., 999 for $9.99). |
-| `price_currency`     | String  | Yes      | 3-letter ISO currency code (e.g., "usd").                   |
-| `name`               | String  | No       | Name for this price tier.                                   |
-| `description`        | String  | No       | Description for this price tier.                            |
-| `recurring_interval` | String  | No       | 'month' or 'year' for subscriptions.                        |
-| `is_default`         | Boolean | No       | Whether this is the default price for the product.          |
+| Field               | Type    | Required | Description                                                 |
+| :------------------ | :------ | :------- | :---------------------------------------------------------- |
+| `projectId`         | UUID    | Yes      | The ID of the project.                                      |
+| `productGroupId`    | UUID    | Yes      | The `productGroupId` of the product.                        |
+| `priceAmount`       | Integer | Yes      | Amount in the smallest currency unit (e.g., 999 for $9.99). |
+| `priceCurrency`     | String  | Yes      | 3-letter ISO currency code (e.g., "usd").                   |
+| `name`              | String  | No       | Name for this price tier.                                   |
+| `description`       | String  | No       | Description for this price tier.                            |
+| `recurringInterval` | String  | No       | 'month' or 'year' for subscriptions.                        |
+| `isDefault`         | Boolean | No       | Whether this is the default price for the product.          |
 
 #### Response Body (201 Created)
 
 ```json
 {
-  "product_price_id": "uuid"
+  "productPriceId": "uuid"
 }
 ```
 
@@ -153,11 +153,11 @@ curl -X POST https://api.surpay.com/product/price \
   -H "Authorization: Bearer sp_test_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "project_id": "550e8400-e29b-41d4-a716-446655440000",
-    "base_product_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    "price": 2900,
-    "price_currency": "usd",
-    "recurring_interval": "month",
+    "projectId": "550e8400-e29b-41d4-a716-446655440000",
+    "productGroupId": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "priceAmount": 2900,
+    "priceCurrency": "usd",
+    "recurringInterval": "month",
     "name": "Monthly Subscription"
   }'
 ```
@@ -180,24 +180,24 @@ Returns an array of product objects, each containing an array of prices.
   {
     "product": {
       "id": "uuid",
-      "product_group_id": "uuid",
+      "productGroupId": "uuid",
       "name": "Pro Plan v2",
       "description": "Now with even more features!",
       "slug": "pro-plan",
       "version": 2,
-      "is_archived": false,
-      "is_default": true,
-      "stripe_product_id": "prod_R123456789"
+      "isArchived": false,
+      "isDefault": true,
+      "processorProductId": "prod_R123456789"
     },
     "prices": [
       {
         "id": "uuid",
         "name": "Monthly Subscription",
         "description": null,
-        "price_amount": 2900,
-        "price_currency": "usd",
-        "recurring_interval": "month",
-        "is_default": false
+        "priceAmount": 2900,
+        "priceCurrency": "usd",
+        "recurringInterval": "month",
+        "isDefault": false
       }
     ]
   }
@@ -221,7 +221,7 @@ Surpay automatically synchronizes your products with Stripe:
 2.  **Environment Mapping**:
     - Requests using `sp_test_` keys sync with your Stripe **Test Mode**.
     - Requests using `sp_live_` keys sync with your Stripe **Live Mode**.
-3.  **Metadata**: Surpay stores the `product_group_id` and its own `product_id` in Stripe product metadata for easy cross-referencing.
+3.  **Metadata**: Surpay stores the `productGroupId` and its own `productId` in Stripe product metadata for easy cross-referencing.
 4.  **Idempotency**: Surpay uses internal idempotency keys to ensure that retried requests do not create duplicate products in Stripe.
 
 **Price Sync**: When you call `POST /product/price`, Surpay also creates a corresponding Price in Stripe. See [Product Prices Documentation](product-prices.md) for details.
@@ -234,35 +234,35 @@ Surpay automatically synchronizes your products with Stripe:
 
 Stores product versions.
 
-| Column              | Type    | Description                       |
-| :------------------ | :------ | :-------------------------------- |
-| `id`                | UUID    | Primary Key (Version ID).         |
-| `product_group_id`  | UUID    | Identifier for the product group. |
-| `project_id`        | UUID    | Foreign Key to `project`.         |
-| `name`              | String  | Product name.                     |
-| `description`       | Text    | Product description.              |
-| `slug`              | String  | URL-friendly identifier.          |
-| `version`           | Integer | Version number.                   |
-| `is_archived`       | Boolean | Archive status.                   |
-| `is_default`        | Boolean | Default status for project.       |
-| `stripe_product_id` | String  | Reference to Stripe Product.      |
-| `env`               | String  | 'test' or 'live'.                 |
+| Column               | Type    | Description                       |
+| :------------------- | :------ | :-------------------------------- |
+| `id`                 | UUID    | Primary Key (Version ID).         |
+| `productGroupId`     | UUID    | Identifier for the product group. |
+| `projectId`          | UUID    | Foreign Key to `project`.         |
+| `name`               | String  | Product name.                     |
+| `description`        | Text    | Product description.              |
+| `slug`               | String  | URL-friendly identifier.          |
+| `version`            | Integer | Version number.                   |
+| `isArchived`         | Boolean | Archive status.                   |
+| `isDefault`          | Boolean | Default status for project.       |
+| `processorProductId` | String  | Reference to Stripe Product.      |
+| `processor`          | String  | 'stripe', etc.                    |
 
 ### `product_price` Table
 
 Stores pricing information for specific product versions.
 
-| Column               | Type    | Description                                  |
-| :------------------- | :------ | :------------------------------------------- |
-| `id`                 | UUID    | Primary Key.                                 |
-| `product_id`         | UUID    | Foreign Key to `product` (specific version). |
-| `name`               | Text    | Price tier name.                             |
-| `description`        | Text    | Price tier description.                      |
-| `price_amount`       | Integer | Amount in cents.                             |
-| `price_currency`     | String  | 3-letter ISO code.                           |
-| `recurring_interval` | String  | 'month' or 'year'.                           |
-| `is_default`         | Boolean | Default status for product.                  |
-| `stripe_price_id`    | String  | Reference to Stripe Price.                   |
+| Column              | Type    | Description                                  |
+| :------------------ | :------ | :------------------------------------------- |
+| `id`                | UUID    | Primary Key.                                 |
+| `productId`         | UUID    | Foreign Key to `product` (specific version). |
+| `name`              | Text    | Price tier name.                             |
+| `description`       | Text    | Price tier description.                      |
+| `priceAmount`       | Integer | Amount in cents.                             |
+| `priceCurrency`     | String  | 3-letter ISO code.                           |
+| `recurringInterval` | String  | 'month' or 'year'.                           |
+| `isDefault`         | Boolean | Default status for product.                  |
+| `processorPriceId`  | String  | Reference to Stripe Price.                   |
 
 ---
 
