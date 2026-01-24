@@ -79,6 +79,8 @@ CREATE TABLE IF NOT EXISTS apikey (
   prefix VARCHAR(8) UNIQUE,
   "userId" UUID REFERENCES "user"(id),
   "organizationId" UUID REFERENCES organization(id),
+  "projectId" UUID REFERENCES project(id),
+  enabled BOOLEAN NOT NULL DEFAULT true,
   "createdAt" TIMESTAMPTZ DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
