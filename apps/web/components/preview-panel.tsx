@@ -24,7 +24,6 @@ import {
   useSandboxLogsQuery,
   type ConvexDashboardCredentials,
 } from '@/queries/projects'
-import { useSurpayAccounts, useSurpayConnect } from '@/queries/surpay'
 
 import DiffView from '@/components/diff/diff-view'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -146,59 +145,7 @@ function ChangesContent({ diffs }: { diffs: FileDiff[] }) {
 }
 
 function PaymentsContent() {
-  const { data: accounts, isLoading } = useSurpayAccounts()
-  const connect = useSurpayConnect()
-
-  if (isLoading) {
-    return <LoadingState icon={CreditCard} message="Loading payment accounts..." />
-  }
-
-  const handleConnect = async () => {
-    const result = await connect.mutateAsync()
-    if (result.oauth_url) {
-      window.location.href = result.oauth_url
-    }
-  }
-
-  if (!accounts?.length) {
-    return (
-      <div className="w-full h-full flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="rounded-full bg-muted p-4">
-            <CreditCard className="size-8 text-muted-foreground" strokeWidth={1.5} />
-          </div>
-          <div className="space-y-1">
-            <p className="font-medium">Connect Payments</p>
-            <p className="text-sm text-muted-foreground">Connect your Stripe account to accept payments</p>
-          </div>
-          <Button onClick={handleConnect} disabled={connect.isPending}>
-            {connect.isPending ? 'Connecting...' : 'Connect Stripe'}
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <ScrollArea className="h-full">
-      <div className="px-3 py-4 space-y-2">
-        {accounts.map((account) => (
-          <div
-            key={account.id}
-            className="flex items-center justify-between rounded-lg border bg-background/60 px-3 py-2"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className={cn('size-2 rounded-full', getStatusDot(account.status))} />
-              <span className="font-medium text-sm truncate">{account.processor}</span>
-            </div>
-            <span className={cn('text-xs font-medium capitalize', getStatusTone(account.status))}>
-              {formatStatus(account.status)}
-            </span>
-          </div>
-        ))}
-      </div>
-    </ScrollArea>
-  )
+  return <div> Pay coming soon. </div>
 }
 
 function LogSection({ title, content }: { title: string; content: string }) {

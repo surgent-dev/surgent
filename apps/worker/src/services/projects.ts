@@ -1,5 +1,4 @@
 import { db } from '@/lib/db'
-import { SurpayService } from '@/services/surpay'
 
 export function getProjectById(id: string) {
   return db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
@@ -21,9 +20,21 @@ export async function createProject(args: {
   githubUrl?: string
 }) {
   const now = new Date()
+  const id = crypto.randomUUID()
+  const projectIdShort = id.slice(0, 8)
+  const slugifiedName = args.name
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\-]+/g, '')
+    .replace(/\-\-+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '')
+  const slug = `${slugifiedName}-${projectIdShort}`
   const row = await db
     .insertInto('project')
     .values({
+      id,
+      slug,
       userId: args.userId,
       organizationId: args.organizationId,
       name: args.name,
@@ -34,13 +45,6 @@ export async function createProject(args: {
     })
     .returning(['id'])
     .executeTakeFirstOrThrow()
-  try {
-    await SurpayService.createProject(args.userId, row.id as string, args.name)
-  } catch (e) {
-    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-    console.error('FAILED TO CREATE SURPAY PROJECT', e)
-    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-  }
   return { id: row.id as string }
 }
 

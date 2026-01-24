@@ -55,6 +55,9 @@
 
             # Stripe test tools
             stripe-cli
+
+            # cloud management tools
+            awscli2
           ];
 
           env.RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";

@@ -35,7 +35,6 @@
     "pako": "^2.1.0",
     "pg": "8.16.3",
     "strip-json-comments": "^5.0.1",
-    "surpay": "0.1.0",
     "wrangler": "^4.0.0",
     "zod": "^4.1.12"
   },

@@ -8,7 +8,6 @@ import github from './routes/github'
 import mcp from './routes/mcp'
 import admin from './routes/admin'
 import providers from './routes/providers'
-import surpay from './routes/surpay'
 import { auth } from './lib/auth'
 import { config } from './lib/config'
 import { db } from './lib/db'
@@ -109,7 +108,6 @@ app.route('/api/github', github)
 app.route('/api/mcp', mcp)
 app.route('/api/admin', admin)
 app.route('/api/providers', providers)
-app.route('/api/surpay', surpay)
 app.route('/mcp', mcp)
 app.route('/preview', preview)
 
