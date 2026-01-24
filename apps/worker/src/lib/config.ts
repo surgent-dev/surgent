@@ -5,6 +5,7 @@ export const config = {
   env,
   server: {
     port: env.PORT || '4000',
+    host: env.HOST || 'localhost',
     clientOrigin: env.CLIENT_ORIGIN || 'http://localhost:3000',
     trustedOrigins: (env.TRUSTED_ORIGINS || env.CLIENT_ORIGIN || 'http://localhost:3000').split(','),
   },

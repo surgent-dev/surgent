@@ -88,3 +88,10 @@ docs/plans
 # nix 
 .direnv/
 .opencode
+
+# CDK
+cdk.out/
+cdk.context.json
+
+# deployments
+.env.prod
