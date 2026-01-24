@@ -203,7 +203,6 @@ export interface IpRateLimitTable {
 
 export interface ProjectTable {
   id: string | null
-  slug: string
   userId: string
   organizationId: string
   name: string
