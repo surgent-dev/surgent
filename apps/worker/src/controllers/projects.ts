@@ -421,11 +421,19 @@ export async function initializeProject(
   }
 
   console.log('[init] creating sandbox...')
+  if(!config.surgent.baseUrl || !config.opencode.baseUrl) {
+    throw new Error('SURGENT_BASE_URL and OPENCODE_BASE_URL are not set')
+  }
   const { sandbox, previewUrl } = await getOrCreateSandbox({
     port: 3000,
     workingDirectory,
     name: 'server',
-    env: { SURGENT_API_KEY: apiKeyResult.key, SURGENT_AI_BASE_URL: 'https://ai.surgent.dev' },
+    env: {
+      SURGENT_API_KEY: apiKeyResult.key,
+      SURGENT_BASE_URL: config.surgent.baseUrl,
+      OPENCODE_API_KEY: apiKeyResult.key,
+      OPENCODE_BASE_URL: config.opencode.baseUrl,
+    },
   })
   console.log('[init] sandbox created:', sandbox.id, 'provider:', sandboxProviderName)
 

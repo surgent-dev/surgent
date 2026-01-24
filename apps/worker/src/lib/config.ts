@@ -71,8 +71,12 @@ export const config = {
   vercel: {
     apiKey: env.VERCEL_API_KEY,
   },
+  surgent: {
+    baseUrl: env.SURGENT_BASE_URL,
+  },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
+    baseUrl: env.OPENCODE_BASE_URL,
     configRepoUrl: env.OPENCODE_CONFIG_REPO_URL || 'https://github.com/surgent-dev/opencode-config.git',
     configDir: env.OPENCODE_CONFIG_DIR || '/home/user/opencode-config',
   },
