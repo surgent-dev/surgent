@@ -1,5 +1,5 @@
 {
-  "name": "@repo/gateway",
+  "name": "gateway",
   "private": true,
   "type": "module",
   "scripts": {

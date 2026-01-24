@@ -19,36 +19,37 @@ export class SurpayService {
   }
 
   /**
-   * Gets the Surpay API key for a user, creating an organization if it doesn't exist.
+   * Gets the Surpay API key for an organization, creating one if it doesn't exist.
    */
-  static async getOrCreateOrgKey(userId: string): Promise<string | null> {
+  static async getOrCreateOrgKey(organizationId: string): Promise<string | null> {
     const existing = await db
-      .selectFrom('surpay_organizations')
-      .select(['apiKey'])
-      .where('userId', '=', userId)
+      .selectFrom('organization')
+      .select(['apiKey', 'name', 'slug'])
+      .where('id', '=', organizationId)
       .executeTakeFirst()
 
-    if (existing) return existing.apiKey
+    if (existing?.apiKey) return existing.apiKey
 
-    // Create new organization on Surpay
-    const user = await db
-      .selectFrom('user')
-      .select(['name', 'email'])
-      .where('id', '=', userId)
-      .executeTakeFirstOrThrow()
+    // Create new organization on Surpay using existing org name and slug
+    const org =
+      existing ||
+      (await db
+        .selectFrom('organization')
+        .select(['name', 'slug'])
+        .where('id', '=', organizationId)
+        .executeTakeFirstOrThrow())
 
-    const username = user.name || user.email.split('@')[0]
     const { data, error } = await this.admin.organization.create({
-      name: user.name || user.email,
-      slug: `${this.slugify(username)}-${userId.slice(0, 8)}`,
+      name: org.name,
+      slug: org.slug,
     })
 
     if (error) {
       if (error.statusCode === 409) {
         const existing = await db
-          .selectFrom('surpay_organizations')
+          .selectFrom('organization')
           .select(['apiKey'])
-          .where('userId', '=', userId)
+          .where('id', '=', organizationId)
           .executeTakeFirst()
         if (existing) return existing.apiKey
       }
@@ -56,21 +57,22 @@ export class SurpayService {
       return null
     }
 
+    // Update the organization record with the api key (organization.id IS the surpay org ID)
     await db
-      .insertInto('surpay_organizations')
-      .values({
-        userId,
-        surpayOrgId: data.id,
+      .updateTable('organization')
+      .set({
         apiKey: data.api_key,
+        apiKeyPrefix: data.api_key.slice(0, 8),
+        updatedAt: new Date(),
       })
-      .onConflict((oc) => oc.column('userId').doNothing())
+      .where('id', '=', organizationId)
       .execute()
 
     // Re-fetch in case of race (another request won)
     const inserted = await db
-      .selectFrom('surpay_organizations')
+      .selectFrom('organization')
       .select(['apiKey'])
-      .where('userId', '=', userId)
+      .where('id', '=', organizationId)
       .executeTakeFirstOrThrow()
 
     return inserted.apiKey
@@ -79,8 +81,8 @@ export class SurpayService {
   /**
    * Creates a Surpay project for a Surgent project
    */
-  static async createProject(userId: string, projectId: string, name: string) {
-    const apiKey = await this.getOrCreateOrgKey(userId)
+  static async createProject(organizationId: string, projectId: string, name: string) {
+    const apiKey = await this.getOrCreateOrgKey(organizationId)
     if (!apiKey) return
 
     const surpay = new Surpay({
