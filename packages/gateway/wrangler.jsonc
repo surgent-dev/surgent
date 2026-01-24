@@ -9,13 +9,6 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
-  "vars": {
-    "STAGE": "dev", // prod
-    "POSTGRES_TYPE": "neon" // planetscale
-    // Set ZEN_MODELS or ZEN_MODELS1..8 as needed.
-    // Use `wrangler secret put DATABASE_URL` for the database URL.
-    // Use `wrangler secret put BETTER_AUTH_SECRET` for the auth secret.
-  },
   "kv_namespaces": [
     {
       "binding": "GATEWAY_KV",
