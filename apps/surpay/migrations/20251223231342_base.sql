@@ -40,6 +40,15 @@ CREATE TYPE refund_status AS ENUM (
   'canceled'
 );
 
+CREATE TABLE IF NOT EXISTS "user" (
+  id UUID PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  "emailVerified" BOOLEAN NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS organization (
   id UUID PRIMARY KEY,
   name TEXT NOT NULL,
@@ -63,12 +72,13 @@ CREATE TABLE IF NOT EXISTS project (
   "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS api_key (
+CREATE TABLE IF NOT EXISTS apikey (
   id UUID PRIMARY KEY,
   name TEXT NOT NULL,
-  slug TEXT NOT NULL UNIQUE,
-  "apiKey" TEXT UNIQUE,
-  "apiKeyPrefix" VARCHAR(8) UNIQUE,
+  "key" TEXT UNIQUE,
+  prefix VARCHAR(8) UNIQUE,
+  "userId" UUID REFERENCES "user"(id),
+  "organizationId" UUID REFERENCES organization(id),
   "createdAt" TIMESTAMPTZ DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
