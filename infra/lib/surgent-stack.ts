@@ -122,6 +122,8 @@ export class SurgentStack extends cdk.Stack {
         subnetType: ec2.SubnetType.PUBLIC,
       },
       healthCheckGracePeriod: cdk.Duration.seconds(60),
+      minHealthyPercent: 50,
+      maxHealthyPercent: 200,
     })
 
     // Configure health check
@@ -135,15 +137,16 @@ export class SurgentStack extends cdk.Stack {
       unhealthyThresholdCount: 3,
     })
 
-    // Auto-scaling: min 1, max 4, CPU target 70%
+    // Auto-scaling: min 2, max 8, request count target 100/task
     const scaling = fargateService.service.autoScaleTaskCount({
-      minCapacity: 1,
-      maxCapacity: 4,
+      minCapacity: 2,
+      maxCapacity: 8,
     })
 
-    scaling.scaleOnCpuUtilization('CpuScaling', {
-      targetUtilizationPercent: 70,
-      scaleInCooldown: cdk.Duration.seconds(60),
+    scaling.scaleOnRequestCount('RequestCountScaling', {
+      targetGroup: fargateService.targetGroup,
+      requestsPerTarget: 100,
+      scaleInCooldown: cdk.Duration.seconds(120),
       scaleOutCooldown: cdk.Duration.seconds(60),
     })
 
