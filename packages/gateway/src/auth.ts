@@ -14,6 +14,7 @@ export function getAuth(env: Bindings) {
   if (!url) throw new Error('DATABASE_URL not set')
   if (!env.BETTER_AUTH_SECRET) throw new Error('BETTER_AUTH_SECRET not set')
 
+  console.log(`[gateway/auth] initializing db with type: ${env.POSTGRES_TYPE}`)
   const { dialect } = createClient(url, env.POSTGRES_TYPE)
 
   authInstance = betterAuth({

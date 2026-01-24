@@ -10,9 +10,8 @@
     "head_sampling_rate": 1
   },
   "vars": {
-    "STAGE": "dev",
-    "POSTGRES_TYPE": "pg",
-    "BETTER_AUTH_URL": "http://localhost:4000"
+    "STAGE": "dev", // prod
+    "POSTGRES_TYPE": "neon" // planetscale
     // Set ZEN_MODELS or ZEN_MODELS1..8 as needed.
     // Use `wrangler secret put DATABASE_URL` for the database URL.
     // Use `wrangler secret put BETTER_AUTH_SECRET` for the auth secret.
@@ -34,7 +33,10 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "1b4080b5b70449688a09fb4eac039c8a"
+      "id": "a7d19aa6d0d540ddb154d3a6f156a3d1"
+
+      // Optional. Can be used to connect to a local database for local development
+      // "localConnectionString": "postgresql://user:password@localhost:5432/databasename"
     }
   ]
 }
