@@ -44,31 +44,29 @@ async function ensureActiveOrganization(userId: string): Promise<string> {
 
   if (existingOrg) return existingOrg.id
 
-  await db.transaction().execute(async (tx) => {
-    await tx
-      .insertInto('organization')
-      .values({
-        id: organizationId,
-        name,
-        slug,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflict((oc) => oc.column('id').doNothing())
-      .execute()
+  await db
+    .insertInto('organization')
+    .values({
+      id: organizationId,
+      name,
+      slug,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflict((oc) => oc.column('id').doNothing())
+    .execute()
 
-    await tx
-      .insertInto('member')
-      .values({
-        id: crypto.randomUUID(),
-        userId,
-        organizationId,
-        role: 'owner',
-        createdAt: now,
-      })
-      .onConflict((oc) => oc.columns(['userId', 'organizationId']).doNothing())
-      .execute()
-  })
+  await db
+    .insertInto('member')
+    .values({
+      id: crypto.randomUUID(),
+      userId,
+      organizationId,
+      role: 'owner',
+      createdAt: now,
+    })
+    .onConflict((oc) => oc.columns(['userId', 'organizationId']).doNothing())
+    .execute()
 
   return organizationId
 }
