@@ -84,3 +84,6 @@ logs/
 
 # plans
 docs/plans
+
+# nix 
+.direnv/

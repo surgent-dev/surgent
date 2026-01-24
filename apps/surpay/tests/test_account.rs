@@ -68,18 +68,18 @@ async fn test_list_accounts_returns_org_accounts(pool: PgPool) -> TestResult {
     let account_id1 = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO account (
+        INSERT INTO connect_account (
             id,
-            organization_id,
+            "organizationId",
             country,
             currency,
-            is_payouts_enabled,
+            "isPayoutsEnabled",
             processor,
-            processor_account_id,
+            "processorAccountId",
             status,
-            details_submitted,
-            charges_enabled,
-            business_type,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType",
             data
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -104,18 +104,18 @@ async fn test_list_accounts_returns_org_accounts(pool: PgPool) -> TestResult {
     let account_id2 = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO account (
+        INSERT INTO connect_account (
             id,
-            organization_id,
+            "organizationId",
             country,
             currency,
-            is_payouts_enabled,
+            "isPayoutsEnabled",
             processor,
-            processor_account_id,
+            "processorAccountId",
             status,
-            details_submitted,
-            charges_enabled,
-            business_type,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType",
             data
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -227,18 +227,18 @@ async fn test_get_account_access_denied(pool: PgPool) -> TestResult {
     let account_id = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO account (
+        INSERT INTO connect_account (
             id,
-            organization_id,
+            "organizationId",
             country,
             currency,
-            is_payouts_enabled,
+            "isPayoutsEnabled",
             processor,
-            processor_account_id,
+            "processorAccountId",
             status,
-            details_submitted,
-            charges_enabled,
-            business_type,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType",
             data
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -285,18 +285,18 @@ async fn test_get_account_success(pool: PgPool) -> TestResult {
     let account_id = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO account (
+        INSERT INTO connect_account (
             id,
-            organization_id,
+            "organizationId",
             country,
             currency,
-            is_payouts_enabled,
+            "isPayoutsEnabled",
             processor,
-            processor_account_id,
+            "processorAccountId",
             status,
-            details_submitted,
-            charges_enabled,
-            business_type,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType",
             data
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -383,18 +383,18 @@ async fn test_callback_success(pool: PgPool) -> TestResult {
     let connect_state = "test_state_123";
     sqlx::query!(
         r#"
-        INSERT INTO account (
+        INSERT INTO connect_account (
             id,
-            organization_id,
+            "organizationId",
             country,
             currency,
-            is_payouts_enabled,
+            "isPayoutsEnabled",
             processor,
-            processor_account_id,
+            "processorAccountId",
             status,
-            details_submitted,
-            charges_enabled,
-            business_type,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType",
             data
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -438,9 +438,12 @@ async fn test_callback_success(pool: PgPool) -> TestResult {
     );
 
     // Verify status was updated
-    let account = sqlx::query!(r#"SELECT status FROM account WHERE id = $1"#, account_id)
-        .fetch_one(&pool)
-        .await?;
+    let account = sqlx::query!(
+        r#"SELECT status FROM connect_account WHERE id = $1"#,
+        account_id
+    )
+    .fetch_one(&pool)
+    .await?;
     assert_eq!(account.status, "onboarding_returned");
 
     Ok(())
@@ -510,17 +513,17 @@ async fn test_create_connect_account_success(pool: PgPool) -> TestResult {
 
     // Verify account was created in database with pending status
     let account = sqlx::query!(
-        r#"SELECT organization_id, country, currency, processor, processor_account_id, status, business_type FROM account WHERE id = $1"#,
+        r#"SELECT "organizationId", country, currency, processor, "processorAccountId", status, "businessType" FROM connect_account WHERE id = $1"#,
         Uuid::parse_str(account_id).unwrap()
     )
     .fetch_one(&pool)
     .await?;
 
-    assert_eq!(account.organization_id, Some(org_id));
+    assert_eq!(account.organizationId, org_id);
     assert_eq!(account.country, "US");
     assert_eq!(account.processor, "stripe");
     assert_eq!(account.status, "pending");
-    assert!(account.processor_account_id.is_none()); // Initially NULL for OAuth flow
+    assert!(account.processorAccountId.is_none()); // Initially NULL for OAuth flow
 
     Ok(())
 }
@@ -601,19 +604,19 @@ async fn test_create_connect_account_real_stripe(pool: PgPool) -> TestResult {
         oauth_url
     );
 
-    // Verify account was created in database with pending status and NULL processor_account_id
+    // Verify account was created in database with pending status and NULL processorAccountId
     let account = sqlx::query!(
         r#"
         SELECT
             id,
-            organization_id,
+            "organizationId",
             country,
             currency,
             processor,
-            processor_account_id,
+            "processorAccountId",
             status,
-            business_type
-        FROM account
+            "businessType"
+        FROM connect_account
         WHERE id = $1
         "#,
         Uuid::parse_str(account_id).unwrap()
@@ -621,14 +624,13 @@ async fn test_create_connect_account_real_stripe(pool: PgPool) -> TestResult {
     .fetch_one(&pool)
     .await?;
 
-    assert_eq!(account.organization_id, Some(org_id));
+    assert_eq!(account.organizationId, org_id);
     assert_eq!(account.country, "US");
     assert_eq!(account.currency, "usd");
     assert_eq!(account.processor, "stripe");
     assert_eq!(account.status, "pending");
-    assert!(account.processor_account_id.is_none()); // Initially NULL for OAuth flow
-    // business_type is optional and may not be returned by Stripe if not specified in request
-    // assert_eq!(account.business_type.unwrap(), "individual");
+    assert!(account.processorAccountId.is_none()); // Initially NULL for OAuth flow
+    // business_type is optional - Stripe may not return it if not specified in the request
 
     Ok(())
 }

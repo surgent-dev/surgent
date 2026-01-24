@@ -15,20 +15,12 @@ pub struct Organization {
     pub id: Uuid,
     pub name: String,
     pub slug: String,
+    #[sqlx(rename = "createdBy")]
     pub created_by: Option<String>,
-    pub api_key: Option<String>,
-    pub api_key_prefix: Option<String>,
+    #[sqlx(rename = "platformFeePercent")]
     pub platform_fee_percent: Option<i32>,
+    #[sqlx(rename = "platformFeeFixed")]
     pub platform_fee_fixed: Option<i32>,
-}
-
-#[derive(Debug, Clone, FromRow)]
-pub struct ApiKey {
-    pub id: Uuid,
-    pub name: String,
-    pub slug: String,
-    pub api_key: Option<String>,
-    pub api_key_prefix: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -77,7 +69,7 @@ fn generate_api_key() -> (String, String, String) {
 )]
 pub async fn create_organization(
     State(pool): State<PgPool>,
-    AuthenticatedApiKey(api_key): AuthenticatedApiKey,
+    api_key: AuthenticatedApiKey,
     Json(req): Json<CreateOrganizationRequest>,
 ) -> Result<Json<CreateOrganizationResponse>, (StatusCode, String)> {
     let org_id = Uuid::new_v4();
@@ -101,18 +93,46 @@ pub async fn create_organization(
             id,
             name,
             slug,
-            created_by,
-            api_key,
-            api_key_prefix
+            "createdBy"
         )
-        VALUES ($1, $2, $3, $4, $5, $6)
+        VALUES ($1, $2, $3, $4)
         "#,
         org_id,
         req.name,
         req.slug,
-        api_key.name,
+        req.name
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
+
+    let apikey_id = Uuid::new_v4();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO apikey (
+            id,
+            name,
+            "key",
+            prefix,
+            "userId",
+            "organizationId",
+            "createdAt",
+            "updatedAt"
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+        "#,
+        apikey_id,
+        format!("{} API Key", req.name),
         secret_hash,
-        prefix
+        prefix,
+        api_key.user_id,
+        org_id
     )
     .execute(&pool)
     .await

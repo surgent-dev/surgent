@@ -30,6 +30,9 @@ export function getAuth(env: Bindings) {
       dialect,
       type: 'postgres',
     },
+    advanced: {
+      database: { generateId: 'uuid' },
+    },
   })
 
   return authInstance

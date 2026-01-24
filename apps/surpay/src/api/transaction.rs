@@ -12,41 +12,70 @@ use uuid::Uuid;
 use crate::core::auth::{AuthenticatedOrganization, validate_project_ownership};
 
 #[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub id: Uuid,
+    #[sqlx(rename = "createdAt")]
     pub created_at: chrono::DateTime<chrono::Utc>,
     #[serde(rename = "type")]
     pub type_: String,
     pub amount: i64,
     pub currency: String,
+    #[sqlx(rename = "taxAmount")]
     pub tax_amount: Option<i64>,
+    #[sqlx(rename = "accountId")]
     pub account_id: Option<Uuid>,
+    #[sqlx(rename = "accountAmount")]
     pub account_amount: Option<i64>,
+    #[sqlx(rename = "accountCurrency")]
     pub account_currency: Option<String>,
+    #[sqlx(rename = "presentmentAmount")]
     pub presentment_amount: Option<i64>,
+    #[sqlx(rename = "presentmentCurrency")]
     pub presentment_currency: Option<String>,
+    #[sqlx(rename = "presentmentTaxAmount")]
     pub presentment_tax_amount: Option<i64>,
+    #[sqlx(rename = "taxFilingAmount")]
     pub tax_filing_amount: Option<i64>,
+    #[sqlx(rename = "taxFilingCurrency")]
     pub tax_filing_currency: Option<String>,
+    #[sqlx(rename = "taxCountry")]
     pub tax_country: Option<String>,
+    #[sqlx(rename = "taxState")]
     pub tax_state: Option<String>,
     pub processor: String,
+    #[sqlx(rename = "chargeId")]
     pub charge_id: Option<String>,
+    #[sqlx(rename = "transferId")]
     pub transfer_id: Option<String>,
+    #[sqlx(rename = "refundId")]
     pub refund_id: Option<Uuid>,
+    #[sqlx(rename = "payoutId")]
     pub payout_id: Option<Uuid>,
+    #[sqlx(rename = "paymentTransactionId")]
     pub payment_transaction_id: Option<Uuid>,
+    #[sqlx(rename = "incurredByTransactionId")]
     pub incurred_by_transaction_id: Option<Uuid>,
+    #[sqlx(rename = "payoutTransactionId")]
     pub payout_transaction_id: Option<Uuid>,
+    #[sqlx(rename = "projectId")]
     pub project_id: Option<Uuid>,
+    #[sqlx(rename = "customerId")]
     pub customer_id: Option<Uuid>,
+    #[sqlx(rename = "productId")]
     pub product_id: Option<Uuid>,
+    #[sqlx(rename = "productPriceId")]
     pub product_price_id: Option<Uuid>,
+    #[sqlx(rename = "subscriptionId")]
     pub subscription_id: Option<Uuid>,
+    #[sqlx(rename = "checkoutSessionId")]
     pub checkout_session_id: Option<Uuid>,
+    #[sqlx(rename = "processorInvoiceId")]
     pub processor_invoice_id: Option<String>,
     pub metadata: Option<serde_json::Value>,
+    #[sqlx(rename = "succeededAt")]
     pub succeeded_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[sqlx(rename = "refundedAt")]
     pub refunded_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -77,50 +106,49 @@ pub async fn list_transactions(
     let pool = &state.pool;
     validate_project_ownership(pool, project_id, &org).await?;
 
-    let transactions = sqlx::query_as!(
-        Transaction,
+    let transactions = sqlx::query_as::<_, Transaction>(
         r#"
         SELECT
             id,
-            created_at,
+            "createdAt",
             type as "type_!: String",
             amount,
             currency,
-            tax_amount,
-            account_id,
-            account_amount,
-            account_currency,
-            presentment_amount,
-            presentment_currency,
-            presentment_tax_amount,
-            tax_filing_amount,
-            tax_filing_currency,
-            tax_country,
-            tax_state,
+            "taxAmount",
+            "accountId",
+            "accountAmount",
+            "accountCurrency",
+            "presentmentAmount",
+            "presentmentCurrency",
+            "presentmentTaxAmount",
+            "taxFilingAmount",
+            "taxFilingCurrency",
+            "taxCountry",
+            "taxState",
             processor,
-            charge_id,
-            transfer_id,
-            refund_id,
-            payout_id,
-            payment_transaction_id,
-            incurred_by_transaction_id,
-            payout_transaction_id,
-            project_id,
-            customer_id,
-            product_id,
-            product_price_id,
-            subscription_id,
-            checkout_session_id,
-            processor_invoice_id,
+            "chargeId",
+            "transferId",
+            "refundId",
+            "payoutId",
+            "paymentTransactionId",
+            "incurredByTransactionId",
+            "payoutTransactionId",
+            "projectId",
+            "customerId",
+            "productId",
+            "productPriceId",
+            "subscriptionId",
+            "checkoutSessionId",
+            "processorInvoiceId",
             metadata,
-            succeeded_at,
-            refunded_at
+            "succeededAt",
+            "refundedAt"
         FROM transaction
-        WHERE project_id = $1 AND type = 'payment'
-        ORDER BY created_at DESC
+        WHERE "projectId" = $1 AND type = 'payment'
+        ORDER BY "createdAt" DESC
         "#,
-        project_id
     )
+    .bind(project_id)
     .fetch_all(pool)
     .await
     .map_err(|e| {

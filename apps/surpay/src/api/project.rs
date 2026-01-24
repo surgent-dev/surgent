@@ -6,12 +6,15 @@ use uuid::Uuid;
 
 use crate::core::auth::AuthenticatedOrganization;
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Project {
     pub id: Uuid,
+    #[sqlx(rename = "organizationId")]
     pub organization_id: Option<Uuid>,
     pub name: String,
     pub slug: String,
+    #[sqlx(rename = "externalId")]
     pub external_id: Option<Uuid>,
 }
 
@@ -25,6 +28,11 @@ pub struct CreateProjectRequest {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CreateProjectResponse {
     pub id: Uuid,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ListProjectsResponse {
+    pub projects: Vec<Project>,
 }
 
 /// Create a new project
@@ -54,10 +62,10 @@ pub async fn create_project(
         r#"
         INSERT INTO project (
             id,
-            organization_id,
+            "organizationId",
             name,
             slug,
-            external_id
+            "externalId"
         )
         VALUES ($1, $2, $3, $4, $5)
         "#,
@@ -85,4 +93,42 @@ pub async fn create_project(
         StatusCode::CREATED,
         Json(CreateProjectResponse { id: project_id }),
     ))
+}
+
+/// List all projects for the authenticated organization
+#[utoipa::path(
+    get,
+    path = "/projects",
+    tag = "project",
+    responses(
+        (status = 200, description = "Projects retrieved", body = ListProjectsResponse),
+        (status = 401, description = "Unauthorized - invalid or missing API key"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("org_key" = [])
+    )
+)]
+pub async fn list_projects(
+    State(pool): State<PgPool>,
+    AuthenticatedOrganization { organization: org }: AuthenticatedOrganization,
+) -> Result<(StatusCode, Json<ListProjectsResponse>), (StatusCode, String)> {
+    let projects = sqlx::query_as::<_, Project>(
+        r#"
+        SELECT id, "organizationId", name, slug, "externalId"
+        FROM project
+        WHERE "organizationId" = $1
+        "#,
+    )
+    .bind(org.id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
+
+    Ok((StatusCode::OK, Json(ListProjectsResponse { projects })))
 }

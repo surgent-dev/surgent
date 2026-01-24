@@ -5,6 +5,8 @@ import { db } from '@/lib/db'
 import { requireAuth } from '../middleware/auth'
 import type { AppContext } from '@/types/application'
 import { config } from '@/lib/config'
+import { z } from 'zod'
+import { zValidator } from '@hono/zod-validator'
 
 type Preview = { url: string; headers: Record<string, string> }
 
@@ -57,8 +59,8 @@ function isSSE(headers: Headers, path: string) {
 
 const agent = new Hono<AppContext>()
 
-agent.all('/:id/*', requireAuth, async (c) => {
-  const projectId = c.req.param('id')
+agent.all('/:id/*', zValidator('param', z.object({ id: z.string().uuid() })), requireAuth, async (c) => {
+  const { id: projectId } = c.req.valid('param')
 
   const project = await db
     .selectFrom('project')

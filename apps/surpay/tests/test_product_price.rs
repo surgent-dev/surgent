@@ -278,7 +278,7 @@ async fn test_create_product_price_stripe_integration(pool: PgPool) -> TestResul
 
     let price_record = sqlx::query!(
         r#"
-        SELECT processor_price_id
+        SELECT "processorPriceId"
         FROM product_price
         WHERE id = $1
         "#,
@@ -288,14 +288,14 @@ async fn test_create_product_price_stripe_integration(pool: PgPool) -> TestResul
     .await?;
 
     assert!(
-        price_record.processor_price_id.is_some(),
-        "Expected processor_price_id to be populated"
+        price_record.processorPriceId.is_some(),
+        "Expected processorPriceId to be populated"
     );
 
-    let processor_price_id = price_record.processor_price_id.unwrap();
+    let processor_price_id = price_record.processorPriceId.unwrap();
     assert!(
         processor_price_id.starts_with("price_"),
-        "Expected processor_price_id to start with 'price_', got: {}",
+        "Expected processorPriceId to start with 'price_', got: {}",
         processor_price_id
     );
 

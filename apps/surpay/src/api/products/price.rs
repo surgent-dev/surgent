@@ -51,12 +51,12 @@ pub async fn create_product_price(
     let pool = &state.pool;
     let product = sqlx::query!(
         r#"
-        SELECT p.id, p.processor_product_id
+        SELECT p.id, p."processorProductId"
         FROM product p
-        INNER JOIN project proj ON p.project_id = proj.id
-        WHERE p.product_group_id = $1
+        INNER JOIN project proj ON p."projectId" = proj.id
+        WHERE p."productGroupId" = $1
           AND proj.id = $2
-          AND proj.organization_id = $3
+          AND proj."organizationId" = $3
         ORDER BY p.version DESC NULLS LAST
         LIMIT 1
         "#,
@@ -86,7 +86,7 @@ pub async fn create_product_price(
         }
     };
 
-    let processor_product_id = match product.processor_product_id {
+    let processor_product_id = match product.processorProductId {
         Some(id) => id,
         None => {
             tracing::error!(
@@ -150,14 +150,14 @@ pub async fn create_product_price(
         r#"
         INSERT INTO product_price (
             id,
-            product_id,
+            "productId",
             name,
             description,
-            price_amount,
-            price_currency,
-            recurring_interval,
-            is_default,
-            processor_price_id
+            "priceAmount",
+            "priceCurrency",
+            "recurringInterval",
+            "isDefault",
+            "processorPriceId"
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,

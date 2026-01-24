@@ -44,7 +44,7 @@ ORG_DATA=$(curl -s -X POST "$BASE_URL/organization" \
     "slug": "my-org-'"$(date +%s)"'"
   }')
 
-export API_KEY=$(echo $ORG_DATA | jq -r '.api_key')
+export API_KEY=$(echo $ORG_DATA | jq -r '.apiKey')
 echo "Organization API Key: $API_KEY"
 ```
 
@@ -76,7 +76,7 @@ echo "Project ID: $PROJECT_ID"
 
 ## Step 4: Create Product
 
-Products are versioned. You need to provide a `product_group_id` (a UUID) to group different versions of the same product. When a product is created, Surpay automatically creates a corresponding product in Stripe.
+Products are versioned. You need to provide a `productGroupId` (a UUID) to group different versions of the same product. When a product is created, Surpay automatically creates a corresponding product in Stripe.
 
 ```bash
 PRODUCT_GROUP_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
@@ -84,41 +84,41 @@ PRODUCT_DATA=$(curl -s -X POST "$BASE_URL/product" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "project_id": "'"$PROJECT_ID"'",
-    "product_group_id": "'"$PRODUCT_GROUP_ID"'",
+    "projectId": "'"$PROJECT_ID"'",
+    "productGroupId": "'"$PRODUCT_GROUP_ID"'",
     "name": "Pro Plan",
     "slug": "pro-plan-'"$(date +%s)"'",
-    "is_default": true
+    "isDefault": true
   }')
 
-PRODUCT_ID=$(echo $PRODUCT_DATA | jq -r '.product_id')
+PRODUCT_ID=$(echo $PRODUCT_DATA | jq -r '.productId')
 echo "Product ID: $PRODUCT_ID"
 ```
 
 ## Step 5: Create Product Price
 
-Create a price for the product. Note that `base_product_id` refers to the `product_group_id`. Surpay will automatically create this price in Stripe and link it to the product.
+Create a price for the product. Note that `productGroupId` refers to the `productGroupId`. Surpay will automatically create this price in Stripe and link it to the product.
 
 ```bash
 PRICE_ID=$(curl -s -X POST "$BASE_URL/product/price" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "project_id": "'"$PROJECT_ID"'",
-    "product_group_id": "'"$PRODUCT_GROUP_ID"'",
+    "projectId": "'"$PROJECT_ID"'",
+    "productGroupId": "'"$PRODUCT_GROUP_ID"'",
     "name": "one time payment",
-    "price": 2900,
-    "price_currency": "usd",
-    "recurring_interval": "",
-    "is_default": true
-  }' | jq -r '.product_price_id')
+    "priceAmount": 2900,
+    "priceCurrency": "usd",
+    "recurringInterval": "",
+    "isDefault": true
+  }' | jq -r '.productPriceId')
 
 echo "Price ID: $PRICE_ID"
 ```
 
 ## Step 6: List Products with Prices (Verify)
 
-Verify that your product and price were created correctly and that the `stripe_product_id` is populated.
+Verify that your product and price were created correctly and that the `processorProductId` is populated.
 
 ```bash
 curl -s "$BASE_URL/product/prices" \
@@ -134,10 +134,10 @@ curl -s -X POST "$BASE_URL/checkout" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "product_id": "'"$PRODUCT_ID"'",
-    "price_id": "'"$PRICE_ID"'",
-    "success_url": "https://example.com/success",
-    "cancel_url": "https://example.com/cancel"
+    "productId": "'"$PRODUCT_ID"'",
+    "priceId": "'"$PRICE_ID"'",
+    "successUrl": "https://example.com/success",
+    "cancelUrl": "https://example.com/cancel"
   }'
 ```
 
@@ -192,7 +192,7 @@ ORG_DATA=$(curl -s -X POST "$BASE_URL/organization" \
     \"name\": \"Test Org $TS\",
     \"slug\": \"test-org-$TS\"
   }")
-API_KEY=$(echo $ORG_DATA | jq -r '.api_key')
+API_KEY=$(echo $ORG_DATA | jq -r '.apiKey')
 echo "Org API Key: $API_KEY"
 
 echo "--- Step 2: Health Check ---"
@@ -215,13 +215,13 @@ PRODUCT_DATA=$(curl -s -X POST "$BASE_URL/product" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d "{
-    \"project_id\": \"$PROJECT_ID\",
-    \"product_group_id\": \"$PRODUCT_GROUP_ID\",
+    \"projectId\": \"$PROJECT_ID\",
+    \"productGroupId\": \"$PRODUCT_GROUP_ID\",
     \"name\": \"Test Product $TS\",
     \"slug\": \"test-product-$TS\",
-    \"is_default\": true
+    \"isDefault\": true
   }")
-PRODUCT_ID=$(echo $PRODUCT_DATA | jq -r '.product_id')
+PRODUCT_ID=$(echo $PRODUCT_DATA | jq -r '.productId')
 echo "Product ID: $PRODUCT_ID"
 
 echo "--- Step 5: Create Product Price ---"
@@ -229,14 +229,14 @@ PRICE_ID=$(curl -s -X POST "$BASE_URL/product/price" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d "{
-    \"project_id\": \"$PROJECT_ID\",
-    \"base_product_id\": \"$PRODUCT_GROUP_ID\",
+    \"projectId\": \"$PROJECT_ID\",
+    \"productGroupId\": \"$PRODUCT_GROUP_ID\",
     \"name\": \"Monthly Test\",
-    \"price\": 1000,
-    \"price_currency\": \"usd\",
-    \"recurring_interval\": \"month\",
-    \"is_default\": true
-  }" | jq -r '.product_price_id')
+    \"priceAmount\": 1000,
+    \"priceCurrency\": \"usd\",
+    \"recurringInterval\": \"month\",
+    \"isDefault\": true
+  }" | jq -r '.productPriceId')
 echo "Price ID: $PRICE_ID"
 
 echo "--- Step 6: Verify ---"
@@ -247,10 +247,10 @@ curl -s -X POST "$BASE_URL/checkout" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d "{
-    \"product_id\": \"$PRODUCT_ID\",
-    \"price_id\": \"$PRICE_ID\",
-    \"success_url\": \"https://example.com/success\",
-    \"cancel_url\": \"https://example.com/cancel\"
+    \"productId\": \"$PRODUCT_ID\",
+    \"priceId\": \"$PRICE_ID\",
+    \"successUrl\": \"https://example.com/success\",
+    \"cancelUrl\": \"https://example.com/cancel\"
   }" | jq
 
 echo "--- Step 8: List Customers ---"
@@ -273,7 +273,7 @@ curl -s "$BASE_URL/project/$PROJECT_ID/subscriptions" \
 - **401 Unauthorized:** Check your API key.
   - Use the **Master Key** (`sp_...` from Step 0) ONLY for creating organizations.
   - Use the **Organization Key** (`sp_...` from Step 1) for all other endpoints.
-- **404 Product not found:** Ensure the `product_id` exists and belongs to the organization associated with your API key.
+- **404 Product not found:** Ensure the `productId` exists and belongs to the organization associated with your API key.
 - **400 Bad Request:** Check the required fields in your JSON body. Ensure UUIDs are valid and slugs are unique.
 - **409 Conflict:** The slug you are trying to use for a project or organization already exists. Use a unique slug.
 - **502 Bad Gateway (Stripe Error):** This usually means there was an issue communicating with Stripe. Check your `.env` file for valid `STRIPE_SECRET_KEY` and ensure your internet connection is stable.

@@ -42,6 +42,14 @@ To regenerate the javascript SDK, run ./packages/sdk/js/script/build.ts
 
 - ALWAYS USE PARALLEL TOOLS WHEN APPLICABLE.
 
+## Rust
+
+- DO NOT EDIT .sqlx/ by hand. Use `cargo prepare` to generate offline sqlx queries.
+- DO NOT run migrations by hand, DO NOT edit database directly.
+- Always run `cargo fmt` after rust code changes
+- Do not leave comments if the code is easy to understand, leave comments if logic is complicated or the behavior is not immediately obvious.
+- Run tests faster with `cargo nextest run`
+
 ## Plans
 
 - For plans, write them into docs/plans with the suffix <plan-name>.plan.md, include references to internal/external sources of reference.

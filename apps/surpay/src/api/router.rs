@@ -19,7 +19,7 @@ use crate::api::openapi::ApiDoc;
 use crate::api::organization::create_organization;
 use crate::api::products::price::create_product_price;
 use crate::api::products::{create_product, list_products_with_prices, update_product};
-use crate::api::project::create_project;
+use crate::api::project::{create_project, list_projects};
 use crate::api::subscription::list_subscriptions;
 use crate::api::transaction::list_transactions;
 use crate::api::webhook::webhook_handler;
@@ -56,6 +56,7 @@ pub fn create_router(state: AppState) -> Router {
 
     Router::new()
         .route("/health", get(health_check))
+        .route("/projects", get(list_projects))
         .nest("/webhooks", webhook_routes)
         .nest("/organization", organization_routes)
         .nest("/project", project_routes)

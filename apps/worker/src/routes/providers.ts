@@ -7,8 +7,8 @@ import { requireAuth } from '../middleware/auth'
 
 const providers = new Hono<AppContext>()
 
-const idParam = z.object({ id: z.string() })
-const providerParam = z.object({ id: z.string(), provider: z.string() })
+const idParam = z.object({ id: z.string().uuid() })
+const providerParam = z.object({ id: z.string().uuid(), provider: z.string() })
 const providerSchema = z.object({
   provider: z.string().min(1).max(64),
   credentials: z.string(),

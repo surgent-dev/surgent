@@ -18,7 +18,7 @@ services:
     container_name: postgres-dev
     restart: unless-stopped
     ports:
-      - '5433:5432'
+      - '5432:5432'
     environment:
       POSTGRES_DB: surgent
       POSTGRES_USER: surgent

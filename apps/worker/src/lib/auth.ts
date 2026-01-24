@@ -36,6 +36,14 @@ async function ensureActiveOrganization(userId: string): Promise<string> {
   const slug = `personal-${userId}`
   const name = user?.name || 'Personal'
 
+  const existingOrg = await db
+    .selectFrom('organization')
+    .select('id')
+    .where((eb) => eb.or([eb('id', '=', organizationId), eb('slug', '=', slug)]))
+    .executeTakeFirst()
+
+  if (existingOrg) return existingOrg.id
+
   await db.transaction().execute(async (tx) => {
     await tx
       .insertInto('organization')
@@ -119,6 +127,7 @@ export const auth = betterAuth({
   },
 
   advanced: {
+    database: { generateId: 'uuid' },
     crossSubDomainCookies: { enabled: true },
   },
 })

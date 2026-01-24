@@ -11,7 +11,7 @@ Prices are linked to the **latest version** of a product group at the time of cr
 ### Key Concepts
 
 - **Price Immutability**: Once created, a price record is never updated.
-- **Product Relationship**: Prices are linked to a product group via `base_product_id`. They are internally associated with the latest version of that product.
+- **Product Relationship**: Prices are linked to a product group via `productGroupId`. They are internally associated with the latest version of that product.
 - **Stripe Sync**: Every price created in Surpay is automatically mirrored in Stripe.
 - **Recurring vs One-time**: Prices can be recurring (subscriptions) or one-time payments.
 
@@ -40,22 +40,22 @@ Adds a pricing tier to a product. This also automatically creates a correspondin
 
 #### Request Body
 
-| Field                | Type    | Required | Description                                                    |
-| :------------------- | :------ | :------- | :------------------------------------------------------------- |
-| `project_id`         | UUID    | Yes      | The ID of the project this price belongs to.                   |
-| `base_product_id`    | UUID    | Yes      | The `product_group_id` of the product.                         |
-| `price`              | Integer | Yes      | Amount in the smallest currency unit (e.g., 999 for $9.99).    |
-| `price_currency`     | String  | Yes      | 3-letter ISO currency code (e.g., "usd").                      |
-| `name`               | String  | No       | Name for this price tier.                                      |
-| `description`        | String  | No       | Description for this price tier.                               |
-| `recurring_interval` | String  | No       | 'month' or 'year' for subscriptions. Omit for one-time prices. |
-| `is_default`         | Boolean | No       | Whether this is the default price for the product.             |
+| Field               | Type    | Required | Description                                                    |
+| :------------------ | :------ | :------- | :------------------------------------------------------------- |
+| `projectId`         | UUID    | Yes      | The ID of the project this price belongs to.                   |
+| `productGroupId`    | UUID    | Yes      | The `productGroupId` of the product.                           |
+| `priceAmount`       | Integer | Yes      | Amount in the smallest currency unit (e.g., 999 for $9.99).    |
+| `priceCurrency`     | String  | Yes      | 3-letter ISO currency code (e.g., "usd").                      |
+| `name`              | String  | No       | Name for this price tier.                                      |
+| `description`       | String  | No       | Description for this price tier.                               |
+| `recurringInterval` | String  | No       | 'month' or 'year' for subscriptions. Omit for one-time prices. |
+| `isDefault`         | Boolean | No       | Whether this is the default price for the product.             |
 
 #### Response Body (201 Created)
 
 ```json
 {
-  "product_price_id": "uuid"
+  "productPriceId": "uuid"
 }
 ```
 
@@ -66,11 +66,11 @@ curl -X POST https://api.surpay.com/product/price \
   -H "Authorization: Bearer sp_test_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "project_id": "550e8400-e29b-41d4-a716-446655440000",
-    "base_product_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-    "price": 2900,
-    "price_currency": "usd",
-    "recurring_interval": "month",
+    "projectId": "550e8400-e29b-41d4-a716-446655440000",
+    "productGroupId": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "priceAmount": 2900,
+    "priceCurrency": "usd",
+    "recurringInterval": "month",
     "name": "Monthly Subscription",
     "description": "Pro plan monthly billing"
   }'
@@ -83,12 +83,12 @@ curl -X POST https://api.surpay.com/product/price \
 Surpay automatically synchronizes your product prices with Stripe:
 
 1.  **Automatic Creation**: When you call `POST /product/price`, Surpay creates a corresponding Price in Stripe.
-2.  **Product Requirement**: The product (identified by `base_product_id`) must already be synced to Stripe (i.e., it must have a `stripe_product_id`). If not, the request will fail with a `400 Bad Request`.
+2.  **Product Requirement**: The product (identified by `productGroupId`) must already be synced to Stripe (i.e., it must have a `processorProductId`). If not, the request will fail with a `400 Bad Request`.
 3.  **Environment Mapping**:
     - Requests using `sp_test_` keys sync with your Stripe **Test Mode**.
     - Requests using `sp_live_` keys sync with your Stripe **Live Mode**.
-4.  **Metadata**: Surpay stores its own `product_price_id` in the Stripe price metadata as `surpay_price_id`.
-5.  **Idempotency**: Surpay uses an idempotency key in the format `price:{product_id}:{org_id}:{price_id}` to ensure that retried requests do not create duplicate prices in Stripe.
+4.  **Metadata**: Surpay stores its own `productPriceId` in the Stripe price metadata as `surpay_price_id`.
+5.  **Idempotency**: Surpay uses an idempotency key in the format `price:{productId}:{org_id}:{price_id}` to ensure that retried requests do not create duplicate prices in Stripe.
 6.  **Immutability**: Since Stripe prices are mostly immutable, Surpay follows this pattern. To "update" a price, you must create a new one.
 
 ---
@@ -99,17 +99,17 @@ Surpay automatically synchronizes your product prices with Stripe:
 
 Stores pricing information for specific product versions.
 
-| Column               | Type    | Description                                           |
-| :------------------- | :------ | :---------------------------------------------------- |
-| `id`                 | UUID    | Primary Key.                                          |
-| `product_id`         | UUID    | Foreign Key to `product` (specific version ID).       |
-| `name`               | Text    | Price tier name.                                      |
-| `description`        | Text    | Price tier description.                               |
-| `price_amount`       | Integer | Amount in cents (or smallest currency unit).          |
-| `price_currency`     | String  | 3-letter ISO code (e.g., "usd").                      |
-| `recurring_interval` | String  | 'month', 'year', or NULL for one-time.                |
-| `is_default`         | Boolean | Default status for the product.                       |
-| `stripe_price_id`    | String  | Reference to the Stripe Price ID (e.g., `price_...`). |
+| Column              | Type    | Description                                           |
+| :------------------ | :------ | :---------------------------------------------------- |
+| `id`                | UUID    | Primary Key.                                          |
+| `productId`         | UUID    | Foreign Key to `product` (specific version ID).       |
+| `name`              | Text    | Price tier name.                                      |
+| `description`       | Text    | Price tier description.                               |
+| `priceAmount`       | Integer | Amount in cents (or smallest currency unit).          |
+| `priceCurrency`     | String  | 3-letter ISO code (e.g., "usd").                      |
+| `recurringInterval` | String  | 'month', 'year', or NULL for one-time.                |
+| `isDefault`         | Boolean | Default status for the product.                       |
+| `processorPriceId`  | String  | Reference to the Stripe Price ID (e.g., `price_...`). |
 
 ---
 

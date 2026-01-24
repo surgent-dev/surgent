@@ -15,18 +15,26 @@ use crate::core::auth::AuthenticatedOrganization;
 #[derive(Debug, Clone, FromRow)]
 pub struct Account {
     pub id: Uuid,
+    #[sqlx(rename = "organizationId")]
     pub organization_id: Uuid,
     pub country: String,
     pub currency: String,
+    #[sqlx(rename = "isPayoutsEnabled")]
     pub is_payouts_enabled: bool,
     pub processor: String,
+    #[sqlx(rename = "processorAccountId")]
     pub processor_account_id: Option<String>,
     pub status: String,
+    #[sqlx(rename = "detailsSubmitted")]
     pub details_submitted: bool,
+    #[sqlx(rename = "chargesEnabled")]
     pub charges_enabled: bool,
+    #[sqlx(rename = "businessType")]
     pub business_type: Option<String>,
     pub data: serde_json::Value,
+    #[sqlx(rename = "createdAt")]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[sqlx(rename = "updatedAt")]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -127,9 +135,9 @@ pub async fn create_connect_account(
 
     if let Some(existing) = sqlx::query_as::<_, ExistingAccountRow>(
         r#"
-        SELECT id, processor_account_id, status
-        FROM account
-        WHERE organization_id = $1 AND processor = $2
+        SELECT id, "processorAccountId", status
+        FROM connect_account
+        WHERE "organizationId" = $1 AND processor = $2
         "#,
     )
     .bind(org.id)
@@ -171,18 +179,18 @@ pub async fn create_connect_account(
 
     sqlx::query(
         r#"
-        INSERT INTO account (
+        INSERT INTO connect_account (
             id,
-            organization_id,
+            "organizationId",
             country,
             currency,
-            is_payouts_enabled,
+            "isPayoutsEnabled",
             processor,
-            processor_account_id,
+            "processorAccountId",
             status,
-            details_submitted,
-            charges_enabled,
-            business_type,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType",
             data
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -228,20 +236,20 @@ pub async fn connect_callback(
         r#"
         SELECT
             id,
-            organization_id,
+            "organizationId",
             country,
             currency,
-            is_payouts_enabled,
+            "isPayoutsEnabled",
             processor,
-            processor_account_id,
+            "processorAccountId",
             status,
-            details_submitted,
-            charges_enabled,
-            business_type,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType",
             data,
-            created_at,
-            updated_at
-        FROM account
+            "createdAt",
+            "updatedAt"
+        FROM connect_account
         WHERE id = $1
         "#,
     )
@@ -265,7 +273,7 @@ pub async fn connect_callback(
         return Err((StatusCode::BAD_REQUEST, "Invalid state".to_string()));
     }
 
-    sqlx::query("UPDATE account SET status = 'onboarding_returned' WHERE id = $1")
+    sqlx::query("UPDATE connect_account SET status = 'onboarding_returned' WHERE id = $1")
         .bind(account.id)
         .execute(&pool)
         .await
@@ -297,8 +305,8 @@ pub async fn connect_refresh(
 
     let row = sqlx::query_as::<_, RefreshAccountRow>(
         r#"
-        SELECT id, processor, processor_account_id, data
-        FROM account
+        SELECT id, processor, "processorAccountId", data
+        FROM connect_account
         WHERE id = $1
         "#,
     )
@@ -348,7 +356,7 @@ pub async fn connect_refresh(
 
     let mut data = row.data;
     data["connect_state"] = serde_json::Value::String(new_state);
-    sqlx::query("UPDATE account SET data = $1 WHERE id = $2")
+    sqlx::query("UPDATE connect_account SET data = $1 WHERE id = $2")
         .bind(data)
         .bind(row.id)
         .execute(&state.pool)
@@ -388,7 +396,7 @@ pub async fn oauth_callback(
     let row = sqlx::query_as::<_, AccountRow>(
         r#"
         SELECT id, processor, data
-        FROM account
+        FROM connect_account
         WHERE data->>'connect_state' = $1
         "#,
     )
@@ -457,13 +465,13 @@ pub async fn oauth_callback(
 
     sqlx::query(
         r#"
-        UPDATE account
-        SET processor_account_id = $1,
+        UPDATE connect_account
+        SET "processorAccountId" = $1,
             status = $2,
             data = $3,
-            details_submitted = $4,
-            charges_enabled = $5,
-            is_payouts_enabled = $6
+            "detailsSubmitted" = $4,
+            "chargesEnabled" = $5,
+            "isPayoutsEnabled" = $6
         WHERE id = $7
         "#,
     )
@@ -519,20 +527,20 @@ pub async fn get_account(
         r#"
         SELECT
             id,
-            organization_id,
+            "organizationId",
             country,
             currency,
-            is_payouts_enabled,
+            "isPayoutsEnabled",
             processor,
-            processor_account_id,
+            "processorAccountId",
             status,
-            details_submitted,
-            charges_enabled,
-            business_type,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType",
             data,
-            created_at,
-            updated_at
-        FROM account
+            "createdAt",
+            "updatedAt"
+        FROM connect_account
         WHERE id = $1
         "#,
     )
@@ -589,22 +597,22 @@ pub async fn list_accounts(
         r#"
         SELECT
             id,
-            organization_id,
+            "organizationId",
             country,
             currency,
-            is_payouts_enabled,
+            "isPayoutsEnabled",
             processor,
-            processor_account_id,
+            "processorAccountId",
             status,
-            details_submitted,
-            charges_enabled,
-            business_type,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType",
             data,
-            created_at,
-            updated_at
-        FROM account
-        WHERE organization_id = $1
-        ORDER BY created_at DESC
+            "createdAt",
+            "updatedAt"
+        FROM connect_account
+        WHERE "organizationId" = $1
+        ORDER BY "createdAt" DESC
         "#,
     )
     .bind(org.id)

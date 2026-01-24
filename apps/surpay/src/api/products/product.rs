@@ -15,16 +15,22 @@ use crate::integrations::types::ProcessorProductRequest;
 use crate::types::RecurringInterval;
 
 #[derive(Debug, Clone, Serialize, FromRow, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Product {
     pub id: Uuid,
+    #[sqlx(rename = "productGroupId")]
     pub product_group_id: Uuid,
     pub name: String,
     pub description: Option<String>,
+    #[sqlx(rename = "projectId")]
     pub project_id: Option<Uuid>,
     pub slug: String,
     pub version: Option<i32>,
+    #[sqlx(rename = "isArchived")]
     pub is_archived: Option<bool>,
+    #[sqlx(rename = "isDefault")]
     pub is_default: Option<bool>,
+    #[sqlx(rename = "processorProductId")]
     pub processor_product_id: Option<String>,
 }
 
@@ -75,7 +81,7 @@ pub async fn create_product(
         r#"
         SELECT COALESCE(MAX(version), 0) as "max!"
         FROM product
-        WHERE product_group_id = $1
+        WHERE "productGroupId" = $1
         "#,
         req.product_group_id
     )
@@ -127,14 +133,14 @@ pub async fn create_product(
         r#"
         INSERT INTO product (
             id,
-            product_group_id,
-            project_id,
+            "productGroupId",
+            "projectId",
             name,
             description,
             slug,
             version,
-            is_default,
-            processor_product_id
+            "isDefault",
+            "processorProductId"
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
@@ -228,18 +234,17 @@ pub async fn update_product(
     Path(product_id): Path<Uuid>,
     Json(req): Json<UpdateProductRequest>,
 ) -> Result<(StatusCode, Json<UpdateProductResponse>), (StatusCode, String)> {
-    let existing = sqlx::query_as!(
-        Product,
+    let existing = sqlx::query_as::<_, Product>(
         r#"
-        SELECT p.id, p.product_group_id, p.name, p.description,
-               p.project_id, p.slug, p.version, p.is_archived, p.is_default, p.processor_product_id
+        SELECT p.id, p."productGroupId", p.name, p.description,
+               p."projectId", p.slug, p.version, p."isArchived", p."isDefault", p."processorProductId"
         FROM product p
-        INNER JOIN project proj ON p.project_id = proj.id
-        WHERE p.id = $1 AND proj.organization_id = $2
+        INNER JOIN project proj ON p."projectId" = proj.id
+        WHERE p.id = $1 AND proj."organizationId" = $2
         "#,
-        product_id,
-        org.id
     )
+    .bind(product_id)
+    .bind(org.id)
     .fetch_optional(&pool)
     .await
     .map_err(|e| {
@@ -255,7 +260,7 @@ pub async fn update_product(
         r#"
         SELECT COALESCE(MAX(version), 0) as "max!"
         FROM product
-        WHERE product_group_id = $1
+        WHERE "productGroupId" = $1
         "#,
         existing.product_group_id
     )
@@ -274,8 +279,8 @@ pub async fn update_product(
     sqlx::query!(
         r#"
         INSERT INTO product (
-            id, product_group_id, project_id, name, description,
-            slug, version, is_default, is_archived
+            id, "productGroupId", "projectId", name, description,
+            slug, version, "isDefault", "isArchived"
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
@@ -336,18 +341,17 @@ pub async fn list_products_with_prices(
     validate_project_ownership(&pool, project_id, &org).await?;
 
     // DISTINCT ON gets the latest version per product_group (sorted by version DESC)
-    let products = sqlx::query_as!(
-        Product,
+    let products = sqlx::query_as::<_, Product>(
         r#"
-        SELECT DISTINCT ON (p.product_group_id)
-            p.id, p.product_group_id, p.name, p.description,
-            p.project_id, p.slug, p.version, p.is_archived, p.is_default, p.processor_product_id
+        SELECT DISTINCT ON (p."productGroupId")
+            p.id, p."productGroupId", p.name, p.description,
+            p."projectId", p.slug, p.version, p."isArchived", p."isDefault", p."processorProductId"
         FROM product p
-        WHERE p.project_id = $1
-        ORDER BY p.product_group_id, p.version DESC NULLS LAST
+        WHERE p."projectId" = $1
+        ORDER BY p."productGroupId", p.version DESC NULLS LAST
         "#,
-        project_id
     )
+    .bind(project_id)
     .fetch_all(&pool)
     .await
     .map_err(|e| {
@@ -365,10 +369,10 @@ pub async fn list_products_with_prices(
 
     let prices = sqlx::query!(
         r#"
-        SELECT id, product_id as "product_id!", name, description, price_amount as "price_amount?",
-               price_currency as "price_currency?", recurring_interval as "recurring_interval: RecurringInterval", is_default as "is_default?"
+        SELECT id, "productId" as "product_id!", name, description, "priceAmount" as "price_amount?",
+               "priceCurrency" as "price_currency?", "recurringInterval" as "recurring_interval: RecurringInterval", "isDefault" as "is_default?"
         FROM product_price
-        WHERE product_id = ANY($1)
+        WHERE "productId" = ANY($1)
         "#,
         &product_ids
     )

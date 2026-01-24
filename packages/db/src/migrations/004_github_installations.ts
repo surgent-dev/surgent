@@ -5,7 +5,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .createTable('github_installations')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('userId', 'text', (col) => col.notNull().references('user.id'))
+    .addColumn('userId', 'uuid', (col) => col.notNull().references('user.id'))
     .addColumn('installationId', 'bigint', (col) => col.notNull().unique())
     .addColumn('accountLogin', 'text', (col) => col.notNull())
     .addColumn('accountType', 'text', (col) => col.notNull())
