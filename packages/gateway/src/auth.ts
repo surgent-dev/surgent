@@ -16,7 +16,9 @@ async function hashApiKey(key: string) {
 export async function verifyApiKey(env: Bindings, key: string): Promise<VerifyResult> {
   const db = getDb(env)
   const hashed = await hashApiKey(key)
+  console.log(`AUTH DEBUG: hashed key=${hashed}`)
   const row = await db.selectFrom('apikey').select('id').where('key', '=', hashed).executeTakeFirst()
+  console.log(`AUTH DEBUG: row found=${!!row}`)
   if (!row) return { valid: false }
   return { valid: true, key: { id: row.id } }
 }
