@@ -42,6 +42,7 @@
     "dev": "bun --hot src/index.ts",
     "start": "bun src/index.ts",
     "e2b:build:dev": "bun run src/e2b/build.ts",
-    "e2b:build:prod": "NODE_ENV=production bun run src/e2b/build.ts"
+    "e2b:build:prod": "NODE_ENV=production bun run src/e2b/build.ts",
+    "e2b:build:dev-sandbox": "bun run src/e2b/build.dev.ts"
   }
 }
