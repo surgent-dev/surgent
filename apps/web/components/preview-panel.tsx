@@ -2,18 +2,7 @@
 
 import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from '@/components/agent/web-preview'
 import { useEffect, useMemo, type ElementType } from 'react'
-import {
-  X,
-  Database,
-  Monitor,
-  CreditCard,
-  GitCompare,
-  Terminal,
-  ScrollText,
-  Plus,
-  Power,
-  RefreshCw,
-} from 'lucide-react'
+import { X, Database, Monitor, GitCompare, Terminal, ScrollText, Plus, Power, RefreshCw } from 'lucide-react'
 import type { FileDiff } from '@opencode-ai/sdk'
 import { useQuery } from '@tanstack/react-query'
 
@@ -36,17 +25,14 @@ import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
 
 export interface PreviewTab {
   id: string
-  type: 'preview' | 'changes' | 'convex' | 'payments' | 'mcp' | 'logs'
+  type: 'preview' | 'changes' | 'convex' | 'mcp' | 'logs'
   title: string
   diffs?: FileDiff[]
   messageId?: string
   convexPath?: string
 }
 
-const DEFAULT_TABS: PreviewTab[] = [
-  { id: 'preview', type: 'preview', title: 'Preview' },
-  { id: 'payments', type: 'payments', title: 'Payments' },
-]
+const DEFAULT_TABS: PreviewTab[] = [{ id: 'preview', type: 'preview', title: 'Preview' }]
 
 type McpStatusValue = { status?: string } | string
 
@@ -142,10 +128,6 @@ function ChangesContent({ diffs }: { diffs: FileDiff[] }) {
       </div>
     </ScrollArea>
   )
-}
-
-function PaymentsContent() {
-  return <div> Pay coming soon. </div>
 }
 
 function LogSection({ title, content }: { title: string; content: string }) {
@@ -248,8 +230,6 @@ function getTabIcon(type: PreviewTab['type']) {
       return Monitor
     case 'convex':
       return Database
-    case 'payments':
-      return CreditCard
     case 'changes':
       return GitCompare
     case 'mcp':
@@ -271,7 +251,7 @@ function TabButton({
   onSelect: () => void
   onClose?: () => void
 }) {
-  const closable = tab.type !== 'preview' && tab.type !== 'convex' && tab.type !== 'payments'
+  const closable = tab.type !== 'preview' && tab.type !== 'convex'
   const Icon = getTabIcon(tab.type)
 
   return (
@@ -406,8 +386,6 @@ export default function PreviewPanel({
       }
       case 'convex':
         return <ConvexContent credentials={convexCredentials} isLoading={convexLoading} path={tab?.convexPath} />
-      case 'payments':
-        return <PaymentsContent />
       case 'changes':
         return tab?.diffs?.length ? <ChangesContent diffs={tab.diffs} /> : null
       case 'mcp':
