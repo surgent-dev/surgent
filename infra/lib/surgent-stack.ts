@@ -113,6 +113,7 @@ export class SurgentStack extends cdk.Stack {
         environment: {
           NODE_ENV: 'production',
           PORT: '4000',
+          HOST: '0.0.0.0',
         },
       },
       taskSubnets: {
@@ -123,7 +124,7 @@ export class SurgentStack extends cdk.Stack {
 
     // Configure health check
     fargateService.targetGroup.configureHealthCheck({
-      path: '/',
+      path: '/health',
       port: '4000',
       healthyHttpCodes: '200',
       interval: cdk.Duration.seconds(30),

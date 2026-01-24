@@ -135,10 +135,13 @@ const port = Number(config.server.port)
 
   console.log('🎉 Migrations completed successfully')
 
+  const host = config.server.host
+
   Bun.serve({
+    hostname: host,
     port,
     fetch: (req) => app.fetch(req),
   })
 
-  console.log(`[worker] listening on http://localhost:${port}`)
+  console.log(`[worker] listening on http://${host}:${port}`)
 })()
