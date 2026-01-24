@@ -92,3 +92,6 @@ docs/plans
 # CDK
 cdk.out/
 cdk.context.json
+
+# deployments
+.env.prod
