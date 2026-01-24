@@ -24,6 +24,33 @@ use surpay::integrations::{
 use tower::Service;
 use uuid::Uuid;
 
+/// Seeds a user and returns the user ID
+pub async fn seed_user(pool: &PgPool) -> Uuid {
+    let user_id = Uuid::new_v4();
+    let name = "Test User";
+    let email = format!("test-{}@example.com", &user_id.to_string()[..8]);
+
+    sqlx::query!(
+        r#"
+        INSERT INTO "user" (
+            id,
+            name,
+            email,
+            "emailVerified"
+        )
+        VALUES ($1, $2, $3, true)
+        "#,
+        user_id,
+        name,
+        email
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to seed user");
+
+    user_id
+}
+
 /// Seeds an API key (master key) and returns the full test API key string
 /// Mock ConnectProcessor for testing account endpoints without real Stripe API calls
 #[derive(Clone)]
@@ -172,10 +199,9 @@ impl ConnectProcessor for MockConnectProcessor {
 pub async fn seed_api_key(pool: &PgPool) -> String {
     let api_key_id = Uuid::new_v4();
     let name = "Test Master Key";
-    let slug = format!("test-master-key-{}", &api_key_id.to_string()[..8]);
-
     let prefix = "testliv1";
     let secret = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let user_id = seed_user(pool).await;
 
     let argon2 = Argon2::default();
 
@@ -187,20 +213,22 @@ pub async fn seed_api_key(pool: &PgPool) -> String {
 
     sqlx::query!(
         r#"
-        INSERT INTO api_key (
+        INSERT INTO apikey (
             id,
             name,
-            slug,
-            api_key,
-            api_key_prefix
+            "key",
+            prefix,
+            "userId",
+            "createdAt",
+            "updatedAt"
         )
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
         "#,
         api_key_id,
         name,
-        slug,
         hash,
-        prefix
+        prefix,
+        user_id
     )
     .execute(pool)
     .await
@@ -212,6 +240,7 @@ pub async fn seed_api_key(pool: &PgPool) -> String {
 /// Seeds an organization and returns (org_id, api_key)
 pub async fn seed_organization(pool: &PgPool) -> (Uuid, String) {
     let org_id = Uuid::new_v4();
+    let user_id = seed_user(pool).await;
     let name = "Test Organization";
     let slug = format!("test-org-{}", &org_id.to_string()[..8]);
 
@@ -232,20 +261,45 @@ pub async fn seed_organization(pool: &PgPool) -> (Uuid, String) {
             id,
             name,
             slug,
-            api_key,
-            api_key_prefix
+            "createdBy"
         )
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4)
         "#,
         org_id,
         name,
         slug,
-        hash,
-        prefix
+        name
     )
     .execute(pool)
     .await
     .expect("Failed to seed organization");
+
+    let apikey_id = Uuid::new_v4();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO apikey (
+            id,
+            name,
+            "key",
+            prefix,
+            "userId",
+            "organizationId",
+            "createdAt",
+            "updatedAt"
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+        "#,
+        apikey_id,
+        format!("{} API Key", name),
+        hash,
+        prefix,
+        user_id,
+        org_id
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to seed API key");
 
     let api_key = format!("sp_org_{}_{}", prefix, secret);
     (org_id, api_key)
@@ -262,7 +316,7 @@ pub async fn seed_customer(
 
     sqlx::query!(
         r#"
-        INSERT INTO customer (id, project_id, email, name)
+        INSERT INTO customer (id, "projectId", email, name)
         VALUES ($1, $2, $3, $4)
         "#,
         customer_id,

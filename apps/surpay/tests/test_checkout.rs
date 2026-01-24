@@ -276,7 +276,7 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
     // Step 10: Verify checkout_session record was created in database
     let checkout_session = sqlx::query!(
         r#"
-        SELECT id, processor_checkout_id, organization_id, project_id, product_id, price_id, status as "status: CheckoutStatus"
+        SELECT id, "processorCheckoutId", "organizationId", "projectId", "productId", "priceId", status as "status: CheckoutStatus"
         FROM checkout_session
         WHERE id = $1
         "#,
@@ -295,20 +295,20 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
 
     // Verify all fields match
     assert_eq!(
-        session.organization_id, org_id,
-        "checkout_session organization_id should match the requesting organization"
+        session.organizationId, org_id,
+        "checkout_session organizationId should match the requesting organization"
     );
     assert_eq!(
-        session.project_id, project_id,
-        "checkout_session project_id should match the product's project"
+        session.projectId, project_id,
+        "checkout_session projectId should match the product's project"
     );
     assert_eq!(
-        session.product_id, product_id,
-        "checkout_session product_id should match the requested product"
+        session.productId, product_id,
+        "checkout_session productId should match the requested product"
     );
     assert_eq!(
-        session.price_id, price_id,
-        "checkout_session price_id should match the requested price"
+        session.priceId, price_id,
+        "checkout_session priceId should match the requested price"
     );
     assert_eq!(
         session.status,
@@ -316,8 +316,8 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
         "checkout_session status should be 'open' for newly created sessions"
     );
     assert!(
-        !session.processor_checkout_id.is_empty(),
-        "checkout_session should have a non-empty processor_checkout_id"
+        !session.processorCheckoutId.is_empty(),
+        "checkout_session should have a non-empty processorCheckoutId"
     );
 
     Ok(())
@@ -424,7 +424,7 @@ async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestRe
     // Step 10: Verify checkout_session record was created in database
     let checkout_session = sqlx::query!(
         r#"
-        SELECT id, processor_checkout_id, organization_id, project_id, product_id, price_id, status as "status: CheckoutStatus"
+        SELECT id, "processorCheckoutId", "organizationId", "projectId", "productId", "priceId", status as "status: CheckoutStatus"
         FROM checkout_session
         WHERE id = $1
         "#,
@@ -443,20 +443,20 @@ async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestRe
 
     // Verify all fields match
     assert_eq!(
-        session.organization_id, org_id,
-        "checkout_session organization_id should match the requesting organization"
+        session.organizationId, org_id,
+        "checkout_session organizationId should match the requesting organization"
     );
     assert_eq!(
-        session.project_id, project_id,
-        "checkout_session project_id should match the product's project"
+        session.projectId, project_id,
+        "checkout_session projectId should match the product's project"
     );
     assert_eq!(
-        session.product_id, product_id,
-        "checkout_session product_id should match the requested product"
+        session.productId, product_id,
+        "checkout_session productId should match the requested product"
     );
     assert_eq!(
-        session.price_id, price_id,
-        "checkout_session price_id should match the requested price"
+        session.priceId, price_id,
+        "checkout_session priceId should match the requested price"
     );
     assert_eq!(
         session.status,
@@ -464,8 +464,8 @@ async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestRe
         "checkout_session status should be 'open' for newly created sessions"
     );
     assert!(
-        !session.processor_checkout_id.is_empty(),
-        "checkout_session should have a non-empty processor_checkout_id"
+        !session.processorCheckoutId.is_empty(),
+        "checkout_session should have a non-empty processorCheckoutId"
     );
 
     Ok(())

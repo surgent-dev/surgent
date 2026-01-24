@@ -135,8 +135,8 @@ async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) 
 
     sqlx::query(
         r#"
-        INSERT INTO checkout_session (id, processor_checkout_id, organization_id, project_id, product_id, price_id, status)
-        SELECT $1, $2, organization_id, $3, $4, $5, 'open'
+        INSERT INTO checkout_session (id, "processorCheckoutId", "organizationId", "projectId", "productId", "priceId", status)
+        SELECT $1, $2, "organizationId", $3, $4, $5, 'open'
         FROM project WHERE id = $3
         "#
     )
@@ -205,24 +205,21 @@ async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) 
 
     // Verify checkout session was updated
     let session = sqlx::query!(
-        "SELECT status as \"status: CheckoutStatus\", customer_id, customer_email, processor_customer_id, completed_at FROM checkout_session WHERE id = $1",
+        r#"SELECT status as "status: CheckoutStatus", "customerId", "customerEmail", "processorCustomerId", "completedAt" FROM checkout_session WHERE id = $1"#,
         checkout_id
     )
     .fetch_one(&pool)
     .await?;
 
     assert_eq!(session.status, CheckoutStatus::Complete);
-    assert_eq!(session.customer_email.as_deref(), Some("buyer@example.com"));
-    assert_eq!(
-        session.processor_customer_id.as_deref(),
-        Some("cus_test123")
-    );
-    assert!(session.completed_at.is_some());
-    assert!(session.customer_id.is_some());
+    assert_eq!(session.customerEmail.as_deref(), Some("buyer@example.com"));
+    assert_eq!(session.processorCustomerId.as_deref(), Some("cus_test123"));
+    assert!(session.completedAt.is_some());
+    assert!(session.customerId.is_some());
 
     // Verify customer was created
     let customer = sqlx::query!(
-        "SELECT email, name, processor_customer_id FROM customer WHERE project_id = $1 AND email = $2",
+        r#"SELECT email, name, "processorCustomerId" FROM customer WHERE "projectId" = $1 AND email = $2"#,
         project_id,
         "buyer@example.com"
     )
@@ -231,14 +228,11 @@ async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) 
 
     assert_eq!(customer.email, "buyer@example.com");
     assert_eq!(customer.name.as_deref(), Some("Test Buyer"));
-    assert_eq!(
-        customer.processor_customer_id.as_deref(),
-        Some("cus_test123")
-    );
+    assert_eq!(customer.processorCustomerId.as_deref(), Some("cus_test123"));
 
     // Verify transaction was created
     let transaction_row = sqlx::query!(
-        "SELECT type as \"type_: String\", amount, currency, processor FROM transaction WHERE checkout_session_id = $1",
+        r#"SELECT type as "type_: String", amount, currency, processor FROM transaction WHERE "checkoutSessionId" = $1"#,
         checkout_id
     )
     .fetch_one(&pool)
@@ -270,8 +264,8 @@ async fn test_checkout_expired_updates_status(pool: PgPool) -> TestResult {
 
     sqlx::query(
         r#"
-        INSERT INTO checkout_session (id, processor_checkout_id, organization_id, project_id, product_id, price_id, status)
-        SELECT $1, $2, organization_id, $3, $4, $5, 'open'
+        INSERT INTO checkout_session (id, "processorCheckoutId", "organizationId", "projectId", "productId", "priceId", status)
+        SELECT $1, $2, "organizationId", $3, $4, $5, 'open'
         FROM project WHERE id = $3
         "#
     )
@@ -326,7 +320,7 @@ async fn test_checkout_expired_updates_status(pool: PgPool) -> TestResult {
 
     // Verify status was updated
     let session = sqlx::query!(
-        "SELECT status as \"status: CheckoutStatus\" FROM checkout_session WHERE id = $1",
+        r#"SELECT status as "status: CheckoutStatus" FROM checkout_session WHERE id = $1"#,
         checkout_id
     )
     .fetch_one(&pool)

@@ -433,9 +433,9 @@ async fn test_create_product_with_stripe_integration(pool: PgPool) -> TestResult
     let body = read_body(response.into_body()).await;
     let product_id = Uuid::parse_str(body["product_id"].as_str().unwrap())?;
 
-    // Verify database record and processor_product_id population
+    // Verify database record and processorProductId population
     let product = sqlx::query!(
-        "SELECT name, processor_product_id FROM product WHERE id = $1",
+        r#"SELECT name, "processorProductId" FROM product WHERE id = $1"#,
         product_id
     )
     .fetch_one(&pool)
@@ -443,12 +443,12 @@ async fn test_create_product_with_stripe_integration(pool: PgPool) -> TestResult
 
     assert_eq!(product.name, product_name);
     assert!(
-        product.processor_product_id.is_some(),
-        "processor_product_id should be populated"
+        product.processorProductId.is_some(),
+        "processorProductId should be populated"
     );
     assert!(
-        product.processor_product_id.unwrap().starts_with("prod_"),
-        "processor_product_id should start with 'prod_'"
+        product.processorProductId.unwrap().starts_with("prod_"),
+        "processorProductId should start with 'prod_'"
     );
 
     Ok(())
