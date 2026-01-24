@@ -41,6 +41,8 @@ const SECRET_NAMES = [
   'POSTGRES_TYPE',
   'TRUSTED_ORIGINS',
   'XAI_API_KEY',
+  'OPENCODE_BASE_URL',
+  'SURGENT_BASE_URL',
 ] as const
 
 export class SurgentStack extends cdk.Stack {
