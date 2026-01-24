@@ -11,10 +11,8 @@
   "dependencies": {
     "dotenv": "^17.2.3",
     "@neondatabase/serverless": "^1.0.2",
-    "@planetscale/database": "^1.19.0",
     "kysely": "^0.28.8",
     "kysely-neon": "^2.0.2",
-    "kysely-planetscale": "^1.7.1",
     "pg": "^8.13.1"
   },
   "devDependencies": {
