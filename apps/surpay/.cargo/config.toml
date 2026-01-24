@@ -1,4 +1,0 @@
-[alias]
-prepare = ["sqlx", "prepare", "--", "--tests"]
-prepare-check = ["sqlx", "prepare", "--check", "--", "--tests"]
-t = "nextest run"

@@ -1,9 +1,0 @@
-services:
-  surpay:
-    image: "ghcr.io/surgent-dev/surpay:latest"
-    pull_policy: always
-    restart: always
-    network_mode: "bridge"
-    env_file: .env
-    ports:
-      - "8090:8090"

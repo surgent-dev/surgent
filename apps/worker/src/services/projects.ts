@@ -1,5 +1,4 @@
 import { db } from '@/lib/db'
-import { SurpayService } from '@/services/surpay'
 
 export function getProjectById(id: string) {
   return db.selectFrom('project').selectAll().where('id', '=', id).executeTakeFirst()
@@ -46,13 +45,6 @@ export async function createProject(args: {
     })
     .returning(['id'])
     .executeTakeFirstOrThrow()
-  try {
-    await SurpayService.createProject(args.userId, row.id as string, args.name)
-  } catch (e) {
-    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-    console.error('FAILED TO CREATE SURPAY PROJECT', e)
-    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-  }
   return { id: row.id as string }
 }
 
