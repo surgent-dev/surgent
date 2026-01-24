@@ -22,7 +22,7 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: surgent
+  ECR_REPOSITORY: surgent/worker
   ECR_REGISTRY: 784713213970.dkr.ecr.us-east-1.amazonaws.com
 
 jobs:
@@ -53,6 +53,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          labels: |
+            org.opencontainers.image.title=surgent/worker
           tags: |
             type=ref,event=branch
             type=ref,event=pr
