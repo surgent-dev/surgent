@@ -43,11 +43,12 @@ export async function up(db: Kysely<any>): Promise<void> {
   // Step 3: Create Surpay tables
 
   // connect_account (renamed from account to avoid collision with auth account table)
+  // Scoped to project so different projects can have different Stripe accounts
   await db.schema
     .createTable('connect_account')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('organizationId', 'uuid', (col) => col.notNull().references('organization.id'))
+    .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id'))
     .addColumn('country', 'varchar(2)', (col) => col.notNull())
     .addColumn('currency', 'varchar(3)', (col) => col.notNull())
     .addColumn('isPayoutsEnabled', 'boolean', (col) => col.notNull())
@@ -487,7 +488,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     db,
   )
   await sql`ALTER TABLE dispute ADD CONSTRAINT dispute_processor_id_key UNIQUE (processor, "processorId")`.execute(db)
-  await sql`ALTER TABLE connect_account ADD CONSTRAINT account_org_processor_key UNIQUE ("organizationId", processor)`.execute(
+  await sql`ALTER TABLE connect_account ADD CONSTRAINT account_project_processor_key UNIQUE ("projectId", processor)`.execute(
     db,
   )
   await sql`CREATE UNIQUE INDEX ix_connect_account_processor_account_id ON connect_account (processor, "processorAccountId") WHERE "processorAccountId" IS NOT NULL`.execute(
@@ -550,10 +551,10 @@ export async function up(db: Kysely<any>): Promise<void> {
     .column('eventType')
     .execute()
   await db.schema
-    .createIndex('idx_connect_account_org')
+    .createIndex('idx_connect_account_project')
     .ifNotExists()
     .on('connect_account')
-    .column('organizationId')
+    .column('projectId')
     .execute()
   await db.schema
     .createIndex('idx_transfer_destination')
@@ -706,7 +707,7 @@ export async function down(db: Kysely<any>): Promise<void> {
   await db.schema.dropIndex('idx_held_balance_org').ifExists().execute()
   await db.schema.dropIndex('idx_connect_payout_account').ifExists().execute()
   await db.schema.dropIndex('idx_transfer_destination').ifExists().execute()
-  await db.schema.dropIndex('idx_connect_account_org').ifExists().execute()
+  await db.schema.dropIndex('idx_connect_account_project').ifExists().execute()
   await db.schema.dropIndex('idx_processed_webhook_event_type').ifExists().execute()
   await db.schema.dropIndex('idx_subscription_processor_subscription_id').ifExists().execute()
   await db.schema.dropIndex('idx_transaction_charge_id').ifExists().execute()
