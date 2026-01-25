@@ -17,8 +17,8 @@ export function createDialect(url: string, type = 'neon'): Dialect {
   return new PostgresDialect({
     pool: new pg.Pool({
       connectionString: url,
-      max: 20,
-      min: 2,
+      max: 10,
+      min: 1,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
     }),

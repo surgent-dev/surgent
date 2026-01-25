@@ -145,7 +145,7 @@ export class SurgentStack extends cdk.Stack {
 
     scaling.scaleOnRequestCount('RequestCountScaling', {
       targetGroup: fargateService.targetGroup,
-      requestsPerTarget: 100,
+      requestsPerTarget: 200,
       scaleInCooldown: cdk.Duration.seconds(120),
       scaleOutCooldown: cdk.Duration.seconds(60),
     })
