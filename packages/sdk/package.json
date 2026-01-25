@@ -1,0 +1,57 @@
+{
+  "name": "@surgent-dev/surpay",
+  "version": "0.1.2",
+  "description": "Official Surpay SDK for TypeScript/JavaScript",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prebuild": "bun install",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "bun install && bun run clean && bun run build",
+    "changeset": "bunx changeset",
+    "changeset:version": "bunx changeset version",
+    "changeset:release": "bunx changeset publish"
+  },
+  "keywords": [
+    "surpay",
+    "payments",
+    "billing",
+    "subscriptions",
+    "stripe",
+    "sdk"
+  ],
+  "author": "Surgent",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/bun": "latest"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/surgent-dev/surpay-sdk-ts.git"
+  },
+  "homepage": "https://github.com/surgent-dev/surpay-sdk-ts#readme",
+  "bugs": {
+    "url": "https://github.com/surgent-dev/surpay-sdk-ts/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
