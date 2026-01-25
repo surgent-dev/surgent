@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                \"key\",\n                prefix,\n                \"userId\"\n            FROM apikey\n            WHERE prefix = $1\n              AND \"organizationId\" IS NULL\n              AND \"projectId\" IS NULL\n              AND enabled = true\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "userId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "14de551d1dbfd443d0d63608b05ca246c79130d598688d9d3a13db6382bbbb67"
+}
