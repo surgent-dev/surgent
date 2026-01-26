@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO transaction (id, \"createdAt\", type, amount, currency, processor,\n            \"projectId\", \"customerId\", \"productId\", \"productPriceId\",\n            \"checkoutSessionId\", \"chargeId\", \"succeededAt\")\n        VALUES ($1, NOW(), 'payment', $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())\n        ON CONFLICT (\"chargeId\") DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Varchar",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ed9fe7f844de15cb4598838c204254b9e3ce57287b147e82cfebf09600057f5f"
+}

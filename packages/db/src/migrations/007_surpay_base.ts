@@ -666,6 +666,11 @@ export async function up(db: Kysely<any>): Promise<void> {
     db,
   )
 
+  // Partial unique index for transaction.chargeId (payment only) - prevents duplicates on webhook retries
+  await sql`CREATE UNIQUE INDEX ix_transaction_charge_id_unique ON "transaction"("chargeId") WHERE "chargeId" IS NOT NULL AND "type" = 'payment'`.execute(
+    db,
+  )
+
   // Partial index for unprocessed webhooks
   await sql`CREATE INDEX ix_processed_webhook_event_unprocessed ON processed_webhook_event("processedAt") WHERE "handledAt" IS NULL`.execute(
     db,
@@ -696,6 +701,7 @@ export async function down(db: Kysely<any>): Promise<void> {
   await db.schema.dropIndex('ix_connect_account_processor_account_id').ifExists().execute()
   await db.schema.dropIndex('ix_refund_processor_id').ifExists().execute()
   await db.schema.dropIndex('ix_transaction_processor_invoice_id').ifExists().execute()
+  await db.schema.dropIndex('ix_transaction_charge_id_unique').ifExists().execute()
   await db.schema.dropIndex('idx_account_connect_state').ifExists().execute()
   await db.schema.dropIndex('ix_processed_webhook_event_handled_at').ifExists().execute()
   await db.schema.dropIndex('ix_dispute_project_id').ifExists().execute()
