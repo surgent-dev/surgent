@@ -282,6 +282,8 @@ projects.delete('/:id', zValidator('param', idParam), async (c) => {
   // Delete sandbox before soft deleting project
   await deleteSandbox({ projectId: id })
 
+  await db.updateTable('apikey').set({ enabled: false, updatedAt: new Date() }).where('projectId', '=', id).execute()
+
   // Soft delete: set deletedAt instead of hard delete
   await db.updateTable('project').set({ deletedAt: new Date(), updatedAt: new Date() }).where('id', '=', id).execute()
 

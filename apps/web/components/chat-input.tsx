@@ -34,7 +34,7 @@ const PROVIDER_COLORS: Record<string, string> = {
 
 // Fallback models when no providers are connected
 const FALLBACK_MODELS: ProviderModel[] = [
-  { id: 'gpt-5.2', name: 'GPT-5.2', providerId: 'opencode', providerName: 'OpenCode' },
+  { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', providerId: 'opencode', providerName: 'OpenCode' },
   { id: 'claude-opus-4-5', name: 'Claude Opus 4.5', providerId: 'opencode', providerName: 'OpenCode' },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', providerId: 'opencode', providerName: 'OpenCode' },
 ]

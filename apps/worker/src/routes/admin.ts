@@ -225,7 +225,7 @@ admin.get('/overview', requireAdmin, async (c) => {
       perPage,
       sort,
       totalUsers: Number(usersInRange?.count ?? 0),
-      totalProjects: deployed ? projectsWithWorker.length : Number(projectsInRange?.count ?? 0),
+      totalProjects: Number(projectsInRange?.count ?? 0),
     },
     totals: {
       users: totalUsers?.count ?? '0',

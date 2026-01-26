@@ -31,8 +31,8 @@ const PROVIDER_COLORS: Record<string, string> = {
 }
 
 const MODEL_TAGS: Record<string, string> = {
-  'gemini-3-flash': 'UI Developer',
-  'gemini-3-pro': 'Full-stack Developer',
+  'gemini-3-flash-preview': 'UI Developer',
+  'gemini-3-pro-preview': 'Full-stack Developer',
   'gpt-5.2': 'Cracked engineer',
   'gpt-5': 'Smart but slower',
   'gpt-4o': 'Quick chatty',

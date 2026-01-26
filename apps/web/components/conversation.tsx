@@ -158,8 +158,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const [providerOpen, setProviderOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const [selectedModel, setSelectedModel] = useState<{ modelId: string; providerId: string }>({
-    modelId: 'gemini-3-flash',
-    providerId: 'google',
+    modelId: 'gpt-5.2-codex',
+    providerId: 'opencode',
   })
   const lastSentRef = useRef<string>('')
 
@@ -414,11 +414,9 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         <div className="h-8 flex items-center px-3 gap-2 min-w-0 text-xs">
           <span
             className={`size-2 rounded-full ${!connected ? 'bg-muted-foreground/40' : isRetrying ? 'bg-warning' : 'bg-success'}`}
-            title={!connected ? 'Connecting...' : isRetrying ? 'Retrying...' : 'Agent connected'}
+            title={connected ? (isRetrying ? 'Retrying...' : 'Agent connected') : undefined}
           />
-          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">
-            {connected ? sessionName : 'Connecting...'}
-          </span>
+          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">{sessionName}</span>
           {connected && (
             <>
               {isRetrying && retryInfo ? (
@@ -536,8 +534,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
               )}
               <ChatInput
                 onSubmit={handleSend}
-                disabled={!connected || working}
-                placeholder={!connected ? 'Connecting...' : working ? 'Working...' : 'Ask anything...'}
+                disabled={working}
+                placeholder={working ? 'Working...' : 'Ask anything...'}
                 mode={mode}
                 onToggleMode={() => setMode((m) => (m === 'plan' ? 'build' : 'plan'))}
                 isWorking={working}
