@@ -791,25 +791,25 @@ async fn handle_charge_refunded(
 ) -> Result<(), String> {
     let (charge_id, refund_id, amount, currency, status, reason, processor_customer_id) =
         match event {
-        NormalizedEvent::ChargeRefunded {
-            charge_id,
-            refund_id,
-            amount,
-            currency,
-            status,
-            reason,
-            customer_id,
-        } => (
-            charge_id.as_str(),
-            refund_id.as_str(),
-            *amount,
-            currency.as_str(),
-            *status,
-            reason.as_deref(),
-            customer_id.as_deref(),
-        ),
-        _ => return Err("Expected ChargeRefunded event".to_string()),
-    };
+            NormalizedEvent::ChargeRefunded {
+                charge_id,
+                refund_id,
+                amount,
+                currency,
+                status,
+                reason,
+                customer_id,
+            } => (
+                charge_id.as_str(),
+                refund_id.as_str(),
+                *amount,
+                currency.as_str(),
+                *status,
+                reason.as_deref(),
+                customer_id.as_deref(),
+            ),
+            _ => return Err("Expected ChargeRefunded event".to_string()),
+        };
 
     // Try to look up customer by processorCustomerId
     let customer_lookup: Option<(Uuid, Uuid)> = if let Some(cust_id) = processor_customer_id {

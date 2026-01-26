@@ -630,3 +630,66 @@ pub async fn list_accounts(
 
     Ok(Json(response))
 }
+
+/// Delete/disconnect an account
+#[utoipa::path(
+    delete,
+    path = "/accounts/{id}",
+    tag = "account",
+    params(
+        ("id" = Uuid, Path, description = "Account ID")
+    ),
+    responses(
+        (status = 200, description = "Account disconnected"),
+        (status = 401, description = "Unauthorized - invalid or missing API key"),
+        (status = 403, description = "Forbidden - access denied"),
+        (status = 404, description = "Account not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("project_key" = [])
+    )
+)]
+pub async fn disconnect(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let account = sqlx::query!(
+        r#"
+        SELECT "projectId"
+        FROM connect_account
+        WHERE id = $1
+        "#,
+        id
+    )
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?
+    .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+
+    verify_project_access(&state.pool, auth.user_id, account.projectId).await?;
+
+    sqlx::query!(
+        r#"
+        DELETE FROM connect_account
+        WHERE id = $1
+        "#,
+        id
+    )
+    .execute(&state.pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
+
+    Ok(StatusCode::OK)
+}

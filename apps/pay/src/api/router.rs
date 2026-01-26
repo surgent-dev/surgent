@@ -11,8 +11,8 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::AppState;
 use crate::api::account::{
-    connect_callback, connect_refresh, create_connect_account, get_account, list_accounts,
-    oauth_callback,
+    connect_callback, connect_refresh, create_connect_account, disconnect, get_account,
+    list_accounts, oauth_callback,
 };
 use crate::api::checkout::{checkout_cancel, checkout_success, create_checkout_session};
 use crate::api::customer::{get_customer, list_customers};
@@ -49,7 +49,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/connect/callback", get(connect_callback))
         .route("/connect/refresh", get(connect_refresh))
         .route("/connect/oauth/callback", get(oauth_callback))
-        .route("/{id}", get(get_account))
+        .route("/{id}", get(get_account).delete(disconnect))
         .route("/", get(list_accounts));
 
     let origins: Vec<_> = state
@@ -60,7 +60,13 @@ pub fn create_router(state: AppState) -> Router {
         .collect();
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::list(origins))
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::OPTIONS])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
         .allow_headers([header::CONTENT_TYPE, header::COOKIE])
         .allow_credentials(true);
 

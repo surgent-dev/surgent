@@ -1,7 +1,7 @@
 'use client'
 
 import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from '@/components/agent/web-preview'
-import { useEffect, useMemo, type ElementType } from 'react'
+import { useEffect, useMemo, useState, type ElementType } from 'react'
 import {
   X,
   Database,
@@ -25,13 +25,22 @@ import {
   type ConvexDashboardCredentials,
 } from '@/queries/projects'
 
-import { useSurpayAccounts, useSurpayConnect } from '@/queries/surpay'
+import { useSurpayAccounts, useSurpayConnect, useSurpayDisconnect } from '@/queries/surpay'
 import { useSandbox } from '@/hooks/use-sandbox'
 
 import DiffView from '@/components/diff/diff-view'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 
 import { cn } from '@/lib/utils'
 import { http } from '@/lib/http'
@@ -209,6 +218,9 @@ function McpContent({ entries, isLoading }: { entries: Array<{ name: string; sta
 function PaymentsContent({ projectId }: { projectId?: string }) {
   const { data: accounts, isLoading } = useSurpayAccounts(projectId)
   const connect = useSurpayConnect()
+  const disconnect = useSurpayDisconnect()
+  const [disconnectOpen, setDisconnectOpen] = useState(false)
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
 
   if (isLoading) {
     return <LoadingState icon={CreditCard} message="Loading payment accounts..." />
@@ -264,9 +276,55 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
                 {connect.isPending ? 'Connecting...' : 'Continue Setup'}
               </Button>
             ) : (
-              <span className={cn('text-xs font-medium capitalize', getStatusTone(account.status))}>
-                {formatStatus(account.status)}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className={cn('text-xs font-medium capitalize', getStatusTone(account.status))}>
+                  {formatStatus(account.status)}
+                </span>
+                <Dialog
+                  open={disconnectOpen && selectedAccount === account.id}
+                  onOpenChange={(open) => {
+                    setDisconnectOpen(open)
+                    if (!open) setSelectedAccount(null)
+                  }}
+                >
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setSelectedAccount(account.id)}
+                    >
+                      Disconnect
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Disconnect Stripe Account</DialogTitle>
+                      <DialogDescription>
+                        Are you sure you want to disconnect your Stripe account? This will disable payment processing
+                        for this project.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setDisconnectOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => {
+                          if (projectId) {
+                            disconnect.mutate({ projectId, accountId: account.id })
+                            setDisconnectOpen(false)
+                          }
+                        }}
+                        disabled={disconnect.isPending}
+                      >
+                        {disconnect.isPending ? 'Disconnecting...' : 'Disconnect'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
             )}
           </div>
         ))}
