@@ -26,10 +26,18 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "a7d19aa6d0d540ddb154d3a6f156a3d1"
-
-      // Optional. Can be used to connect to a local database for local development
-      // "localConnectionString": "postgresql://user:password@localhost:5432/databasename"
+      "id": "37ec3c99113a428badc26fd0e02c1039"
     }
-  ]
+  ],
+
+  // Development environment (separate worker)
+  "env": {
+    "dev": {
+      "name": "gateway-dev",
+      "routes": ["ai-dev.surgent.dev/zen/*"],
+      "vars": {
+        "STAGE": "dev"
+      }
+    }
+  }
 }

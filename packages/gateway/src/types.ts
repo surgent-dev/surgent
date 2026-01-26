@@ -2,9 +2,9 @@ import type { Context } from 'hono'
 
 export interface Bindings {
   STAGE: string
-  POSTGRES_TYPE: string
   ZEN_MODELS?: string
   GATEWAY_KV: KVNamespace
+  POSTGRES_TYPE?: string
   GATEWAY_DATA?: R2Bucket
   HYPERDRIVE?: { connectionString: string }
 }

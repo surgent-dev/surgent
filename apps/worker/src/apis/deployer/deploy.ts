@@ -11,7 +11,6 @@ export function buildDeploymentConfig(
   config: WranglerConfig,
   workerContent: string,
   accountId: string,
-  apiToken: string,
   assetsManifest?: Record<string, { hash: string; size: number }>,
   compatibilityFlags?: string[],
 ): DeployConfig {
@@ -20,7 +19,6 @@ export function buildDeploymentConfig(
 
   return {
     accountId,
-    apiToken,
     scriptName: config.name,
     compatibilityDate: config.compatibility_date,
     compatibilityFlags: compatibilityFlags || config.compatibility_flags,
@@ -28,6 +26,7 @@ export function buildDeploymentConfig(
     assets: assetsManifest,
     bindings: bindings.length > 0 ? bindings : undefined,
     vars: config.vars,
+    observability: config.observability,
   }
 }
 
@@ -46,7 +45,6 @@ export function parseWranglerConfig(configContent: string): WranglerConfig {
 export async function deployWorker(
   deployConfig: DeployConfig,
   fileContents?: Map<string, Buffer>,
-  additionalModules?: Map<string, string>,
   assetsConfig?: WranglerConfig['assets'],
   dispatchNamespace?: string,
 ): Promise<void> {
@@ -63,8 +61,8 @@ export async function deployWorker(
       deployConfig.vars,
       dispatchNamespace,
       assetsConfig,
-      additionalModules,
       deployConfig.compatibilityFlags,
+      deployConfig.observability,
     )
   } else {
     await deployer.deploySimple(
@@ -74,8 +72,8 @@ export async function deployWorker(
       deployConfig.bindings,
       deployConfig.vars,
       dispatchNamespace,
-      additionalModules,
       deployConfig.compatibilityFlags,
+      deployConfig.observability,
     )
   }
 }
@@ -86,8 +84,7 @@ export async function deployWorker(
 export async function deployToDispatch(
   deployConfig: DispatchDeployConfig,
   fileContents?: Map<string, Buffer>,
-  additionalModules?: Map<string, string>,
   assetsConfig?: WranglerConfig['assets'],
 ): Promise<void> {
-  await deployWorker(deployConfig, fileContents, additionalModules, assetsConfig, deployConfig.dispatchNamespace)
+  await deployWorker(deployConfig, fileContents, assetsConfig, deployConfig.dispatchNamespace)
 }

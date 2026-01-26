@@ -1,60 +1,60 @@
-"use client";
-import { useEffect, useState } from 'react';
-import { Github, Twitter, ArrowRight } from 'lucide-react';
-import Link from 'next/link';
-import Image from 'next/image';
-import { motion } from 'motion/react';
-import { Button } from '@/components/ui/button';
-import { authClient } from '@/lib/auth-client';
-import { isWaitlistMode } from '@/lib/waitlist';
-import { WaitlistScreen } from '@/components/waitlist-screen';
-import { ChatComposer } from '@/components/chat/chat-composer';
-import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
-import { useRouter } from 'next/navigation';
-import { useCreateProject } from '@/queries/projects';
-import { toast, Toaster } from 'react-hot-toast';
+'use client'
+import { useEffect, useState } from 'react'
+import { Github, Twitter, ArrowRight } from 'lucide-react'
+import Link from 'next/link'
+import Image from 'next/image'
+import { motion } from 'motion/react'
+import { Button } from '@/components/ui/button'
+import { authClient } from '@/lib/auth-client'
+import { isWaitlistMode } from '@/lib/waitlist'
+import { WaitlistScreen } from '@/components/waitlist-screen'
+import { ChatComposer } from '@/components/chat/chat-composer'
+import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card'
+import { useRouter } from 'next/navigation'
+import { useCreateProject } from '@/queries/projects'
+import { toast } from 'react-hot-toast'
 
 // Typing placeholder hook
 function useTypingPlaceholder(placeholders: string[], typingSpeed = 50, pauseDuration = 2000) {
-  const [displayText, setDisplayText] = useState('');
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isTyping, setIsTyping] = useState(true);
+  const [displayText, setDisplayText] = useState('')
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [isTyping, setIsTyping] = useState(true)
 
   useEffect(() => {
-    const currentPlaceholder = placeholders[currentIndex]!;
-    
+    const currentPlaceholder = placeholders[currentIndex]!
+
     if (isTyping) {
       if (displayText.length < currentPlaceholder.length) {
         const timeout = setTimeout(() => {
-          setDisplayText(currentPlaceholder.slice(0, displayText.length + 1));
-        }, typingSpeed);
-        return () => clearTimeout(timeout);
+          setDisplayText(currentPlaceholder.slice(0, displayText.length + 1))
+        }, typingSpeed)
+        return () => clearTimeout(timeout)
       } else {
-        const timeout = setTimeout(() => setIsTyping(false), pauseDuration);
-        return () => clearTimeout(timeout);
+        const timeout = setTimeout(() => setIsTyping(false), pauseDuration)
+        return () => clearTimeout(timeout)
       }
     } else {
       if (displayText.length > 0) {
         const timeout = setTimeout(() => {
-          setDisplayText(displayText.slice(0, -1));
-        }, typingSpeed / 2);
-        return () => clearTimeout(timeout);
+          setDisplayText(displayText.slice(0, -1))
+        }, typingSpeed / 2)
+        return () => clearTimeout(timeout)
       } else {
-        setCurrentIndex((prev) => (prev + 1) % placeholders.length);
-        setIsTyping(true);
+        setCurrentIndex((prev) => (prev + 1) % placeholders.length)
+        setIsTyping(true)
       }
     }
-  }, [displayText, currentIndex, isTyping, placeholders, typingSpeed, pauseDuration]);
+  }, [displayText, currentIndex, isTyping, placeholders, typingSpeed, pauseDuration])
 
-  return displayText;
+  return displayText
 }
 
 const typingPlaceholders = [
-  "Build a CRM for freelance photographers...",
-  "Build a habit tracker for students...",
-  "Build an invoicing app for freelancers...",
-  "Build a booking system for salons...",
-];
+  'Build a CRM for freelance photographers...',
+  'Build a habit tracker for students...',
+  'Build an invoicing app for freelancers...',
+  'Build a booking system for salons...',
+]
 
 const templates = [
   {
@@ -84,16 +84,16 @@ const templates = [
   {
     id: 'utility-app',
     title: 'Utility App',
-    description: 'Practical tools like calculators, converters, task managers, or note apps. Includes data persistence and real-time features.',
+    description:
+      'Practical tools like calculators, converters, task managers, or note apps. Includes data persistence and real-time features.',
     image: '/c4e_raw_note_transformer.svg',
     gitRepo: 'https://github.com/bahodirr/surgent-template-utility',
     initConvex: true,
   },
- 
-];
+]
 
 // Simple Template Card Component
-function TemplateCard({ template }: { template: typeof templates[0] }) {
+function TemplateCard({ template }: { template: (typeof templates)[0] }) {
   return (
     <Card className="border-0 p-0 shadow-none bg-transparent rounded-xs">
       <div className="rounded-md overflow-hidden border border-border">
@@ -107,72 +107,77 @@ function TemplateCard({ template }: { template: typeof templates[0] }) {
         />
       </div>
       <CardContent className="px-0 pt-3 space-y-1.5">
-        <CardTitle className="text-base sm:text-lg text-foreground">
-          {template.title}
-        </CardTitle>
-        <CardDescription className="text-muted-foreground">
-          {template.description}
-        </CardDescription>
+        <CardTitle className="text-base sm:text-lg text-foreground">{template.title}</CardTitle>
+        <CardDescription className="text-muted-foreground">{template.description}</CardDescription>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 export default function Index() {
-  const waitlistMode = isWaitlistMode();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [promptValue, setPromptValue] = useState('');
-  const router = useRouter();
-  const create = useCreateProject();
-  const typingPlaceholder = useTypingPlaceholder(typingPlaceholders);
+  const waitlistMode = isWaitlistMode()
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [promptValue, setPromptValue] = useState('')
+  const router = useRouter()
+  const create = useCreateProject()
+  const typingPlaceholder = useTypingPlaceholder(typingPlaceholders)
 
-  if (waitlistMode) return <WaitlistScreen />;
+  if (waitlistMode) return <WaitlistScreen />
 
   useEffect(() => {
     const load = async () => {
-      const { data } = await authClient.getSession();
-      setIsLoggedIn(!!data?.user);
-    };
-    load();
-  }, []);
+      const { data } = await authClient.getSession()
+      setIsLoggedIn(!!data?.user)
+    }
+    load()
+  }, [])
 
   const projectTypes: Record<string, { name: string; githubUrl: string; initConvex: boolean }> = {
-    fullstack: { name: 'Fullstack', githubUrl: 'https://github.com/bahodirr/worker-vite-react-template', initConvex: true },
+    fullstack: {
+      name: 'Fullstack',
+      githubUrl: 'https://github.com/bahodirr/worker-vite-react-template',
+      initConvex: true,
+    },
     landing: { name: 'Landing', githubUrl: 'https://github.com/bahodirr/web-landing-starter', initConvex: false },
-    simple: { name: 'Utility', githubUrl: 'https://github.com/bahodirr/worker-vite-react-simple-template', initConvex: false },
-  };
+    simple: {
+      name: 'Utility',
+      githubUrl: 'https://github.com/bahodirr/worker-vite-react-simple-template',
+      initConvex: false,
+    },
+  }
 
   const handlePromptSend = (text: string, files?: FileList, projectType = 'simple') => {
-    const initial = text.trim();
-    if (!initial) return;
-    
+    const initial = text.trim()
+    if (!initial) return
+
     if (isLoggedIn) {
-      toast.loading('Creating your project…', { id: 'create-project' });
-      const config = projectTypes[projectType] || projectTypes.simple!;
-      const { name, githubUrl, initConvex } = config;
-      
+      toast.loading('Creating your project…', { id: 'create-project' })
+      const config = projectTypes[projectType] || projectTypes.simple!
+      const { name, githubUrl, initConvex } = config
+
       create.mutate(
-        { 
-          name: `${name} Website ${new Date().toLocaleDateString()}`, 
+        {
+          name: `${name} Website ${new Date().toLocaleDateString()}`,
           githubUrl,
-          initConvex 
+          initConvex,
         },
         {
           onSuccess: ({ id }) => {
-            toast.success('Project created!', { id: 'create-project' });
-            const q = new URLSearchParams({ initial }).toString();
-            router.push(`/project/${id}?${q}`);
+            toast.success('Project created!', { id: 'create-project' })
+            const q = new URLSearchParams({ initial }).toString()
+            router.push(`/project/${id}?${q}`)
           },
-          onError: (error) => toast.error(error instanceof Error ? error.message : String(error), { id: 'create-project' }),
-        }
-      );
+          onError: (error) =>
+            toast.error(error instanceof Error ? error.message : String(error), { id: 'create-project' }),
+        },
+      )
     } else {
-      const q = new URLSearchParams({ initial }).toString();
-      const next = `/project/new?${q}`;
-      const qp = new URLSearchParams({ next }).toString();
-      router.push(`/signup?${qp}`);
+      const q = new URLSearchParams({ initial }).toString()
+      const next = `/project/new?${q}`
+      const qp = new URLSearchParams({ next }).toString()
+      router.push(`/signup?${qp}`)
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -186,7 +191,7 @@ export default function Index() {
         transition={{
           duration: 8,
           repeat: Number.POSITIVE_INFINITY,
-          ease: "easeInOut",
+          ease: 'easeInOut',
         }}
       />
       <motion.div
@@ -198,25 +203,25 @@ export default function Index() {
         transition={{
           duration: 10,
           repeat: Number.POSITIVE_INFINITY,
-          ease: "easeInOut",
+          ease: 'easeInOut',
         }}
       />
-      
+
       {/* Subtle gradient background */}
       <div className="absolute inset-0 bg-linear-to-br from-background via-background to-muted/20" />
-      
+
       {/* Dot pattern overlay */}
-      <div 
+      <div
         className="absolute inset-0 opacity-[0.02] dark:opacity-[0.04]"
         style={{
           backgroundImage: 'radial-gradient(circle, #000 1px, transparent 1px)',
-          backgroundSize: '32px 32px'
+          backgroundSize: '32px 32px',
         }}
       />
 
       <div className="relative z-10 min-h-screen flex flex-col">
         {/* Header */}
-        <motion.header 
+        <motion.header
           className="w-full px-6 py-6"
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -224,14 +229,7 @@ export default function Index() {
         >
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <Image
-                src="/surgent-logo.svg"
-                alt="Surgent"
-                width={119}
-                height={32}
-                className="h-8 w-auto"
-                priority
-              />
+              <Image src="/surgent-logo.svg" alt="Surgent" width={119} height={32} className="h-8 w-auto" priority />
             </Link>
             {isLoggedIn ? (
               <Button asChild variant="outline" size="sm" className="rounded-full shrink-0 cursor-pointer">
@@ -252,7 +250,7 @@ export default function Index() {
             <div className="text-center space-y-6">
               {/* 2-line headline */}
               <div className="space-y-2">
-                <motion.h1 
+                <motion.h1
                   className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground"
                   initial={{ y: 20, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
@@ -263,7 +261,7 @@ export default function Index() {
               </div>
 
               {/* Subheadline */}
-              <motion.p 
+              <motion.p
                 className="text-lg md:text-xl text-muted-foreground font-normal max-w-2xl mx-auto leading-relaxed"
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -282,7 +280,7 @@ export default function Index() {
                 <div className="relative">
                   <ChatComposer
                     onSend={handlePromptSend}
-                    placeholder={typingPlaceholder || "What do you want to build?"}
+                    placeholder={typingPlaceholder || 'What do you want to build?'}
                     disabled={create.isPending}
                     value={promptValue}
                     onValueChange={setPromptValue}
@@ -296,7 +294,7 @@ export default function Index() {
                     </div>
                   )}
                 </div>
-                
+
                 {/* Trust line */}
                 <motion.p
                   className="text-xs sm:text-sm text-muted-foreground"
@@ -311,7 +309,7 @@ export default function Index() {
 
             {/* Templates Section */}
             <div className="space-y-8">
-              <motion.div 
+              <motion.div
                 className="text-center"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -321,7 +319,7 @@ export default function Index() {
                   Things you can build
                 </p>
               </motion.div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6 lg:gap-8 max-w-4xl mx-auto">
                 {templates.map((template, index) => (
                   <motion.div
@@ -374,7 +372,6 @@ export default function Index() {
           </div>
         </footer>
       </div>
-      <Toaster position="top-right" />
     </div>
-  );
+  )
 }

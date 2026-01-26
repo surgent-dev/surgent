@@ -332,7 +332,7 @@ export default function PreviewPanel({
     })
   }, [mcpStatus])
 
-  const url = project?.sandbox?.previewUrl
+  const url = project?.sandbox?.url
   const ready = Boolean(url)
 
   const { data: health } = useSandboxHealthQuery(projectId, type === 'preview')

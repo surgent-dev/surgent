@@ -22,7 +22,7 @@ const DEFAULT_WORKER = `export default {
 
 const DEFAULT_WRANGLER = {
   compatibility_date: '2025-04-24',
-  assets: { binding: 'ASSETS', not_found_handling: 'single-page-application' },
+  assets: { binding: 'ASSETS', not_found_handling: 'single-page-application' as const },
   observability: { enabled: true, head_sampling_rate: 0.1 },
 }
 
@@ -66,6 +66,7 @@ export interface RunAgentArgs {
 export interface DeployProjectArgs {
   projectId: string
   deployName?: string
+  deploymentId: string
 }
 
 export interface UndeployProjectArgs {
@@ -125,6 +126,11 @@ function sanitizeScriptName(input: string): string {
     .slice(0, 63)
 }
 
+async function getProjectEnvVars(projectId: string, environment: string) {
+  const rows = await ProjectService.getEnvVarsByProjectId(projectId, environment)
+  return Object.fromEntries(rows.filter((row) => row.value).map((row) => [row.key, row.value as string]))
+}
+
 async function directoryExists(sandbox: Sandbox, dir: string): Promise<boolean> {
   try {
     return (await sandbox.stat(dir)).isDir
@@ -144,7 +150,7 @@ async function downloadFileSafe(sandbox: Sandbox, filePath: string, cwd?: string
   }
 }
 
-async function collectAssets(sandbox: Sandbox, rootDir: string) {
+async function collectAssets(sandbox: Sandbox, rootDir: string, hashSalt: string) {
   const root = stripTrailingSlash(rootDir)
   const manifest: Record<string, { hash: string; size: number }> = {}
   const files: Array<{ path: string; base64: string }> = []
@@ -157,7 +163,10 @@ async function collectAssets(sandbox: Sandbox, rootDir: string) {
       } else {
         const buffer = await downloadFileSafe(sandbox, entryPath)
         const rel = `/${posix.relative(root, entryPath)}`
-        manifest[rel] = { hash: createHash('sha256').update(buffer).digest('hex').slice(0, 32), size: buffer.length }
+        manifest[rel] = {
+          hash: createHash('sha256').update(hashSalt).update(buffer).digest('hex').slice(0, 32),
+          size: buffer.length,
+        }
         files.push({ path: rel, base64: buffer.toString('base64') })
       }
     }
@@ -236,107 +245,129 @@ async function getOrCreateSandbox(opts: {
 // Main Functions
 // ============================================================================
 
-export async function deployProject(args: DeployProjectArgs): Promise<void> {
-  const { projectId, deployName: rawName } = args
-  console.log('[deploy] start', { projectId })
+export async function createDeploymentRecord(projectId: string, deployName?: string) {
+  const scriptName = deployName ? sanitizeScriptName(deployName) : `project-${projectId.slice(0, 8)}`
+  const hostname = `https://${scriptName}.surgent.site`
+  return ProjectService.createDeployment({
+    projectId,
+    scriptName,
+    status: 'queued',
+    startedAt: new Date(),
+    hostname,
+  })
+}
 
-  // 1. Load project
+export async function deployProject(args: DeployProjectArgs): Promise<void> {
+  const { projectId, deployName: rawName, deploymentId } = args
+  console.log('[deploy] start', { projectId, deploymentId })
+
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new Error(`Project ${projectId} not found`)
-  if (!project.sandbox?.id) throw new Error('Sandbox not initialized')
+  const sandboxRow = await ProjectService.getSandboxByProjectId(projectId)
+  if (!sandboxRow?.id) throw new Error('Sandbox not initialized')
 
   const scriptName = rawName ? sanitizeScriptName(rawName) : `project-${projectId.slice(0, 8)}`
   const workingDir = localWorkspacePath(projectId)
-  const previewUrl = `https://${scriptName}.surgent.site`
+  const accountId = config.cloudflare.accountId!
 
-  // Insert deployment history record
-  const deploymentHistory = await ProjectService.createDeploymentHistory({
-    projectId,
-    name: scriptName,
-    previewUrl,
-    status: 'queued',
-    startedAt: new Date(),
-  })
+  const prevName = (await ProjectService.getWorkerByProjectId(projectId))?.scriptName
+
+  const updateStatus = async (status: string, extra?: { error?: string; finishedAt?: Date }) => {
+    await ProjectService.updateDeployment(deploymentId, { status, ...extra })
+  }
+
+  await updateStatus('starting')
 
   try {
-    await ProjectService.updateDeploymentStatus(projectId, 'starting', scriptName, { startedAt: new Date() })
+    const sandbox = await getSandboxProvider().resume(sandboxRow.id)
 
-    // 2. Resume sandbox
-    const sandbox = await getSandboxProvider().resume(project.sandbox.id)
-
-    // 3. Build
-    await ProjectService.updateDeploymentStatus(projectId, 'building')
+    await updateStatus('building')
     const build = await sandbox.exec('bun run build', { cwd: workingDir, timeout: 180_000 })
     if (build.code !== 0) {
       const error = `Build failed: ${String(build.output).slice(0, 500)}`
-      await ProjectService.updateDeploymentHistory(deploymentHistory.id, {
-        status: 'build_failed',
-        error,
-      })
-      await ProjectService.updateDeploymentStatus(projectId, 'build_failed')
+      await updateStatus('build_failed', { error, finishedAt: new Date() })
       throw new Error(error)
     }
 
-    // 4. Find assets directory (dist/client or dist/)
     const assetsDir = await findAssetsDir(sandbox, workingDir)
     if (!assetsDir) throw new Error('No dist/ directory found after build')
 
-    // 5. Collect assets
-    const { manifest, files } = await collectAssets(sandbox, assetsDir)
+    const { manifest, files } = await collectAssets(sandbox, assetsDir, scriptName)
+    console.log('[deploy] assets collected:', {
+      assetsDir,
+      fileCount: files.length,
+      paths: Object.keys(manifest).slice(0, 20),
+    })
     if (!Object.keys(manifest).length) throw new Error('No assets found in dist/')
 
-    // 6. Read env vars (optional)
-    const envVars = await readEnvFile(sandbox, `${workingDir}/.env.local`)
+    const envVars = await getProjectEnvVars(projectId, 'production')
+    const localEnv = await readEnvFile(sandbox, `${workingDir}/.env.local`)
 
-    // 7. Deploy to Cloudflare
-    await ProjectService.updateDeploymentStatus(projectId, 'uploading')
+    await updateStatus('uploading')
 
     const wranglerConfig = { name: scriptName, ...DEFAULT_WRANGLER }
     const wrangler = parseWranglerConfig(JSON.stringify(wranglerConfig))
-    const deployConfig = buildDeploymentConfig(
-      wrangler,
-      DEFAULT_WORKER,
-      config.cloudflare.accountId!,
-      config.cloudflare.apiToken!,
-      manifest,
-    )
+    const deployConfig = buildDeploymentConfig(wrangler, DEFAULT_WORKER, accountId, manifest)
 
-    if (envVars) deployConfig.vars = { ...envVars, ...deployConfig.vars }
+    if (localEnv) deployConfig.vars = { ...localEnv, ...deployConfig.vars }
+    if (Object.keys(envVars).length) deployConfig.vars = { ...deployConfig.vars, ...envVars }
 
     const fileContents = new Map(files.map((f) => [f.path, Buffer.from(f.base64, 'base64')]))
     await deployToDispatch(
       { ...deployConfig, dispatchNamespace: config.cloudflare.dispatchNamespace! },
       fileContents,
-      undefined,
       wranglerConfig.assets,
     )
 
-    // 8. Update project with deployed timestamp
-    await ProjectService.updateProject(projectId, {
-      sandbox: { ...project.sandbox, deployed: true, deployName: scriptName },
-      deployment: {
-        status: 'deployed',
-        name: scriptName,
-        previewUrl,
-        projectId,
-        updatedAt: new Date(),
-      },
-    })
-    await ProjectService.updateDeploymentHistory(deploymentHistory.id, {
-      status: 'deployed',
-      deployedAt: new Date(),
-    })
-    await ProjectService.updateDeploymentStatus(projectId, 'deployed', scriptName, { deployedAt: new Date() })
+    // Fetch Cloudflare deployment info for version tracking
+    const cfDeployment = await fetchLatestCloudflareDeployment(accountId, scriptName)
+    const finishedAt = new Date()
+    const workerHostname = `https://${scriptName}.surgent.site`
 
-    console.log('[deploy] success', { projectId, scriptName })
+    await ProjectService.updateDeployment(deploymentId, {
+      status: 'deployed',
+      finishedAt,
+      cloudflareDeploymentId: cfDeployment?.id ?? null,
+      cloudflareVersionId: cfDeployment?.versionId ?? null,
+    })
+
+    await ProjectService.upsertWorker({
+      projectId,
+      accountId,
+      scriptName,
+      dispatchNamespace: config.cloudflare.dispatchNamespace,
+      hostname: workerHostname,
+      status: 'active',
+    })
+
+    if (prevName && prevName !== scriptName) {
+      await new WorkerDeployer().deleteWorker(prevName, config.cloudflare.dispatchNamespace!).catch(() => {})
+    }
+
+    console.log('[deploy] success', { projectId, scriptName, cfDeploymentId: cfDeployment?.id })
   } catch (err: any) {
     console.error('[deploy] failed', { projectId, error: err?.message })
-    await ProjectService.updateDeploymentHistory(deploymentHistory.id, {
+    await ProjectService.updateDeployment(deploymentId, {
       status: 'deploy_failed',
       error: err?.message || 'Deployment failed',
+      finishedAt: new Date(),
     }).catch(() => {})
-    await ProjectService.updateDeploymentStatus(projectId, 'deploy_failed').catch(() => {})
+    // Don't update worker status on deploy failure - previous version may still be running
     throw err
+  }
+}
+
+async function fetchLatestCloudflareDeployment(accountId: string, scriptName: string) {
+  try {
+    if (config.cloudflare.dispatchNamespace) return null
+    const client = new Cloudflare({ apiToken: config.cloudflare.apiToken })
+    const result: any = await client.workers.scripts.deployments.list(scriptName, { account_id: accountId })
+    const deployments = Array.isArray(result) ? result : result.result || []
+    const latest = deployments[0]
+    if (!latest) return null
+    return { id: latest.id, versionId: latest.versions?.[0]?.version_id }
+  } catch {
+    return null
   }
 }
 
@@ -347,24 +378,45 @@ export async function undeployProject(args: UndeployProjectArgs): Promise<void> 
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new Error(`Project ${projectId} not found`)
 
-  const scriptName = project.deployment?.name
+  const worker = await ProjectService.getWorkerByProjectId(projectId)
+  const latestDeployment = await db
+    .selectFrom('deployment')
+    .select(['scriptName'])
+    .where('projectId', '=', projectId)
+    .orderBy('createdAt', 'desc')
+    .executeTakeFirst()
+  const scriptName = worker?.scriptName || latestDeployment?.scriptName
   if (!scriptName) throw new Error('No deployment name found')
 
-  try {
-    await ProjectService.updateDeploymentStatus(projectId, 'undeploying')
+  const deployment = await ProjectService.createDeployment({
+    projectId,
+    scriptName,
+    status: 'undeploying',
+    startedAt: new Date(),
+  })
 
+  try {
     const deployer = new WorkerDeployer()
     await deployer.deleteWorker(scriptName, config.cloudflare.dispatchNamespace!)
 
-    await ProjectService.updateProject(projectId, {
-      sandbox: { ...project.sandbox, deployed: false, deployName: null },
-      deployment: null,
+    await ProjectService.updateDeployment(deployment.id, { status: 'undeployed', finishedAt: new Date() })
+    await ProjectService.upsertWorker({
+      projectId,
+      accountId: config.cloudflare.accountId!,
+      scriptName,
+      dispatchNamespace: config.cloudflare.dispatchNamespace,
+      hostname: null,
+      status: null,
     })
 
     console.log('[undeploy] success', { projectId, scriptName })
   } catch (err: any) {
     console.error('[undeploy] failed', { projectId, error: err?.message })
-    await ProjectService.updateDeploymentStatus(projectId, 'undeploy_failed').catch(() => {})
+    await ProjectService.updateDeployment(deployment.id, {
+      status: 'undeploy_failed',
+      error: err?.message || 'Undeploy failed',
+      finishedAt: new Date(),
+    }).catch(() => {})
     throw err
   }
 }
@@ -421,11 +473,21 @@ export async function initializeProject(
   }
 
   console.log('[init] creating sandbox...')
+  if (!config.surgent.baseUrl || !config.opencode.baseUrl) {
+    throw new Error('SURGENT_BASE_URL and OPENCODE_BASE_URL are not set')
+  }
+  const devEnv = await getProjectEnvVars(projectId, 'development')
   const { sandbox, previewUrl } = await getOrCreateSandbox({
     port: 3000,
     workingDirectory,
     name: 'server',
-    env: { SURGENT_API_KEY: apiKeyResult.key, SURGENT_AI_BASE_URL: 'https://ai.surgent.dev' },
+    env: {
+      ...devEnv,
+      SURGENT_API_KEY: apiKeyResult.key,
+      SURGENT_BASE_URL: config.surgent.baseUrl,
+      OPENCODE_API_KEY: apiKeyResult.key,
+      OPENCODE_BASE_URL: config.opencode.baseUrl,
+    },
   })
   console.log('[init] sandbox created:', sandbox.id, 'provider:', sandboxProviderName)
 
@@ -452,14 +514,20 @@ export async function initializeProject(
   }
 
   if (initScript) await sandbox.exec(buildBashCommand(workingDirectory, initScript), { timeout: 600_000 })
-  if (devScript) await ensurePm2Process(sandbox, workingDirectory, processName, devScript)
+  if (devScript) await ensurePm2Process(sandbox, workingDirectory, processName, devScript, devEnv)
   const opencodeConfigDir = config.opencode.configDir
   await ensureOpencodeConfigRepo(sandbox, config.opencode.configRepoUrl, opencodeConfigDir)
   await startOpencodeServer(sandbox, workingDirectory, { OPENCODE_CONFIG_DIR: opencodeConfigDir })
 
   await ProjectService.updateProject(projectId, {
     metadata: { workingDirectory, processName, startCommand: devScript },
-    sandbox: { id: sandbox.id, provider: sandboxProviderName, previewUrl, status: 'started', isInitialized: true },
+  })
+  await ProjectService.upsertSandbox({
+    id: sandbox.id,
+    projectId,
+    provider: sandboxProviderName,
+    status: 'started',
+    host: previewUrl,
   })
 
   return { projectId, sandboxId: sandbox.id, previewUrl }
@@ -467,6 +535,7 @@ export async function initializeProject(
 
 export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxId: string; previewUrl: string }> {
   const workingDirectory = localWorkspacePath(args.projectId)
+  const devEnv = await getProjectEnvVars(args.projectId, 'development')
 
   const { sandbox, previewUrl } = await getOrCreateSandbox({
     sandboxId: args.sandboxId,
@@ -479,7 +548,7 @@ export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxI
     const project = await ProjectService.getProjectById(args.projectId)
     const { startCommand, processName } = (project?.metadata ?? {}) as any
     if (startCommand && processName) {
-      await ensurePm2Process(sandbox, workingDirectory, processName, startCommand)
+      await ensurePm2Process(sandbox, workingDirectory, processName, startCommand, devEnv)
     }
 
     const opencodeConfigDir = config.opencode.configDir
@@ -489,6 +558,14 @@ export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxI
     console.log('[resume] error', err)
   }
 
+  await ProjectService.upsertSandbox({
+    id: sandbox.id,
+    projectId: args.projectId,
+    provider: sandboxProviderName,
+    status: 'started',
+    host: previewUrl,
+  })
+
   return { sandboxId: sandbox.id, previewUrl }
 }
 
@@ -496,10 +573,10 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
   const project = await ProjectService.getProjectById(args.projectId)
   if (!project) throw new Error(`Project ${args.projectId} not found`)
 
-  const sandboxId = project.sandbox?.id
-  if (!sandboxId) throw new Error('Sandbox not found')
+  const sandboxRow = await ProjectService.getSandboxByProjectId(args.projectId)
+  if (!sandboxRow?.id) throw new Error('Sandbox not found')
 
-  const sandbox = await getSandboxProvider().resume(sandboxId)
+  const sandbox = await getSandboxProvider().resume(sandboxRow.id)
   const cwd = project.metadata?.workingDirectory || localWorkspacePath(args.projectId)
 
   const res = await sandbox.exec('bunx convex deploy -y', { cwd, timeout: 180_000 })
@@ -510,10 +587,10 @@ export async function downloadProject(projectId: string): Promise<{ buffer: Buff
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new HttpError(404, 'Project not found')
 
-  const sandboxId = project.sandbox?.id
-  if (!sandboxId) throw new HttpError(400, 'Sandbox not initialized')
+  const sandboxRow = await ProjectService.getSandboxByProjectId(projectId)
+  if (!sandboxRow?.id) throw new HttpError(400, 'Sandbox not initialized')
 
-  const sandbox = await getSandboxProvider().resume(sandboxId)
+  const sandbox = await getSandboxProvider().resume(sandboxRow.id)
   const workingDir = (project.metadata as any)?.workingDirectory || localWorkspacePath(projectId)
   const archivePath = `/tmp/${projectId}-download.tar.gz`
 
@@ -548,14 +625,18 @@ export async function deleteSandbox(args: DeleteProjectArgs): Promise<void> {
   const project = await ProjectService.getProjectById(args.projectId)
   if (!project) return
 
-  const sandboxId = project.sandbox?.id
-  if (!sandboxId) return
+  const sandboxRow = await ProjectService.getSandboxByProjectId(args.projectId)
+  if (!sandboxRow?.id) return
 
   try {
-    await getSandboxProvider().kill(sandboxId)
-    console.log('[delete] sandbox deleted', { projectId: args.projectId, sandboxId })
+    await getSandboxProvider().kill(sandboxRow.id)
+    console.log('[delete] sandbox deleted', { projectId: args.projectId, sandboxId: sandboxRow.id })
   } catch (err) {
-    console.error('[delete] sandbox deletion failed', { projectId: args.projectId, sandboxId, error: err })
+    console.error('[delete] sandbox deletion failed', {
+      projectId: args.projectId,
+      sandboxId: sandboxRow.id,
+      error: err,
+    })
   }
 }
 
@@ -563,10 +644,10 @@ export async function getSandboxLogs(projectId: string, lines = 100): Promise<{ 
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new HttpError(404, 'Project not found')
 
-  const sandboxId = project.sandbox?.id
-  if (!sandboxId) throw new HttpError(400, 'Sandbox not initialized')
+  const sandboxRow = await ProjectService.getSandboxByProjectId(projectId)
+  if (!sandboxRow?.id) throw new HttpError(400, 'Sandbox not initialized')
 
-  const sandbox = await getSandboxProvider().resume(sandboxId)
+  const sandbox = await getSandboxProvider().resume(sandboxRow.id)
   const processName = (project.metadata as any)?.processName
 
   const [app, opencode] = await Promise.all([
@@ -583,37 +664,59 @@ export async function getSandboxLogs(projectId: string, lines = 100): Promise<{ 
   return { app: app.output, opencode: opencode.output }
 }
 
-export async function getRecentDeployments(accountId: string, scriptName: string) {
+export async function redeployVersion(projectId: string, versionId: string) {
+  if (config.cloudflare.dispatchNamespace) {
+    throw new Error('Rollback is not supported for dispatch deployments')
+  }
+
+  const worker = await ProjectService.getWorkerByProjectId(projectId)
+  if (!worker) throw new Error('No worker found for project')
+
+  const { scriptName, accountId, hostname } = worker
   const client = new Cloudflare({ apiToken: config.cloudflare.apiToken })
 
-  const deployments: any = await client.workers.scripts.deployments.list(scriptName, {
-    account_id: accountId,
+  const previous = await db
+    .selectFrom('deployment')
+    .select(['id'])
+    .where('projectId', '=', projectId)
+    .where('cloudflareVersionId', '=', versionId)
+    .executeTakeFirst()
+
+  // Create deployment record for rollback
+  const deployment = await ProjectService.createDeployment({
+    projectId,
+    scriptName,
+    status: 'deploying',
+    hostname,
+    startedAt: new Date(),
+    rollbackOf: previous?.id ?? null,
   })
 
-  const result = Array.isArray(deployments) ? deployments : deployments.result || []
+  try {
+    await (client.workers.scripts.deployments.create as any)(scriptName, {
+      account_id: accountId,
+      strategy: 'all_at_once',
+      versions: [{ version_id: versionId, percentage: 100 }],
+      metadata: { deployment_message: `Rollback to version ${versionId}` },
+    })
 
-  return result.slice(0, 10).map((d: any) => ({
-    id: d.id,
-    created_on: d.created_on,
-    version_id: d.versions?.[0]?.version_id,
-    metadata: d.metadata,
-  }))
-}
+    // Fetch new deployment info
+    const cfDeployment = await fetchLatestCloudflareDeployment(accountId, scriptName)
 
-export async function redeployVersion(accountId: string, scriptName: string, versionId: string) {
-  const client = new Cloudflare({ apiToken: config.cloudflare.apiToken })
+    await ProjectService.updateDeployment(deployment.id, {
+      status: 'deployed',
+      finishedAt: new Date(),
+      cloudflareDeploymentId: cfDeployment?.id ?? null,
+      cloudflareVersionId: cfDeployment?.versionId ?? null,
+    })
 
-  await (client.workers.scripts.deployments.create as any)(scriptName, {
-    account_id: accountId,
-    strategy: 'all_at_once',
-    versions: [
-      {
-        version_id: versionId,
-        percentage: 100,
-      },
-    ],
-    metadata: {
-      deployment_message: `Rollback to version ${versionId}`,
-    },
-  })
+    console.log('[rollback] success', { projectId, versionId })
+  } catch (err: any) {
+    await ProjectService.updateDeployment(deployment.id, {
+      status: 'deploy_failed',
+      error: err?.message || 'Rollback failed',
+      finishedAt: new Date(),
+    })
+    throw err
+  }
 }

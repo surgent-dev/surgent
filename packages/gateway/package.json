@@ -5,13 +5,16 @@
   "scripts": {
     "dev": "bunx wrangler dev --port 8080 --inspector-port 9231",
     "start": "bunx wrangler dev --verbose --port 8080 --inspector-port 9231",
-    "deploy": "bunx wrangler deploy",
+    "deploy": "echo 'Use deploy:dev or deploy:prod' && exit 1",
+    "deploy:dev": "bunx wrangler deploy --env dev",
+    "deploy:prod": "if [ \"$CONFIRM_PROD\" != \"1\" ]; then echo \"Set CONFIRM_PROD=1 to deploy to prod\"; exit 1; fi; bunx wrangler deploy",
     "generate-types": "bunx wrangler types"
   },
   "dependencies": {
     "@repo/db": "*",
     "@smithy/eventstream-codec": "4.2.8",
     "@smithy/util-utf8": "4.2.0",
+    "@types/node": "25.0.10",
     "hono": "4.10.7",
     "kysely": "^0.28.8",
     "zod": "4.1.8"

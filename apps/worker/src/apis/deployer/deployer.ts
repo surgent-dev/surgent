@@ -1,29 +1,27 @@
-import * as fs from 'fs/promises'
-import * as path from 'path'
-import * as os from 'os'
+import Cloudflare from 'cloudflare'
+import { config } from '@/lib/config'
 import { AssetManifest, WorkerBinding, WranglerConfig } from './types'
+import { getMimeType } from './utils/index'
 
 const logger = console
 
-interface DeploymentResult {
-  success: boolean
-  error?: string
-  output?: string
-}
+type AssetFile = { path: string; content: Buffer; hash: string }
 
 /**
- * Main deployment orchestrator using Wrangler CLI
+ * Main deployment orchestrator using Cloudflare SDK
  * Handles both simple deployments and deployments with static assets
  */
 export class WorkerDeployer {
-  private readonly tempDir: string
+  private client: Cloudflare
+  private accountId: string
 
   constructor() {
-    this.tempDir = path.join(os.tmpdir(), 'surgent-deployer')
+    this.client = new Cloudflare({ apiToken: config.cloudflare.apiToken })
+    this.accountId = config.cloudflare.accountId!
   }
 
   /**
-   * Deploy a Worker with static assets using Wrangler CLI
+   * Deploy a Worker with static assets to dispatch namespace
    */
   async deployWithAssets(
     scriptName: string,
@@ -35,52 +33,79 @@ export class WorkerDeployer {
     vars?: Record<string, string>,
     dispatchNamespace?: string,
     assetsConfig?: WranglerConfig['assets'],
-    additionalModules?: Map<string, string>,
     compatibilityFlags?: string[],
+    observability?: WranglerConfig['observability'],
   ): Promise<void> {
-    logger.info('🚀 Starting deployment process...')
-    logger.info(`📦 Worker: ${scriptName}`)
-    if (dispatchNamespace) {
-      logger.info(`🎯 Dispatch Namespace: ${dispatchNamespace}`)
+    logger.info('🚀 Starting SDK deployment...', { scriptName, dispatchNamespace })
+
+    if (!dispatchNamespace) {
+      throw new Error('Dispatch namespace is required for Workers for Platforms')
     }
 
-    // Create temporary deployment directory
-    const deployDir = await this.createDeployDir(scriptName)
-
-    try {
-      // Create wrangler.toml
-      const assetsDir = path.join(deployDir, 'assets')
-      await fs.mkdir(assetsDir, { recursive: true })
-
-      const workerScriptPath = path.join(deployDir, 'index.js')
-      await fs.writeFile(workerScriptPath, workerContent)
-
-      // Copy assets to deployment directory
-      await this.copyAssets(assetsDir, fileContents)
-
-      // Generate wrangler.toml
-      const wranglerConfig = this.generateWranglerConfig(
-        scriptName,
-        workerScriptPath,
-        compatibilityDate,
-        assetsDir,
-        assetsConfig,
-      )
-      const wranglerPath = path.join(deployDir, 'wrangler.toml')
-      await fs.writeFile(wranglerPath, wranglerConfig)
-
-      // Deploy with Wrangler
-      await this.runWranglerDeploy(scriptName, dispatchNamespace, deployDir)
-
-      logger.info('✅ Deployment completed successfully')
-    } finally {
-      // Cleanup temporary directory
-      await this.cleanupDeployDir(deployDir)
+    // Prepare asset files with hashes
+    const assetFiles: AssetFile[] = []
+    for (const [path, info] of Object.entries(assetsManifest)) {
+      const content = fileContents.get(path)
+      if (content) {
+        assetFiles.push({ path, content, hash: info.hash })
+      }
     }
+
+    // 1. Start asset upload session
+    logger.info('📤 Starting asset upload session...')
+    const uploadSession = await this.client.workersForPlatforms.dispatch.namespaces.scripts.assetUpload.create(
+      dispatchNamespace,
+      scriptName,
+      {
+        account_id: this.accountId,
+        manifest: assetsManifest,
+      },
+    )
+
+    const { buckets, jwt: uploadJwt } = uploadSession
+    if (!uploadJwt) {
+      throw new Error('Failed to get upload JWT from asset session')
+    }
+
+    // 2. Upload assets in buckets
+    let completionJwt = uploadJwt
+    if (buckets && buckets.length > 0) {
+      logger.info(`📦 Uploading ${buckets.length} asset bucket(s)...`)
+      completionJwt = await this.uploadAssetBuckets(buckets, assetFiles, uploadJwt)
+    } else {
+      logger.info('✅ All assets already uploaded (cached)')
+    }
+
+    // 3. Deploy script with assets
+    logger.info('🚀 Deploying worker script...')
+    const scriptFilename = 'index.js'
+
+    await this.client.workersForPlatforms.dispatch.namespaces.scripts.update(dispatchNamespace, scriptName, {
+      account_id: this.accountId,
+      metadata: {
+        main_module: scriptFilename,
+        compatibility_date: compatibilityDate,
+        compatibility_flags: compatibilityFlags,
+        bindings: this.buildBindings(bindings, vars, assetsConfig),
+        observability,
+        assets: {
+          jwt: completionJwt,
+          config: assetsConfig
+            ? {
+                not_found_handling: assetsConfig.not_found_handling || 'single-page-application',
+                run_worker_first: assetsConfig.run_worker_first,
+              }
+            : undefined,
+        },
+      },
+      files: [new File([workerContent], scriptFilename, { type: 'application/javascript+module' })],
+    })
+
+    logger.info('✅ Deployment completed successfully')
   }
 
   /**
-   * Deploy a Worker without static assets using Wrangler CLI
+   * Deploy a Worker without assets (simple script)
    */
   async deploySimple(
     scriptName: string,
@@ -89,172 +114,135 @@ export class WorkerDeployer {
     bindings?: WorkerBinding[],
     vars?: Record<string, string>,
     dispatchNamespace?: string,
-    additionalModules?: Map<string, string>,
     compatibilityFlags?: string[],
+    observability?: WranglerConfig['observability'],
   ): Promise<void> {
-    logger.info('🚀 Starting simple deployment (no assets)...')
-    logger.info(`📦 Worker: ${scriptName}`)
-    if (dispatchNamespace) {
-      logger.info(`🎯 Dispatch Namespace: ${dispatchNamespace}`)
+    logger.info('🚀 Starting simple SDK deployment...', { scriptName, dispatchNamespace })
+
+    if (!dispatchNamespace) {
+      throw new Error('Dispatch namespace is required for Workers for Platforms')
     }
 
-    const deployDir = await this.createDeployDir(scriptName)
+    const scriptFilename = 'index.js'
 
-    try {
-      const workerScriptPath = path.join(deployDir, 'index.js')
-      await fs.writeFile(workerScriptPath, workerContent)
-
-      // Generate simple wrangler.toml without assets
-      const wranglerConfig = this.generateWranglerConfig(
-        scriptName,
-        workerScriptPath,
-        compatibilityDate,
-        undefined,
-        undefined,
-      )
-      const wranglerPath = path.join(deployDir, 'wrangler.toml')
-      await fs.writeFile(wranglerPath, wranglerConfig)
-
-      await this.runWranglerDeploy(scriptName, dispatchNamespace, deployDir)
-
-      logger.info('✅ Simple deployment completed successfully')
-    } finally {
-      await this.cleanupDeployDir(deployDir)
-    }
-  }
-
-  /**
-   * Create a unique deployment directory for each deployment
-   */
-  private async createDeployDir(scriptName: string): Promise<string> {
-    const uniqueId = Date.now() + '-' + Math.random().toString(36).substring(7)
-    const deployDir = path.join(this.tempDir, `${scriptName}-${uniqueId}`)
-    await fs.mkdir(deployDir, { recursive: true })
-    return deployDir
-  }
-
-  /**
-   * Copy assets from fileContents map to the assets directory
-   */
-  private async copyAssets(assetsDir: string, fileContents: Map<string, Buffer>): Promise<void> {
-    const entries = Array.from(fileContents.entries())
-    for (const [filePath, content] of entries) {
-      // Remove leading slash if present
-      const cleanPath = filePath.startsWith('/') ? filePath.substring(1) : filePath
-      const targetPath = path.join(assetsDir, cleanPath)
-      const targetDir = path.dirname(targetPath)
-
-      await fs.mkdir(targetDir, { recursive: true })
-      await fs.writeFile(targetPath, content)
-    }
-  }
-
-  /**
-   * Generate wrangler.toml configuration
-   */
-  private generateWranglerConfig(
-    scriptName: string,
-    workerScriptPath: string,
-    compatibilityDate: string,
-    assetsDir?: string,
-    assetsConfig?: WranglerConfig['assets'],
-  ): string {
-    let config = `name = "${scriptName}"
-main = "${workerScriptPath}"
-compatibility_date = "${compatibilityDate}"
-`
-
-    if (assetsDir) {
-      config += `
-[assets]
-directory = "${assetsDir}"
-binding = "${assetsConfig?.binding || 'ASSETS'}"
-not_found_handling = "${assetsConfig?.not_found_handling || 'single-page-application'}"
-`
-    }
-
-    return config
-  }
-
-  /**
-   * Execute wrangler deploy command using Bun.spawn
-   */
-  private async runWranglerDeploy(
-    scriptName: string,
-    dispatchNamespace: string | undefined,
-    cwd: string,
-  ): Promise<DeploymentResult> {
-    const args = ['npx', 'wrangler', 'deploy', '--name', scriptName]
-
-    if (dispatchNamespace) {
-      args.push('--dispatch-namespace', dispatchNamespace)
-    }
-
-    logger.info(`Running: ${args.join(' ')}`)
-
-    const proc = Bun.spawn(args, {
-      cwd,
-      stdout: 'pipe',
-      stderr: 'pipe',
-      env: process.env,
+    await this.client.workersForPlatforms.dispatch.namespaces.scripts.update(dispatchNamespace, scriptName, {
+      account_id: this.accountId,
+      metadata: {
+        main_module: scriptFilename,
+        compatibility_date: compatibilityDate,
+        compatibility_flags: compatibilityFlags,
+        bindings: this.buildBindings(bindings, vars),
+        observability,
+      },
+      files: [new File([workerContent], scriptFilename, { type: 'application/javascript+module' })],
     })
 
-    const stdout = await new Response(proc.stdout).text()
-    const stderr = await new Response(proc.stderr).text()
-    const exitCode = await proc.exited
-
-    logger.info('Wrangler stdout:', stdout)
-    if (stderr) logger.info('Wrangler stderr:', stderr)
-
-    if (exitCode !== 0) {
-      throw new Error(`Wrangler deploy failed (exit code ${exitCode}): ${stderr}`)
-    }
-
-    return { success: true, output: stdout }
+    logger.info('✅ Simple deployment completed')
   }
 
   /**
-   * Delete a Worker using Wrangler CLI
+   * Delete a Worker from dispatch namespace
    */
   async deleteWorker(scriptName: string, dispatchNamespace?: string): Promise<void> {
-    const args = ['npx', 'wrangler', 'delete', scriptName]
-
-    if (dispatchNamespace) {
-      args.push('--dispatch-namespace', dispatchNamespace)
+    if (!dispatchNamespace) {
+      throw new Error('Dispatch namespace is required')
     }
 
-    logger.info(`Deleting worker: ${scriptName}`)
-    logger.info(`Running: ${args.join(' ')}`)
+    logger.info(`🗑️ Deleting worker: ${scriptName}`)
 
-    const proc = Bun.spawn(args, {
-      stdout: 'pipe',
-      stderr: 'pipe',
-      env: process.env,
-    })
-
-    const stdout = await new Response(proc.stdout).text()
-    const stderr = await new Response(proc.stderr).text()
-    const exitCode = await proc.exited
-
-    logger.info('Wrangler stdout:', stdout)
-    if (stderr) logger.info('Wrangler stderr:', stderr)
-
-    if (exitCode !== 0 && exitCode !== 1) {
-      // Exit code 1 means the worker doesn't exist, which is fine
-      throw new Error(`Wrangler delete failed (exit code ${exitCode}): ${stderr}`)
+    try {
+      await this.client.workersForPlatforms.dispatch.namespaces.scripts.delete(dispatchNamespace, scriptName, {
+        account_id: this.accountId,
+        force: true,
+      })
+      logger.info(`✅ Worker deleted: ${scriptName}`)
+    } catch (err: any) {
+      // 404 means already deleted - that's fine
+      if (err?.status === 404) {
+        logger.info(`Worker ${scriptName} not found (already deleted)`)
+        return
+      }
+      throw err
     }
-
-    logger.info(`✅ Worker deleted: ${scriptName}`)
   }
 
   /**
-   * Cleanup temporary deployment directory
+   * Upload asset buckets and return completion JWT
    */
-  private async cleanupDeployDir(deployDir: string): Promise<void> {
-    try {
-      await fs.rm(deployDir, { recursive: true, force: true })
-    } catch (err) {
-      logger.warn(`Failed to cleanup ${deployDir}:`, err)
+  private async uploadAssetBuckets(buckets: string[][], assetFiles: AssetFile[], uploadJwt: string): Promise<string> {
+    let completionJwt = uploadJwt
+
+    for (let i = 0; i < buckets.length; i++) {
+      const bucket = buckets[i]!
+      const formData = new FormData()
+
+      for (const hash of bucket) {
+        const file = assetFiles.find((f) => f.hash === hash)
+        if (!file) {
+          throw new Error(`Asset with hash ${hash} not found`)
+        }
+        const blob = new Blob([file.content.toString('base64')], { type: getMimeType(file.path) })
+        formData.append(hash, blob, hash)
+      }
+
+      logger.info(`📤 Uploading bucket ${i + 1}/${buckets.length}...`)
+
+      const response = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/workers/assets/upload?base64=true`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${completionJwt}` },
+          body: formData,
+        },
+      )
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to upload assets: ${response.status} - ${error}`)
+      }
+
+      if (response.status === 201) {
+        const data: any = await response.json()
+        if (data?.result?.jwt) completionJwt = data.result.jwt
+      }
     }
+
+    return completionJwt
+  }
+
+  /**
+   * Build bindings array for script metadata
+   */
+  private buildBindings(
+    bindings?: WorkerBinding[],
+    vars?: Record<string, string>,
+    assetsConfig?: WranglerConfig['assets'],
+  ): any[] {
+    const result: any[] = []
+    const hasAssetsBinding = bindings?.some((binding) => binding.type === 'assets') || false
+
+    // Add ASSETS binding if we have assets
+    if (assetsConfig && !hasAssetsBinding) {
+      result.push({
+        type: 'assets',
+        name: assetsConfig.binding || 'ASSETS',
+      })
+    }
+
+    // Add plain_text bindings for env vars
+    if (vars) {
+      for (const [name, text] of Object.entries(vars)) {
+        result.push({ type: 'plain_text', name, text })
+      }
+    }
+
+    // Add custom bindings
+    if (bindings) {
+      for (const binding of bindings) {
+        result.push(binding)
+      }
+    }
+
+    return result
   }
 }

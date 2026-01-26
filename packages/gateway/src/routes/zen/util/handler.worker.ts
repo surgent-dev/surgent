@@ -393,12 +393,14 @@ export async function handleZenRequest(
 
   async function authenticate(modelInfo: ModelInfo): Promise<AuthInfo | undefined> {
     const key = opts.parseApiKey(c.req.raw.headers)
+    logger.debug(`AUTH: key present=${!!key}, key prefix=${key?.slice(0, 10)}...`)
     if (!key || key === 'public') {
       if (modelInfo.allowAnonymous) return
       throw new AuthError('Missing API key.')
     }
 
     const verify = await verifyApiKey(c.env, key)
+    logger.debug(`AUTH: verify result=${JSON.stringify(verify)}`)
     if (!verify.valid || !verify.key) throw new AuthError('Invalid API key.')
 
     const byokProvider = modelInfo.byokProvider ?? ''

@@ -48,13 +48,6 @@ export function useProjectQuery(id?: string) {
     queryKey: ['project', id],
     queryFn: () => fetchProject(id as string),
     enabled: Boolean(id),
-    refetchInterval: (query) => {
-      const status = query.state.data?.deployment?.status
-      if (status && DEPLOYMENT_IN_PROGRESS_STATUSES.includes(status)) {
-        return 3000 // Poll every 3 seconds while deployment is in progress
-      }
-      return false
-    },
   })
 }
 
@@ -84,9 +77,11 @@ export function useActivateProject() {
 }
 
 // New: deploy project
+const DeployResponseSchema = z.object({ deploymentId: z.string(), status: z.string() })
+
 async function deployProjectReq({ id, deployName }: { id: string; deployName?: string }) {
   const data = await http.post(`api/projects/${id}/deploy`, { json: { deployName } }).json()
-  return ScheduledSchema.parse(data)
+  return DeployResponseSchema.parse(data)
 }
 
 async function confirmHostnameReq({ id, name }: { id: string; name: string }) {
@@ -101,6 +96,7 @@ export function useDeployProject() {
     onSuccess: (_res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['latest-deployment', vars.id] })
     },
   })
 }
@@ -175,8 +171,14 @@ export function useSandboxHealthQuery(id?: string, enabled = true) {
     queryKey: ['sandbox-health', id],
     queryFn: () => fetchSandboxHealth(id!),
     enabled: Boolean(id) && enabled,
-    refetchInterval: 5000,
-    staleTime: 2000,
+    // Only poll when tab is focused; pause when hidden
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      // Poll faster when not running yet, slower when stable
+      return status === 'running' ? 30000 : 5000
+    },
+    refetchIntervalInBackground: false,
+    staleTime: 5000,
   })
 }
 
@@ -215,8 +217,9 @@ export function useSandboxLogsQuery(id?: string, enabled = true) {
     queryKey: ['sandbox-logs', id],
     queryFn: () => fetchSandboxLogs(id!),
     enabled: Boolean(id) && enabled,
-    refetchInterval: 5000,
-    staleTime: 2000,
+    refetchInterval: 10000,
+    refetchIntervalInBackground: false,
+    staleTime: 5000,
   })
 }
 
@@ -228,6 +231,10 @@ const DeploymentItemSchema = z.object({
   startedAt: z.string().optional(),
   deployedAt: z.string().optional(),
   error: z.string().optional(),
+  cloudflareVersionId: z.string().nullable().optional(),
+  hostname: z.string().nullable().optional(),
+  rollbackOf: z.string().nullable().optional(),
+  scriptName: z.string().optional(),
 })
 
 const DeploymentHistorySchema = z.array(DeploymentItemSchema)
@@ -252,15 +259,26 @@ export function useDeploymentHistoryQuery(id?: string, enabled = true) {
 const CloudflareDeploymentSchema = z.object({
   id: z.string(),
   created_on: z.string(),
-  version_id: z.string(),
-  metadata: z.any().optional(),
+  version_id: z.string().nullable(),
+  hostname: z.string().nullable().optional(),
+  is_rollback: z.boolean().optional(),
 })
 
 export type CloudflareDeployment = z.infer<typeof CloudflareDeploymentSchema>
 
 async function fetchCloudflareDeployments(id: string): Promise<CloudflareDeployment[]> {
-  const data = await http.get(`api/projects/${id}/cloudflare-deployments`).json()
-  return z.array(CloudflareDeploymentSchema).parse(data)
+  const data = await http.get(`api/projects/${id}/deployments`).json()
+  const items = DeploymentHistorySchema.parse(data)
+  const deployments = items
+    .filter((item) => item.status === 'deployed')
+    .map((item) => ({
+      id: item.id,
+      created_on: item.createdAt,
+      version_id: item.cloudflareVersionId ?? null,
+      hostname: item.hostname ?? null,
+      is_rollback: Boolean(item.rollbackOf),
+    }))
+  return z.array(CloudflareDeploymentSchema).parse(deployments)
 }
 
 export function useCloudflareDeploymentsQuery(projectId: string) {
@@ -268,6 +286,8 @@ export function useCloudflareDeploymentsQuery(projectId: string) {
     queryKey: ['cloudflare-deployments', projectId],
     queryFn: () => fetchCloudflareDeployments(projectId),
     enabled: Boolean(projectId),
+    staleTime: 60000, // 1 minute - don't refetch unless stale
+    gcTime: 300000, // 5 minutes cache
   })
 }
 
@@ -284,5 +304,64 @@ export function useRedeployVersion() {
       queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
       queryClient.invalidateQueries({ queryKey: ['cloudflare-deployments', vars.id] })
     },
+  })
+}
+
+// Deployment status
+const DeploymentStatusSchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  createdAt: z.string().optional(),
+  startedAt: z.string().optional(),
+  finishedAt: z.string().optional(),
+  error: z.string().optional(),
+  hostname: z.string().nullable(),
+  scriptName: z.string(),
+})
+
+export type DeploymentStatus = z.infer<typeof DeploymentStatusSchema>
+
+const TERMINAL_STATUSES = ['deployed', 'deploy_failed', 'build_failed']
+
+// Fetch latest deployment for a project
+async function fetchLatestDeployment(projectId: string): Promise<DeploymentStatus | null> {
+  const data = await http.get(`api/projects/${projectId}/deployments`).json()
+  const items = DeploymentHistorySchema.parse(data)
+  if (!items.length) return null
+  const latest = items[0]! // Already sorted by createdAt desc
+  return {
+    id: latest.id,
+    status: latest.status,
+    createdAt: latest.createdAt,
+    startedAt: latest.startedAt,
+    finishedAt: latest.deployedAt,
+    error: latest.error,
+    hostname: latest.hostname ?? null,
+    scriptName: latest.scriptName || 'unknown',
+  }
+}
+
+export function useLatestDeploymentQuery(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useQuery({
+    queryKey: ['latest-deployment', projectId],
+    queryFn: async () => {
+      const result = await fetchLatestDeployment(projectId!)
+      // Invalidate project when deployment completes to refresh worker status
+      if (result && TERMINAL_STATUSES.includes(result.status)) {
+        queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      }
+      return result
+    },
+    enabled: Boolean(projectId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      if (!status || TERMINAL_STATUSES.includes(status)) {
+        return false // Don't poll when done
+      }
+      return 2000 // Poll every 2s while in progress
+    },
+    refetchIntervalInBackground: false,
+    staleTime: 1000,
   })
 }
