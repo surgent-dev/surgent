@@ -71,7 +71,7 @@ impl axum::response::IntoResponse for WebhookError {
     }
 }
 
-const VISIBILITY_TIMEOUT_SECS: i32 = 30;
+const VISIBILITY_TIMEOUT_SECS: i32 = 120;
 const MAX_QUEUE_ERRORS: i32 = 5;
 
 // lifetime here is required because it contains 2 borrowed Strings
@@ -316,24 +316,30 @@ impl WebhookWorker {
         let payload: WebhookMessage = serde_json::from_str(msg.body().unwrap_or_default())
             .map_err(|e| format!("Failed to parse message body: {}", e))?;
 
-        // Check if already processed (don't insert yet)
-        let existing = sqlx::query!(
-            r#"SELECT 1 as exists FROM processed_webhook_event WHERE processor = $1 AND "processorEventId" = $2"#,
+        // Atomic idempotency check: INSERT returns row only if we won the race
+        let inserted = sqlx::query!(
+            r#"
+            INSERT INTO processed_webhook_event (processor, "processorEventId", "eventType", "processedAt")
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (processor, "processorEventId") DO NOTHING
+            RETURNING "processorEventId"
+            "#,
             &payload.processor,
-            &payload.event_id
+            &payload.event_id,
+            &get_event_type_name(&payload.event)
         )
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
 
-        if existing.is_some() {
+        if inserted.is_none() {
             tracing::info!("Event {} already processed, skipping", payload.event_id);
             let receipt_handle = msg.receipt_handle().ok_or("Missing receipt handle")?;
             self.delete_message(receipt_handle).await;
             return Ok(());
         }
 
-        // Process the normalized event
+        // Process the normalized event (we won the race)
         handle_normalized_event(
             &self.pool,
             &self.config,
@@ -342,21 +348,6 @@ impl WebhookWorker {
             &payload.raw_payload,
         )
         .await?;
-
-        // Mark as processed AFTER successful processing
-        sqlx::query!(
-        r#"
-        INSERT INTO processed_webhook_event (processor, "processorEventId", "eventType", "processedAt")
-        VALUES ($1, $2, $3, NOW())
-        ON CONFLICT (processor, "processorEventId") DO NOTHING
-        "#,
-        &payload.processor,
-        &payload.event_id,
-        &get_event_type_name(&payload.event)
-    )
-        .execute(&self.pool)
-        .await
-        .map_err(|e| format!("Failed to mark event as processed: {}", e))?;
 
         tracing::debug!("Successfully processed webhook event {}", payload.event_id);
         let receipt_handle = msg.receipt_handle().ok_or("Missing receipt handle")?;
@@ -401,39 +392,28 @@ pub async fn process_webhook_message_directly(
     config: &Config,
     msg: WebhookMessage,
 ) -> Result<(), String> {
-    // Check if already processed (don't insert yet)
-    let existing = sqlx::query!(
-        r#"SELECT 1 as exists FROM processed_webhook_event WHERE processor = $1 AND "processorEventId" = $2"#,
-        &msg.processor,
-        &msg.event_id
-    )
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| format!("Database error: {}", e))?;
-
-    if existing.is_some() {
-        return Ok(());
-    }
-
-    // Process the normalized event
-    handle_normalized_event(pool, config, &msg.processor, &msg.event, &msg.raw_payload).await?;
-
-    // Mark as processed AFTER successful processing
-    sqlx::query!(
+    // Atomic idempotency check: INSERT returns row only if we won the race
+    let inserted = sqlx::query!(
         r#"
         INSERT INTO processed_webhook_event (processor, "processorEventId", "eventType", "processedAt")
         VALUES ($1, $2, $3, NOW())
         ON CONFLICT (processor, "processorEventId") DO NOTHING
+        RETURNING "processorEventId"
         "#,
         &msg.processor,
         &msg.event_id,
         &get_event_type_name(&msg.event)
     )
-    .execute(pool)
+    .fetch_optional(pool)
     .await
-    .map_err(|e| format!("Failed to mark event as processed: {}", e))?;
+    .map_err(|e| format!("Database error: {}", e))?;
 
-    Ok(())
+    if inserted.is_none() {
+        return Ok(());
+    }
+
+    // Process the normalized event (we won the race)
+    handle_normalized_event(pool, config, &msg.processor, &msg.event, &msg.raw_payload).await
 }
 
 fn extract_customer_id_from_payload(payload: &Value) -> Result<&str, String> {
@@ -470,9 +450,7 @@ async fn handle_normalized_event(
         }
         NormalizedEvent::InvoicePaid { customer_id, .. } => {
             // First handle invoice-specific logic, then sync customer data
-            if let Err(e) = handle_invoice_paid(pool, processor, raw_payload).await {
-                tracing::error!("Failed to handle invoice paid: {}", e);
-            }
+            handle_invoice_paid(pool, processor, raw_payload).await?;
             sync_stripe_customer_data(pool, config, customer_id).await
         }
         NormalizedEvent::InvoicePaymentFailed { customer_id, .. } => {
@@ -985,6 +963,7 @@ async fn create_payment_transaction(
             "projectId", "customerId", "productId", "productPriceId",
             "checkoutSessionId", "chargeId", "succeededAt")
         VALUES ($1, NOW(), 'payment', $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        ON CONFLICT ("chargeId") DO NOTHING
         "#,
         transaction_id,
         params.amount,

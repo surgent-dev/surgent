@@ -139,9 +139,6 @@ where
     type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let cookie_header = parts.headers.get(COOKIE).map(|v| v.to_str().ok()).flatten();
-        tracing::debug!("Cookie header: {:?}", cookie_header);
-
         let cookie_value = extract_session_token(parts).ok_or_else(|| {
             tracing::warn!("No session cookie found");
             (StatusCode::UNAUTHORIZED, "Missing session")
