@@ -16,10 +16,9 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_success(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     let body = json!({
@@ -53,10 +52,9 @@ async fn test_create_product_price_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_minimal(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     let body = json!({
@@ -86,10 +84,8 @@ async fn test_create_product_price_minimal(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_invalid_product(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
-
-    let project_id = app.create_project(&api_key).await;
 
     let body = json!({
         "project_id": project_id,
@@ -117,10 +113,9 @@ async fn test_create_product_price_invalid_product(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_wrong_project(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     let body = json!({
@@ -149,12 +144,11 @@ async fn test_create_product_price_wrong_project(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_cross_org_access(pool: PgPool) -> TestResult {
-    let (_org1_id, api_key1) = seed_organization(&pool).await;
-    let (_org2_id, api_key2) = seed_organization(&pool).await;
+    let (_org1_id, project_id, api_key1) = seed_organization(&pool).await;
+    let (_org2_id, _project_id2, api_key2) = seed_organization(&pool).await;
 
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key1).await;
     let (_product_id, product_group_id) = app.create_product(&api_key1, project_id).await;
 
     let body = json!({
@@ -203,16 +197,15 @@ async fn test_create_product_price_missing_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing Authorization header");
+    assert_eq!(body, "Missing API key");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_missing_required_fields(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     let body = json!({
@@ -243,10 +236,9 @@ async fn test_create_product_price_missing_required_fields(pool: PgPool) -> Test
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_stripe_integration(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     let body = json!({
@@ -304,10 +296,9 @@ async fn test_create_product_price_stripe_integration(pool: PgPool) -> TestResul
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_same_amount_different_intervals(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     // Create a recurring monthly price at $10

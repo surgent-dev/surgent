@@ -1,15 +1,11 @@
-use axum::{
-    Json,
-    extract::{Path, State},
-    http::StatusCode,
-};
+use axum::{Json, extract::State, http::StatusCode};
 use chrono;
 use serde::Serialize;
 use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::{AuthenticatedOrganization, validate_project_ownership};
+use crate::core::auth::AuthenticatedProject;
 use crate::types::SubscriptionStatus;
 
 #[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
@@ -62,13 +58,9 @@ pub struct Subscription {
 )]
 pub async fn list_subscriptions(
     State(state): State<crate::AppState>,
-    AuthenticatedOrganization {
-        organization: org, ..
-    }: AuthenticatedOrganization,
-    Path(project_id): Path<Uuid>,
+    auth: AuthenticatedProject,
 ) -> Result<Json<Vec<Subscription>>, (StatusCode, String)> {
     let pool = &state.pool;
-    validate_project_ownership(pool, project_id, &org).await?;
 
     let subscriptions = sqlx::query_as::<_, Subscription>(
         r#"
@@ -81,7 +73,7 @@ pub async fn list_subscriptions(
         ORDER BY "createdAt" DESC
         "#,
     )
-    .bind(project_id)
+    .bind(auth.project_id)
     .fetch_all(pool)
     .await
     .map_err(|e| {

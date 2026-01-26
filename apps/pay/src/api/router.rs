@@ -16,18 +16,15 @@ use crate::api::account::{
 use crate::api::checkout::{checkout_cancel, checkout_success, create_checkout_session};
 use crate::api::customer::{get_customer, list_customers};
 use crate::api::openapi::ApiDoc;
-use crate::api::organization::create_organization;
 use crate::api::products::price::create_product_price;
 use crate::api::products::{create_product, list_products_with_prices, update_product};
-use crate::api::project::{create_project, list_projects};
+use crate::api::project::list_projects;
 use crate::api::subscription::list_subscriptions;
 use crate::api::transaction::list_transactions;
 use crate::api::webhook::webhook_handler;
 
 pub fn create_router(state: AppState) -> Router {
-    let organization_routes = Router::new().route("/", post(create_organization));
     let project_routes = Router::new()
-        .route("/", post(create_project))
         .route("/{project_id}/customers", get(list_customers))
         .route("/{project_id}/customer/{id}", get(get_customer))
         .route("/{project_id}/transactions", get(list_transactions))
@@ -58,7 +55,6 @@ pub fn create_router(state: AppState) -> Router {
         .route("/health", get(health_check))
         .route("/projects", get(list_projects))
         .nest("/webhooks", webhook_routes)
-        .nest("/organization", organization_routes)
         .nest("/project", project_routes)
         .nest("/product", product_routes)
         .nest("/checkout", checkout_routes)

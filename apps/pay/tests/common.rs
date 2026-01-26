@@ -1,13 +1,11 @@
 #![allow(dead_code)]
 
-use argon2::{
-    Argon2, PasswordHasher,
-    password_hash::{SaltString, rand_core::OsRng},
-};
 use async_trait::async_trait;
 use axum::{Router, body::Body, http::Request};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::sync::Arc;
 use surpay::AppState;
@@ -196,6 +194,12 @@ impl ConnectProcessor for MockConnectProcessor {
     }
 }
 
+fn hash_api_key(key: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(key.as_bytes());
+    URL_SAFE_NO_PAD.encode(hasher.finalize())
+}
+
 pub async fn seed_api_key(pool: &PgPool) -> String {
     let api_key_id = Uuid::new_v4();
     let name = "Test Master Key";
@@ -203,13 +207,8 @@ pub async fn seed_api_key(pool: &PgPool) -> String {
     let secret = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     let user_id = seed_user(pool).await;
 
-    let argon2 = Argon2::default();
-
-    let salt = SaltString::generate(&mut OsRng);
-    let hash = argon2
-        .hash_password(secret.as_bytes(), &salt)
-        .expect("Failed to hash secret")
-        .to_string();
+    let api_key = format!("sp_master_{}_{}", prefix, secret);
+    let hash = hash_api_key(&api_key);
 
     sqlx::query!(
         r#"
@@ -234,47 +233,60 @@ pub async fn seed_api_key(pool: &PgPool) -> String {
     .await
     .expect("Failed to seed API key");
 
-    format!("sp_master_{}_{}", prefix, secret)
+    api_key
 }
 
-/// Seeds an organization and returns (org_id, api_key)
-pub async fn seed_organization(pool: &PgPool) -> (Uuid, String) {
+/// Seeds an organization with a project and returns (org_id, project_id, api_key)
+pub async fn seed_organization(pool: &PgPool) -> (Uuid, Uuid, String) {
     let org_id = Uuid::new_v4();
+    let project_id = Uuid::new_v4();
     let user_id = seed_user(pool).await;
     let name = "Test Organization";
     let slug = format!("test-org-{}", &org_id.to_string()[..8]);
+    let project_slug = format!("test-project-{}", &project_id.to_string()[..8]);
 
     let prefix = format!("lv{}", &Uuid::new_v4().to_string()[..6]);
     let secret = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
-    let argon2 = Argon2::default();
-
-    let salt = SaltString::generate(&mut OsRng);
-    let hash = argon2
-        .hash_password(secret.as_bytes(), &salt)
-        .expect("Failed to hash secret")
-        .to_string();
 
     sqlx::query!(
         r#"
         INSERT INTO organization (
             id,
             name,
-            slug,
-            "createdBy"
+            slug
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3)
         "#,
         org_id,
         name,
-        slug,
-        name
+        slug
     )
     .execute(pool)
     .await
     .expect("Failed to seed organization");
 
+    sqlx::query!(
+        r#"
+        INSERT INTO project (
+            id,
+            name,
+            slug,
+            "organizationId"
+        )
+        VALUES ($1, $2, $3, $4)
+        "#,
+        project_id,
+        "Test Project",
+        project_slug,
+        org_id
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to seed project");
+
     let apikey_id = Uuid::new_v4();
+    let api_key = format!("sp_org_{}_{}", prefix, secret);
+    let hash = hash_api_key(&api_key);
 
     sqlx::query!(
         r#"
@@ -285,24 +297,44 @@ pub async fn seed_organization(pool: &PgPool) -> (Uuid, String) {
             prefix,
             "userId",
             "organizationId",
+            "projectId",
             "createdAt",
             "updatedAt"
         )
-        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
         "#,
         apikey_id,
         format!("{} API Key", name),
         hash,
         prefix,
         user_id,
-        org_id
+        org_id,
+        project_id
     )
     .execute(pool)
     .await
     .expect("Failed to seed API key");
 
-    let api_key = format!("sp_org_{}_{}", prefix, secret);
-    (org_id, api_key)
+    (org_id, project_id, api_key)
+}
+
+/// Seeds a project for an existing organization and returns the project ID
+pub async fn seed_project(pool: &PgPool, org_id: Uuid) -> Uuid {
+    let project_id = Uuid::new_v4();
+    let slug = format!("test-project-{}", &project_id.to_string()[..8]);
+
+    sqlx::query!(
+        r#"INSERT INTO project (id, name, slug, "organizationId") VALUES ($1, $2, $3, $4)"#,
+        project_id,
+        "Test Project",
+        slug,
+        org_id
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to seed project");
+
+    project_id
 }
 
 /// Seeds a customer and returns the customer ID

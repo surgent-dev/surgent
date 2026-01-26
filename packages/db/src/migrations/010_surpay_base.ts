@@ -596,6 +596,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     .column('handledAt')
     .execute()
 
+  // API key index for auth lookups
+  await sql`CREATE INDEX IF NOT EXISTS apikey_key_idx ON apikey (key)`.execute(db)
+
   // Billing layer indexes
   await db.schema.createIndex('idx_feature_project_id').ifNotExists().on('feature').column('projectId').execute()
   await db.schema
@@ -666,6 +669,9 @@ export async function up(db: Kysely<any>): Promise<void> {
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
+  // Drop apikey index
+  await sql`DROP INDEX IF EXISTS apikey_key_idx`.execute(db)
+
   // Drop billing layer indexes first
   await db.schema.dropIndex('idx_invoice_status').ifExists().execute()
   await db.schema.dropIndex('idx_invoice_subscription_id').ifExists().execute()

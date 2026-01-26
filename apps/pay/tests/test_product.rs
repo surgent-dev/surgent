@@ -16,10 +16,8 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_success(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
-
-    let project_id = app.create_project(&api_key).await;
 
     let body = json!({
         "project_id": project_id,
@@ -51,10 +49,8 @@ async fn test_create_product_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_missing_name(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
-
-    let project_id = app.create_project(&api_key).await;
 
     let body = json!({
         "project_id": project_id,
@@ -85,7 +81,7 @@ async fn test_create_product_missing_name(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_missing_project_id(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, _project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let body = json!({
@@ -117,7 +113,7 @@ async fn test_create_product_missing_project_id(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_invalid_project(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, _project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let body = json!({
@@ -161,19 +157,17 @@ async fn test_create_product_missing_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing Authorization header");
+    assert_eq!(body, "Missing API key");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_wrong_org_project(pool: PgPool) -> TestResult {
     // Create two organizations, project under first org
-    let (_org1_id, api_key1) = seed_organization(&pool).await;
-    let (_org2_id, api_key2) = seed_organization(&pool).await;
+    let (_org1_id, project_id, _api_key1) = seed_organization(&pool).await;
+    let (_org2_id, _project_id2, api_key2) = seed_organization(&pool).await;
 
     let mut app = create_router(create_test_state(pool).await);
-
-    let project_id = app.create_project(&api_key1).await;
 
     // Try to create product using org2's API key for org1's project
     let body = json!({
@@ -202,10 +196,8 @@ async fn test_create_product_wrong_org_project(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_duplicate_slug_allowed(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
-
-    let project_id = app.create_project(&api_key).await;
 
     let slug = format!("test-product-{}", Uuid::new_v4());
     let product_group_id = Uuid::new_v4();
@@ -248,10 +240,9 @@ async fn test_create_product_duplicate_slug_allowed(pool: PgPool) -> TestResult 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_update_product_success(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     let body = json!({
@@ -285,10 +276,9 @@ async fn test_update_product_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_update_product_increments_version_correctly(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let product_group_id = Uuid::new_v4();
 
     // Create first product (version 1)
@@ -333,7 +323,7 @@ async fn test_update_product_increments_version_correctly(pool: PgPool) -> TestR
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_update_product_not_found(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, _project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let response = app
@@ -369,18 +359,17 @@ async fn test_update_product_missing_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing Authorization header");
+    assert_eq!(body, "Missing API key");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_update_product_wrong_org(pool: PgPool) -> TestResult {
-    let (_org1_id, api_key1) = seed_organization(&pool).await;
-    let (_org2_id, api_key2) = seed_organization(&pool).await;
+    let (_org1_id, project_id, api_key1) = seed_organization(&pool).await;
+    let (_org2_id, _project_id2, api_key2) = seed_organization(&pool).await;
 
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key1).await;
     let (product_id, _) = app.create_product(&api_key1, project_id).await;
 
     // Try to update with org2's API key
@@ -403,10 +392,9 @@ async fn test_update_product_wrong_org(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_with_stripe_integration(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
-    let project_id = app.create_project(&api_key).await;
     let product_name = "Stripe Integrated Product";
 
     let body = json!({

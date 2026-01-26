@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::AuthenticatedOrganization;
+use crate::core::auth::AuthenticatedProject;
 use crate::integrations::types::ProcessorPriceRequest;
 use crate::types::RecurringInterval;
 
@@ -45,24 +45,25 @@ pub struct CreateProductPriceResponse {
 )]
 pub async fn create_product_price(
     State(state): State<crate::AppState>,
-    AuthenticatedOrganization { organization: org }: AuthenticatedOrganization,
+    auth: AuthenticatedProject,
     Json(req): Json<CreateProductPriceRequest>,
 ) -> Result<(StatusCode, Json<CreateProductPriceResponse>), (StatusCode, String)> {
+    if req.project_id != auth.project_id {
+        return Err((StatusCode::FORBIDDEN, "Invalid product".to_string()));
+    }
+
     let pool = &state.pool;
     let product = sqlx::query!(
         r#"
         SELECT p.id, p."processorProductId"
         FROM product p
-        INNER JOIN project proj ON p."projectId" = proj.id
         WHERE p."productGroupId" = $1
-          AND proj.id = $2
-          AND proj."organizationId" = $3
+          AND p."projectId" = $2
         ORDER BY p.version DESC NULLS LAST
         LIMIT 1
         "#,
         req.product_group_id,
-        req.project_id,
-        org.id
+        auth.project_id
     )
     .fetch_optional(pool)
     .await
@@ -115,7 +116,7 @@ pub async fn create_product_price(
         recurring_interval: normalized_recurring_interval.cloned(),
         metadata: HashMap::from([
             ("surpay_price_id".to_string(), product_price_id.to_string()),
-            ("org_id".to_string(), org.id.to_string()),
+            ("org_id".to_string(), auth.organization_id.to_string()),
             (
                 "product_group_id".to_string(),
                 req.product_group_id.to_string(),

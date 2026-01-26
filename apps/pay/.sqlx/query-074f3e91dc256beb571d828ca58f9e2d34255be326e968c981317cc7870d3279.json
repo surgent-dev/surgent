@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \"platformFeePercent\", \"platformFeeFixed\"\n        FROM organization\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "platformFeePercent",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "platformFeeFixed",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "074f3e91dc256beb571d828ca58f9e2d34255be326e968c981317cc7870d3279"
+}

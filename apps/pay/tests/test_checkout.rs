@@ -37,16 +37,15 @@ async fn test_create_checkout_missing_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing Authorization header");
+    assert_eq!(body, "Missing API key");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_invalid_product(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
     let price_id = app
         .create_product_price(&api_key, project_id, product_group_id)
@@ -72,19 +71,15 @@ async fn test_create_checkout_invalid_product(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(
-        body,
-        "Product not found or does not belong to this organization"
-    );
+    assert_eq!(body, "Product not found or does not belong to this project");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_invalid_price(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (product_id, _) = app.create_product(&api_key, project_id).await;
 
     let body = json!({
@@ -113,10 +108,8 @@ async fn test_create_checkout_invalid_price(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_price_not_for_product(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
-
-    let project_id = app.create_project(&api_key).await;
 
     // Create product 1 and its price
     let (_product_id1, product_group_id1) = app.create_product(&api_key, project_id).await;
@@ -154,13 +147,12 @@ async fn test_create_checkout_price_not_for_product(pool: PgPool) -> TestResult 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_wrong_org(pool: PgPool) -> TestResult {
-    let (_org1_id, api_key1) = seed_organization(&pool).await;
-    let (_org2_id, api_key2) = seed_organization(&pool).await;
+    let (_org1_id, project_id1, api_key1) = seed_organization(&pool).await;
+    let (_org2_id, _project_id2, api_key2) = seed_organization(&pool).await;
 
     let mut app = create_router(create_test_state(pool).await);
 
     // Create product under org1
-    let project_id1 = app.create_project(&api_key1).await;
     let (product_id1, product_group_id1) = app.create_product(&api_key1, project_id1).await;
     let price_id1 = app
         .create_product_price(&api_key1, project_id1, product_group_id1)
@@ -187,10 +179,7 @@ async fn test_create_checkout_wrong_org(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(
-        body,
-        "Product not found or does not belong to this organization"
-    );
+    assert_eq!(body, "Product not found or does not belong to this project");
     Ok(())
 }
 
@@ -209,14 +198,11 @@ async fn test_create_checkout_wrong_org(pool: PgPool) -> TestResult {
 /// 7. Verify checkout_session record was created in database
 #[sqlx::test(migrations = "./migrations")]
 async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
-    // Step 1: Create organization
-    let (org_id, api_key) = seed_organization(&pool).await;
+    // Step 1: Create organization (includes project)
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
-    // Step 2: Create project
-    let project_id = app.create_project(&api_key).await;
-
-    // Step 3: Create product (auto-creates Stripe product)
+    // Step 2: Create product (auto-creates Stripe product)
     let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     // Step 4: Create product price (auto-creates Stripe price)
@@ -276,7 +262,7 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
     // Step 10: Verify checkout_session record was created in database
     let checkout_session = sqlx::query!(
         r#"
-        SELECT id, "processorCheckoutId", "organizationId", "projectId", "productId", "priceId", status as "status: CheckoutStatus"
+        SELECT id, "processorCheckoutId", "projectId", "productId", "priceId", status as "status: CheckoutStatus"
         FROM checkout_session
         WHERE id = $1
         "#,
@@ -294,10 +280,6 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
     let session = checkout_session.unwrap();
 
     // Verify all fields match
-    assert_eq!(
-        session.organizationId, org_id,
-        "checkout_session organizationId should match the requesting organization"
-    );
     assert_eq!(
         session.projectId, project_id,
         "checkout_session projectId should match the product's project"
@@ -338,14 +320,11 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
 /// 7. Verify checkout_session record was created in database
 #[sqlx::test(migrations = "./migrations")]
 async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestResult {
-    // Step 1: Create organization
-    let (org_id, api_key) = seed_organization(&pool).await;
+    // Step 1: Create organization (includes project)
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
-    // Step 2: Create project
-    let project_id = app.create_project(&api_key).await;
-
-    // Step 3: Create product (auto-creates Stripe product)
+    // Step 2: Create product (auto-creates Stripe product)
     let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     // Step 4: Create recurring product price (auto-creates Stripe price with recurring interval)
@@ -424,7 +403,7 @@ async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestRe
     // Step 10: Verify checkout_session record was created in database
     let checkout_session = sqlx::query!(
         r#"
-        SELECT id, "processorCheckoutId", "organizationId", "projectId", "productId", "priceId", status as "status: CheckoutStatus"
+        SELECT id, "processorCheckoutId", "projectId", "productId", "priceId", status as "status: CheckoutStatus"
         FROM checkout_session
         WHERE id = $1
         "#,
@@ -442,10 +421,6 @@ async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestRe
     let session = checkout_session.unwrap();
 
     // Verify all fields match
-    assert_eq!(
-        session.organizationId, org_id,
-        "checkout_session organizationId should match the requesting organization"
-    );
     assert_eq!(
         session.projectId, project_id,
         "checkout_session projectId should match the product's project"

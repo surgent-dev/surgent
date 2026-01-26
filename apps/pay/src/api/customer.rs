@@ -4,12 +4,12 @@ use axum::{
     http::StatusCode,
 };
 use chrono;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::core::auth::AuthenticatedOrganization;
+use crate::core::auth::AuthenticatedProject;
 use crate::types::{SubscriptionStatus, TransactionType};
 
 use super::subscription::Subscription;
@@ -79,10 +79,7 @@ pub struct CustomerWithDetails {
 )]
 pub async fn list_customers(
     State(pool): State<PgPool>,
-    AuthenticatedOrganization {
-        organization: org, ..
-    }: AuthenticatedOrganization,
-    Path(project_id): Path<Uuid>,
+    auth: AuthenticatedProject,
 ) -> Result<Json<Vec<Customer>>, (StatusCode, String)> {
     let customers = sqlx::query_as::<_, Customer>(
         r#"
@@ -93,13 +90,10 @@ pub async fn list_customers(
             c.name,
             c."processorCustomerId"
         FROM customer c
-        INNER JOIN project p ON c."projectId" = p.id
         WHERE c."projectId" = $1
-          AND p."organizationId" = $2
         "#,
     )
-    .bind(project_id)
-    .bind(org.id)
+    .bind(auth.project_id)
     .fetch_all(&pool)
     .await
     .map_err(|e| {
@@ -112,15 +106,19 @@ pub async fn list_customers(
     Ok(Json(customers))
 }
 
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct GetCustomerParams {
+    #[allow(dead_code)]
+    project_id: Uuid,
+    id: Uuid,
+}
+
 /// Get customer with details
 #[utoipa::path(
     get,
     path = "/project/{project_id}/customer/{id}",
     tag = "customer",
-    params(
-        ("project_id" = Uuid, Path, description = "Project ID"),
-        ("id" = Uuid, Path, description = "Customer ID")
-    ),
+    params(GetCustomerParams),
     responses(
         (status = 200, description = "Customer with transactions and subscriptions", body = CustomerWithDetails),
         (status = 401, description = "Unauthorized - invalid or missing API key"),
@@ -133,10 +131,8 @@ pub async fn list_customers(
 )]
 pub async fn get_customer(
     State(pool): State<PgPool>,
-    AuthenticatedOrganization {
-        organization: org, ..
-    }: AuthenticatedOrganization,
-    Path((project_id, customer_id)): Path<(Uuid, Uuid)>,
+    auth: AuthenticatedProject,
+    Path(params): Path<GetCustomerParams>,
 ) -> Result<Json<CustomerWithDetails>, (StatusCode, String)> {
     let customer = sqlx::query_as::<_, Customer>(
         r#"
@@ -147,15 +143,12 @@ pub async fn get_customer(
             c.name,
             c."processorCustomerId"
         FROM customer c
-        INNER JOIN project p ON c."projectId" = p.id
         WHERE c.id = $1
           AND c."projectId" = $2
-          AND p."organizationId" = $3
         "#,
     )
-    .bind(customer_id)
-    .bind(project_id)
-    .bind(org.id)
+    .bind(params.id)
+    .bind(auth.project_id)
     .fetch_optional(&pool)
     .await
     .map_err(|e| {
@@ -180,7 +173,7 @@ pub async fn get_customer(
           AND t.type = 'payment'
         ORDER BY t."createdAt" DESC
         "#,
-        customer_id
+        params.id
     )
     .fetch_all(&pool)
     .await
@@ -213,7 +206,7 @@ pub async fn get_customer(
         ORDER BY s."createdAt" DESC
         "#,
     )
-    .bind(customer_id)
+    .bind(params.id)
     .fetch_all(&pool)
     .await
     .map_err(|e| {

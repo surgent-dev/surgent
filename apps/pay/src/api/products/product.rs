@@ -10,7 +10,7 @@ use sqlx::{FromRow, PgPool};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::{AuthenticatedOrganization, validate_project_ownership};
+use crate::core::auth::AuthenticatedProject;
 use crate::integrations::types::ProcessorProductRequest;
 use crate::types::RecurringInterval;
 
@@ -69,11 +69,14 @@ pub struct CreateProductResponse {
 )]
 pub async fn create_product(
     State(state): State<crate::AppState>,
-    AuthenticatedOrganization { organization: org }: AuthenticatedOrganization,
+    auth: AuthenticatedProject,
     Json(req): Json<CreateProductRequest>,
 ) -> Result<(StatusCode, Json<CreateProductResponse>), (StatusCode, String)> {
+    if req.project_id != auth.project_id {
+        return Err((StatusCode::UNAUTHORIZED, "Invalid project".to_string()));
+    }
+
     let pool = &state.pool;
-    validate_project_ownership(pool, req.project_id, &org).await?;
 
     let product_id = Uuid::new_v4();
 
@@ -111,7 +114,7 @@ pub async fn create_product(
                 req.product_group_id.to_string(),
             ),
             ("surpay_product_id".to_string(), product_id.to_string()),
-            ("org_id".to_string(), org.id.to_string()),
+            ("org_id".to_string(), auth.organization_id.to_string()),
             ("slug".to_string(), req.slug.clone()),
             ("version".to_string(), version.to_string()),
         ]),
@@ -119,7 +122,7 @@ pub async fn create_product(
 
     let processor_product = processor.create_product(processor_req).await.map_err(|e| {
         tracing::error!(
-            project_id = %req.project_id,
+            project_id = %auth.project_id,
             product_id = %product_id,
             product_group_id = %req.product_group_id,
             product_name = %req.name,
@@ -146,7 +149,7 @@ pub async fn create_product(
         "#,
         product_id,
         req.product_group_id,
-        req.project_id,
+        auth.project_id,
         req.name,
         req.description,
         req.slug,
@@ -228,9 +231,7 @@ pub struct ProductWithPricesResponse {
 )]
 pub async fn update_product(
     State(pool): State<PgPool>,
-    AuthenticatedOrganization {
-        organization: org, ..
-    }: AuthenticatedOrganization,
+    auth: AuthenticatedProject,
     Path(product_id): Path<Uuid>,
     Json(req): Json<UpdateProductRequest>,
 ) -> Result<(StatusCode, Json<UpdateProductResponse>), (StatusCode, String)> {
@@ -239,12 +240,11 @@ pub async fn update_product(
         SELECT p.id, p."productGroupId", p.name, p.description,
                p."projectId", p.slug, p.version, p."isArchived", p."isDefault", p."processorProductId"
         FROM product p
-        INNER JOIN project proj ON p."projectId" = proj.id
-        WHERE p.id = $1 AND proj."organizationId" = $2
+        WHERE p.id = $1 AND p."projectId" = $2
         "#,
     )
     .bind(product_id)
-    .bind(org.id)
+    .bind(auth.project_id)
     .fetch_optional(&pool)
     .await
     .map_err(|e| {
@@ -333,13 +333,8 @@ pub async fn update_product(
 )]
 pub async fn list_products_with_prices(
     State(pool): State<PgPool>,
-    AuthenticatedOrganization {
-        organization: org, ..
-    }: AuthenticatedOrganization,
-    Path(project_id): Path<Uuid>,
+    auth: AuthenticatedProject,
 ) -> Result<Json<Vec<ProductWithPricesResponse>>, (StatusCode, String)> {
-    validate_project_ownership(&pool, project_id, &org).await?;
-
     // DISTINCT ON gets the latest version per product_group (sorted by version DESC)
     let products = sqlx::query_as::<_, Product>(
         r#"
@@ -351,7 +346,7 @@ pub async fn list_products_with_prices(
         ORDER BY p."productGroupId", p.version DESC NULLS LAST
         "#,
     )
-    .bind(project_id)
+    .bind(auth.project_id)
     .fetch_all(&pool)
     .await
     .map_err(|e| {

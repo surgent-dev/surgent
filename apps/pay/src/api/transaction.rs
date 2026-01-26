@@ -1,15 +1,11 @@
-use axum::{
-    Json,
-    extract::{Path, State},
-    http::StatusCode,
-};
+use axum::{Json, extract::State, http::StatusCode};
 use chrono;
 use serde::Serialize;
 use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::{AuthenticatedOrganization, validate_project_ownership};
+use crate::core::auth::AuthenticatedProject;
 
 #[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -98,13 +94,9 @@ pub struct Transaction {
 )]
 pub async fn list_transactions(
     State(state): State<crate::AppState>,
-    AuthenticatedOrganization {
-        organization: org, ..
-    }: AuthenticatedOrganization,
-    Path(project_id): Path<Uuid>,
+    auth: AuthenticatedProject,
 ) -> Result<Json<Vec<Transaction>>, (StatusCode, String)> {
     let pool = &state.pool;
-    validate_project_ownership(pool, project_id, &org).await?;
 
     let transactions = sqlx::query_as::<_, Transaction>(
         r#"
@@ -148,7 +140,7 @@ pub async fn list_transactions(
         ORDER BY "createdAt" DESC
         "#,
     )
-    .bind(project_id)
+    .bind(auth.project_id)
     .fetch_all(pool)
     .await
     .map_err(|e| {

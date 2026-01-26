@@ -119,11 +119,10 @@ async fn test_webhook_valid_signature_enqueues(pool: PgPool) -> TestResult {
 #[sqlx::test(migrations = "./migrations")]
 async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) -> TestResult {
     // Setup: Create org, project, product, price, and checkout session
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let state = create_test_state(pool.clone()).await;
     let mut app = create_router(state.clone());
 
-    let project_id = app.create_project(&api_key).await;
     let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
     let price_id = app
         .create_product_price(&api_key, project_id, product_group_id)
@@ -135,9 +134,8 @@ async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) 
 
     sqlx::query(
         r#"
-        INSERT INTO checkout_session (id, "processorCheckoutId", "organizationId", "projectId", "productId", "priceId", status)
-        SELECT $1, $2, "organizationId", $3, $4, $5, 'open'
-        FROM project WHERE id = $3
+        INSERT INTO checkout_session (id, "processorCheckoutId", "projectId", "productId", "priceId", status)
+        VALUES ($1, $2, $3, $4, $5, 'open')
         "#
     )
     .bind(checkout_id)
@@ -248,11 +246,10 @@ async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_checkout_expired_updates_status(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let state = create_test_state(pool.clone()).await;
     let mut app = create_router(state.clone());
 
-    let project_id = app.create_project(&api_key).await;
     let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
     let price_id = app
         .create_product_price(&api_key, project_id, product_group_id)
@@ -264,9 +261,8 @@ async fn test_checkout_expired_updates_status(pool: PgPool) -> TestResult {
 
     sqlx::query(
         r#"
-        INSERT INTO checkout_session (id, "processorCheckoutId", "organizationId", "projectId", "productId", "priceId", status)
-        SELECT $1, $2, "organizationId", $3, $4, $5, 'open'
-        FROM project WHERE id = $3
+        INSERT INTO checkout_session (id, "processorCheckoutId", "projectId", "productId", "priceId", status)
+        VALUES ($1, $2, $3, $4, $5, 'open')
         "#
     )
     .bind(checkout_id)

@@ -6,12 +6,12 @@ default-run = "surpay"
 
 [dependencies]
 
-argon2 = "0.5"
 async-trait = "0.1"
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 aws-sdk-sqs = "1.81.0"
 axum = "0.8.8"
 axum-extra = { version = "0.12", features = ["typed-header"] }
+base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 dotenvy = "0.15.7"
@@ -42,10 +42,6 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 hyper = "1.5"
 cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
-
-[[bin]]
-name = "create-api-key"
-path = "src/bin/create-api-key.rs"
 
 [profile.release]
 lto = "thin"          # Link-time optimization for smaller/faster binary

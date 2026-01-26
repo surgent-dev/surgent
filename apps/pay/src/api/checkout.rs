@@ -7,12 +7,12 @@ use url::Url;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::AuthenticatedOrganization;
+use crate::core::auth::AuthenticatedProject;
 use crate::core::config::Config;
 use crate::integrations::ProcessorRegistry;
 use crate::integrations::stripe::fetch_checkout_session;
 use crate::integrations::types::{CheckoutLineItem, CreateCheckoutSessionRequest};
-use crate::types::{CheckoutStatus, RecurringInterval};
+use crate::types::RecurringInterval;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateCheckoutRequest {
@@ -72,23 +72,22 @@ pub async fn create_checkout_session(
     State(pool): State<PgPool>,
     State(config): State<Config>,
     State(registry): State<Arc<ProcessorRegistry>>,
-    AuthenticatedOrganization { organization: org }: AuthenticatedOrganization,
+    auth: AuthenticatedProject,
     Json(req): Json<CreateCheckoutRequest>,
 ) -> Result<(StatusCode, Json<CreateCheckoutResponse>), (StatusCode, String)> {
     // Validate URLs to prevent phishing attacks
     req.validate()
         .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
 
-    // Validate product belongs to the authenticated organization
+    // Validate product belongs to the authenticated project
     let product = sqlx::query!(
         r#"
         SELECT p.id, p."projectId"
         FROM product p
-        INNER JOIN project proj ON p."projectId" = proj.id
-        WHERE p.id = $1 AND proj."organizationId" = $2
+        WHERE p.id = $1 AND p."projectId" = $2
         "#,
         req.product_id,
-        org.id
+        auth.project_id
     )
     .fetch_optional(&pool)
     .await
@@ -101,13 +100,10 @@ pub async fn create_checkout_session(
 
     let product = product.ok_or((
         StatusCode::NOT_FOUND,
-        "Product not found or does not belong to this organization".to_string(),
+        "Product not found or does not belong to this project".to_string(),
     ))?;
 
-    let project_id = product.projectId.ok_or((
-        StatusCode::BAD_REQUEST,
-        "Product must have a projectId".to_string(),
-    ))?;
+    let project_id = product.projectId;
 
     // Same with price
     let price = sqlx::query!(
@@ -144,15 +140,15 @@ pub async fn create_checkout_session(
         "payment"
     };
 
-    // Look up org's connected account for destination charges
+    // Look up project's connected account for destination charges
     let destination_account = sqlx::query_scalar!(
         r#"
         SELECT "processorAccountId"
         FROM connect_account
-        WHERE "organizationId" = $1 AND "processorAccountId" IS NOT NULL
+        WHERE "projectId" = $1 AND "processorAccountId" IS NOT NULL
         LIMIT 1
         "#,
-        org.id
+        auth.project_id
     )
     .fetch_optional(&pool)
     .await
@@ -164,14 +160,37 @@ pub async fn create_checkout_session(
     })?
     .flatten();
 
+    // Fetch org config for platform fee calculation
+    let org_config = sqlx::query!(
+        r#"
+        SELECT "platformFeePercent", "platformFeeFixed"
+        FROM organization
+        WHERE id = $1
+        "#,
+        auth.organization_id
+    )
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
+
     // Calculate platform fee from org config
     let application_fee_amount = if destination_account.is_some() {
         let price_amount = price.priceAmount as i64;
-        let percent_fee = org
-            .platform_fee_percent
+        let percent_fee = org_config
+            .as_ref()
+            .and_then(|o| o.platformFeePercent)
             .map(|p| (price_amount * p as i64) / 100)
             .unwrap_or(0);
-        let fixed_fee = org.platform_fee_fixed.map(|f| f as i64).unwrap_or(0);
+        let fixed_fee = org_config
+            .as_ref()
+            .and_then(|o| o.platformFeeFixed)
+            .map(|f| f as i64)
+            .unwrap_or(0);
         let total_fee = percent_fee + fixed_fee;
 
         if total_fee > 0 { Some(total_fee) } else { None }
@@ -228,23 +247,19 @@ pub async fn create_checkout_session(
         INSERT INTO checkout_session (
             id,
             "processorCheckoutId",
-            "organizationId",
             "projectId",
             "productId",
             "priceId",
-            status,
             "successUrl",
             "cancelUrl"
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         "#,
         session_id,
         &processor_session.id,
-        org.id,
         project_id,
         req.product_id,
         req.price_id,
-        CheckoutStatus::Open as CheckoutStatus,
         &req.success_url,
         &req.cancel_url
     )

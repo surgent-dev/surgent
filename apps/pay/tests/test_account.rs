@@ -33,13 +33,13 @@ async fn test_list_accounts_requires_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing Authorization header");
+    assert_eq!(body, "Missing API key");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_accounts_empty(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, _project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let response = app
@@ -59,18 +59,18 @@ async fn test_list_accounts_empty(pool: PgPool) -> TestResult {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn test_list_accounts_returns_org_accounts(pool: PgPool) -> TestResult {
-    let (org_id1, api_key1) = seed_organization(&pool).await;
-    let (org_id2, api_key2) = seed_organization(&pool).await;
+async fn test_list_accounts_returns_project_accounts(pool: PgPool) -> TestResult {
+    let (_org_id1, project_id1, api_key1) = seed_organization(&pool).await;
+    let (_org_id2, project_id2, api_key2) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
-    // Insert account for org1
+    // Insert account for project1
     let account_id1 = Uuid::new_v4();
     sqlx::query!(
         r#"
         INSERT INTO connect_account (
             id,
-            "organizationId",
+            "projectId",
             country,
             currency,
             "isPayoutsEnabled",
@@ -85,7 +85,7 @@ async fn test_list_accounts_returns_org_accounts(pool: PgPool) -> TestResult {
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
         account_id1,
-        org_id1,
+        project_id1,
         "US",
         "usd",
         false,
@@ -100,13 +100,13 @@ async fn test_list_accounts_returns_org_accounts(pool: PgPool) -> TestResult {
     .execute(&pool)
     .await?;
 
-    // Insert account for org2
+    // Insert account for project2
     let account_id2 = Uuid::new_v4();
     sqlx::query!(
         r#"
         INSERT INTO connect_account (
             id,
-            "organizationId",
+            "projectId",
             country,
             currency,
             "isPayoutsEnabled",
@@ -121,7 +121,7 @@ async fn test_list_accounts_returns_org_accounts(pool: PgPool) -> TestResult {
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
         account_id2,
-        org_id2,
+        project_id2,
         "GB",
         "gbp",
         false,
@@ -136,7 +136,7 @@ async fn test_list_accounts_returns_org_accounts(pool: PgPool) -> TestResult {
     .execute(&pool)
     .await?;
 
-    // List accounts for org1
+    // List accounts for project1
     let response = app
         .call(
             Request::builder()
@@ -153,7 +153,7 @@ async fn test_list_accounts_returns_org_accounts(pool: PgPool) -> TestResult {
     assert_eq!(accounts.len(), 1);
     assert_eq!(accounts[0]["id"].as_str().unwrap(), account_id1.to_string());
 
-    // List accounts for org2
+    // List accounts for project2
     let response = app
         .call(
             Request::builder()
@@ -191,13 +191,13 @@ async fn test_get_account_requires_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing Authorization header");
+    assert_eq!(body, "Missing API key");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_get_account_not_found(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, _project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
     let account_id = Uuid::new_v4();
 
@@ -219,17 +219,17 @@ async fn test_get_account_not_found(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_get_account_access_denied(pool: PgPool) -> TestResult {
-    let (org_id1, _api_key1) = seed_organization(&pool).await;
-    let (_org_id2, api_key2) = seed_organization(&pool).await;
+    let (_org_id1, project_id1, _api_key1) = seed_organization(&pool).await;
+    let (_org_id2, _project_id2, api_key2) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
-    // Insert account for org1
+    // Insert account for project1
     let account_id = Uuid::new_v4();
     sqlx::query!(
         r#"
         INSERT INTO connect_account (
             id,
-            "organizationId",
+            "projectId",
             country,
             currency,
             "isPayoutsEnabled",
@@ -244,7 +244,7 @@ async fn test_get_account_access_denied(pool: PgPool) -> TestResult {
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
         account_id,
-        org_id1,
+        project_id1,
         "US",
         "usd",
         false,
@@ -259,7 +259,7 @@ async fn test_get_account_access_denied(pool: PgPool) -> TestResult {
     .execute(&pool)
     .await?;
 
-    // Try to access with org2's API key
+    // Try to access with project2's API key
     let response = app
         .call(
             Request::builder()
@@ -270,15 +270,15 @@ async fn test_get_account_access_denied(pool: PgPool) -> TestResult {
         )
         .await?;
 
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Access denied");
+    // Returns 404 (not found in caller's project context) rather than 403
+    // This is more secure as it doesn't leak existence of accounts in other projects
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_get_account_success(pool: PgPool) -> TestResult {
-    let (org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     // Insert account
@@ -287,7 +287,7 @@ async fn test_get_account_success(pool: PgPool) -> TestResult {
         r#"
         INSERT INTO connect_account (
             id,
-            "organizationId",
+            "projectId",
             country,
             currency,
             "isPayoutsEnabled",
@@ -302,7 +302,7 @@ async fn test_get_account_success(pool: PgPool) -> TestResult {
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
         account_id,
-        org_id,
+        project_id,
         "US",
         "usd",
         true,
@@ -376,7 +376,7 @@ async fn test_callback_success(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     // Seed organization first to avoid foreign key constraint violation
-    let (org_id, _) = seed_organization(&pool).await;
+    let (_org_id, project_id, _) = seed_organization(&pool).await;
 
     // Insert account with connect_state
     let account_id = Uuid::new_v4();
@@ -385,7 +385,7 @@ async fn test_callback_success(pool: PgPool) -> TestResult {
         r#"
         INSERT INTO connect_account (
             id,
-            "organizationId",
+            "projectId",
             country,
             currency,
             "isPayoutsEnabled",
@@ -400,7 +400,7 @@ async fn test_callback_success(pool: PgPool) -> TestResult {
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
         account_id,
-        org_id,
+        project_id,
         "US",
         "usd",
         false,
@@ -473,13 +473,13 @@ async fn test_create_connect_account_requires_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body_text = read_body_text(response.into_body()).await;
-    assert_eq!(body_text, "Missing Authorization header");
+    assert_eq!(body_text, "Missing API key");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_connect_account_success(pool: PgPool) -> TestResult {
-    let (org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     let body = json!({
@@ -513,13 +513,13 @@ async fn test_create_connect_account_success(pool: PgPool) -> TestResult {
 
     // Verify account was created in database with pending status
     let account = sqlx::query!(
-        r#"SELECT "organizationId", country, currency, processor, "processorAccountId", status, "businessType" FROM connect_account WHERE id = $1"#,
+        r#"SELECT "projectId", country, currency, processor, "processorAccountId", status, "businessType" FROM connect_account WHERE id = $1"#,
         Uuid::parse_str(account_id).unwrap()
     )
     .fetch_one(&pool)
     .await?;
 
-    assert_eq!(account.organizationId, org_id);
+    assert_eq!(account.projectId, project_id);
     assert_eq!(account.country, "US");
     assert_eq!(account.processor, "stripe");
     assert_eq!(account.status, "pending");
@@ -530,7 +530,7 @@ async fn test_create_connect_account_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_connect_account_missing_country(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, _project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let body = json!({
@@ -564,7 +564,7 @@ async fn test_create_connect_account_real_stripe(pool: PgPool) -> TestResult {
         return Ok(());
     }
 
-    let (org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state_real_stripe(pool.clone()).await);
 
     let body = json!({
@@ -609,7 +609,7 @@ async fn test_create_connect_account_real_stripe(pool: PgPool) -> TestResult {
         r#"
         SELECT
             id,
-            "organizationId",
+            "projectId",
             country,
             currency,
             processor,
@@ -624,7 +624,7 @@ async fn test_create_connect_account_real_stripe(pool: PgPool) -> TestResult {
     .fetch_one(&pool)
     .await?;
 
-    assert_eq!(account.organizationId, org_id);
+    assert_eq!(account.projectId, project_id);
     assert_eq!(account.country, "US");
     assert_eq!(account.currency, "usd");
     assert_eq!(account.processor, "stripe");

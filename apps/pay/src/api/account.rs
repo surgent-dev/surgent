@@ -10,13 +10,13 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
-use crate::core::auth::AuthenticatedOrganization;
+use crate::core::auth::AuthenticatedProject;
 
 #[derive(Debug, Clone, FromRow)]
 pub struct Account {
     pub id: Uuid,
-    #[sqlx(rename = "organizationId")]
-    pub organization_id: Uuid,
+    #[sqlx(rename = "projectId")]
+    pub project_id: Uuid,
     pub country: String,
     pub currency: String,
     #[sqlx(rename = "isPayoutsEnabled")]
@@ -111,9 +111,7 @@ pub struct ConnectedAccountResponse {
 )]
 pub async fn create_connect_account(
     State(state): State<AppState>,
-    AuthenticatedOrganization {
-        organization: org, ..
-    }: AuthenticatedOrganization,
+    auth: AuthenticatedProject,
     Json(req): Json<ConnectAccountRequest>,
 ) -> Result<Json<OAuthInitResponse>, (StatusCode, String)> {
     let processor = state
@@ -126,7 +124,7 @@ pub async fn create_connect_account(
         .country
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "country is required".to_string()))?;
 
-    // One account per org+processor (enforced by DB). If it already exists, return an error.
+    // One account per project+processor (enforced by DB). If it already exists, return an error.
     #[derive(Debug, FromRow)]
     struct ExistingAccountRow {
         pub id: Uuid,
@@ -137,10 +135,10 @@ pub async fn create_connect_account(
         r#"
         SELECT id, "processorAccountId", status
         FROM connect_account
-        WHERE "organizationId" = $1 AND processor = $2
+        WHERE "projectId" = $1 AND processor = $2
         "#,
     )
-    .bind(org.id)
+    .bind(auth.project_id)
     .bind(&req.processor)
     .fetch_optional(&state.pool)
     .await
@@ -181,7 +179,7 @@ pub async fn create_connect_account(
         r#"
         INSERT INTO connect_account (
             id,
-            "organizationId",
+            "projectId",
             country,
             currency,
             "isPayoutsEnabled",
@@ -197,7 +195,7 @@ pub async fn create_connect_account(
         "#,
     )
     .bind(account_id)
-    .bind(org.id)
+    .bind(auth.project_id)
     .bind(&country)
     .bind(&currency)
     .bind(false)
@@ -236,7 +234,7 @@ pub async fn connect_callback(
         r#"
         SELECT
             id,
-            "organizationId",
+            "projectId",
             country,
             currency,
             "isPayoutsEnabled",
@@ -518,16 +516,14 @@ pub async fn oauth_callback(
 )]
 pub async fn get_account(
     State(pool): State<PgPool>,
-    AuthenticatedOrganization {
-        organization: org, ..
-    }: AuthenticatedOrganization,
+    auth: AuthenticatedProject,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ConnectedAccountResponse>, (StatusCode, String)> {
     let account = sqlx::query_as::<_, Account>(
         r#"
         SELECT
             id,
-            "organizationId",
+            "projectId",
             country,
             currency,
             "isPayoutsEnabled",
@@ -541,10 +537,11 @@ pub async fn get_account(
             "createdAt",
             "updatedAt"
         FROM connect_account
-        WHERE id = $1
+        WHERE id = $1 AND "projectId" = $2
         "#,
     )
     .bind(id)
+    .bind(auth.project_id)
     .fetch_optional(&pool)
     .await
     .map_err(|e| {
@@ -554,10 +551,6 @@ pub async fn get_account(
         )
     })?
     .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
-
-    if account.organization_id != org.id {
-        return Err((StatusCode::FORBIDDEN, "Access denied".to_string()));
-    }
 
     Ok(Json(ConnectedAccountResponse {
         id: account.id,
@@ -589,15 +582,13 @@ pub async fn get_account(
 )]
 pub async fn list_accounts(
     State(pool): State<PgPool>,
-    AuthenticatedOrganization {
-        organization: org, ..
-    }: AuthenticatedOrganization,
+    auth: AuthenticatedProject,
 ) -> Result<Json<Vec<ConnectedAccountResponse>>, (StatusCode, String)> {
     let accounts = sqlx::query_as::<_, Account>(
         r#"
         SELECT
             id,
-            "organizationId",
+            "projectId",
             country,
             currency,
             "isPayoutsEnabled",
@@ -611,11 +602,11 @@ pub async fn list_accounts(
             "createdAt",
             "updatedAt"
         FROM connect_account
-        WHERE "organizationId" = $1
+        WHERE "projectId" = $1
         ORDER BY "createdAt" DESC
         "#,
     )
-    .bind(org.id)
+    .bind(auth.project_id)
     .fetch_all(&pool)
     .await
     .map_err(|e| {

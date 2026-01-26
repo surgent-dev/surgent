@@ -9,10 +9,8 @@ use utoipa::{Modify, OpenApi};
         description = "Payment processing and subscription management API"
     ),
     paths(
-        // Organization (master key)
-        crate::api::organization::create_organization,
         // Project
-        crate::api::project::create_project,
+        crate::api::project::list_projects,
         // Customer
         crate::api::customer::list_customers,
         crate::api::customer::get_customer,
@@ -43,12 +41,9 @@ use utoipa::{Modify, OpenApi};
             crate::types::PayoutStatus,
             crate::types::RecurringInterval,
             crate::types::TransactionType,
-            // Organization DTOs
-            crate::api::organization::CreateOrganizationRequest,
-            crate::api::organization::CreateOrganizationResponse,
             // Project DTOs
-            crate::api::project::CreateProjectRequest,
-            crate::api::project::CreateProjectResponse,
+            crate::api::project::Project,
+            crate::api::project::ListProjectsResponse,
             // Customer DTOs
             crate::api::customer::Customer,
             crate::api::customer::CustomerWithDetails,
@@ -80,7 +75,6 @@ use utoipa::{Modify, OpenApi};
         )
     ),
     tags(
-        (name = "organization", description = "Organization management (requires master key)"),
         (name = "project", description = "Project management"),
         (name = "customer", description = "Customer management"),
         (name = "transaction", description = "Transaction history"),
@@ -98,18 +92,6 @@ struct SecurityAddon;
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         let components = openapi.components.get_or_insert_with(Default::default);
-
-        // Master API key (for organization creation)
-        components.add_security_scheme(
-            "master_key",
-            SecurityScheme::Http(
-                HttpBuilder::new()
-                    .scheme(HttpAuthScheme::Bearer)
-                    .bearer_format("sp_master_<prefix>_<secret>")
-                    .description(Some("Master API key for platform administration"))
-                    .build(),
-            ),
-        );
 
         // Organization API key (for merchant operations)
         components.add_security_scheme(

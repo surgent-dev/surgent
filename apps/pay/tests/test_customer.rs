@@ -8,19 +8,15 @@ use sqlx::PgPool;
 use tower::Service;
 use uuid::Uuid;
 
-use common::{
-    TestAppExt, create_test_state, read_body, read_body_text, seed_customer, seed_organization,
-};
+use common::{create_test_state, read_body, read_body_text, seed_customer, seed_organization};
 use surpay::api::create_router;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_customers_empty(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
-
-    let project_id = app.create_project(&api_key).await;
 
     let response = app
         .call(
@@ -42,10 +38,8 @@ async fn test_list_customers_empty(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_customers_success(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
-
-    let project_id = app.create_project(&api_key).await;
 
     // Seed a customer directly in the database
     let customer_id =
@@ -79,12 +73,10 @@ async fn test_list_customers_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_customers_unauthorized(pool: PgPool) -> TestResult {
-    let (_org1_id, api_key1) = seed_organization(&pool).await;
-    let (_org2_id, api_key2) = seed_organization(&pool).await;
+    let (_org1_id, project_id, _api_key1) = seed_organization(&pool).await;
+    let (_org2_id, _project_id2, api_key2) = seed_organization(&pool).await;
 
     let mut app = create_router(create_test_state(pool.clone()).await);
-
-    let project_id = app.create_project(&api_key1).await;
 
     // Seed a customer in org1's project
     seed_customer(&pool, project_id, "test@example.com", Some("Test Customer")).await;
@@ -113,7 +105,7 @@ async fn test_list_customers_unauthorized(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_customers_invalid_project(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, _project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let invalid_project_id = Uuid::new_v4();
@@ -141,10 +133,8 @@ async fn test_list_customers_invalid_project(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_get_customer_success(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
-
-    let project_id = app.create_project(&api_key).await;
 
     // Seed a customer directly in the database
     let customer_id =
@@ -182,10 +172,9 @@ async fn test_get_customer_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_get_customer_not_found(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let invalid_customer_id = Uuid::new_v4();
 
     let response = app

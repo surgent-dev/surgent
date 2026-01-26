@@ -18,10 +18,9 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_success(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
     let _price_id = app
         .create_product_price(&api_key, project_id, product_group_id)
@@ -54,10 +53,8 @@ async fn test_list_products_with_prices_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_empty_when_no_products(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
-
-    let project_id = app.create_project(&api_key).await;
 
     let response = app
         .call(
@@ -79,10 +76,9 @@ async fn test_list_products_with_prices_empty_when_no_products(pool: PgPool) -> 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_returns_only_latest_version(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let product_group_id = Uuid::new_v4();
 
     // Create v1 and v2 of the same product group
@@ -130,10 +126,9 @@ async fn test_list_products_with_prices_returns_only_latest_version(pool: PgPool
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_product_without_prices(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let _product = app.create_product(&api_key, project_id).await;
     // No prices added
 
@@ -165,10 +160,9 @@ async fn test_list_products_with_prices_product_without_prices(pool: PgPool) -> 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     // Add multiple prices (with different amounts to avoid idempotency collisions)
@@ -251,7 +245,7 @@ async fn test_list_products_with_prices_missing_auth(pool: PgPool) -> TestResult
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing Authorization header");
+    assert_eq!(body, "Missing API key");
     Ok(())
 }
 
@@ -276,10 +270,9 @@ async fn test_list_products_with_prices_invalid_auth(pool: PgPool) -> TestResult
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_price_values_are_correct(pool: PgPool) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     let price_id = app
@@ -331,10 +324,9 @@ async fn test_list_products_with_prices_price_values_are_correct(pool: PgPool) -
 async fn test_list_products_with_prices_multiple_prices_with_different_values(
     pool: PgPool,
 ) -> TestResult {
-    let (_org_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let project_id = app.create_project(&api_key).await;
     let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
 
     let monthly_id = app
@@ -405,13 +397,10 @@ async fn test_list_products_with_prices_multiple_prices_with_different_values(
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_organization_isolation(pool: PgPool) -> TestResult {
     // Create two organizations with their own products
-    let (_org1_id, api_key1) = seed_organization(&pool).await;
-    let (_org2_id, api_key2) = seed_organization(&pool).await;
+    let (_org1_id, project1_id, api_key1) = seed_organization(&pool).await;
+    let (_org2_id, project2_id, api_key2) = seed_organization(&pool).await;
 
     let mut app = create_router(create_test_state(pool).await);
-
-    let project1_id = app.create_project(&api_key1).await;
-    let project2_id = app.create_project(&api_key2).await;
 
     let (product1_id, product_group1) = app.create_product(&api_key1, project1_id).await;
     let (_product2_id, product_group2) = app.create_product(&api_key2, project2_id).await;
