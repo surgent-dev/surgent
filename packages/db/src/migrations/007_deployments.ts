@@ -1,6 +1,8 @@
 import { Kysely, sql } from 'kysely'
 
 export async function up(db: Kysely<any>): Promise<void> {
+  await db.schema.alterTable('project').addColumn('deletedAt', 'timestamptz').execute()
+
   // workers - prod runtime state
   await db.schema
     .createTable('worker')
@@ -11,6 +13,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('scriptName', 'text', (col) => col.notNull())
     .addColumn('dispatchNamespace', 'text')
     .addColumn('hostname', 'text')
+    .addColumn('status', 'text')
     .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
@@ -88,7 +91,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('cloudflareDeploymentId', 'text')
     .addColumn('cloudflareVersionId', 'text')
     .addColumn('rollbackOf', 'uuid', (col) => col.references('deployment.id'))
-    .addColumn('metadata', 'jsonb')
+    .addColumn('hostname', 'text')
     .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
 
@@ -105,6 +108,7 @@ export async function down(db: Kysely<any>): Promise<void> {
   await db.schema.dropTable('integration').ifExists().execute()
   await db.schema.dropTable('sandbox').ifExists().execute()
   await db.schema.dropTable('worker').ifExists().execute()
+  await db.schema.alterTable('project').dropColumn('deletedAt').execute()
 
   // restore old table
   await db.schema
