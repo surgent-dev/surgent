@@ -127,18 +127,16 @@ Surpay uses Bearer token authentication with API keys. There are two types of ke
 
 ### API Key Format
 
-`sp_{env}_{prefix}_{secret}`
+API keys are 64-character random alphabetic strings (a-z, A-Z).
 
-- `env`: Either `live` or `test`.
-- `prefix`: 8-character unique identifier.
-- `secret`: 32-character random secret.
+Example: `xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd`
 
 ### Usage
 
 Include the API key in the `Authorization` header of your requests:
 
 ```http
-Authorization: Bearer sp_live_abcdefgh_your_secret_key_here
+Authorization: Bearer xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd
 ```
 
 API keys are stored securely using Argon2 hashing. Master keys are created via the CLI, while Organization keys are returned when an organization is created.

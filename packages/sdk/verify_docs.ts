@@ -1,16 +1,11 @@
-import { Surpay, SurpayAdmin, isSurpayError } from './src/index.js'
+import { Surpay, isSurpayError } from './src/index.js'
 
 async function test() {
   const surpay = new Surpay({
-    apiKey: 'sp_org_test',
-  })
-
-  const admin = new SurpayAdmin({
-    masterKey: 'sp_master_test',
+    apiKey: 'xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd',
   })
 
   // Projects
-  await surpay.projects.create({ name: 'test', slug: 'test' })
   await surpay.projects.list()
 
   // Products
@@ -53,9 +48,6 @@ async function test() {
   await surpay.accounts.connect({ processor: 'stripe' })
   await surpay.accounts.get('123')
   await surpay.accounts.list()
-
-  // Admin
-  await admin.organization.create({ name: 'test', slug: 'test' })
 
   // Error handling
   try {

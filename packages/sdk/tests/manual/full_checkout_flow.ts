@@ -1,9 +1,9 @@
 /**
  * Surpay SDK - Full Checkout Flow Example
  *
- * This file demonstrates creating a new project and running through a complete
- * checkout flow including product creation, prices, checkout session, and
- * listing customers/subscriptions/transactions.
+ * This file demonstrates running through a complete checkout flow including
+ * product creation, prices, checkout session, and listing
+ * customers/subscriptions/transactions.
  *
  * Usage: bun run tests/manual/full_checkout_flow.ts
  */
@@ -15,14 +15,11 @@ import { stdin as input, stdout as output } from 'node:process'
 const env = typeof process !== 'undefined' ? process.env : {}
 const rl = readline.createInterface({ input, output })
 const surpay = new Surpay({
-  apiKey: env.SURPAY_API_KEY ?? 'sp_org_test_key_123',
+  apiKey: env.SURPAY_API_KEY ?? 'xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd',
   baseUrl: env.SURPAY_BASE_URL ?? 'http://localhost:8090',
 })
 
 async function main() {
-  // Generate timestamp to avoid conflicts across multiple runs
-  const timestamp = Date.now()
-
   // =========================================================================
   // Project Setup - Interactive Selection
   // =========================================================================
@@ -39,53 +36,30 @@ async function main() {
   // Ensure projects is always an array
   const projectList = Array.isArray(projects) ? projects : []
 
-  // Always display the menu, even when no projects exist
   console.log('='.repeat(50))
   console.log('SELECT A PROJECT')
   console.log('='.repeat(50))
 
   if (projectList.length === 0) {
-    console.log('No existing projects found.')
-  } else {
-    for (let i = 0; i < projectList.length; i++) {
-      const p = projectList[i]
-      console.log(`[${i + 1}] ${p.name} (ID: ${p.id})`)
-    }
+    console.log('No projects found. Create a project via the Surgent dashboard.')
+    process.exit(1)
   }
-  console.log(`[${projectList.length + 1}] Create a new project`)
+
+  for (let i = 0; i < projectList.length; i++) {
+    const p = projectList[i]
+    console.log(`[${i + 1}] ${p.name} (ID: ${p.id})`)
+  }
 
   const projectChoice = await rl.question('\nEnter your choice: ')
   const selectedIndex = parseInt(projectChoice, 10) - 1
 
-  // Validate numeric input (NaN check)
-  if (isNaN(selectedIndex) || selectedIndex < 0) {
+  if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= projectList.length) {
     console.log('Invalid selection. Exiting.')
     process.exit(1)
   }
 
-  if (selectedIndex < projectList.length) {
-    // User selected an existing project
-    projectId = projectList[selectedIndex].id
-    console.log(`\nSelected project: ${projectList[selectedIndex].name}`)
-  } else if (selectedIndex === projectList.length) {
-    // User chose to create a new project
-    console.log('\nCreating new project...')
-    const { data: project, error: projectError } = await surpay.projects.create({
-      name: `Test Project ${timestamp}`,
-      slug: `test-project-${timestamp}`,
-    })
-
-    if (projectError) {
-      console.error('Failed to create project:', projectError.message)
-      process.exit(1)
-    }
-
-    projectId = project.id
-    console.log('New project created:', projectId)
-  } else {
-    console.log('Invalid selection. Exiting.')
-    process.exit(1)
-  }
+  projectId = projectList[selectedIndex].id
+  console.log(`\nSelected project: ${projectList[selectedIndex].name}`)
 
   // =========================================================================
   // List Existing Prices

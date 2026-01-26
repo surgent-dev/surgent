@@ -79,6 +79,9 @@ export interface OrganizationTable {
   slug: string
   logo: string | null
   metadata: any | null
+  createdBy: string | null
+  platformFeePercent: number | null
+  platformFeeFixed: number | null
   createdAt?: Date
   updatedAt?: Date
 }
@@ -206,15 +209,17 @@ export interface IpRateLimitTable {
 }
 
 export interface ProjectTable {
-  id: string | null
+  id: string
   userId: string
   organizationId: string
   name: string
+  slug: string
   github: any | null
   settings: any | null
   deployment: any | null
   sandbox: any | null
   metadata: any | null
+  externalId: string | null
   createdAt?: Date
   updatedAt?: Date
   deletedAt?: Date | null
@@ -278,7 +283,7 @@ export interface DeploymentTable {
 }
 
 export interface ChatsTable {
-  id: string | null
+  id: string
   projectId: string
   agentSessionId: string | null
   title: string | null
@@ -289,7 +294,7 @@ export interface ChatsTable {
 }
 
 export interface GitHubInstallationsTable {
-  id: string | null
+  id: string
   userId: string
   installationId: number
   accountLogin: string

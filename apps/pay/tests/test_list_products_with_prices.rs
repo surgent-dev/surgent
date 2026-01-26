@@ -259,7 +259,10 @@ async fn test_list_products_with_prices_invalid_auth(pool: PgPool) -> TestResult
             Request::builder()
                 .method("GET")
                 .uri(format!("/project/{}/product/prices", project_id))
-                .header("Authorization", "Bearer sp_org_invalid_invalidinvalid")
+                .header(
+                    "Authorization",
+                    "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                )
                 .body(Body::empty())?,
         )
         .await?;

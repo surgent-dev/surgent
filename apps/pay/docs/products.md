@@ -20,10 +20,8 @@ Surpay uses an **immutable versioning system** for products. Instead of updating
 All API requests must include your API key in the `Authorization` header as a Bearer token.
 
 ```bash
-Authorization: Bearer sp_test_your_secret_key
+Authorization: Bearer xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd
 ```
-
-Use your **test key** for development and **live key** for production.
 
 ---
 
@@ -61,7 +59,7 @@ Creates a new product and its first version. This also automatically creates a c
 
 ```bash
 curl -X POST https://api.surpay.com/product \
-  -H "Authorization: Bearer sp_test_YOUR_KEY" \
+  -H "Authorization: Bearer xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd" \
   -H "Content-Type: application/json" \
   -d '{
     "projectId": "550e8400-e29b-41d4-a716-446655440000",
@@ -108,7 +106,7 @@ All fields are optional. If not provided, the value from the previous version is
 
 ```bash
 curl -X PUT https://api.surpay.com/product/b1f2e3d4-c5b6-a7f8-e9d0-c1b2a3f4e5d6 \
-  -H "Authorization: Bearer sp_test_YOUR_KEY" \
+  -H "Authorization: Bearer xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Pro Plan v2",
@@ -150,7 +148,7 @@ Adds a pricing tier to a product. Prices are linked to the _latest version_ of t
 
 ```bash
 curl -X POST https://api.surpay.com/product/price \
-  -H "Authorization: Bearer sp_test_YOUR_KEY" \
+  -H "Authorization: Bearer xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd" \
   -H "Content-Type: application/json" \
   -d '{
     "projectId": "550e8400-e29b-41d4-a716-446655440000",
@@ -208,7 +206,7 @@ Returns an array of product objects, each containing an array of prices.
 
 ```bash
 curl -X GET https://api.surpay.com/product/prices \
-  -H "Authorization: Bearer sp_test_YOUR_KEY"
+  -H "Authorization: Bearer xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd"
 ```
 
 ---
@@ -218,9 +216,7 @@ curl -X GET https://api.surpay.com/product/prices \
 Surpay automatically synchronizes your products with Stripe:
 
 1.  **Automatic Creation**: When you call `POST /product`, Surpay creates a corresponding Product in Stripe.
-2.  **Environment Mapping**:
-    - Requests using `sp_test_` keys sync with your Stripe **Test Mode**.
-    - Requests using `sp_live_` keys sync with your Stripe **Live Mode**.
+2.  **Environment Mapping**: Requests sync with your Stripe account based on the API key used.
 3.  **Metadata**: Surpay stores the `productGroupId` and its own `productId` in Stripe product metadata for easy cross-referencing.
 4.  **Idempotency**: Surpay uses internal idempotency keys to ensure that retried requests do not create duplicate products in Stripe.
 

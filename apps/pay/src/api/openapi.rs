@@ -100,7 +100,7 @@ impl Modify for SecurityAddon {
             SecurityScheme::Http(
                 HttpBuilder::new()
                     .scheme(HttpAuthScheme::Bearer)
-                    .bearer_format("sp_org_xxx")
+                    .bearer_format("64-char alphabetic key")
                     .description(Some("Project-scoped API key for merchant operations. Keys are provisioned during project creation and grant access to a specific project's resources."))
                     .build(),
             ),

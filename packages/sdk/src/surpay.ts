@@ -21,8 +21,6 @@ import type {
   CreateCheckoutResponse,
   Subscription,
   Transaction,
-  CreateProjectRequest,
-  CreateProjectResponse,
   Project,
   ConnectAccountRequest,
   ConnectAccountResponse,
@@ -37,10 +35,6 @@ export class Surpay extends SurpayClient {
 
     if (!apiKey) {
       throw new Error('Surpay API key is required. Pass it via options or set SURPAY_API_KEY env var.')
-    }
-
-    if (!apiKey.startsWith('sp_org_')) {
-      throw new Error('Invalid API key format. Tenant keys must start with sp_org_')
     }
 
     super({ apiKey, baseUrl })
@@ -79,8 +73,6 @@ export class Surpay extends SurpayClient {
   }
 
   projects = {
-    create: (params: CreateProjectRequest) => this.post<CreateProjectResponse>('/project', params),
-
     list: async () => {
       const result = await this.get<Project[] | { projects: Project[] }>('/projects')
       if (result.error) {

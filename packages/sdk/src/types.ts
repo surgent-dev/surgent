@@ -33,39 +33,18 @@ export type TransactionType = 'payment' | 'processor_fee' | 'refund' | 'dispute'
 export type CheckoutStatus = 'open' | 'complete' | 'expired'
 export type CheckoutMode = 'payment' | 'subscription' | 'setup'
 
-// ============================================================================
-// Organization
-// ============================================================================
-
-export interface CreateOrganizationRequest {
-  name: string
-  slug: string
-}
-
-export interface CreateOrganizationResponse {
-  id: string
-  api_key: string
-}
+export type PayoutStatus = 'paid' | 'pending' | 'in_transit' | 'canceled' | 'failed'
 
 // ============================================================================
 // Project
 // ============================================================================
-
-export interface CreateProjectRequest {
-  name: string
-  slug: string
-  external_id?: string
-}
-
-export interface CreateProjectResponse {
-  id: string
-}
 
 export interface Project {
   id: string
   name: string
   slug?: string
   external_id?: string | null
+  organization_id?: string | null
 }
 
 // ============================================================================
@@ -298,15 +277,8 @@ export interface ConnectedAccount {
 // ============================================================================
 
 export interface SurpayConfig {
-  /** Your Surpay API key (format: sp_org_xxx) */
+  /** Your Surpay API key (64 alphabetic characters) */
   apiKey?: string
-  /** Override the base URL (default: https://api.surpay.io) */
-  baseUrl?: string
-}
-
-export interface SurpayAdminConfig {
-  /** Your Surpay master key (format: sp_master_xxx) */
-  masterKey?: string
   /** Override the base URL (default: https://api.surpay.io) */
   baseUrl?: string
 }

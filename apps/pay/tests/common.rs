@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use axum::{Router, body::Body, http::Request};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use http_body_util::BodyExt;
+use rand::Rng;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
@@ -200,15 +201,23 @@ fn hash_api_key(key: &str) -> String {
     URL_SAFE_NO_PAD.encode(hasher.finalize())
 }
 
+/// Generates a 64-character alphabetic API key (a-z, A-Z)
+fn generate_api_key() -> String {
+    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let mut rng = rand::rng();
+    (0..64)
+        .map(|_| CHARSET[rng.random_range(0..CHARSET.len())] as char)
+        .collect()
+}
+
 pub async fn seed_api_key(pool: &PgPool) -> String {
     let api_key_id = Uuid::new_v4();
     let name = "Test Master Key";
-    let prefix = "testliv1";
-    let secret = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     let user_id = seed_user(pool).await;
 
-    let api_key = format!("sp_master_{}_{}", prefix, secret);
+    let api_key = generate_api_key();
     let hash = hash_api_key(&api_key);
+    let start = &api_key[..8];
 
     sqlx::query!(
         r#"
@@ -226,7 +235,7 @@ pub async fn seed_api_key(pool: &PgPool) -> String {
         api_key_id,
         name,
         hash,
-        prefix,
+        start,
         user_id
     )
     .execute(pool)
@@ -245,8 +254,8 @@ pub async fn seed_organization(pool: &PgPool) -> (Uuid, Uuid, String) {
     let slug = format!("test-org-{}", &org_id.to_string()[..8]);
     let project_slug = format!("test-project-{}", &project_id.to_string()[..8]);
 
-    let prefix = format!("lv{}", &Uuid::new_v4().to_string()[..6]);
-    let secret = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let api_key = generate_api_key();
+    let start = &api_key[..8];
 
     sqlx::query!(
         r#"
@@ -285,7 +294,6 @@ pub async fn seed_organization(pool: &PgPool) -> (Uuid, Uuid, String) {
     .expect("Failed to seed project");
 
     let apikey_id = Uuid::new_v4();
-    let api_key = format!("sp_org_{}_{}", prefix, secret);
     let hash = hash_api_key(&api_key);
 
     sqlx::query!(
@@ -306,7 +314,7 @@ pub async fn seed_organization(pool: &PgPool) -> (Uuid, Uuid, String) {
         apikey_id,
         format!("{} API Key", name),
         hash,
-        prefix,
+        start,
         user_id,
         org_id,
         project_id

@@ -16,7 +16,7 @@ npm install surpay
 import { Surpay } from 'surpay'
 
 const surpay = new Surpay({
-  apiKey: 'sp_org_your_api_key',
+  apiKey: 'xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd',
 })
 
 async function example() {
@@ -35,26 +35,11 @@ async function example() {
 
 The SDK can be configured via the constructor or environment variables.
 
-### Surpay (Tenant Client)
-
-Used for most operations. Requires an API key starting with `sp_org_`.
-
 ```typescript
+import { Surpay } from 'surpay'
+
 const surpay = new Surpay({
   apiKey: process.env.SURPAY_API_KEY, // Fallback: SURPAY_API_KEY env var
-  baseUrl: 'https://api.surpay.io', // Optional
-})
-```
-
-### SurpayAdmin (Admin Client)
-
-Used for organization-level operations. Requires a master key starting with `sp_master_`.
-
-```typescript
-import { SurpayAdmin } from 'surpay'
-
-const admin = new SurpayAdmin({
-  masterKey: process.env.SURPAY_MASTER_KEY, // Fallback: SURPAY_MASTER_KEY env var
   baseUrl: 'https://api.surpay.io', // Optional
 })
 ```
@@ -97,15 +82,9 @@ try {
 
 ### Projects
 
-Manage your projects.
+Note: Projects are created via the Surgent dashboard. The SDK provides read-only access to list your projects.
 
 ```typescript
-// Create a project
-const { data } = await surpay.projects.create({
-  name: 'My SaaS',
-  slug: 'my-saas',
-})
-
 // List projects
 const { data: projects } = await surpay.projects.list()
 ```
@@ -209,19 +188,4 @@ const { data: account } = await surpay.accounts.get('acc_123')
 
 // List connected accounts
 const { data: accounts } = await surpay.accounts.list()
-```
-
-## Admin Operations
-
-### Organizations
-
-Create new organizations (requires `SurpayAdmin`).
-
-```typescript
-const { data } = await admin.organization.create({
-  name: 'New Org',
-  slug: 'new-org',
-})
-
-console.log(data.api_key) // Use this for Surpay client
 ```

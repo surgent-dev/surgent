@@ -25,10 +25,10 @@ Before using the API, you need a Master API key. Use the provided CLI tool to cr
 cargo run --bin create-api-key -- --name "Test Organization" --slug "test-org"
 ```
 
-This will output an **API Key**. Save the **API Key** (it starts with `sp_`) as your `MASTER_KEY`.
+This will output an **API Key**. Save the **API Key** as your `MASTER_KEY`.
 
 ```bash
-export MASTER_KEY="your_master_key_here"
+export MASTER_KEY="xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd"
 ```
 
 ## Step 1: Create Organization
@@ -60,7 +60,7 @@ curl "$BASE_URL/health"
 
 ## Step 3: Create Project
 
-Projects group your products. Use the Organization API Key (`sp_...`) from Step 1.
+Projects group your products. Use the Organization API Key from Step 1.
 
 ```bash
 PROJECT_ID=$(curl -s -X POST "$BASE_URL/project" \
@@ -179,7 +179,7 @@ set -e
 # Configuration
 # 1. Run: cargo run --bin create-api-key -- --name "Test Organization" --slug "test-org"
 # 2. Copy the API Key and paste it below:
-MASTER_KEY="sp_..."
+MASTER_KEY="xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd"
 
 BASE_URL="http://localhost:3000"
 TS=$(date +%s)
@@ -271,8 +271,8 @@ curl -s "$BASE_URL/project/$PROJECT_ID/subscriptions" \
 ### Common Errors
 
 - **401 Unauthorized:** Check your API key.
-  - Use the **Master Key** (`sp_...` from Step 0) ONLY for creating organizations.
-  - Use the **Organization Key** (`sp_...` from Step 1) for all other endpoints.
+  - Use the **Master Key** from Step 0 ONLY for creating organizations.
+  - Use the **Organization Key** from Step 1 for all other endpoints.
 - **404 Product not found:** Ensure the `productId` exists and belongs to the organization associated with your API key.
 - **400 Bad Request:** Check the required fields in your JSON body. Ensure UUIDs are valid and slugs are unique.
 - **409 Conflict:** The slug you are trying to use for a project or organization already exists. Use a unique slug.

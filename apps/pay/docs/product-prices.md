@@ -22,10 +22,8 @@ Prices are linked to the **latest version** of a product group at the time of cr
 All API requests must include your API key in the `Authorization` header as a Bearer token.
 
 ```bash
-Authorization: Bearer sp_test_your_secret_key
+Authorization: Bearer xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd
 ```
-
-Use your **test key** for development and **live key** for production.
 
 ---
 
@@ -63,7 +61,7 @@ Adds a pricing tier to a product. This also automatically creates a correspondin
 
 ```bash
 curl -X POST https://api.surpay.com/product/price \
-  -H "Authorization: Bearer sp_test_YOUR_KEY" \
+  -H "Authorization: Bearer xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd" \
   -H "Content-Type: application/json" \
   -d '{
     "projectId": "550e8400-e29b-41d4-a716-446655440000",
@@ -84,9 +82,7 @@ Surpay automatically synchronizes your product prices with Stripe:
 
 1.  **Automatic Creation**: When you call `POST /product/price`, Surpay creates a corresponding Price in Stripe.
 2.  **Product Requirement**: The product (identified by `productGroupId`) must already be synced to Stripe (i.e., it must have a `processorProductId`). If not, the request will fail with a `400 Bad Request`.
-3.  **Environment Mapping**:
-    - Requests using `sp_test_` keys sync with your Stripe **Test Mode**.
-    - Requests using `sp_live_` keys sync with your Stripe **Live Mode**.
+3.  **Environment Mapping**: Requests sync with your Stripe account based on the API key used.
 4.  **Metadata**: Surpay stores its own `productPriceId` in the Stripe price metadata as `surpay_price_id`.
 5.  **Idempotency**: Surpay uses an idempotency key in the format `price:{productId}:{org_id}:{price_id}` to ensure that retried requests do not create duplicate prices in Stripe.
 6.  **Immutability**: Since Stripe prices are mostly immutable, Surpay follows this pattern. To "update" a price, you must create a new one.

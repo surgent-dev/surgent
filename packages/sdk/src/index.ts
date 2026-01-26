@@ -7,7 +7,7 @@
  * ```typescript
  * import { Surpay } from 'surpay'
  *
- * const surpay = new Surpay({ apiKey: 'sp_org_xxx' })
+ * const surpay = new Surpay({ apiKey: 'xKmZqWpNrTsYvBcDfGhJkLmNpQrStUvWxYzAbCdEfGhJkLmNpQrStUvWxYzAbCd' })
  *
  * // Create a checkout session
  * const { data, error } = await surpay.checkout.create({
@@ -27,9 +27,8 @@
  * ```
  */
 
-// Main clients
+// Main client
 export { Surpay } from './surpay.js'
-export { SurpayAdmin } from './surpay-admin.js'
 
 // Error handling
 export { SurpayError, isSurpayError } from './errors.js'
@@ -43,7 +42,6 @@ export type {
 
   // Config
   SurpayConfig,
-  SurpayAdminConfig,
 
   // Enums
   SubscriptionStatus,
@@ -51,14 +49,9 @@ export type {
   TransactionType,
   CheckoutStatus,
   CheckoutMode,
-
-  // Organization
-  CreateOrganizationRequest,
-  CreateOrganizationResponse,
+  PayoutStatus,
 
   // Project
-  CreateProjectRequest,
-  CreateProjectResponse,
   Project,
 
   // Customer
