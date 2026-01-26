@@ -4,6 +4,7 @@ export interface Bindings {
   STAGE: string
   ZEN_MODELS?: string
   GATEWAY_KV: KVNamespace
+  POSTGRES_TYPE?: string
   GATEWAY_DATA?: R2Bucket
   HYPERDRIVE?: { connectionString: string }
 }

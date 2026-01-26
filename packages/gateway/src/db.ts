@@ -9,7 +9,7 @@ export function getDb(env: Bindings) {
     if (!url) {
       throw new Error('HYPERDRIVE not configured')
     }
-    db = createDb(url, 'pg')
+    db = createDb(url, env.POSTGRES_TYPE || 'pg')
   }
   return db
 }

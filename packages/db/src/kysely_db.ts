@@ -3,7 +3,7 @@ import type { Database as DatabaseInterface } from './types'
 
 export function createDialect(url: string, type?: string): Dialect {
   type = type || process.env.POSTGRES_TYPE || 'pg'
-  
+
   if (type === 'neon') {
     const { neon } = require('@neondatabase/serverless')
     const { NeonDialect } = require('kysely-neon')
@@ -14,10 +14,9 @@ export function createDialect(url: string, type?: string): Dialect {
   return new PostgresDialect({
     pool: new pg.Pool({
       connectionString: url,
-      max: 10,
-      min: 1,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      max: 1, // Single connection - Hyperdrive handles pooling in prod
+      connectionTimeoutMillis: 10000, // Fail fast, don't hang
+      idleTimeoutMillis: 0, // Close immediately when idle
     }),
   })
 }
