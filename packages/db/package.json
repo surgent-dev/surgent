@@ -9,11 +9,11 @@
     "db:rollback": "bun ./src/migrate.ts down"
   },
   "dependencies": {
-    "dotenv": "^17.2.3",
     "@neondatabase/serverless": "^1.0.2",
+    "dotenv": "^17.2.3",
     "kysely": "^0.28.8",
     "kysely-neon": "^2.0.2",
-    "pg": "^8.13.1"
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@types/bun": "latest",

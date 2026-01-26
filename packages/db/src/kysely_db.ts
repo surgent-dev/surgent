@@ -10,13 +10,16 @@ export function createDialect(url: string, type?: string): Dialect {
     return new NeonDialect({ neon: neon(url) })
   }
 
+  // Serverless-friendly pool config:
+  // - max:1 prevents pool exhaustion in workerd local dev
+  // - In production, Hyperdrive handles connection pooling
   const pg = require('pg')
   return new PostgresDialect({
     pool: new pg.Pool({
       connectionString: url,
-      max: 1, // Single connection - Hyperdrive handles pooling in prod
-      connectionTimeoutMillis: 10000, // Fail fast, don't hang
-      idleTimeoutMillis: 0, // Close immediately when idle
+      max: 1,
+      idleTimeoutMillis: 0,
+      allowExitOnIdle: true,
     }),
   })
 }
