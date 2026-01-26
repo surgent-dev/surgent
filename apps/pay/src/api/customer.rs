@@ -50,7 +50,7 @@ pub struct SubscriptionSummary {
 #[serde(rename_all = "camelCase")]
 pub struct CustomerWithDetails {
     pub id: Uuid,
-    pub project_id: Option<Uuid>,
+    pub project_id: Uuid,
     pub email: String,
     pub name: Option<String>,
     pub processor_customer_id: Option<String>,
@@ -176,7 +176,7 @@ pub async fn get_customer(
     let row = row.ok_or((StatusCode::NOT_FOUND, "Customer not found".to_string()))?;
     let customer = Customer {
         id: row.id,
-        project_id: Some(row.projectId),
+        project_id: row.projectId,
         email: row.email,
         name: row.name,
         processor_customer_id: row.processorCustomerId,
