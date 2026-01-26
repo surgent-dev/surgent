@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+
+use crate::types::RefundStatus;
 use std::collections::HashMap;
 
 /// Request to create a product on the payment processor
@@ -255,6 +257,17 @@ pub enum NormalizedEvent {
     TransferReversed {
         transfer_id: String,
         reversal_id: String,
+    },
+
+    // Charge events
+    ChargeRefunded {
+        charge_id: String,
+        refund_id: String,
+        amount: i64,
+        currency: String,
+        status: RefundStatus,
+        reason: Option<String>,
+        customer_id: Option<String>,
     },
 
     // Unknown/unhandled events (for forward compatibility)

@@ -14,6 +14,7 @@ use crate::integrations::types::{
     ProcessorPayout, ProcessorPrice, ProcessorPriceRequest, ProcessorProduct,
     ProcessorProductRequest, ProcessorTransfer, TransferRequest,
 };
+use crate::types::RefundStatus;
 use async_trait::async_trait;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -459,6 +460,82 @@ impl PaymentProcessor for StripeProcessor {
                 Ok(NormalizedEvent::TransferReversed {
                     transfer_id: transfer_id.to_string(),
                     reversal_id,
+                })
+            }
+            "refund.created" | "refund.updated" | "charge.refund.updated" => {
+                let refund_id = object
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing refund_id")?;
+                let status = object
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing refund status")?;
+                let status = RefundStatus::try_from(status)?;
+                let charge_id = object.get("charge").and_then(|v| v.as_str()).unwrap_or("");
+                let amount = object.get("amount").and_then(|v| v.as_i64()).unwrap_or(0);
+                let currency = object
+                    .get("currency")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("usd");
+                let reason = object
+                    .get("reason")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                // Refund object doesn't have customer directly, it's on the charge
+                Ok(NormalizedEvent::ChargeRefunded {
+                    charge_id: charge_id.to_string(),
+                    refund_id: refund_id.to_string(),
+                    amount,
+                    currency: currency.to_string(),
+                    status,
+                    reason,
+                    customer_id: None,
+                })
+            }
+            "charge.refunded" => {
+                // charge.refunded has refund nested in refunds.data[] - may be empty in test fixtures
+                let Some(refund) = object
+                    .get("refunds")
+                    .and_then(|r| r.get("data"))
+                    .and_then(|d| d.as_array())
+                    .and_then(|arr| arr.first())
+                else {
+                    return Ok(NormalizedEvent::Unknown {
+                        event_type: event_type.to_string(),
+                    });
+                };
+                let charge_id = object.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                let customer_id = object
+                    .get("customer")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let refund_id = refund
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing refund_id")?;
+                let status = refund
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing refund status")?;
+                let status = RefundStatus::try_from(status)?;
+                let amount = refund.get("amount").and_then(|v| v.as_i64()).unwrap_or(0);
+                let currency = refund
+                    .get("currency")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("usd");
+                let reason = refund
+                    .get("reason")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                Ok(NormalizedEvent::ChargeRefunded {
+                    charge_id: charge_id.to_string(),
+                    refund_id: refund_id.to_string(),
+                    amount,
+                    currency: currency.to_string(),
+                    status,
+                    reason,
+                    customer_id,
                 })
             }
             _ => Ok(NormalizedEvent::Unknown {

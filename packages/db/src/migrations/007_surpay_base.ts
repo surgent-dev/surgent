@@ -446,7 +446,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('customerId', 'uuid', (col) => col.notNull().references('customer.id').onDelete('cascade'))
     .addColumn('subscriptionId', 'uuid', (col) => col.references('subscription.id'))
     .addColumn('productIds', sql`text[]`, (col) => col.defaultTo(sql`'{}'`))
-    .addColumn('stripeId', 'text')
+    .addColumn('stripeId', 'text', (col) => col.notNull().unique())
     .addColumn('status', sql`invoice_status`, (col) => col.defaultTo('draft'))
     .addColumn('hostedInvoiceUrl', 'text')
     .addColumn('total', 'bigint', (col) => col.defaultTo(0))
@@ -662,6 +662,11 @@ export async function up(db: Kysely<any>): Promise<void> {
     db,
   )
 
+  // Partial unique index for transaction.processorInvoiceId (payment only)
+  await sql`CREATE UNIQUE INDEX ix_transaction_processor_invoice_id ON "transaction"("processorInvoiceId") WHERE "processorInvoiceId" IS NOT NULL AND "type" = 'payment'`.execute(
+    db,
+  )
+
   // Partial index for unprocessed webhooks
   await sql`CREATE INDEX ix_processed_webhook_event_unprocessed ON processed_webhook_event("processedAt") WHERE "handledAt" IS NULL`.execute(
     db,
@@ -673,6 +678,7 @@ export async function down(db: Kysely<any>): Promise<void> {
   await sql`DROP INDEX IF EXISTS apikey_key_idx`.execute(db)
 
   // Drop billing layer indexes first
+  await db.schema.dropIndex('ix_invoice_stripe_id').ifExists().execute()
   await db.schema.dropIndex('idx_invoice_status').ifExists().execute()
   await db.schema.dropIndex('idx_invoice_subscription_id').ifExists().execute()
   await db.schema.dropIndex('idx_invoice_customer_id').ifExists().execute()
@@ -690,6 +696,7 @@ export async function down(db: Kysely<any>): Promise<void> {
   await db.schema.dropIndex('ix_payout_processor_payout_id').ifExists().execute()
   await db.schema.dropIndex('ix_connect_account_processor_account_id').ifExists().execute()
   await db.schema.dropIndex('ix_refund_processor_id').ifExists().execute()
+  await db.schema.dropIndex('ix_transaction_processor_invoice_id').ifExists().execute()
   await db.schema.dropIndex('idx_account_connect_state').ifExists().execute()
   await db.schema.dropIndex('ix_processed_webhook_event_handled_at').ifExists().execute()
   await db.schema.dropIndex('ix_dispute_project_id').ifExists().execute()

@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::core::config::Config;
 use crate::integrations::stripe::fetch_customer_subscriptions_with_payment_means;
 use crate::integrations::types::NormalizedEvent;
-use crate::types::{CheckoutMode, CheckoutStatus, SubscriptionStatus};
+use crate::types::{CheckoutMode, CheckoutStatus, RefundStatus, SubscriptionStatus};
 
 struct CreateSubscriptionParams<'a> {
     project_id: Uuid,
@@ -243,6 +243,7 @@ fn get_event_type_name(event: &NormalizedEvent) -> String {
         NormalizedEvent::TransferCreated { .. } => "transfer_created".to_string(),
         NormalizedEvent::TransferPaid { .. } => "transfer_paid".to_string(),
         NormalizedEvent::TransferReversed { .. } => "transfer_reversed".to_string(),
+        NormalizedEvent::ChargeRefunded { .. } => "charge_refunded".to_string(),
         NormalizedEvent::Unknown { event_type } => event_type.clone(),
     }
 }
@@ -467,8 +468,14 @@ async fn handle_normalized_event(
                 Ok(())
             }
         }
-        NormalizedEvent::InvoicePaid { customer_id, .. }
-        | NormalizedEvent::InvoicePaymentFailed { customer_id, .. } => {
+        NormalizedEvent::InvoicePaid { customer_id, .. } => {
+            // First handle invoice-specific logic, then sync customer data
+            if let Err(e) = handle_invoice_paid(pool, processor, raw_payload).await {
+                tracing::error!("Failed to handle invoice paid: {}", e);
+            }
+            sync_stripe_customer_data(pool, config, customer_id).await
+        }
+        NormalizedEvent::InvoicePaymentFailed { customer_id, .. } => {
             sync_stripe_customer_data(pool, config, customer_id).await
         }
         NormalizedEvent::PaymentSucceeded { .. } | NormalizedEvent::PaymentFailed { .. } => {
@@ -639,6 +646,17 @@ async fn handle_normalized_event(
             }
             Ok(())
         }
+        NormalizedEvent::DisputeCreated { dispute_id, .. } => {
+            tracing::info!("Dispute created event received: {}", dispute_id);
+            Ok(())
+        }
+        NormalizedEvent::DisputeClosed { dispute_id, .. } => {
+            tracing::info!("Dispute closed event received: {}", dispute_id);
+            Ok(())
+        }
+        NormalizedEvent::ChargeRefunded { .. } => {
+            handle_charge_refunded(pool, processor, event).await
+        }
         NormalizedEvent::Unknown { event_type } => {
             // Catch-all for Stripe subscription/invoice/payment events not explicitly mapped
             // These trigger a full customer data sync from Stripe (legacy behavior)
@@ -657,11 +675,218 @@ async fn handle_normalized_event(
             tracing::debug!("Ignoring unknown event type: {}", event_type);
             Ok(())
         }
-        _ => {
-            tracing::debug!("Ignoring unhandled event type: {:?}", event);
-            Ok(())
-        }
     }
+}
+
+async fn handle_invoice_paid(
+    pool: &PgPool,
+    processor: &str,
+    raw_payload: &Value,
+) -> Result<(), String> {
+    let object = &raw_payload["data"]["object"];
+
+    let stripe_invoice_id = object["id"].as_str().ok_or("Missing invoice id")?;
+    let processor_customer_id = object["customer"].as_str().ok_or("Missing customer id")?;
+    let processor_subscription_id = object["subscription"].as_str();
+    let amount = object["amount_paid"].as_i64().unwrap_or(0);
+    let currency = object["currency"].as_str().unwrap_or("usd");
+    let hosted_url = object["hosted_invoice_url"].as_str();
+    let period_start = object["period_start"]
+        .as_i64()
+        .and_then(|ts| DateTime::from_timestamp(ts, 0));
+    let period_end = object["period_end"]
+        .as_i64()
+        .and_then(|ts| DateTime::from_timestamp(ts, 0));
+    let items = if object["lines"]["data"].is_array() {
+        object["lines"]["data"].clone()
+    } else {
+        Value::Array(vec![])
+    };
+
+    // Single query: customer + subscription via LEFT JOIN
+    let row = sqlx::query!(
+        r#"
+        SELECT c.id as customer_id, c."projectId" as project_id,
+               s.id as "subscription_id?", s."productId" as "product_id?", s."productPriceId" as "price_id?"
+        FROM customer c
+        LEFT JOIN subscription s ON s."processorSubscriptionId" = $2
+        WHERE c."processorCustomerId" = $1
+        "#,
+        processor_customer_id,
+        processor_subscription_id
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Failed to fetch customer: {}", e))?;
+
+    let Some(row) = row else {
+        tracing::warn!(
+            "Customer {} not found, skipping invoice_paid",
+            processor_customer_id
+        );
+        return Ok(());
+    };
+
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO transaction (id, "createdAt", type, amount, currency, processor,
+            "projectId", "customerId", "productId", "productPriceId",
+            "subscriptionId", "processorInvoiceId", "succeededAt")
+        VALUES (gen_random_uuid(), NOW(), 'payment', $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+        ON CONFLICT ("processorInvoiceId") WHERE "processorInvoiceId" IS NOT NULL AND "type" = 'payment' DO NOTHING
+        "#,
+        amount,
+        currency,
+        processor,
+        row.project_id,
+        row.customer_id,
+        row.product_id,
+        row.price_id,
+        row.subscription_id,
+        stripe_invoice_id
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to create transaction: {}", e))?;
+
+    if result.rows_affected() == 0 {
+        tracing::info!(
+            "Transaction for invoice {} already exists, skipping",
+            stripe_invoice_id
+        );
+    }
+
+    // Upsert invoice
+    sqlx::query!(
+        r#"
+        INSERT INTO invoice (id, "customerId", "subscriptionId", "stripeId", status,
+            "hostedInvoiceUrl", total, currency, items, "periodStart", "periodEnd", "paidAt", "createdAt")
+        VALUES (gen_random_uuid(), $1, $2, $3, 'paid', $4, $5, $6, $7, $8, $9, NOW(), NOW())
+        ON CONFLICT ("stripeId") DO UPDATE SET
+            status = 'paid', "paidAt" = NOW(), total = $5,
+            "hostedInvoiceUrl" = $4, "periodStart" = $8, "periodEnd" = $9, items = $7
+        "#,
+        row.customer_id,
+        row.subscription_id,
+        stripe_invoice_id,
+        hosted_url,
+        amount,
+        currency,
+        items,
+        period_start,
+        period_end
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to upsert invoice: {}", e))?;
+
+    tracing::info!("Processed invoice_paid for {}", stripe_invoice_id);
+    Ok(())
+}
+
+async fn handle_charge_refunded(
+    pool: &PgPool,
+    processor: &str,
+    event: &NormalizedEvent,
+) -> Result<(), String> {
+    let (charge_id, refund_id, amount, currency, status, reason, processor_customer_id) =
+        match event {
+        NormalizedEvent::ChargeRefunded {
+            charge_id,
+            refund_id,
+            amount,
+            currency,
+            status,
+            reason,
+            customer_id,
+        } => (
+            charge_id.as_str(),
+            refund_id.as_str(),
+            *amount,
+            currency.as_str(),
+            *status,
+            reason.as_deref(),
+            customer_id.as_deref(),
+        ),
+        _ => return Err("Expected ChargeRefunded event".to_string()),
+    };
+
+    // Try to look up customer by processorCustomerId
+    let customer_lookup: Option<(Uuid, Uuid)> = if let Some(cust_id) = processor_customer_id {
+        sqlx::query!(
+            r#"SELECT id, "projectId" FROM customer WHERE "processorCustomerId" = $1"#,
+            cust_id
+        )
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| format!("Failed to fetch customer: {}", e))?
+        .map(|row| (row.id, row.projectId))
+    } else {
+        None
+    };
+
+    // If customer lookup failed, try to find project_id from transaction by charge_id
+    let (customer_id, project_id) = match customer_lookup {
+        Some((cid, pid)) => (Some(cid), Some(pid)),
+        None => {
+            let tx_row = sqlx::query!(
+                r#"SELECT "customerId", "projectId" FROM transaction WHERE "chargeId" = $1"#,
+                charge_id
+            )
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| format!("Failed to fetch transaction: {}", e))?;
+
+            match tx_row {
+                Some(row) => (row.customerId, Some(row.projectId)),
+                None => (None, None),
+            }
+        }
+    };
+
+    let project_id = match project_id {
+        Some(pid) => pid,
+        None => {
+            tracing::warn!(
+                "Could not determine project_id for refund {}, skipping",
+                refund_id
+            );
+            return Ok(());
+        }
+    };
+
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO refund (id, "createdAt", amount, currency, reason, status, processor, "processorId", "projectId", "customerId")
+        VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT ("processorId") WHERE "processorId" IS NOT NULL DO NOTHING
+        "#,
+        amount,
+        currency,
+        reason,
+        status as RefundStatus,
+        processor,
+        refund_id,
+        project_id,
+        customer_id
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to insert refund: {}", e))?;
+
+    if result.rows_affected() == 0 {
+        tracing::info!("Refund {} already exists, skipping", refund_id);
+        return Ok(());
+    }
+
+    tracing::info!(
+        "Created refund {} for charge {} (project: {})",
+        refund_id,
+        charge_id,
+        project_id
+    );
+
+    Ok(())
 }
 
 async fn handle_checkout_expired(pool: &PgPool, payload: &Value) -> Result<(), String> {

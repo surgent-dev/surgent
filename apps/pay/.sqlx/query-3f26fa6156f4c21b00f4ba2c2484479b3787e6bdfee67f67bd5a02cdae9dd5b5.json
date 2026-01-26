@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO transaction (id, \"createdAt\", type, amount, currency, processor,\n            \"projectId\", \"customerId\", \"productId\", \"productPriceId\",\n            \"subscriptionId\", \"processorInvoiceId\", \"succeededAt\")\n        VALUES (gen_random_uuid(), NOW(), 'payment', $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())\n        ON CONFLICT (\"processorInvoiceId\") WHERE \"processorInvoiceId\" IS NOT NULL AND \"type\" = 'payment' DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Varchar",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3f26fa6156f4c21b00f4ba2c2484479b3787e6bdfee67f67bd5a02cdae9dd5b5"
+}

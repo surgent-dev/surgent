@@ -1,482 +1,2592 @@
--- Test schema for surpay
--- This is a simplified schema for running tests
+--
+-- PostgreSQL database dump
+--
 
--- Create enums
-CREATE TYPE checkout_status AS ENUM ('open', 'complete', 'expired');
-CREATE TYPE checkout_mode AS ENUM ('payment', 'subscription', 'setup');
-CREATE TYPE subscription_status AS ENUM ('active', 'past_due', 'canceled', 'unpaid', 'trialing', 'incomplete', 'incomplete_expired');
-CREATE TYPE payout_status AS ENUM ('paid', 'pending', 'in_transit', 'canceled', 'failed');
-CREATE TYPE recurring_interval AS ENUM ('day', 'week', 'month', 'year');
-CREATE TYPE transaction_type AS ENUM ('payment', 'processor_fee', 'refund', 'dispute', 'balance', 'payout');
-CREATE TYPE payment_status AS ENUM ('requires_payment_method', 'requires_confirmation', 'requires_action', 'processing', 'requires_capture', 'canceled', 'succeeded');
-CREATE TYPE dispute_status AS ENUM ('warning_needs_response', 'warning_under_review', 'warning_closed', 'needs_response', 'under_review', 'won', 'lost');
-CREATE TYPE refund_status AS ENUM ('pending', 'requires_action', 'succeeded', 'failed', 'canceled');
-CREATE TYPE feature_type AS ENUM ('metered', 'boolean');
-CREATE TYPE meter_type AS ENUM ('consumable', 'non_consumable');
-CREATE TYPE invoice_status AS ENUM ('draft', 'open', 'paid', 'void', 'uncollectible');
+\restrict oH8iKC0dxwzibvqka8jAVdlEJtizvfaaLOEA5K5ejHZwMUS52NVXCbRQxxiHjGw
 
--- Base tables (from packages/db migrations)
-CREATE TABLE "user" (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    "emailVerified" BOOLEAN NOT NULL DEFAULT false,
-    image TEXT,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+-- Dumped from database version 18.1 (Debian 18.1-1.pgdg13+2)
+-- Dumped by pg_dump version 18.1
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: checkout_mode; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.checkout_mode AS ENUM (
+    'payment',
+    'subscription',
+    'setup'
 );
 
-CREATE TABLE organization (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    slug TEXT NOT NULL UNIQUE,
-    logo TEXT,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    metadata TEXT,
-    "createdBy" TEXT,
-    "platformFeePercent" INTEGER,
-    "platformFeeFixed" INTEGER
+
+ALTER TYPE public.checkout_mode OWNER TO surgent;
+
+--
+-- Name: checkout_status; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.checkout_status AS ENUM (
+    'open',
+    'complete',
+    'expired'
 );
 
-CREATE TABLE project (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    "organizationId" UUID NOT NULL REFERENCES organization(id),
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    slug TEXT NOT NULL UNIQUE,
-    "externalId" UUID
+
+ALTER TYPE public.checkout_status OWNER TO surgent;
+
+--
+-- Name: dispute_status; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.dispute_status AS ENUM (
+    'warning_needs_response',
+    'warning_under_review',
+    'warning_closed',
+    'needs_response',
+    'under_review',
+    'won',
+    'lost'
 );
 
-CREATE TABLE apikey (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT,
-    key TEXT NOT NULL,
-    prefix TEXT,
-    "userId" UUID NOT NULL REFERENCES "user"(id),
-    "organizationId" UUID REFERENCES organization(id),
-    "projectId" UUID REFERENCES project(id),
-    enabled BOOLEAN NOT NULL DEFAULT true,
-    "expiresAt" TIMESTAMPTZ,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+
+ALTER TYPE public.dispute_status OWNER TO surgent;
+
+--
+-- Name: feature_type; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.feature_type AS ENUM (
+    'metered',
+    'boolean'
 );
 
--- Surpay tables (project-scoped)
-CREATE TABLE connect_account (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "projectId" UUID NOT NULL REFERENCES project(id),
-    country VARCHAR(2) NOT NULL,
-    currency VARCHAR(3) NOT NULL,
-    "isPayoutsEnabled" BOOLEAN NOT NULL,
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorAccountId" TEXT,
-    status TEXT NOT NULL DEFAULT 'pending',
-    "detailsSubmitted" BOOLEAN NOT NULL DEFAULT false,
-    "chargesEnabled" BOOLEAN NOT NULL DEFAULT false,
-    "businessType" TEXT,
-    data JSONB NOT NULL DEFAULT '{}'::jsonb,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+
+ALTER TYPE public.feature_type OWNER TO surgent;
+
+--
+-- Name: invoice_status; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.invoice_status AS ENUM (
+    'draft',
+    'open',
+    'paid',
+    'void',
+    'uncollectible'
 );
 
-CREATE TABLE product (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "productGroupId" UUID NOT NULL,
-    name TEXT NOT NULL,
-    description TEXT,
-    "projectId" UUID NOT NULL REFERENCES project(id),
-    slug TEXT NOT NULL,
-    version INTEGER,
-    "isArchived" BOOLEAN DEFAULT false,
-    "isDefault" BOOLEAN,
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorProductId" TEXT,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "isAddOn" BOOLEAN DEFAULT false,
-    "planGroup" TEXT,
-    env TEXT DEFAULT 'live'
+
+ALTER TYPE public.invoice_status OWNER TO surgent;
+
+--
+-- Name: meter_type; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.meter_type AS ENUM (
+    'consumable',
+    'non_consumable'
 );
 
-CREATE TABLE product_price (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "productId" UUID NOT NULL REFERENCES product(id),
-    name TEXT,
-    description TEXT,
-    "priceAmount" INTEGER NOT NULL,
-    "priceCurrency" VARCHAR(3) NOT NULL,
-    "recurringInterval" recurring_interval,
-    "isDefault" BOOLEAN,
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorPriceId" TEXT,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+
+ALTER TYPE public.meter_type OWNER TO surgent;
+
+--
+-- Name: payment_status; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.payment_status AS ENUM (
+    'requires_payment_method',
+    'requires_confirmation',
+    'requires_action',
+    'processing',
+    'requires_capture',
+    'canceled',
+    'succeeded'
 );
 
-CREATE TABLE customer (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "projectId" UUID NOT NULL REFERENCES project(id),
-    email VARCHAR(320) NOT NULL,
-    name TEXT,
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorCustomerId" TEXT,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "defaultPaymentMethodId" UUID
+
+ALTER TYPE public.payment_status OWNER TO surgent;
+
+--
+-- Name: payout_status; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.payout_status AS ENUM (
+    'paid',
+    'pending',
+    'in_transit',
+    'canceled',
+    'failed'
 );
 
-CREATE TABLE checkout_session (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorCheckoutId" TEXT NOT NULL,
-    "projectId" UUID NOT NULL REFERENCES project(id),
-    "productId" UUID NOT NULL REFERENCES product(id),
-    "priceId" UUID NOT NULL REFERENCES product_price(id),
-    status checkout_status NOT NULL DEFAULT 'open',
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "customerId" UUID REFERENCES customer(id),
-    "customerEmail" VARCHAR(320),
-    "processorCustomerId" TEXT,
-    "processorPaymentId" TEXT,
-    "processorSubscriptionId" TEXT,
-    "successUrl" TEXT,
-    "cancelUrl" TEXT,
-    mode checkout_mode,
-    "completedAt" TIMESTAMPTZ
+
+ALTER TYPE public.payout_status OWNER TO surgent;
+
+--
+-- Name: recurring_interval; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.recurring_interval AS ENUM (
+    'day',
+    'week',
+    'month',
+    'year'
 );
 
-CREATE TABLE payment_method (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "deletedAt" TIMESTAMPTZ,
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorId" TEXT NOT NULL,
-    type TEXT NOT NULL,
-    "methodMetadata" JSONB NOT NULL DEFAULT '{}',
-    "customerId" UUID NOT NULL REFERENCES customer(id) ON DELETE CASCADE
+
+ALTER TYPE public.recurring_interval OWNER TO surgent;
+
+--
+-- Name: refund_status; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.refund_status AS ENUM (
+    'pending',
+    'requires_action',
+    'succeeded',
+    'failed',
+    'canceled'
 );
 
--- Add FK for customer.defaultPaymentMethodId after payment_method exists
-ALTER TABLE customer ADD CONSTRAINT customer_default_payment_method_fk 
-    FOREIGN KEY ("defaultPaymentMethodId") REFERENCES payment_method(id) ON DELETE SET NULL;
 
-CREATE TABLE subscription (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "projectId" UUID NOT NULL REFERENCES project(id),
-    "productId" UUID REFERENCES product(id),
-    "productPriceId" UUID REFERENCES product_price(id),
-    "customerId" UUID REFERENCES customer(id),
-    "createdAt" TIMESTAMPTZ NOT NULL,
-    "deletedAt" TIMESTAMPTZ,
-    "currentPeriodStart" TIMESTAMPTZ,
-    "currentPeriodEnd" TIMESTAMPTZ,
-    "canceledAt" TIMESTAMPTZ,
-    "endedAt" TIMESTAMPTZ,
-    status subscription_status NOT NULL,
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorSubscriptionId" TEXT,
-    "processorCustomerId" TEXT,
-    "cancelAtPeriodEnd" BOOLEAN DEFAULT false,
-    "paymentMethodBrand" VARCHAR(20),
-    "paymentMethodLast4" VARCHAR(4),
-    "paymentMethodId" UUID REFERENCES payment_method(id) ON DELETE SET NULL
+ALTER TYPE public.refund_status OWNER TO surgent;
+
+--
+-- Name: subscription_status; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.subscription_status AS ENUM (
+    'active',
+    'past_due',
+    'canceled',
+    'unpaid',
+    'trialing',
+    'incomplete',
+    'incomplete_expired'
 );
 
-CREATE TABLE payment (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "deletedAt" TIMESTAMPTZ,
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorId" TEXT NOT NULL,
-    status payment_status NOT NULL,
-    amount BIGINT NOT NULL,
-    currency VARCHAR(3) NOT NULL,
-    method TEXT NOT NULL,
-    "methodMetadata" JSONB NOT NULL DEFAULT '{}',
-    "customerId" UUID REFERENCES customer(id),
-    "customerEmail" VARCHAR(320),
-    "projectId" UUID NOT NULL REFERENCES project(id),
-    "checkoutSessionId" UUID REFERENCES checkout_session(id) ON DELETE SET NULL,
-    "paymentMethodId" UUID REFERENCES payment_method(id) ON DELETE SET NULL,
-    "declineReason" TEXT,
-    "declineMessage" TEXT,
-    "riskLevel" TEXT,
-    "riskScore" SMALLINT,
-    "processorMetadata" JSONB NOT NULL DEFAULT '{}',
-    "authorizedAt" TIMESTAMPTZ,
-    "capturedAt" TIMESTAMPTZ,
-    "canceledAt" TIMESTAMPTZ
+
+ALTER TYPE public.subscription_status OWNER TO surgent;
+
+--
+-- Name: transaction_type; Type: TYPE; Schema: public; Owner: surgent
+--
+
+CREATE TYPE public.transaction_type AS ENUM (
+    'payment',
+    'processor_fee',
+    'refund',
+    'dispute',
+    'balance',
+    'payout'
 );
 
-CREATE TABLE refund (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "createdAt" TIMESTAMPTZ NOT NULL,
-    "deletedAt" TIMESTAMPTZ,
-    amount BIGINT NOT NULL,
-    currency VARCHAR(3) NOT NULL,
-    reason TEXT,
-    status refund_status NOT NULL DEFAULT 'succeeded',
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorId" TEXT,
-    "paymentId" UUID REFERENCES payment(id),
-    "projectId" UUID NOT NULL REFERENCES project(id),
-    "customerId" UUID REFERENCES customer(id)
+
+ALTER TYPE public.transaction_type OWNER TO surgent;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: account; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.account (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "userId" uuid NOT NULL,
+    "accountId" text NOT NULL,
+    "providerId" text NOT NULL,
+    "accessToken" text,
+    "refreshToken" text,
+    "accessTokenExpiresAt" timestamp without time zone,
+    "refreshTokenExpiresAt" timestamp without time zone,
+    scope text,
+    "idToken" text,
+    password text,
+    "createdAt" timestamp without time zone NOT NULL,
+    "updatedAt" timestamp without time zone NOT NULL
 );
 
-CREATE TABLE payout (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "createdAt" TIMESTAMPTZ NOT NULL,
-    "accountId" UUID REFERENCES connect_account(id),
-    amount BIGINT NOT NULL,
-    currency VARCHAR(3) NOT NULL,
-    status payout_status NOT NULL,
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorPayoutId" TEXT,
-    "paidAt" TIMESTAMPTZ
+
+ALTER TABLE public.account OWNER TO surgent;
+
+--
+-- Name: apikey; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.apikey (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text,
+    start text,
+    prefix text,
+    key text NOT NULL,
+    "userId" uuid NOT NULL,
+    "organizationId" uuid,
+    "projectId" uuid,
+    "refillInterval" integer,
+    "refillAmount" integer,
+    "lastRefillAt" timestamp with time zone,
+    enabled boolean DEFAULT true NOT NULL,
+    "rateLimitEnabled" boolean DEFAULT false NOT NULL,
+    "rateLimitTimeWindow" integer,
+    "rateLimitMax" integer,
+    "requestCount" integer DEFAULT 0 NOT NULL,
+    remaining integer,
+    "lastRequest" timestamp with time zone,
+    "expiresAt" timestamp with time zone,
+    "createdAt" timestamp with time zone NOT NULL,
+    "updatedAt" timestamp with time zone NOT NULL,
+    permissions text,
+    metadata jsonb
 );
 
-CREATE TABLE transaction (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "createdAt" TIMESTAMPTZ NOT NULL,
-    type transaction_type NOT NULL,
-    amount BIGINT NOT NULL,
-    currency VARCHAR(3) NOT NULL,
-    "taxAmount" BIGINT DEFAULT 0,
-    "accountId" UUID REFERENCES connect_account(id),
-    "accountAmount" BIGINT,
-    "accountCurrency" VARCHAR(3),
-    "presentmentAmount" BIGINT,
-    "presentmentCurrency" VARCHAR(3),
-    "presentmentTaxAmount" BIGINT,
-    "taxFilingAmount" BIGINT,
-    "taxFilingCurrency" VARCHAR(3),
-    "taxCountry" VARCHAR(2),
-    "taxState" VARCHAR(2),
-    processor TEXT NOT NULL,
-    "chargeId" TEXT,
-    "transferId" TEXT,
-    "refundId" UUID REFERENCES refund(id),
-    "payoutId" UUID REFERENCES payout(id),
-    "paymentTransactionId" UUID REFERENCES transaction(id),
-    "incurredByTransactionId" UUID REFERENCES transaction(id),
-    "payoutTransactionId" UUID REFERENCES transaction(id),
-    "projectId" UUID NOT NULL REFERENCES project(id),
-    "customerId" UUID REFERENCES customer(id),
-    "productId" UUID REFERENCES product(id),
-    "productPriceId" UUID REFERENCES product_price(id),
-    "subscriptionId" UUID REFERENCES subscription(id),
-    "checkoutSessionId" UUID REFERENCES checkout_session(id),
-    "processorInvoiceId" TEXT,
-    "paymentMethodBrand" VARCHAR(20),
-    "paymentMethodLast4" VARCHAR(4),
-    metadata JSONB DEFAULT '{}',
-    "succeededAt" TIMESTAMPTZ,
-    "refundedAt" TIMESTAMPTZ,
-    "paymentId" UUID REFERENCES payment(id)
+
+ALTER TABLE public.apikey OWNER TO surgent;
+
+--
+-- Name: chats; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.chats (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    "agentSessionId" text,
+    title text,
+    metadata jsonb,
+    stats jsonb,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE transfer (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    processor TEXT NOT NULL,
-    "processorTransferId" TEXT NOT NULL,
-    amount BIGINT NOT NULL,
-    currency VARCHAR(3) NOT NULL,
-    "destinationAccountId" UUID NOT NULL REFERENCES connect_account(id),
-    "sourceTransactionId" UUID REFERENCES transaction(id),
-    "reversalId" TEXT,
-    "reversedAt" TIMESTAMPTZ,
-    status TEXT NOT NULL DEFAULT 'pending',
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+
+ALTER TABLE public.chats OWNER TO surgent;
+
+--
+-- Name: checkout_session; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.checkout_session (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorCheckoutId" text NOT NULL,
+    "projectId" uuid NOT NULL,
+    "productId" uuid NOT NULL,
+    "priceId" uuid NOT NULL,
+    status public.checkout_status DEFAULT 'open'::public.checkout_status NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "customerId" uuid,
+    "customerEmail" character varying(320),
+    "processorCustomerId" text,
+    "processorPaymentId" text,
+    "processorSubscriptionId" text,
+    "successUrl" text,
+    "cancelUrl" text,
+    mode public.checkout_mode,
+    "completedAt" timestamp with time zone
 );
 
-CREATE TABLE held_balance (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "projectId" UUID NOT NULL REFERENCES project(id),
-    "connectedAccountId" UUID REFERENCES connect_account(id),
-    "sourceTransactionId" UUID REFERENCES transaction(id),
-    amount BIGINT NOT NULL,
-    currency VARCHAR(3) NOT NULL,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+
+ALTER TABLE public.checkout_session OWNER TO surgent;
+
+--
+-- Name: connect_account; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.connect_account (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    country character varying(2) NOT NULL,
+    currency character varying(3) NOT NULL,
+    "isPayoutsEnabled" boolean NOT NULL,
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorAccountId" text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    "detailsSubmitted" boolean DEFAULT false NOT NULL,
+    "chargesEnabled" boolean DEFAULT false NOT NULL,
+    "businessType" text,
+    data jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE processed_webhook_event (
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorEventId" TEXT NOT NULL,
-    "eventType" TEXT NOT NULL,
-    "processedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "apiVersion" TEXT,
-    data JSONB,
-    "taskName" TEXT,
-    "handledAt" TIMESTAMPTZ,
-    "requestId" TEXT,
-    PRIMARY KEY (processor, "processorEventId")
+
+ALTER TABLE public.connect_account OWNER TO surgent;
+
+--
+-- Name: customer; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.customer (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    email character varying(320) NOT NULL,
+    name text,
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorCustomerId" text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "defaultPaymentMethodId" uuid
 );
 
-CREATE TABLE dispute (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "deletedAt" TIMESTAMPTZ,
-    status dispute_status NOT NULL,
-    amount BIGINT NOT NULL,
-    currency VARCHAR(3) NOT NULL,
-    processor TEXT NOT NULL DEFAULT 'stripe',
-    "processorId" TEXT,
-    reason TEXT,
-    "reasonMessage" TEXT,
-    "paymentId" UUID NOT NULL REFERENCES payment(id),
-    "projectId" UUID NOT NULL REFERENCES project(id),
-    "customerId" UUID REFERENCES customer(id),
-    "evidenceDueBy" TIMESTAMPTZ,
-    "evidenceSubmittedAt" TIMESTAMPTZ,
-    "resolvedAt" TIMESTAMPTZ
+
+ALTER TABLE public.customer OWNER TO surgent;
+
+--
+-- Name: customer_entitlement; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.customer_entitlement (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "customerProductId" uuid NOT NULL,
+    "entitlementId" uuid NOT NULL,
+    "customerId" uuid NOT NULL,
+    "featureId" uuid NOT NULL,
+    unlimited boolean DEFAULT false,
+    balance bigint DEFAULT 0,
+    "usageAllowed" boolean DEFAULT false,
+    "nextResetAt" timestamp with time zone,
+    "additionalBalance" bigint DEFAULT 0,
+    "expiresAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE feature (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "projectId" UUID NOT NULL REFERENCES project(id),
-    name TEXT NOT NULL,
-    type feature_type NOT NULL,
-    "meterType" meter_type,
-    "isCreditSystem" BOOLEAN DEFAULT false,
-    "creditSchema" JSONB,
-    config JSONB DEFAULT '{}',
-    display JSONB,
-    "eventNames" TEXT[] DEFAULT '{}',
-    "isArchived" BOOLEAN DEFAULT false,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+
+ALTER TABLE public.customer_entitlement OWNER TO surgent;
+
+--
+-- Name: customer_product; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.customer_product (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "customerId" uuid NOT NULL,
+    "productId" uuid NOT NULL,
+    "subscriptionId" uuid,
+    status text,
+    processor jsonb,
+    canceled boolean DEFAULT false,
+    "canceledAt" timestamp with time zone,
+    "endedAt" timestamp with time zone,
+    "startsAt" timestamp with time zone,
+    "trialEndsAt" timestamp with time zone,
+    "collectionMethod" text DEFAULT 'charge_automatically'::text,
+    quantity integer DEFAULT 1,
+    "isCustom" boolean DEFAULT false,
+    options jsonb DEFAULT '[]'::jsonb,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE entitlement (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "productId" UUID REFERENCES product(id) ON DELETE CASCADE,
-    "featureId" UUID NOT NULL REFERENCES feature(id) ON DELETE CASCADE,
-    "allowanceType" TEXT,
-    allowance BIGINT,
-    "interval" TEXT,
-    "intervalCount" INTEGER DEFAULT 1,
-    "carryFromPrevious" BOOLEAN DEFAULT false,
-    rollover JSONB,
-    "usageLimit" BIGINT,
-    "isCustom" BOOLEAN DEFAULT false,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+
+ALTER TABLE public.customer_product OWNER TO surgent;
+
+--
+-- Name: deployment_history; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.deployment_history (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    name text NOT NULL,
+    "previewUrl" text NOT NULL,
+    status text NOT NULL,
+    error text,
+    "startedAt" timestamp without time zone NOT NULL,
+    "deployedAt" timestamp without time zone,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE customer_product (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "customerId" UUID NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
-    "productId" UUID NOT NULL REFERENCES product(id),
-    "subscriptionId" UUID REFERENCES subscription(id),
-    status TEXT,
-    processor JSONB,
-    canceled BOOLEAN DEFAULT false,
-    "canceledAt" TIMESTAMPTZ,
-    "endedAt" TIMESTAMPTZ,
-    "startsAt" TIMESTAMPTZ,
-    "trialEndsAt" TIMESTAMPTZ,
-    "collectionMethod" TEXT DEFAULT 'charge_automatically',
-    quantity INTEGER DEFAULT 1,
-    "isCustom" BOOLEAN DEFAULT false,
-    options JSONB DEFAULT '[]',
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+
+ALTER TABLE public.deployment_history OWNER TO surgent;
+
+--
+-- Name: dispute; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.dispute (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    status public.dispute_status NOT NULL,
+    amount bigint NOT NULL,
+    currency character varying(3) NOT NULL,
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorId" text,
+    reason text,
+    "reasonMessage" text,
+    "paymentId" uuid NOT NULL,
+    "projectId" uuid NOT NULL,
+    "customerId" uuid,
+    "evidenceDueBy" timestamp with time zone,
+    "evidenceSubmittedAt" timestamp with time zone,
+    "resolvedAt" timestamp with time zone
 );
 
-CREATE TABLE customer_entitlement (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "customerProductId" UUID NOT NULL REFERENCES customer_product(id) ON DELETE CASCADE,
-    "entitlementId" UUID NOT NULL REFERENCES entitlement(id) ON DELETE CASCADE,
-    "customerId" UUID NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
-    "featureId" UUID NOT NULL REFERENCES feature(id) ON DELETE CASCADE,
-    unlimited BOOLEAN DEFAULT false,
-    balance BIGINT DEFAULT 0,
-    "usageAllowed" BOOLEAN DEFAULT false,
-    "nextResetAt" TIMESTAMPTZ,
-    "additionalBalance" BIGINT DEFAULT 0,
-    "expiresAt" TIMESTAMPTZ,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+
+ALTER TABLE public.dispute OWNER TO surgent;
+
+--
+-- Name: entitlement; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.entitlement (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "productId" uuid,
+    "featureId" uuid NOT NULL,
+    "allowanceType" text,
+    allowance bigint,
+    "interval" text,
+    "intervalCount" integer DEFAULT 1,
+    "carryFromPrevious" boolean DEFAULT false,
+    rollover jsonb,
+    "usageLimit" bigint,
+    "isCustom" boolean DEFAULT false,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE invoice (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "customerId" UUID NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
-    "subscriptionId" UUID REFERENCES subscription(id),
-    "productIds" TEXT[] DEFAULT '{}',
-    "stripeId" TEXT,
-    status invoice_status DEFAULT 'draft',
-    "hostedInvoiceUrl" TEXT,
-    total BIGINT DEFAULT 0,
-    currency VARCHAR(3) DEFAULT 'usd',
-    discounts JSONB DEFAULT '[]',
-    items JSONB DEFAULT '[]',
-    "periodStart" TIMESTAMPTZ,
-    "periodEnd" TIMESTAMPTZ,
-    "dueDate" TIMESTAMPTZ,
-    "paidAt" TIMESTAMPTZ,
-    "voidedAt" TIMESTAMPTZ,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+
+ALTER TABLE public.entitlement OWNER TO surgent;
+
+--
+-- Name: feature; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.feature (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    name text NOT NULL,
+    type public.feature_type NOT NULL,
+    "meterType" public.meter_type,
+    "isCreditSystem" boolean DEFAULT false,
+    "creditSchema" jsonb,
+    config jsonb DEFAULT '{}'::jsonb,
+    display jsonb,
+    "eventNames" text[] DEFAULT '{}'::text[],
+    "isArchived" boolean DEFAULT false,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
--- Indexes
-CREATE INDEX idx_product_project_id ON product("projectId");
-CREATE INDEX idx_project_organization_id ON project("organizationId");
-CREATE INDEX idx_checkout_session_processor_checkout_id ON checkout_session("processorCheckoutId");
-CREATE INDEX idx_checkout_session_project_id ON checkout_session("projectId");
-CREATE INDEX idx_transaction_project_id ON transaction("projectId");
-CREATE INDEX idx_transaction_customer_id ON transaction("customerId");
-CREATE INDEX idx_transaction_charge_id ON transaction("chargeId");
-CREATE INDEX idx_subscription_processor_subscription_id ON subscription("processorSubscriptionId");
-CREATE INDEX idx_subscription_project_id ON subscription("projectId");
-CREATE INDEX idx_processed_webhook_event_type ON processed_webhook_event("eventType");
-CREATE INDEX idx_connect_account_project ON connect_account("projectId");
-CREATE INDEX idx_transfer_destination ON transfer("destinationAccountId");
-CREATE INDEX idx_connect_payout_account ON payout("accountId");
-CREATE INDEX idx_held_balance_project ON held_balance("projectId");
-CREATE INDEX idx_held_balance_connected_account ON held_balance("connectedAccountId");
-CREATE INDEX ix_payment_method_customer_id ON payment_method("customerId");
-CREATE INDEX ix_payment_status ON payment(status);
-CREATE INDEX ix_payment_customer_id ON payment("customerId");
-CREATE INDEX ix_payment_project_id ON payment("projectId");
-CREATE INDEX ix_dispute_status ON dispute(status);
-CREATE INDEX ix_dispute_payment_id ON dispute("paymentId");
-CREATE INDEX ix_dispute_project_id ON dispute("projectId");
-CREATE INDEX ix_refund_status ON refund(status);
-CREATE INDEX ix_refund_payment_id ON refund("paymentId");
-CREATE INDEX ix_refund_project_id ON refund("projectId");
-CREATE INDEX ix_processed_webhook_event_handled_at ON processed_webhook_event("handledAt");
-CREATE INDEX idx_feature_project_id ON feature("projectId");
-CREATE INDEX idx_entitlement_product_id ON entitlement("productId");
-CREATE INDEX idx_entitlement_feature_id ON entitlement("featureId");
-CREATE INDEX idx_customer_product_customer_id ON customer_product("customerId");
-CREATE INDEX idx_customer_product_product_id ON customer_product("productId");
-CREATE INDEX idx_customer_entitlement_customer_product_id ON customer_entitlement("customerProductId");
-CREATE INDEX idx_customer_entitlement_customer_id ON customer_entitlement("customerId");
-CREATE INDEX idx_customer_entitlement_feature_id ON customer_entitlement("featureId");
-CREATE INDEX idx_invoice_customer_id ON invoice("customerId");
-CREATE INDEX idx_invoice_subscription_id ON invoice("subscriptionId");
-CREATE INDEX idx_invoice_status ON invoice(status);
 
--- Unique constraints
-ALTER TABLE customer ADD CONSTRAINT customer_project_id_email_key UNIQUE ("projectId", email);
-ALTER TABLE checkout_session ADD CONSTRAINT checkout_session_processor_checkout_id_key UNIQUE (processor, "processorCheckoutId");
-ALTER TABLE payment_method ADD CONSTRAINT payment_method_processor_customer_key UNIQUE (processor, "processorId", "customerId");
-ALTER TABLE subscription ADD CONSTRAINT subscription_processor_subscription_id_key UNIQUE (processor, "processorSubscriptionId");
-ALTER TABLE payment ADD CONSTRAINT payment_processor_id_key UNIQUE (processor, "processorId");
-ALTER TABLE transfer ADD CONSTRAINT transfer_processor_transfer_id_key UNIQUE (processor, "processorTransferId");
-ALTER TABLE dispute ADD CONSTRAINT dispute_processor_id_key UNIQUE (processor, "processorId");
-ALTER TABLE connect_account ADD CONSTRAINT account_project_processor_key UNIQUE ("projectId", processor);
-ALTER TABLE feature ADD CONSTRAINT feature_project_id_name_key UNIQUE ("projectId", name);
-ALTER TABLE entitlement ADD CONSTRAINT entitlement_product_id_feature_id_key UNIQUE ("productId", "featureId");
-ALTER TABLE customer_entitlement ADD CONSTRAINT customer_entitlement_customer_id_feature_id_key UNIQUE ("customerId", "featureId");
+ALTER TABLE public.feature OWNER TO surgent;
 
--- Partial unique indexes
-CREATE UNIQUE INDEX ix_connect_account_processor_account_id ON connect_account (processor, "processorAccountId") WHERE "processorAccountId" IS NOT NULL;
-CREATE UNIQUE INDEX ix_payout_processor_payout_id ON payout (processor, "processorPayoutId") WHERE "processorPayoutId" IS NOT NULL;
-CREATE UNIQUE INDEX ix_refund_processor_id ON refund("processorId") WHERE "processorId" IS NOT NULL;
+--
+-- Name: github_installations; Type: TABLE; Schema: public; Owner: surgent
+--
 
--- Expression indexes
-CREATE INDEX idx_account_connect_state ON connect_account ((data->>'connect_state')) WHERE data->>'connect_state' IS NOT NULL;
-CREATE INDEX ix_processed_webhook_event_unprocessed ON processed_webhook_event("processedAt") WHERE "handledAt" IS NULL;
+CREATE TABLE public.github_installations (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "userId" uuid NOT NULL,
+    "installationId" bigint NOT NULL,
+    "accountLogin" text NOT NULL,
+    "accountType" text NOT NULL,
+    "userAccessToken" text,
+    "userAccessTokenExpiresAt" timestamp without time zone,
+    "userRefreshToken" text,
+    "userRefreshTokenExpiresAt" timestamp without time zone,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.github_installations OWNER TO surgent;
+
+--
+-- Name: held_balance; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.held_balance (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    "connectedAccountId" uuid,
+    "sourceTransactionId" uuid,
+    amount bigint NOT NULL,
+    currency character varying(3) NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.held_balance OWNER TO surgent;
+
+--
+-- Name: invitation; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.invitation (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    email text NOT NULL,
+    "inviterId" uuid NOT NULL,
+    "organizationId" uuid NOT NULL,
+    "teamId" uuid,
+    role text NOT NULL,
+    status text NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "expiresAt" timestamp with time zone NOT NULL
+);
+
+
+ALTER TABLE public.invitation OWNER TO surgent;
+
+--
+-- Name: invoice; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.invoice (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "customerId" uuid NOT NULL,
+    "subscriptionId" uuid,
+    "productIds" text[] DEFAULT '{}'::text[],
+    "stripeId" text NOT NULL,
+    status public.invoice_status DEFAULT 'draft'::public.invoice_status,
+    "hostedInvoiceUrl" text,
+    total bigint DEFAULT 0,
+    currency character varying(3) DEFAULT 'usd'::character varying,
+    discounts jsonb DEFAULT '[]'::jsonb,
+    items jsonb DEFAULT '[]'::jsonb,
+    "periodStart" timestamp with time zone,
+    "periodEnd" timestamp with time zone,
+    "dueDate" timestamp with time zone,
+    "paidAt" timestamp with time zone,
+    "voidedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.invoice OWNER TO surgent;
+
+--
+-- Name: ip; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.ip (
+    ip text NOT NULL,
+    usage integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+ALTER TABLE public.ip OWNER TO surgent;
+
+--
+-- Name: ip_rate_limit; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.ip_rate_limit (
+    ip text NOT NULL,
+    "interval" text NOT NULL,
+    count integer NOT NULL
+);
+
+
+ALTER TABLE public.ip_rate_limit OWNER TO surgent;
+
+--
+-- Name: kysely_migration; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.kysely_migration (
+    name character varying(255) NOT NULL,
+    "timestamp" character varying(255) NOT NULL
+);
+
+
+ALTER TABLE public.kysely_migration OWNER TO surgent;
+
+--
+-- Name: kysely_migration_lock; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.kysely_migration_lock (
+    id character varying(255) NOT NULL,
+    is_locked integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE public.kysely_migration_lock OWNER TO surgent;
+
+--
+-- Name: member; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.member (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "userId" uuid NOT NULL,
+    "organizationId" uuid NOT NULL,
+    role text NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.member OWNER TO surgent;
+
+--
+-- Name: model; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.model (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    model text NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+ALTER TABLE public.model OWNER TO surgent;
+
+--
+-- Name: organization; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.organization (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    slug text NOT NULL,
+    logo text,
+    metadata jsonb,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "createdBy" text,
+    "platformFeePercent" integer,
+    "platformFeeFixed" integer
+);
+
+
+ALTER TABLE public.organization OWNER TO surgent;
+
+--
+-- Name: organizationRole; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public."organizationRole" (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "organizationId" uuid NOT NULL,
+    role text NOT NULL,
+    permission text NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public."organizationRole" OWNER TO surgent;
+
+--
+-- Name: payment; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.payment (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorId" text NOT NULL,
+    status public.payment_status NOT NULL,
+    amount bigint NOT NULL,
+    currency character varying(3) NOT NULL,
+    method text NOT NULL,
+    "methodMetadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "customerId" uuid,
+    "customerEmail" character varying(320),
+    "projectId" uuid NOT NULL,
+    "checkoutSessionId" uuid,
+    "paymentMethodId" uuid,
+    "declineReason" text,
+    "declineMessage" text,
+    "riskLevel" text,
+    "riskScore" smallint,
+    "processorMetadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "authorizedAt" timestamp with time zone,
+    "capturedAt" timestamp with time zone,
+    "canceledAt" timestamp with time zone
+);
+
+
+ALTER TABLE public.payment OWNER TO surgent;
+
+--
+-- Name: payment_method; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.payment_method (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorId" text NOT NULL,
+    type text NOT NULL,
+    "methodMetadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "customerId" uuid NOT NULL
+);
+
+
+ALTER TABLE public.payment_method OWNER TO surgent;
+
+--
+-- Name: payout; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.payout (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "createdAt" timestamp with time zone NOT NULL,
+    "accountId" uuid,
+    amount bigint NOT NULL,
+    currency character varying(3) NOT NULL,
+    status public.payout_status NOT NULL,
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorPayoutId" text,
+    "paidAt" timestamp with time zone
+);
+
+
+ALTER TABLE public.payout OWNER TO surgent;
+
+--
+-- Name: processed_webhook_event; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.processed_webhook_event (
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorEventId" text NOT NULL,
+    "eventType" text NOT NULL,
+    "processedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "apiVersion" text,
+    data jsonb,
+    "taskName" text,
+    "handledAt" timestamp with time zone,
+    "requestId" text
+);
+
+
+ALTER TABLE public.processed_webhook_event OWNER TO surgent;
+
+--
+-- Name: product; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.product (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "productGroupId" uuid NOT NULL,
+    name text NOT NULL,
+    description text,
+    "projectId" uuid NOT NULL,
+    slug text NOT NULL,
+    version integer,
+    "isArchived" boolean DEFAULT false,
+    "isDefault" boolean,
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorProductId" text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "isAddOn" boolean DEFAULT false,
+    "planGroup" text,
+    env text DEFAULT 'live'::text
+);
+
+
+ALTER TABLE public.product OWNER TO surgent;
+
+--
+-- Name: product_price; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.product_price (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "productId" uuid NOT NULL,
+    name text,
+    description text,
+    "priceAmount" integer NOT NULL,
+    "priceCurrency" character varying(3) NOT NULL,
+    "recurringInterval" public.recurring_interval,
+    "isDefault" boolean,
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorPriceId" text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.product_price OWNER TO surgent;
+
+--
+-- Name: project; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.project (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "userId" uuid NOT NULL,
+    "organizationId" uuid NOT NULL,
+    name text NOT NULL,
+    github jsonb,
+    settings jsonb,
+    deployment jsonb,
+    sandbox jsonb,
+    metadata jsonb,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL,
+    slug text NOT NULL,
+    "externalId" uuid
+);
+
+
+ALTER TABLE public.project OWNER TO surgent;
+
+--
+-- Name: provider; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.provider (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    provider text NOT NULL,
+    credentials text NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+ALTER TABLE public.provider OWNER TO surgent;
+
+--
+-- Name: refund; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.refund (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "createdAt" timestamp with time zone NOT NULL,
+    "deletedAt" timestamp with time zone,
+    amount bigint NOT NULL,
+    currency character varying(3) NOT NULL,
+    reason text,
+    status public.refund_status DEFAULT 'succeeded'::public.refund_status NOT NULL,
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorId" text,
+    "paymentId" uuid,
+    "projectId" uuid NOT NULL,
+    "customerId" uuid
+);
+
+
+ALTER TABLE public.refund OWNER TO surgent;
+
+--
+-- Name: session; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.session (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "userId" uuid NOT NULL,
+    token text NOT NULL,
+    "expiresAt" timestamp without time zone NOT NULL,
+    "ipAddress" text,
+    "userAgent" text,
+    "activeOrganizationId" uuid,
+    "activeTeamId" text,
+    "createdAt" timestamp without time zone NOT NULL,
+    "updatedAt" timestamp without time zone NOT NULL
+);
+
+
+ALTER TABLE public.session OWNER TO surgent;
+
+--
+-- Name: subscription; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.subscription (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    "productId" uuid,
+    "productPriceId" uuid,
+    "customerId" uuid,
+    "createdAt" timestamp with time zone NOT NULL,
+    "deletedAt" timestamp with time zone,
+    "currentPeriodStart" timestamp with time zone,
+    "currentPeriodEnd" timestamp with time zone,
+    "canceledAt" timestamp with time zone,
+    "endedAt" timestamp with time zone,
+    status public.subscription_status NOT NULL,
+    processor text DEFAULT 'stripe'::text NOT NULL,
+    "processorSubscriptionId" text,
+    "processorCustomerId" text,
+    "cancelAtPeriodEnd" boolean DEFAULT false,
+    "paymentMethodBrand" character varying(20),
+    "paymentMethodLast4" character varying(4),
+    "paymentMethodId" uuid
+);
+
+
+ALTER TABLE public.subscription OWNER TO surgent;
+
+--
+-- Name: team; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.team (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "organizationId" uuid NOT NULL,
+    name text NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone
+);
+
+
+ALTER TABLE public.team OWNER TO surgent;
+
+--
+-- Name: teamMember; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public."teamMember" (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "teamId" uuid NOT NULL,
+    "userId" uuid NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public."teamMember" OWNER TO surgent;
+
+--
+-- Name: transaction; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.transaction (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "createdAt" timestamp with time zone NOT NULL,
+    type public.transaction_type NOT NULL,
+    amount bigint NOT NULL,
+    currency character varying(3) NOT NULL,
+    "taxAmount" bigint DEFAULT 0,
+    "accountId" uuid,
+    "accountAmount" bigint,
+    "accountCurrency" character varying(3),
+    "presentmentAmount" bigint,
+    "presentmentCurrency" character varying(3),
+    "presentmentTaxAmount" bigint,
+    "taxFilingAmount" bigint,
+    "taxFilingCurrency" character varying(3),
+    "taxCountry" character varying(2),
+    "taxState" character varying(2),
+    processor text NOT NULL,
+    "chargeId" text,
+    "transferId" text,
+    "refundId" uuid,
+    "payoutId" uuid,
+    "paymentTransactionId" uuid,
+    "incurredByTransactionId" uuid,
+    "payoutTransactionId" uuid,
+    "projectId" uuid NOT NULL,
+    "customerId" uuid,
+    "productId" uuid,
+    "productPriceId" uuid,
+    "subscriptionId" uuid,
+    "checkoutSessionId" uuid,
+    "processorInvoiceId" text,
+    "paymentMethodBrand" character varying(20),
+    "paymentMethodLast4" character varying(4),
+    metadata jsonb DEFAULT '{}'::jsonb,
+    "succeededAt" timestamp with time zone,
+    "refundedAt" timestamp with time zone,
+    "paymentId" uuid
+);
+
+
+ALTER TABLE public.transaction OWNER TO surgent;
+
+--
+-- Name: transfer; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.transfer (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    processor text NOT NULL,
+    "processorTransferId" text NOT NULL,
+    amount bigint NOT NULL,
+    currency character varying(3) NOT NULL,
+    "destinationAccountId" uuid NOT NULL,
+    "sourceTransactionId" uuid,
+    "reversalId" text,
+    "reversedAt" timestamp with time zone,
+    status text DEFAULT 'pending'::text NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.transfer OWNER TO surgent;
+
+--
+-- Name: usage; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.usage (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    model text NOT NULL,
+    provider text NOT NULL,
+    "inputTokens" integer NOT NULL,
+    "outputTokens" integer NOT NULL,
+    "reasoningTokens" integer,
+    "cacheReadTokens" integer,
+    "cacheWrite5mTokens" integer,
+    "cacheWrite1hTokens" integer,
+    cost bigint NOT NULL,
+    "keyId" uuid,
+    enrichment jsonb,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+ALTER TABLE public.usage OWNER TO surgent;
+
+--
+-- Name: user; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public."user" (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    email text NOT NULL,
+    "emailVerified" boolean NOT NULL,
+    image text,
+    "createdAt" timestamp without time zone NOT NULL,
+    "updatedAt" timestamp without time zone NOT NULL
+);
+
+
+ALTER TABLE public."user" OWNER TO surgent;
+
+--
+-- Name: verification; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.verification (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    identifier text NOT NULL,
+    value text NOT NULL,
+    "expiresAt" timestamp without time zone NOT NULL,
+    "createdAt" timestamp without time zone NOT NULL,
+    "updatedAt" timestamp without time zone NOT NULL
+);
+
+
+ALTER TABLE public.verification OWNER TO surgent;
+
+--
+-- Name: account account_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.account
+    ADD CONSTRAINT account_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: connect_account account_project_processor_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.connect_account
+    ADD CONSTRAINT account_project_processor_key UNIQUE ("projectId", processor);
+
+
+--
+-- Name: apikey apikey_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.apikey
+    ADD CONSTRAINT apikey_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: chats chats_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.chats
+    ADD CONSTRAINT chats_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: checkout_session checkout_session_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.checkout_session
+    ADD CONSTRAINT checkout_session_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: checkout_session checkout_session_processor_checkout_id_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.checkout_session
+    ADD CONSTRAINT checkout_session_processor_checkout_id_key UNIQUE (processor, "processorCheckoutId");
+
+
+--
+-- Name: connect_account connect_account_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.connect_account
+    ADD CONSTRAINT connect_account_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: customer_entitlement customer_entitlement_customer_id_feature_id_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer_entitlement
+    ADD CONSTRAINT customer_entitlement_customer_id_feature_id_key UNIQUE ("customerId", "featureId");
+
+
+--
+-- Name: customer_entitlement customer_entitlement_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer_entitlement
+    ADD CONSTRAINT customer_entitlement_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: customer customer_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer
+    ADD CONSTRAINT customer_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: customer_product customer_product_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer_product
+    ADD CONSTRAINT customer_product_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: customer customer_project_id_email_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer
+    ADD CONSTRAINT customer_project_id_email_key UNIQUE ("projectId", email);
+
+
+--
+-- Name: deployment_history deployment_history_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.deployment_history
+    ADD CONSTRAINT deployment_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: dispute dispute_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.dispute
+    ADD CONSTRAINT dispute_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: dispute dispute_processor_id_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.dispute
+    ADD CONSTRAINT dispute_processor_id_key UNIQUE (processor, "processorId");
+
+
+--
+-- Name: entitlement entitlement_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.entitlement
+    ADD CONSTRAINT entitlement_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: entitlement entitlement_product_id_feature_id_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.entitlement
+    ADD CONSTRAINT entitlement_product_id_feature_id_key UNIQUE ("productId", "featureId");
+
+
+--
+-- Name: feature feature_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.feature
+    ADD CONSTRAINT feature_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: feature feature_project_id_name_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.feature
+    ADD CONSTRAINT feature_project_id_name_key UNIQUE ("projectId", name);
+
+
+--
+-- Name: github_installations github_installations_installationId_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.github_installations
+    ADD CONSTRAINT "github_installations_installationId_key" UNIQUE ("installationId");
+
+
+--
+-- Name: github_installations github_installations_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.github_installations
+    ADD CONSTRAINT github_installations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: held_balance held_balance_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.held_balance
+    ADD CONSTRAINT held_balance_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: invitation invitation_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.invitation
+    ADD CONSTRAINT invitation_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: invoice invoice_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.invoice
+    ADD CONSTRAINT invoice_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: invoice invoice_stripeId_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.invoice
+    ADD CONSTRAINT "invoice_stripeId_key" UNIQUE ("stripeId");
+
+
+--
+-- Name: ip ip_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.ip
+    ADD CONSTRAINT ip_pkey PRIMARY KEY (ip);
+
+
+--
+-- Name: ip_rate_limit ip_rate_limit_pk; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.ip_rate_limit
+    ADD CONSTRAINT ip_rate_limit_pk PRIMARY KEY (ip, "interval");
+
+
+--
+-- Name: kysely_migration_lock kysely_migration_lock_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.kysely_migration_lock
+    ADD CONSTRAINT kysely_migration_lock_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: kysely_migration kysely_migration_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.kysely_migration
+    ADD CONSTRAINT kysely_migration_pkey PRIMARY KEY (name);
+
+
+--
+-- Name: member member_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.member
+    ADD CONSTRAINT member_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: model model_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.model
+    ADD CONSTRAINT model_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: organizationRole organizationRole_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public."organizationRole"
+    ADD CONSTRAINT "organizationRole_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: organization organization_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.organization
+    ADD CONSTRAINT organization_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_method payment_method_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.payment_method
+    ADD CONSTRAINT payment_method_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_method payment_method_processor_customer_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.payment_method
+    ADD CONSTRAINT payment_method_processor_customer_key UNIQUE (processor, "processorId", "customerId");
+
+
+--
+-- Name: payment payment_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.payment
+    ADD CONSTRAINT payment_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment payment_processor_id_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.payment
+    ADD CONSTRAINT payment_processor_id_key UNIQUE (processor, "processorId");
+
+
+--
+-- Name: payout payout_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.payout
+    ADD CONSTRAINT payout_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: processed_webhook_event processed_webhook_event_pk; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.processed_webhook_event
+    ADD CONSTRAINT processed_webhook_event_pk PRIMARY KEY (processor, "processorEventId");
+
+
+--
+-- Name: product product_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.product
+    ADD CONSTRAINT product_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: product_price product_price_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.product_price
+    ADD CONSTRAINT product_price_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: project project_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.project
+    ADD CONSTRAINT project_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: project project_slug_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.project
+    ADD CONSTRAINT project_slug_key UNIQUE (slug);
+
+
+--
+-- Name: provider provider_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.provider
+    ADD CONSTRAINT provider_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: refund refund_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.refund
+    ADD CONSTRAINT refund_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: session session_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.session
+    ADD CONSTRAINT session_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: subscription subscription_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.subscription
+    ADD CONSTRAINT subscription_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: subscription subscription_processor_subscription_id_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.subscription
+    ADD CONSTRAINT subscription_processor_subscription_id_key UNIQUE (processor, "processorSubscriptionId");
+
+
+--
+-- Name: teamMember teamMember_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public."teamMember"
+    ADD CONSTRAINT "teamMember_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: team team_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.team
+    ADD CONSTRAINT team_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: transaction transaction_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT transaction_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: transfer transfer_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transfer
+    ADD CONSTRAINT transfer_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: transfer transfer_processor_transfer_id_key; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transfer
+    ADD CONSTRAINT transfer_processor_transfer_id_key UNIQUE (processor, "processorTransferId");
+
+
+--
+-- Name: usage usage_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.usage
+    ADD CONSTRAINT usage_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user user_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: verification verification_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.verification
+    ADD CONSTRAINT verification_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: apikey_key_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX apikey_key_idx ON public.apikey USING btree (key);
+
+
+--
+-- Name: apikey_projectId_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX "apikey_projectId_idx" ON public.apikey USING btree ("projectId");
+
+
+--
+-- Name: chats_projectId_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX "chats_projectId_idx" ON public.chats USING btree ("projectId");
+
+
+--
+-- Name: deployment_history_projectId_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX "deployment_history_projectId_idx" ON public.deployment_history USING btree ("projectId");
+
+
+--
+-- Name: github_installations_userId_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX "github_installations_userId_idx" ON public.github_installations USING btree ("userId");
+
+
+--
+-- Name: idx_account_connect_state; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_account_connect_state ON public.connect_account USING btree (((data ->> 'connect_state'::text))) WHERE ((data ->> 'connect_state'::text) IS NOT NULL);
+
+
+--
+-- Name: idx_checkout_session_processor_checkout_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_checkout_session_processor_checkout_id ON public.checkout_session USING btree ("processorCheckoutId");
+
+
+--
+-- Name: idx_checkout_session_project_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_checkout_session_project_id ON public.checkout_session USING btree ("projectId");
+
+
+--
+-- Name: idx_connect_account_project; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_connect_account_project ON public.connect_account USING btree ("projectId");
+
+
+--
+-- Name: idx_connect_payout_account; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_connect_payout_account ON public.payout USING btree ("accountId");
+
+
+--
+-- Name: idx_customer_entitlement_customer_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_customer_entitlement_customer_id ON public.customer_entitlement USING btree ("customerId");
+
+
+--
+-- Name: idx_customer_entitlement_customer_product_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_customer_entitlement_customer_product_id ON public.customer_entitlement USING btree ("customerProductId");
+
+
+--
+-- Name: idx_customer_entitlement_feature_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_customer_entitlement_feature_id ON public.customer_entitlement USING btree ("featureId");
+
+
+--
+-- Name: idx_customer_product_customer_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_customer_product_customer_id ON public.customer_product USING btree ("customerId");
+
+
+--
+-- Name: idx_customer_product_product_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_customer_product_product_id ON public.customer_product USING btree ("productId");
+
+
+--
+-- Name: idx_entitlement_feature_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_entitlement_feature_id ON public.entitlement USING btree ("featureId");
+
+
+--
+-- Name: idx_entitlement_product_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_entitlement_product_id ON public.entitlement USING btree ("productId");
+
+
+--
+-- Name: idx_feature_project_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_feature_project_id ON public.feature USING btree ("projectId");
+
+
+--
+-- Name: idx_held_balance_connected_account; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_held_balance_connected_account ON public.held_balance USING btree ("connectedAccountId");
+
+
+--
+-- Name: idx_held_balance_project; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_held_balance_project ON public.held_balance USING btree ("projectId");
+
+
+--
+-- Name: idx_invoice_customer_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_invoice_customer_id ON public.invoice USING btree ("customerId");
+
+
+--
+-- Name: idx_invoice_status; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_invoice_status ON public.invoice USING btree (status);
+
+
+--
+-- Name: idx_invoice_subscription_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_invoice_subscription_id ON public.invoice USING btree ("subscriptionId");
+
+
+--
+-- Name: idx_processed_webhook_event_type; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_processed_webhook_event_type ON public.processed_webhook_event USING btree ("eventType");
+
+
+--
+-- Name: idx_product_project_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_product_project_id ON public.product USING btree ("projectId");
+
+
+--
+-- Name: idx_project_organization_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_project_organization_id ON public.project USING btree ("organizationId");
+
+
+--
+-- Name: idx_subscription_processor_subscription_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_subscription_processor_subscription_id ON public.subscription USING btree ("processorSubscriptionId");
+
+
+--
+-- Name: idx_subscription_project_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_subscription_project_id ON public.subscription USING btree ("projectId");
+
+
+--
+-- Name: idx_transaction_charge_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_transaction_charge_id ON public.transaction USING btree ("chargeId");
+
+
+--
+-- Name: idx_transaction_customer_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_transaction_customer_id ON public.transaction USING btree ("customerId");
+
+
+--
+-- Name: idx_transaction_project_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_transaction_project_id ON public.transaction USING btree ("projectId");
+
+
+--
+-- Name: idx_transfer_destination; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX idx_transfer_destination ON public.transfer USING btree ("destinationAccountId");
+
+
+--
+-- Name: ix_connect_account_processor_account_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE UNIQUE INDEX ix_connect_account_processor_account_id ON public.connect_account USING btree (processor, "processorAccountId") WHERE ("processorAccountId" IS NOT NULL);
+
+
+--
+-- Name: ix_dispute_payment_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_dispute_payment_id ON public.dispute USING btree ("paymentId");
+
+
+--
+-- Name: ix_dispute_project_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_dispute_project_id ON public.dispute USING btree ("projectId");
+
+
+--
+-- Name: ix_dispute_status; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_dispute_status ON public.dispute USING btree (status);
+
+
+--
+-- Name: ix_payment_customer_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_payment_customer_id ON public.payment USING btree ("customerId");
+
+
+--
+-- Name: ix_payment_method_customer_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_payment_method_customer_id ON public.payment_method USING btree ("customerId");
+
+
+--
+-- Name: ix_payment_project_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_payment_project_id ON public.payment USING btree ("projectId");
+
+
+--
+-- Name: ix_payment_status; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_payment_status ON public.payment USING btree (status);
+
+
+--
+-- Name: ix_payout_processor_payout_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE UNIQUE INDEX ix_payout_processor_payout_id ON public.payout USING btree (processor, "processorPayoutId") WHERE ("processorPayoutId" IS NOT NULL);
+
+
+--
+-- Name: ix_processed_webhook_event_handled_at; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_processed_webhook_event_handled_at ON public.processed_webhook_event USING btree ("handledAt");
+
+
+--
+-- Name: ix_processed_webhook_event_unprocessed; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_processed_webhook_event_unprocessed ON public.processed_webhook_event USING btree ("processedAt") WHERE ("handledAt" IS NULL);
+
+
+--
+-- Name: ix_refund_payment_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_refund_payment_id ON public.refund USING btree ("paymentId");
+
+
+--
+-- Name: ix_refund_processor_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE UNIQUE INDEX ix_refund_processor_id ON public.refund USING btree ("processorId") WHERE ("processorId" IS NOT NULL);
+
+
+--
+-- Name: ix_refund_project_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_refund_project_id ON public.refund USING btree ("projectId");
+
+
+--
+-- Name: ix_refund_status; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX ix_refund_status ON public.refund USING btree (status);
+
+
+--
+-- Name: ix_transaction_processor_invoice_id; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE UNIQUE INDEX ix_transaction_processor_invoice_id ON public.transaction USING btree ("processorInvoiceId") WHERE (("processorInvoiceId" IS NOT NULL) AND (type = 'payment'::public.transaction_type));
+
+
+--
+-- Name: member_user_org_uq; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE UNIQUE INDEX member_user_org_uq ON public.member USING btree ("userId", "organizationId");
+
+
+--
+-- Name: model_project_model_uq; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE UNIQUE INDEX model_project_model_uq ON public.model USING btree ("projectId", model);
+
+
+--
+-- Name: organizationRole_organizationId_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX "organizationRole_organizationId_idx" ON public."organizationRole" USING btree ("organizationId");
+
+
+--
+-- Name: organization_slug_uq; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE UNIQUE INDEX organization_slug_uq ON public.organization USING btree (slug);
+
+
+--
+-- Name: project_organizationId_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX "project_organizationId_idx" ON public.project USING btree ("organizationId");
+
+
+--
+-- Name: project_userId_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX "project_userId_idx" ON public.project USING btree ("userId");
+
+
+--
+-- Name: provider_project_provider_uq; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE UNIQUE INDEX provider_project_provider_uq ON public.provider USING btree ("projectId", provider);
+
+
+--
+-- Name: teamMember_teamId_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX "teamMember_teamId_idx" ON public."teamMember" USING btree ("teamId");
+
+
+--
+-- Name: team_organizationId_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX "team_organizationId_idx" ON public.team USING btree ("organizationId");
+
+
+--
+-- Name: usage_project_created_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX usage_project_created_idx ON public.usage USING btree ("projectId", "createdAt");
+
+
+--
+-- Name: account account_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.account
+    ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
+
+
+--
+-- Name: apikey apikey_organizationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.apikey
+    ADD CONSTRAINT "apikey_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES public.organization(id);
+
+
+--
+-- Name: apikey apikey_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.apikey
+    ADD CONSTRAINT "apikey_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: apikey apikey_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.apikey
+    ADD CONSTRAINT "apikey_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
+
+
+--
+-- Name: chats chats_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.chats
+    ADD CONSTRAINT "chats_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: checkout_session checkout_session_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.checkout_session
+    ADD CONSTRAINT "checkout_session_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.customer(id);
+
+
+--
+-- Name: checkout_session checkout_session_priceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.checkout_session
+    ADD CONSTRAINT "checkout_session_priceId_fkey" FOREIGN KEY ("priceId") REFERENCES public.product_price(id);
+
+
+--
+-- Name: checkout_session checkout_session_productId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.checkout_session
+    ADD CONSTRAINT "checkout_session_productId_fkey" FOREIGN KEY ("productId") REFERENCES public.product(id);
+
+
+--
+-- Name: checkout_session checkout_session_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.checkout_session
+    ADD CONSTRAINT "checkout_session_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: connect_account connect_account_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.connect_account
+    ADD CONSTRAINT "connect_account_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: customer customer_defaultPaymentMethodId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer
+    ADD CONSTRAINT "customer_defaultPaymentMethodId_fkey" FOREIGN KEY ("defaultPaymentMethodId") REFERENCES public.payment_method(id) ON DELETE SET NULL;
+
+
+--
+-- Name: customer_entitlement customer_entitlement_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer_entitlement
+    ADD CONSTRAINT "customer_entitlement_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.customer(id) ON DELETE CASCADE;
+
+
+--
+-- Name: customer_entitlement customer_entitlement_customerProductId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer_entitlement
+    ADD CONSTRAINT "customer_entitlement_customerProductId_fkey" FOREIGN KEY ("customerProductId") REFERENCES public.customer_product(id) ON DELETE CASCADE;
+
+
+--
+-- Name: customer_entitlement customer_entitlement_entitlementId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer_entitlement
+    ADD CONSTRAINT "customer_entitlement_entitlementId_fkey" FOREIGN KEY ("entitlementId") REFERENCES public.entitlement(id) ON DELETE CASCADE;
+
+
+--
+-- Name: customer_entitlement customer_entitlement_featureId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer_entitlement
+    ADD CONSTRAINT "customer_entitlement_featureId_fkey" FOREIGN KEY ("featureId") REFERENCES public.feature(id) ON DELETE CASCADE;
+
+
+--
+-- Name: customer_product customer_product_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer_product
+    ADD CONSTRAINT "customer_product_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.customer(id) ON DELETE CASCADE;
+
+
+--
+-- Name: customer_product customer_product_productId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer_product
+    ADD CONSTRAINT "customer_product_productId_fkey" FOREIGN KEY ("productId") REFERENCES public.product(id);
+
+
+--
+-- Name: customer_product customer_product_subscriptionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer_product
+    ADD CONSTRAINT "customer_product_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES public.subscription(id);
+
+
+--
+-- Name: customer customer_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.customer
+    ADD CONSTRAINT "customer_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: deployment_history deployment_history_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.deployment_history
+    ADD CONSTRAINT "deployment_history_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id) ON DELETE CASCADE;
+
+
+--
+-- Name: dispute dispute_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.dispute
+    ADD CONSTRAINT "dispute_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.customer(id);
+
+
+--
+-- Name: dispute dispute_paymentId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.dispute
+    ADD CONSTRAINT "dispute_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES public.payment(id);
+
+
+--
+-- Name: dispute dispute_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.dispute
+    ADD CONSTRAINT "dispute_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: entitlement entitlement_featureId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.entitlement
+    ADD CONSTRAINT "entitlement_featureId_fkey" FOREIGN KEY ("featureId") REFERENCES public.feature(id) ON DELETE CASCADE;
+
+
+--
+-- Name: entitlement entitlement_productId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.entitlement
+    ADD CONSTRAINT "entitlement_productId_fkey" FOREIGN KEY ("productId") REFERENCES public.product(id) ON DELETE CASCADE;
+
+
+--
+-- Name: feature feature_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.feature
+    ADD CONSTRAINT "feature_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: github_installations github_installations_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.github_installations
+    ADD CONSTRAINT "github_installations_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
+
+
+--
+-- Name: held_balance held_balance_connectedAccountId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.held_balance
+    ADD CONSTRAINT "held_balance_connectedAccountId_fkey" FOREIGN KEY ("connectedAccountId") REFERENCES public.connect_account(id);
+
+
+--
+-- Name: held_balance held_balance_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.held_balance
+    ADD CONSTRAINT "held_balance_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: held_balance held_balance_sourceTransactionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.held_balance
+    ADD CONSTRAINT "held_balance_sourceTransactionId_fkey" FOREIGN KEY ("sourceTransactionId") REFERENCES public.transaction(id);
+
+
+--
+-- Name: invitation invitation_inviterId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.invitation
+    ADD CONSTRAINT "invitation_inviterId_fkey" FOREIGN KEY ("inviterId") REFERENCES public."user"(id);
+
+
+--
+-- Name: invitation invitation_organizationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.invitation
+    ADD CONSTRAINT "invitation_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES public.organization(id);
+
+
+--
+-- Name: invitation invitation_teamId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.invitation
+    ADD CONSTRAINT "invitation_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES public.team(id);
+
+
+--
+-- Name: invoice invoice_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.invoice
+    ADD CONSTRAINT "invoice_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.customer(id) ON DELETE CASCADE;
+
+
+--
+-- Name: invoice invoice_subscriptionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.invoice
+    ADD CONSTRAINT "invoice_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES public.subscription(id);
+
+
+--
+-- Name: member member_organizationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.member
+    ADD CONSTRAINT "member_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES public.organization(id);
+
+
+--
+-- Name: member member_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.member
+    ADD CONSTRAINT "member_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
+
+
+--
+-- Name: model model_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.model
+    ADD CONSTRAINT "model_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: organizationRole organizationRole_organizationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public."organizationRole"
+    ADD CONSTRAINT "organizationRole_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES public.organization(id);
+
+
+--
+-- Name: payment payment_checkoutSessionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.payment
+    ADD CONSTRAINT "payment_checkoutSessionId_fkey" FOREIGN KEY ("checkoutSessionId") REFERENCES public.checkout_session(id) ON DELETE SET NULL;
+
+
+--
+-- Name: payment payment_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.payment
+    ADD CONSTRAINT "payment_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.customer(id);
+
+
+--
+-- Name: payment_method payment_method_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.payment_method
+    ADD CONSTRAINT "payment_method_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.customer(id) ON DELETE CASCADE;
+
+
+--
+-- Name: payment payment_paymentMethodId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.payment
+    ADD CONSTRAINT "payment_paymentMethodId_fkey" FOREIGN KEY ("paymentMethodId") REFERENCES public.payment_method(id) ON DELETE SET NULL;
+
+
+--
+-- Name: payment payment_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.payment
+    ADD CONSTRAINT "payment_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: payout payout_accountId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.payout
+    ADD CONSTRAINT "payout_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES public.connect_account(id);
+
+
+--
+-- Name: product_price product_price_productId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.product_price
+    ADD CONSTRAINT "product_price_productId_fkey" FOREIGN KEY ("productId") REFERENCES public.product(id);
+
+
+--
+-- Name: product product_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.product
+    ADD CONSTRAINT "product_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: project project_organizationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.project
+    ADD CONSTRAINT "project_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES public.organization(id);
+
+
+--
+-- Name: project project_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.project
+    ADD CONSTRAINT "project_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
+
+
+--
+-- Name: provider provider_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.provider
+    ADD CONSTRAINT "provider_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: refund refund_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.refund
+    ADD CONSTRAINT "refund_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.customer(id);
+
+
+--
+-- Name: refund refund_paymentId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.refund
+    ADD CONSTRAINT "refund_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES public.payment(id);
+
+
+--
+-- Name: refund refund_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.refund
+    ADD CONSTRAINT "refund_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: session session_activeOrganizationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.session
+    ADD CONSTRAINT "session_activeOrganizationId_fkey" FOREIGN KEY ("activeOrganizationId") REFERENCES public.organization(id);
+
+
+--
+-- Name: session session_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.session
+    ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
+
+
+--
+-- Name: subscription subscription_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.subscription
+    ADD CONSTRAINT "subscription_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.customer(id);
+
+
+--
+-- Name: subscription subscription_paymentMethodId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.subscription
+    ADD CONSTRAINT "subscription_paymentMethodId_fkey" FOREIGN KEY ("paymentMethodId") REFERENCES public.payment_method(id) ON DELETE SET NULL;
+
+
+--
+-- Name: subscription subscription_productId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.subscription
+    ADD CONSTRAINT "subscription_productId_fkey" FOREIGN KEY ("productId") REFERENCES public.product(id);
+
+
+--
+-- Name: subscription subscription_productPriceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.subscription
+    ADD CONSTRAINT "subscription_productPriceId_fkey" FOREIGN KEY ("productPriceId") REFERENCES public.product_price(id);
+
+
+--
+-- Name: subscription subscription_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.subscription
+    ADD CONSTRAINT "subscription_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: teamMember teamMember_teamId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public."teamMember"
+    ADD CONSTRAINT "teamMember_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES public.team(id);
+
+
+--
+-- Name: teamMember teamMember_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public."teamMember"
+    ADD CONSTRAINT "teamMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
+
+
+--
+-- Name: team team_organizationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.team
+    ADD CONSTRAINT "team_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES public.organization(id);
+
+
+--
+-- Name: transaction transaction_accountId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES public.connect_account(id);
+
+
+--
+-- Name: transaction transaction_checkoutSessionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_checkoutSessionId_fkey" FOREIGN KEY ("checkoutSessionId") REFERENCES public.checkout_session(id);
+
+
+--
+-- Name: transaction transaction_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.customer(id);
+
+
+--
+-- Name: transaction transaction_incurredByTransactionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_incurredByTransactionId_fkey" FOREIGN KEY ("incurredByTransactionId") REFERENCES public.transaction(id);
+
+
+--
+-- Name: transaction transaction_paymentId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES public.payment(id);
+
+
+--
+-- Name: transaction transaction_paymentTransactionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_paymentTransactionId_fkey" FOREIGN KEY ("paymentTransactionId") REFERENCES public.transaction(id);
+
+
+--
+-- Name: transaction transaction_payoutId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_payoutId_fkey" FOREIGN KEY ("payoutId") REFERENCES public.payout(id);
+
+
+--
+-- Name: transaction transaction_payoutTransactionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_payoutTransactionId_fkey" FOREIGN KEY ("payoutTransactionId") REFERENCES public.transaction(id);
+
+
+--
+-- Name: transaction transaction_productId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_productId_fkey" FOREIGN KEY ("productId") REFERENCES public.product(id);
+
+
+--
+-- Name: transaction transaction_productPriceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_productPriceId_fkey" FOREIGN KEY ("productPriceId") REFERENCES public.product_price(id);
+
+
+--
+-- Name: transaction transaction_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: transaction transaction_refundId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_refundId_fkey" FOREIGN KEY ("refundId") REFERENCES public.refund(id);
+
+
+--
+-- Name: transaction transaction_subscriptionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transaction
+    ADD CONSTRAINT "transaction_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES public.subscription(id);
+
+
+--
+-- Name: transfer transfer_destinationAccountId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transfer
+    ADD CONSTRAINT "transfer_destinationAccountId_fkey" FOREIGN KEY ("destinationAccountId") REFERENCES public.connect_account(id);
+
+
+--
+-- Name: transfer transfer_sourceTransactionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.transfer
+    ADD CONSTRAINT "transfer_sourceTransactionId_fkey" FOREIGN KEY ("sourceTransactionId") REFERENCES public.transaction(id);
+
+
+--
+-- Name: usage usage_keyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.usage
+    ADD CONSTRAINT "usage_keyId_fkey" FOREIGN KEY ("keyId") REFERENCES public.apikey(id);
+
+
+--
+-- Name: usage usage_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.usage
+    ADD CONSTRAINT "usage_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict oH8iKC0dxwzibvqka8jAVdlEJtizvfaaLOEA5K5ejHZwMUS52NVXCbRQxxiHjGw
+

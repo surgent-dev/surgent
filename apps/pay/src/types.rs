@@ -102,3 +102,32 @@ pub enum TransactionType {
     Balance,
     Payout,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Type, Serialize, Deserialize, ToSchema)]
+#[sqlx(type_name = "refund_status", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum RefundStatus {
+    Pending,
+    RequiresAction,
+    Succeeded,
+    Failed,
+    Canceled,
+}
+
+impl TryFrom<&str> for RefundStatus {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            "pending" => Ok(RefundStatus::Pending),
+            "requires_action" => Ok(RefundStatus::RequiresAction),
+            "succeeded" => Ok(RefundStatus::Succeeded),
+            "failed" => Ok(RefundStatus::Failed),
+            "canceled" => Ok(RefundStatus::Canceled),
+            other => Err(format!(
+                "Invalid refund status: {}. Valid values are: pending, requires_action, succeeded, failed, canceled",
+                other
+            )),
+        }
+    }
+}
