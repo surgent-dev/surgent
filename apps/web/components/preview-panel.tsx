@@ -2,7 +2,18 @@
 
 import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from '@/components/agent/web-preview'
 import { useEffect, useMemo, type ElementType } from 'react'
-import { X, Database, Monitor, GitCompare, Terminal, ScrollText, Plus, Power, RefreshCw } from 'lucide-react'
+import {
+  X,
+  Database,
+  Monitor,
+  GitCompare,
+  Terminal,
+  ScrollText,
+  Plus,
+  Power,
+  RefreshCw,
+  CreditCard,
+} from 'lucide-react'
 import type { FileDiff } from '@opencode-ai/sdk'
 import { useQuery } from '@tanstack/react-query'
 
@@ -13,6 +24,8 @@ import {
   useSandboxLogsQuery,
   type ConvexDashboardCredentials,
 } from '@/queries/projects'
+
+import { useSurpayAccounts, useSurpayConnect } from '@/queries/surpay'
 
 import DiffView from '@/components/diff/diff-view'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -25,7 +38,7 @@ import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
 
 export interface PreviewTab {
   id: string
-  type: 'preview' | 'changes' | 'convex' | 'mcp' | 'logs'
+  type: 'preview' | 'changes' | 'convex' | 'mcp' | 'logs' | 'payments'
   title: string
   diffs?: FileDiff[]
   messageId?: string
@@ -192,6 +205,75 @@ function McpContent({ entries, isLoading }: { entries: Array<{ name: string; sta
   )
 }
 
+function PaymentsContent({ projectId }: { projectId?: string }) {
+  const { data: accounts, isLoading } = useSurpayAccounts(projectId)
+  const connect = useSurpayConnect()
+
+  if (isLoading) {
+    return <LoadingState icon={CreditCard} message="Loading payment accounts..." />
+  }
+
+  const handleConnect = async () => {
+    if (!projectId) return
+    const result = await connect.mutateAsync(projectId)
+    if (result.oauth_url) {
+      window.location.href = result.oauth_url
+    }
+  }
+
+  if (!accounts?.length) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="rounded-full bg-muted p-4">
+            <CreditCard className="size-8 text-muted-foreground" strokeWidth={1.5} />
+          </div>
+          <div className="space-y-1">
+            <p className="font-medium">Connect Payments</p>
+            <p className="text-sm text-muted-foreground">Connect your Stripe account to accept payments</p>
+          </div>
+          <Button onClick={handleConnect} disabled={connect.isPending}>
+            {connect.isPending ? 'Connecting...' : 'Connect Stripe'}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="px-3 py-4 space-y-2">
+        {accounts.map((account) => (
+          <div
+            key={account.id}
+            className="flex items-center justify-between rounded-lg border bg-background/60 px-3 py-2"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={cn('size-2 rounded-full', getStatusDot(account.status))} />
+              <span className="font-medium text-sm truncate">{account.processor}</span>
+            </div>
+            {account.status === 'pending' ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleConnect}
+                disabled={connect.isPending}
+                className="h-6 text-xs"
+              >
+                {connect.isPending ? 'Connecting...' : 'Continue Setup'}
+              </Button>
+            ) : (
+              <span className={cn('text-xs font-medium capitalize', getStatusTone(account.status))}>
+                {formatStatus(account.status)}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </ScrollArea>
+  )
+}
+
 function SandboxPausedContent({ onActivate, isActivating }: { onActivate: () => void; isActivating: boolean }) {
   return (
     <div className="w-full h-full flex items-center justify-center">
@@ -236,6 +318,8 @@ function getTabIcon(type: PreviewTab['type']) {
       return Terminal
     case 'logs':
       return ScrollText
+    case 'payments':
+      return CreditCard
   }
 }
 
@@ -392,6 +476,8 @@ export default function PreviewPanel({
         return <McpContent entries={mcpEntries} isLoading={mcpLoading} />
       case 'logs':
         return <LogsContent app={sandboxLogs?.app} opencode={sandboxLogs?.opencode} isLoading={logsLoading} />
+      case 'payments':
+        return <PaymentsContent projectId={projectId} />
     }
   })()
 

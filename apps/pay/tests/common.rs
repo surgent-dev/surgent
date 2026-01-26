@@ -406,6 +406,7 @@ pub async fn create_test_state(pool: PgPool) -> AppState {
             .unwrap_or_else(|_| "http://localhost:9324/queue/webhooks_dlq".to_string()),
         better_auth_secret: "test-secret".to_string(),
         trusted_origins: "http://localhost:3000".to_string(),
+        web_base_url: "http://localhost:3000".to_string(),
     };
 
     // Register Stripe processor
@@ -463,6 +464,7 @@ pub async fn create_test_state_real_stripe(pool: PgPool) -> AppState {
             .unwrap_or_else(|_| "http://localhost:9324/queue/webhooks_dlq".to_string()),
         better_auth_secret: "test-secret".to_string(),
         trusted_origins: "http://localhost:3000".to_string(),
+        web_base_url: "http://localhost:3000".to_string(),
     };
 
     // Register Stripe processor as BOTH PaymentProcessor AND ConnectProcessor
