@@ -3,7 +3,7 @@
 FROM rust:1-alpine AS chef
 
 # Install musl-dev for Alpine builds and tini-static for signal handling
-RUN apk add --no-cache musl-dev tini-static
+RUN apk add --no-cache musl-dev tini-static curl
 
 # Install cargo-chef for dependency caching
 RUN cargo install cargo-chef
