@@ -6,6 +6,7 @@ import * as ecs_patterns from 'aws-cdk-lib/aws-ecs-patterns'
 import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2'
+import * as sqs from 'aws-cdk-lib/aws-sqs'
 import { Construct } from 'constructs'
 
 const SSM_PREFIX = '/surgent/prod'
@@ -171,6 +172,142 @@ export class SurgentStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'CertificateArn', {
       value: certificate.certificateArn,
       description: 'ACM certificate ARN - add DNS validation CNAME in Cloudflare',
+    })
+
+    // ==================== SURPAY SERVICE ====================
+
+    // ECR Repository for surpay
+    const surpayRepository = new ecr.Repository(this, 'SurpayRepo', {
+      repositoryName: 'surgent/pay',
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      lifecycleRules: [
+        {
+          maxImageCount: 10,
+          description: 'Keep last 10 images',
+        },
+      ],
+    })
+
+    // SQS Dead Letter Queue for webhooks
+    const webhooksDlq = new sqs.Queue(this, 'WebhooksDlq', {
+      queueName: 'surgent-webhooks-dlq',
+      retentionPeriod: cdk.Duration.days(14),
+    })
+
+    // SQS Queue for webhooks
+    const webhooksQueue = new sqs.Queue(this, 'WebhooksQueue', {
+      queueName: 'surgent-webhooks',
+      visibilityTimeout: cdk.Duration.seconds(30),
+      deadLetterQueue: {
+        queue: webhooksDlq,
+        maxReceiveCount: 3,
+      },
+    })
+
+    // ACM Certificate for pay.surgent.dev
+    const surpayCertificate = new acm.Certificate(this, 'SurpayCert', {
+      domainName: 'pay.surgent.dev',
+      validation: acm.CertificateValidation.fromDns(),
+    })
+
+    // Load surpay secrets from SSM Parameter Store
+    const surpaySecrets: Record<string, ecs.Secret> = {}
+    const surpaySecretNames = [
+      'DATABASE_URL',
+      'STRIPE_SECRET_KEY',
+      'STRIPE_CLIENT_ID',
+      'STRIPE_WEBHOOK_SECRET',
+    ] as const
+    for (const name of surpaySecretNames) {
+      surpaySecrets[name] = ecs.Secret.fromSsmParameter(
+        ssm.StringParameter.fromSecureStringParameterAttributes(this, `SurpayParam${name}`, {
+          parameterName: `${SSM_PREFIX}/${name}`,
+        }),
+      )
+    }
+
+    // Surpay ALB + Fargate Service
+    const surpayService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'SurpayService', {
+      cluster,
+      serviceName: 'surpay',
+      cpu: 256,
+      memoryLimitMiB: 512,
+      desiredCount: 1,
+      assignPublicIp: true,
+      publicLoadBalancer: true,
+      certificate: surpayCertificate,
+      redirectHTTP: true,
+      listenerPort: 443,
+      taskImageOptions: {
+        image: ecs.ContainerImage.fromEcrRepository(surpayRepository, 'latest'),
+        containerPort: 8090,
+        secrets: surpaySecrets,
+        environment: {
+          DATABASE_MAX_CONNECTIONS: '5',
+          DATABASE_MIN_CONNECTIONS: '1',
+          SERVICE_PORT: '8090',
+          SERVICE_HOST: '0.0.0.0',
+          SURPAY_BASE_URL: 'pay.surgent.dev',
+          SQS_WEBHOOKS_QUEUE_URL: webhooksQueue.queueUrl,
+          SQS_WEBHOOKS_DLQ_URL: webhooksDlq.queueUrl,
+        },
+      },
+      taskSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
+      healthCheckGracePeriod: cdk.Duration.seconds(60),
+      minHealthyPercent: 50,
+      maxHealthyPercent: 200,
+    })
+
+    // Grant SQS permissions to surpay task role (producer and consumer)
+    webhooksQueue.grantSendMessages(surpayService.taskDefinition.taskRole)
+    webhooksQueue.grantConsumeMessages(surpayService.taskDefinition.taskRole)
+    webhooksDlq.grantSendMessages(surpayService.taskDefinition.taskRole)
+    webhooksDlq.grantConsumeMessages(surpayService.taskDefinition.taskRole)
+
+    // Configure surpay health check
+    surpayService.targetGroup.configureHealthCheck({
+      path: '/health',
+      port: '8090',
+      healthyHttpCodes: '200',
+      interval: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(5),
+      healthyThresholdCount: 2,
+      unhealthyThresholdCount: 3,
+    })
+
+    // Security: ECS only allows traffic from ALB on port 8090
+    surpayService.service.connections.allowFrom(
+      surpayService.loadBalancer,
+      ec2.Port.tcp(8090),
+      'Allow traffic from ALB',
+    )
+
+    // Surpay Outputs
+    new cdk.CfnOutput(this, 'SurpayLoadBalancerDNS', {
+      value: surpayService.loadBalancer.loadBalancerDnsName,
+      description: 'Surpay ALB DNS name - point pay.surgent.dev CNAME here',
+    })
+
+    new cdk.CfnOutput(this, 'SurpayRepositoryUri', {
+      value: surpayRepository.repositoryUri,
+      description: 'Surpay ECR repository URI for docker push',
+    })
+
+    new cdk.CfnOutput(this, 'SurpayCertificateArn', {
+      value: surpayCertificate.certificateArn,
+      description: 'Surpay ACM certificate ARN - add DNS validation CNAME in Cloudflare',
+    })
+
+    new cdk.CfnOutput(this, 'WebhooksQueueUrl', {
+      value: webhooksQueue.queueUrl,
+      description: 'SQS webhooks queue URL',
+    })
+
+    new cdk.CfnOutput(this, 'WebhooksDlqUrl', {
+      value: webhooksDlq.queueUrl,
+      description: 'SQS webhooks DLQ URL',
     })
   }
 }
