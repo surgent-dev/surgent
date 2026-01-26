@@ -2,7 +2,6 @@ import * as cdk from 'aws-cdk-lib'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import * as ecs from 'aws-cdk-lib/aws-ecs'
 import * as ecr from 'aws-cdk-lib/aws-ecr'
-import * as ecs_patterns from 'aws-cdk-lib/aws-ecs-patterns'
 import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2'
@@ -66,7 +65,8 @@ export class SurgentStack extends cdk.Stack {
     // ECR Repository with lifecycle policy
     const repository = new ecr.Repository(this, 'SurgentWorkerRepo', {
       repositoryName: 'surgent/worker',
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      emptyOnDelete: true,
       lifecycleRules: [
         {
           maxImageCount: 10,
@@ -81,9 +81,9 @@ export class SurgentStack extends cdk.Stack {
       clusterName: 'surgent-cluster',
     })
 
-    // ACM Certificate for api.surgent.dev
-    const certificate = new acm.Certificate(this, 'SurgentCert', {
-      domainName: 'api.surgent.dev',
+    // Wildcard ACM Certificate for *.surgent.dev (shared by all services)
+    const certificate = new acm.Certificate(this, 'SurgentWildcardCert', {
+      domainName: '*.surgent.dev',
       validation: acm.CertificateValidation.fromDns(),
     })
 
@@ -97,71 +97,111 @@ export class SurgentStack extends cdk.Stack {
       )
     }
 
-    // ALB + Fargate Service
-    const fargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'SurgentWorkerService', {
-      cluster,
-      serviceName: 'surgent-worker',
+    // ==================== SHARED ALB ====================
+
+    const alb = new elbv2.ApplicationLoadBalancer(this, 'SharedAlb', {
+      vpc,
+      internetFacing: true,
+      loadBalancerName: 'surgent-alb',
+    })
+
+    // HTTP listener redirects to HTTPS
+    alb.addListener('HttpListener', {
+      port: 80,
+      defaultAction: elbv2.ListenerAction.redirect({
+        protocol: 'HTTPS',
+        port: '443',
+        permanent: true,
+      }),
+    })
+
+    // HTTPS listener with default 404 response
+    const httpsListener = alb.addListener('HttpsListener', {
+      port: 443,
+      certificates: [certificate],
+      defaultAction: elbv2.ListenerAction.fixedResponse(404, {
+        contentType: 'text/plain',
+        messageBody: 'Not Found',
+      }),
+    })
+
+    // ==================== SURGENT-WORKER SERVICE ====================
+
+    const workerTaskDef = new ecs.FargateTaskDefinition(this, 'WorkerTaskDef', {
       cpu: 512,
       memoryLimitMiB: 1024,
+    })
+
+    workerTaskDef.addContainer('worker', {
+      image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
+      containerName: 'worker',
+      portMappings: [{ containerPort: 4000 }],
+      secrets,
+      environment: {
+        NODE_ENV: 'production',
+        PORT: '4000',
+        HOST: '0.0.0.0',
+      },
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'surgent-worker' }),
+    })
+
+    const workerService = new ecs.FargateService(this, 'SurgentWorkerService', {
+      cluster,
+      serviceName: 'surgent-worker',
+      taskDefinition: workerTaskDef,
       desiredCount: 2,
       assignPublicIp: true,
-      publicLoadBalancer: true,
-      certificate,
-      redirectHTTP: true,
-      listenerPort: 443,
-      taskImageOptions: {
-        image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
-        containerPort: 4000,
-        secrets,
-        environment: {
-          NODE_ENV: 'production',
-          PORT: '4000',
-          HOST: '0.0.0.0',
-        },
-      },
-      taskSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC,
-      },
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       healthCheckGracePeriod: cdk.Duration.seconds(60),
       minHealthyPercent: 50,
       maxHealthyPercent: 200,
     })
 
-    // Configure health check
-    fargateService.targetGroup.configureHealthCheck({
-      path: '/health',
-      port: '4000',
-      healthyHttpCodes: '200',
-      interval: cdk.Duration.seconds(30),
-      timeout: cdk.Duration.seconds(5),
-      healthyThresholdCount: 2,
-      unhealthyThresholdCount: 3,
+    const workerTargetGroup = new elbv2.ApplicationTargetGroup(this, 'WorkerTargetGroup', {
+      vpc,
+      port: 4000,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targetType: elbv2.TargetType.IP,
+      healthCheck: {
+        path: '/health',
+        port: '4000',
+        healthyHttpCodes: '200',
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+      },
     })
 
-    // Auto-scaling: min 2, max 8, request count target 100/task
-    const scaling = fargateService.service.autoScaleTaskCount({
+    workerService.attachToApplicationTargetGroup(workerTargetGroup)
+
+    // Host-based routing: api.surgent.dev -> worker
+    httpsListener.addTargetGroups('WorkerRule', {
+      targetGroups: [workerTargetGroup],
+      priority: 10,
+      conditions: [elbv2.ListenerCondition.hostHeaders(['api.surgent.dev'])],
+    })
+
+    // Auto-scaling: min 2, max 8
+    const workerScaling = workerService.autoScaleTaskCount({
       minCapacity: 2,
       maxCapacity: 8,
     })
 
-    scaling.scaleOnRequestCount('RequestCountScaling', {
-      targetGroup: fargateService.targetGroup,
+    workerScaling.scaleOnRequestCount('RequestCountScaling', {
+      targetGroup: workerTargetGroup,
       requestsPerTarget: 200,
       scaleInCooldown: cdk.Duration.seconds(120),
       scaleOutCooldown: cdk.Duration.seconds(60),
     })
 
     // Security: ECS only allows traffic from ALB on port 4000
-    fargateService.service.connections.allowFrom(
-      fargateService.loadBalancer,
-      ec2.Port.tcp(4000),
-      'Allow traffic from ALB',
-    )
+    workerService.connections.allowFrom(alb, ec2.Port.tcp(4000), 'Allow traffic from ALB')
 
     // Outputs
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
-      value: fargateService.loadBalancer.loadBalancerDnsName,
-      description: 'ALB DNS name - point api.surgent.dev CNAME here',
+      value: alb.loadBalancerDnsName,
+      description: 'ALB DNS name - point api.surgent.dev and pay.surgent.dev CNAME here',
     })
 
     new cdk.CfnOutput(this, 'RepositoryUri', {
@@ -171,7 +211,7 @@ export class SurgentStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'CertificateArn', {
       value: certificate.certificateArn,
-      description: 'ACM certificate ARN - add DNS validation CNAME in Cloudflare',
+      description: 'Wildcard ACM certificate ARN - add DNS validation CNAME in Cloudflare',
     })
 
     // ==================== SURPAY SERVICE ====================
@@ -179,7 +219,8 @@ export class SurgentStack extends cdk.Stack {
     // ECR Repository for surpay
     const surpayRepository = new ecr.Repository(this, 'SurpayRepo', {
       repositoryName: 'surgent/pay',
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      emptyOnDelete: true,
       lifecycleRules: [
         {
           maxImageCount: 10,
@@ -204,12 +245,6 @@ export class SurgentStack extends cdk.Stack {
       },
     })
 
-    // ACM Certificate for pay.surgent.dev
-    const surpayCertificate = new acm.Certificate(this, 'SurpayCert', {
-      domainName: 'pay.surgent.dev',
-      validation: acm.CertificateValidation.fromDns(),
-    })
-
     // Load surpay secrets from SSM Parameter Store
     const surpaySecrets: Record<string, ecs.Secret> = {}
     const surpaySecretNames = [
@@ -217,6 +252,9 @@ export class SurgentStack extends cdk.Stack {
       'STRIPE_SECRET_KEY',
       'STRIPE_CLIENT_ID',
       'STRIPE_WEBHOOK_SECRET',
+      'BETTER_AUTH_SECRET',
+      'WEB_BASE_URL',
+      'TRUSTED_ORIGINS',
     ] as const
     for (const name of surpaySecretNames) {
       surpaySecrets[name] = ecs.Secret.fromSsmParameter(
@@ -226,78 +264,78 @@ export class SurgentStack extends cdk.Stack {
       )
     }
 
-    // Surpay ALB + Fargate Service
-    const surpayService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'SurpayService', {
-      cluster,
-      serviceName: 'surpay',
+    const surpayTaskDef = new ecs.FargateTaskDefinition(this, 'SurpayTaskDef', {
       cpu: 256,
       memoryLimitMiB: 512,
+    })
+
+    surpayTaskDef.addContainer('surpay', {
+      image: ecs.ContainerImage.fromEcrRepository(surpayRepository, 'latest'),
+      containerName: 'surpay',
+      portMappings: [{ containerPort: 8090 }],
+      secrets: surpaySecrets,
+      environment: {
+        DATABASE_MAX_CONNECTIONS: '5',
+        DATABASE_MIN_CONNECTIONS: '1',
+        SERVICE_PORT: '8090',
+        SERVICE_HOST: '0.0.0.0',
+        SURPAY_BASE_URL: 'pay.surgent.dev',
+        SQS_WEBHOOKS_QUEUE_URL: webhooksQueue.queueUrl,
+        SQS_WEBHOOKS_DLQ_URL: webhooksDlq.queueUrl,
+      },
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'surpay' }),
+    })
+
+    const surpayService = new ecs.FargateService(this, 'SurpayService', {
+      cluster,
+      serviceName: 'surpay',
+      taskDefinition: surpayTaskDef,
       desiredCount: 1,
       assignPublicIp: true,
-      publicLoadBalancer: true,
-      certificate: surpayCertificate,
-      redirectHTTP: true,
-      listenerPort: 443,
-      taskImageOptions: {
-        image: ecs.ContainerImage.fromEcrRepository(surpayRepository, 'latest'),
-        containerPort: 8090,
-        secrets: surpaySecrets,
-        environment: {
-          DATABASE_MAX_CONNECTIONS: '5',
-          DATABASE_MIN_CONNECTIONS: '1',
-          SERVICE_PORT: '8090',
-          SERVICE_HOST: '0.0.0.0',
-          SURPAY_BASE_URL: 'pay.surgent.dev',
-          SQS_WEBHOOKS_QUEUE_URL: webhooksQueue.queueUrl,
-          SQS_WEBHOOKS_DLQ_URL: webhooksDlq.queueUrl,
-        },
-      },
-      taskSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC,
-      },
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       healthCheckGracePeriod: cdk.Duration.seconds(60),
       minHealthyPercent: 50,
       maxHealthyPercent: 200,
     })
 
     // Grant SQS permissions to surpay task role (producer and consumer)
-    webhooksQueue.grantSendMessages(surpayService.taskDefinition.taskRole)
-    webhooksQueue.grantConsumeMessages(surpayService.taskDefinition.taskRole)
-    webhooksDlq.grantSendMessages(surpayService.taskDefinition.taskRole)
-    webhooksDlq.grantConsumeMessages(surpayService.taskDefinition.taskRole)
+    webhooksQueue.grantSendMessages(surpayTaskDef.taskRole)
+    webhooksQueue.grantConsumeMessages(surpayTaskDef.taskRole)
+    webhooksDlq.grantSendMessages(surpayTaskDef.taskRole)
+    webhooksDlq.grantConsumeMessages(surpayTaskDef.taskRole)
 
-    // Configure surpay health check
-    surpayService.targetGroup.configureHealthCheck({
-      path: '/health',
-      port: '8090',
-      healthyHttpCodes: '200',
-      interval: cdk.Duration.seconds(30),
-      timeout: cdk.Duration.seconds(5),
-      healthyThresholdCount: 2,
-      unhealthyThresholdCount: 3,
+    const surpayTargetGroup = new elbv2.ApplicationTargetGroup(this, 'SurpayTargetGroup', {
+      vpc,
+      port: 8090,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targetType: elbv2.TargetType.IP,
+      healthCheck: {
+        path: '/health',
+        port: '8090',
+        healthyHttpCodes: '200',
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+      },
+    })
+
+    surpayService.attachToApplicationTargetGroup(surpayTargetGroup)
+
+    // Host-based routing: pay.surgent.dev -> surpay
+    httpsListener.addTargetGroups('SurpayRule', {
+      targetGroups: [surpayTargetGroup],
+      priority: 20,
+      conditions: [elbv2.ListenerCondition.hostHeaders(['pay.surgent.dev'])],
     })
 
     // Security: ECS only allows traffic from ALB on port 8090
-    surpayService.service.connections.allowFrom(
-      surpayService.loadBalancer,
-      ec2.Port.tcp(8090),
-      'Allow traffic from ALB',
-    )
+    surpayService.connections.allowFrom(alb, ec2.Port.tcp(8090), 'Allow traffic from ALB')
 
     // Surpay Outputs
-    new cdk.CfnOutput(this, 'SurpayLoadBalancerDNS', {
-      value: surpayService.loadBalancer.loadBalancerDnsName,
-      description: 'Surpay ALB DNS name - point pay.surgent.dev CNAME here',
-    })
-
     new cdk.CfnOutput(this, 'SurpayRepositoryUri', {
       value: surpayRepository.repositoryUri,
       description: 'Surpay ECR repository URI for docker push',
-    })
-
-    new cdk.CfnOutput(this, 'SurpayCertificateArn', {
-      value: surpayCertificate.certificateArn,
-      description: 'Surpay ACM certificate ARN - add DNS validation CNAME in Cloudflare',
     })
 
     new cdk.CfnOutput(this, 'WebhooksQueueUrl', {
