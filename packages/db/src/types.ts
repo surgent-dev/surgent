@@ -16,9 +16,13 @@ export interface Database {
   ip: IpTable
   ip_rate_limit: IpRateLimitTable
   project: ProjectTable
+  worker: WorkerTable
+  sandbox: SandboxTable
+  integration: IntegrationTable
+  env_var: EnvVarTable
+  deployment: DeploymentTable
   chats: ChatsTable
   github_installations: GitHubInstallationsTable
-  deployment_history: DeploymentHistoryTable
 }
 
 export interface UserTable {
@@ -213,6 +217,64 @@ export interface ProjectTable {
   metadata: any | null
   createdAt?: Date
   updatedAt?: Date
+  deletedAt?: Date | null
+}
+
+export interface WorkerTable {
+  id: string | null
+  projectId: string
+  accountId: string
+  scriptName: string
+  dispatchNamespace: string | null
+  hostname: string | null
+  status: string | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface SandboxTable {
+  id: string
+  projectId: string
+  provider: string
+  status: string
+  host: string | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface IntegrationTable {
+  id: string | null
+  projectId: string
+  provider: string
+  config: any | null
+  status: string
+  createdAt?: Date
+}
+
+export interface EnvVarTable {
+  id: string | null
+  projectId: string
+  environment: string
+  key: string
+  value: string | null
+  integrationId: string | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface DeploymentTable {
+  id: string | null
+  projectId: string
+  scriptName: string
+  status: string
+  error: string | null
+  startedAt: Date | null
+  finishedAt: Date | null
+  cloudflareDeploymentId: string | null
+  cloudflareVersionId: string | null
+  rollbackOf: string | null
+  hostname: string | null
+  createdAt?: Date
 }
 
 export interface ChatsTable {
@@ -238,16 +300,4 @@ export interface GitHubInstallationsTable {
   userRefreshTokenExpiresAt: Date | null
   createdAt?: Date
   updatedAt?: Date
-}
-
-export interface DeploymentHistoryTable {
-  id: string | null
-  projectId: string
-  name: string
-  previewUrl: string
-  status: string
-  error: string | null
-  startedAt: Date
-  deployedAt: Date | null
-  createdAt?: Date
 }
