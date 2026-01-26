@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT p.id FROM project p\n        INNER JOIN member m ON m.\"organizationId\" = p.\"organizationId\"\n        WHERE p.id = $1 AND m.\"userId\" = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3dad1f46e4cb0d8ec49ba7b5b0205e289956a0b63314685e4439117873cfedc5"
+}

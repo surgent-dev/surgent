@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE connect_account SET status = 'onboarding_returned' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0cb1ad0e86f1c1b524ef7cd480ce30f2ecaa13bf4bb5712c20b21803cf60de13"
+}

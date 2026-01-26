@@ -20,7 +20,13 @@ pub struct Config {
     pub sqs_webhooks_queue_url: String,
     pub sqs_webhooks_dlq_url: String,
 
+    pub better_auth_secret: String,
+
     pub cargo_crate_name: String,
+
+    pub trusted_origins: String,
+
+    pub web_base_url: String,
 }
 
 impl Config {
@@ -55,7 +61,14 @@ impl Config {
             sqs_webhooks_dlq_url: env::var("SQS_WEBHOOKS_DLQ_URL")
                 .expect("SQS_WEBHOOKS_DLQ_URL must be set"),
 
+            better_auth_secret: env::var("BETTER_AUTH_SECRET")
+                .expect("BETTER_AUTH_SECRET must be set"),
+
             cargo_crate_name: env!("CARGO_CRATE_NAME").to_string(),
+
+            trusted_origins: env::var("TRUSTED_ORIGINS").expect("TRUSTED_ORIGINS must be set"),
+
+            web_base_url: env::var("WEB_BASE_URL").expect("WEB_BASE_URL must be set"),
         })
     }
 }

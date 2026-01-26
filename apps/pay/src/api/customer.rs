@@ -1,28 +1,26 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use chrono;
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgPool};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::core::auth::AuthenticatedProject;
+use crate::AppState;
+use crate::core::auth::{AuthenticatedUser, verify_project_access};
 use crate::types::{SubscriptionStatus, TransactionType};
 
 use super::subscription::Subscription;
 
-#[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Customer {
     pub id: Uuid,
-    #[sqlx(rename = "projectId")]
-    pub project_id: Option<Uuid>,
+    pub project_id: Uuid,
     pub email: String,
     pub name: Option<String>,
-    #[sqlx(rename = "processorCustomerId")]
     pub processor_customer_id: Option<String>,
 }
 
@@ -60,6 +58,11 @@ pub struct CustomerWithDetails {
     pub subscriptions: Vec<SubscriptionSummary>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ListCustomersQuery {
+    pub project_id: Uuid,
+}
+
 /// List customers for a project
 #[utoipa::path(
     get,
@@ -78,10 +81,13 @@ pub struct CustomerWithDetails {
     )
 )]
 pub async fn list_customers(
-    State(pool): State<PgPool>,
-    auth: AuthenticatedProject,
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<ListCustomersQuery>,
 ) -> Result<Json<Vec<Customer>>, (StatusCode, String)> {
-    let customers = sqlx::query_as::<_, Customer>(
+    verify_project_access(&state.pool, auth.user_id, query.project_id).await?;
+
+    let rows = sqlx::query!(
         r#"
         SELECT
             c.id,
@@ -92,9 +98,9 @@ pub async fn list_customers(
         FROM customer c
         WHERE c."projectId" = $1
         "#,
+        query.project_id
     )
-    .bind(auth.project_id)
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| {
         (
@@ -102,6 +108,17 @@ pub async fn list_customers(
             format!("Database error: {}", e),
         )
     })?;
+
+    let customers = rows
+        .into_iter()
+        .map(|r| Customer {
+            id: r.id,
+            project_id: r.projectId,
+            email: r.email,
+            name: r.name,
+            processor_customer_id: r.processorCustomerId,
+        })
+        .collect();
 
     Ok(Json(customers))
 }
@@ -130,11 +147,11 @@ pub struct GetCustomerParams {
     )
 )]
 pub async fn get_customer(
-    State(pool): State<PgPool>,
-    auth: AuthenticatedProject,
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
     Path(params): Path<GetCustomerParams>,
 ) -> Result<Json<CustomerWithDetails>, (StatusCode, String)> {
-    let customer = sqlx::query_as::<_, Customer>(
+    let row = sqlx::query!(
         r#"
         SELECT
             c.id,
@@ -144,12 +161,10 @@ pub async fn get_customer(
             c."processorCustomerId"
         FROM customer c
         WHERE c.id = $1
-          AND c."projectId" = $2
         "#,
+        params.id
     )
-    .bind(params.id)
-    .bind(auth.project_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await
     .map_err(|e| {
         (
@@ -158,7 +173,17 @@ pub async fn get_customer(
         )
     })?;
 
-    let customer = customer.ok_or((StatusCode::NOT_FOUND, "Customer not found".to_string()))?;
+    let row = row.ok_or((StatusCode::NOT_FOUND, "Customer not found".to_string()))?;
+    let customer = Customer {
+        id: row.id,
+        project_id: Some(row.projectId),
+        email: row.email,
+        name: row.name,
+        processor_customer_id: row.processorCustomerId,
+    };
+
+    // Verify access via customer's project
+    verify_project_access(&state.pool, auth.user_id, row.projectId).await?;
 
     let transactions = sqlx::query!(
         r#"
@@ -175,7 +200,7 @@ pub async fn get_customer(
         "#,
         params.id
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| {
         (
@@ -184,7 +209,7 @@ pub async fn get_customer(
         )
     })?;
 
-    let subscriptions = sqlx::query_as::<_, Subscription>(
+    let subscription_rows = sqlx::query!(
         r#"
         SELECT
             s.id,
@@ -205,9 +230,9 @@ pub async fn get_customer(
         WHERE s."customerId" = $1
         ORDER BY s."createdAt" DESC
         "#,
+        params.id
     )
-    .bind(params.id)
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| {
         (
@@ -215,6 +240,26 @@ pub async fn get_customer(
             format!("Database error: {}", e),
         )
     })?;
+
+    let subscriptions: Vec<Subscription> = subscription_rows
+        .into_iter()
+        .map(|r| Subscription {
+            id: r.id,
+            project_id: r.projectId,
+            product_id: r.productId,
+            product_price_id: r.productPriceId,
+            customer_id: r.customerId,
+            processor_subscription_id: r.processorSubscriptionId,
+            processor_customer_id: r.processorCustomerId,
+            created_at: r.createdAt,
+            deleted_at: r.deletedAt,
+            current_period_start: r.currentPeriodStart,
+            current_period_end: r.currentPeriodEnd,
+            canceled_at: r.canceledAt,
+            ended_at: r.endedAt,
+            status: r.status,
+        })
+        .collect();
 
     Ok(Json(CustomerWithDetails {
         id: customer.id,

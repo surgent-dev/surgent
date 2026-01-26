@@ -2,15 +2,15 @@ use std::collections::HashMap;
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgPool};
+use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::AuthenticatedProject;
+use crate::core::auth::{AuthenticatedUser, verify_project_access};
 use crate::integrations::types::ProcessorProductRequest;
 use crate::types::RecurringInterval;
 
@@ -69,12 +69,10 @@ pub struct CreateProductResponse {
 )]
 pub async fn create_product(
     State(state): State<crate::AppState>,
-    auth: AuthenticatedProject,
+    auth: AuthenticatedUser,
     Json(req): Json<CreateProductRequest>,
 ) -> Result<(StatusCode, Json<CreateProductResponse>), (StatusCode, String)> {
-    if req.project_id != auth.project_id {
-        return Err((StatusCode::UNAUTHORIZED, "Invalid project".to_string()));
-    }
+    verify_project_access(&state.pool, auth.user_id, req.project_id).await?;
 
     let pool = &state.pool;
 
@@ -104,6 +102,11 @@ pub async fn create_product(
         "Payment processor not available".to_string(),
     ))?;
 
+    let org_id = auth
+        .organization_id
+        .map(|id| id.to_string())
+        .unwrap_or_default();
+
     let processor_req = ProcessorProductRequest {
         name: req.name.clone(),
         description: req.description.clone(),
@@ -114,7 +117,7 @@ pub async fn create_product(
                 req.product_group_id.to_string(),
             ),
             ("surpay_product_id".to_string(), product_id.to_string()),
-            ("org_id".to_string(), auth.organization_id.to_string()),
+            ("org_id".to_string(), org_id),
             ("slug".to_string(), req.slug.clone()),
             ("version".to_string(), version.to_string()),
         ]),
@@ -122,7 +125,7 @@ pub async fn create_product(
 
     let processor_product = processor.create_product(processor_req).await.map_err(|e| {
         tracing::error!(
-            project_id = %auth.project_id,
+            project_id = %req.project_id,
             product_id = %product_id,
             product_group_id = %req.product_group_id,
             product_name = %req.name,
@@ -149,7 +152,7 @@ pub async fn create_product(
         "#,
         product_id,
         req.product_group_id,
-        auth.project_id,
+        req.project_id,
         req.name,
         req.description,
         req.slug,
@@ -230,8 +233,8 @@ pub struct ProductWithPricesResponse {
     )
 )]
 pub async fn update_product(
-    State(pool): State<PgPool>,
-    auth: AuthenticatedProject,
+    State(state): State<crate::AppState>,
+    auth: AuthenticatedUser,
     Path(product_id): Path<Uuid>,
     Json(req): Json<UpdateProductRequest>,
 ) -> Result<(StatusCode, Json<UpdateProductResponse>), (StatusCode, String)> {
@@ -240,12 +243,11 @@ pub async fn update_product(
         SELECT p.id, p."productGroupId", p.name, p.description,
                p."projectId", p.slug, p.version, p."isArchived", p."isDefault", p."processorProductId"
         FROM product p
-        WHERE p.id = $1 AND p."projectId" = $2
+        WHERE p.id = $1
         "#,
     )
     .bind(product_id)
-    .bind(auth.project_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await
     .map_err(|e| {
         (
@@ -256,6 +258,12 @@ pub async fn update_product(
 
     let existing = existing.ok_or((StatusCode::NOT_FOUND, "Product not found".to_string()))?;
 
+    // Verify access via product's project
+    let project_id = existing
+        .project_id
+        .ok_or((StatusCode::FORBIDDEN, "Product has no project".to_string()))?;
+    verify_project_access(&state.pool, auth.user_id, project_id).await?;
+
     let max_version = sqlx::query_scalar!(
         r#"
         SELECT COALESCE(MAX(version), 0) as "max!"
@@ -264,7 +272,7 @@ pub async fn update_product(
         "#,
         existing.product_group_id
     )
-    .fetch_one(&pool)
+    .fetch_one(&state.pool)
     .await
     .map_err(|e| {
         (
@@ -294,7 +302,7 @@ pub async fn update_product(
         req.is_default.or(existing.is_default).unwrap_or(false),
         req.is_archived.or(existing.is_archived).unwrap_or(false)
     )
-    .execute(&pool)
+    .execute(&state.pool)
     .await
     .map_err(|e| {
         (
@@ -311,6 +319,11 @@ pub async fn update_product(
             version: new_version,
         }),
     ))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListProductsWithPricesQuery {
+    pub project_id: Uuid,
 }
 
 /// List products with prices for a project
@@ -332,9 +345,12 @@ pub async fn update_product(
     )
 )]
 pub async fn list_products_with_prices(
-    State(pool): State<PgPool>,
-    auth: AuthenticatedProject,
+    State(state): State<crate::AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<ListProductsWithPricesQuery>,
 ) -> Result<Json<Vec<ProductWithPricesResponse>>, (StatusCode, String)> {
+    verify_project_access(&state.pool, auth.user_id, query.project_id).await?;
+
     // DISTINCT ON gets the latest version per product_group (sorted by version DESC)
     let products = sqlx::query_as::<_, Product>(
         r#"
@@ -346,8 +362,8 @@ pub async fn list_products_with_prices(
         ORDER BY p."productGroupId", p.version DESC NULLS LAST
         "#,
     )
-    .bind(auth.project_id)
-    .fetch_all(&pool)
+    .bind(query.project_id)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| {
         (
@@ -371,7 +387,7 @@ pub async fn list_products_with_prices(
         "#,
         &product_ids
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| {
         (

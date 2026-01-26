@@ -1,11 +1,15 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::{Query, State},
+    http::StatusCode,
+};
 use chrono;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::AuthenticatedProject;
+use crate::core::auth::{AuthenticatedUser, verify_project_access};
 use crate::types::SubscriptionStatus;
 
 #[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
@@ -13,7 +17,7 @@ use crate::types::SubscriptionStatus;
 pub struct Subscription {
     pub id: Uuid,
     #[sqlx(rename = "projectId")]
-    pub project_id: Option<Uuid>,
+    pub project_id: Uuid,
     #[sqlx(rename = "productId")]
     pub product_id: Option<Uuid>,
     #[sqlx(rename = "productPriceId")]
@@ -39,6 +43,11 @@ pub struct Subscription {
     pub status: SubscriptionStatus,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ListSubscriptionsQuery {
+    pub project_id: Uuid,
+}
+
 /// List subscriptions for a project
 #[utoipa::path(
     get,
@@ -58,9 +67,10 @@ pub struct Subscription {
 )]
 pub async fn list_subscriptions(
     State(state): State<crate::AppState>,
-    auth: AuthenticatedProject,
+    auth: AuthenticatedUser,
+    Query(query): Query<ListSubscriptionsQuery>,
 ) -> Result<Json<Vec<Subscription>>, (StatusCode, String)> {
-    let pool = &state.pool;
+    verify_project_access(&state.pool, auth.user_id, query.project_id).await?;
 
     let subscriptions = sqlx::query_as::<_, Subscription>(
         r#"
@@ -73,8 +83,8 @@ pub async fn list_subscriptions(
         ORDER BY "createdAt" DESC
         "#,
     )
-    .bind(auth.project_id)
-    .fetch_all(pool)
+    .bind(query.project_id)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| {
         (

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE connect_account\n        SET \"processorAccountId\" = $1,\n            status = $2,\n            data = $3,\n            \"detailsSubmitted\" = $4,\n            \"chargesEnabled\" = $5,\n            \"isPayoutsEnabled\" = $6\n        WHERE id = $7\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Jsonb",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a57c5489d1a58870c201dab2932f45e21be4ac814ad6c43bc1dd8e57d05eb1e4"
+}

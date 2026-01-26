@@ -5,41 +5,34 @@ use axum::{
     response::Redirect,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgPool};
+use sqlx::PgPool;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
-use crate::core::auth::AuthenticatedProject;
+use crate::core::auth::{AuthenticatedUser, verify_project_access};
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone)]
 pub struct Account {
     pub id: Uuid,
-    #[sqlx(rename = "projectId")]
     pub project_id: Uuid,
     pub country: String,
     pub currency: String,
-    #[sqlx(rename = "isPayoutsEnabled")]
     pub is_payouts_enabled: bool,
     pub processor: String,
-    #[sqlx(rename = "processorAccountId")]
     pub processor_account_id: Option<String>,
     pub status: String,
-    #[sqlx(rename = "detailsSubmitted")]
     pub details_submitted: bool,
-    #[sqlx(rename = "chargesEnabled")]
     pub charges_enabled: bool,
-    #[sqlx(rename = "businessType")]
     pub business_type: Option<String>,
     pub data: serde_json::Value,
-    #[sqlx(rename = "createdAt")]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    #[sqlx(rename = "updatedAt")]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ConnectAccountRequest {
+    pub project_id: Uuid,
     pub processor: String,
     pub account_type: Option<String>,
     pub country: Option<String>,
@@ -111,56 +104,79 @@ pub struct ConnectedAccountResponse {
 )]
 pub async fn create_connect_account(
     State(state): State<AppState>,
-    auth: AuthenticatedProject,
+    auth: AuthenticatedUser,
     Json(req): Json<ConnectAccountRequest>,
 ) -> Result<Json<OAuthInitResponse>, (StatusCode, String)> {
+    tracing::debug!(
+        "create_connect_account called for project: {}",
+        req.project_id
+    );
+    verify_project_access(&state.pool, auth.user_id, req.project_id).await?;
+    tracing::debug!("project access verified");
+
     let processor = state
         .registry
         .get_connect(&req.processor)
         .await
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "Invalid processor".to_string()))?;
+        .ok_or_else(|| {
+            tracing::error!("Invalid processor: {}", req.processor);
+            (StatusCode::BAD_REQUEST, "Invalid processor".to_string())
+        })?;
+    tracing::debug!("processor found: {}", req.processor);
 
-    let country = req
-        .country
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "country is required".to_string()))?;
-
-    // One account per project+processor (enforced by DB). If it already exists, return an error.
-    #[derive(Debug, FromRow)]
-    struct ExistingAccountRow {
-        pub id: Uuid,
-        pub processor_account_id: Option<String>,
-    }
-
-    if let Some(existing) = sqlx::query_as::<_, ExistingAccountRow>(
+    // Check for existing account first (before requiring country for new accounts)
+    if let Some(existing) = sqlx::query!(
         r#"
-        SELECT id, "processorAccountId", status
+        SELECT id, "processorAccountId", data
         FROM connect_account
         WHERE "projectId" = $1 AND processor = $2
         "#,
+        req.project_id,
+        &req.processor
     )
-    .bind(auth.project_id)
-    .bind(&req.processor)
     .fetch_optional(&state.pool)
     .await
     .map_err(|e| {
+        tracing::error!("Database error checking existing account: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Database error: {}", e),
         )
     })? {
+        tracing::debug!("Found existing account");
         // If account already has a processor_account_id, it's already connected
-        if existing.processor_account_id.is_some() {
+        if existing.processorAccountId.is_some() {
             return Err((
                 StatusCode::CONFLICT,
                 "Account already connected".to_string(),
             ));
         }
-        // If account is pending, return the same account for retry
+        // If account is pending, generate a new OAuth URL for retry
+        tracing::debug!("Existing account data: {:?}", existing.data);
+        let connect_state = existing
+            .data
+            .get("connect_state")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                tracing::error!("Missing connect_state in account data: {:?}", existing.data);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Missing connect_state".to_string(),
+                )
+            })?;
+        let base = state.config.surpay_base_url.trim_end_matches('/');
+        let redirect_uri = format!("{}/accounts/connect/oauth/callback", base);
+        let oauth_url = processor.generate_oauth_url(connect_state, &redirect_uri);
         return Ok(Json(OAuthInitResponse {
             account_id: existing.id,
-            oauth_url: String::new(), // Caller should handle retry logic
+            oauth_url,
         }));
     }
+
+    // Country is only required for new accounts
+    let country = req
+        .country
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "country is required".to_string()))?;
 
     // Create pending account for OAuth flow
     let account_id = Uuid::new_v4();
@@ -175,7 +191,7 @@ pub async fn create_connect_account(
     let mut account_data = serde_json::json!({});
     account_data["connect_state"] = serde_json::Value::String(connect_state.clone());
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO connect_account (
             id,
@@ -193,19 +209,19 @@ pub async fn create_connect_account(
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
+        account_id,
+        req.project_id,
+        &country,
+        &currency,
+        false,
+        &req.processor,
+        None::<String>,
+        "pending",
+        false,
+        false,
+        req.business_type,
+        account_data
     )
-    .bind(account_id)
-    .bind(auth.project_id)
-    .bind(&country)
-    .bind(&currency)
-    .bind(false)
-    .bind(&req.processor)
-    .bind(None::<String>) // processor_account_id initially NULL
-    .bind("pending")
-    .bind(false)
-    .bind(false)
-    .bind(req.business_type)
-    .bind(account_data)
     .execute(&state.pool)
     .await
     .map_err(|e| {
@@ -230,28 +246,14 @@ pub async fn connect_callback(
     State(pool): State<PgPool>,
     Query(params): Query<CallbackParams>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let account = sqlx::query_as::<_, Account>(
+    let account = sqlx::query!(
         r#"
-        SELECT
-            id,
-            "projectId",
-            country,
-            currency,
-            "isPayoutsEnabled",
-            processor,
-            "processorAccountId",
-            status,
-            "detailsSubmitted",
-            "chargesEnabled",
-            "businessType",
-            data,
-            "createdAt",
-            "updatedAt"
+        SELECT id, data
         FROM connect_account
         WHERE id = $1
         "#,
+        params.account_id
     )
-    .bind(params.account_id)
     .fetch_optional(&pool)
     .await
     .map_err(|e| {
@@ -271,16 +273,18 @@ pub async fn connect_callback(
         return Err((StatusCode::BAD_REQUEST, "Invalid state".to_string()));
     }
 
-    sqlx::query("UPDATE connect_account SET status = 'onboarding_returned' WHERE id = $1")
-        .bind(account.id)
-        .execute(&pool)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Database error: {}", e),
-            )
-        })?;
+    sqlx::query!(
+        r#"UPDATE connect_account SET status = 'onboarding_returned' WHERE id = $1"#,
+        account.id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
 
     Ok(Json(serde_json::json!({
         "account_id": account.id,
@@ -293,22 +297,14 @@ pub async fn connect_refresh(
     State(state): State<AppState>,
     Query(params): Query<CallbackParams>,
 ) -> Result<Redirect, (StatusCode, String)> {
-    #[derive(Debug, FromRow)]
-    struct RefreshAccountRow {
-        pub id: Uuid,
-        pub processor: String,
-        pub processor_account_id: Option<String>,
-        pub data: serde_json::Value,
-    }
-
-    let row = sqlx::query_as::<_, RefreshAccountRow>(
+    let row = sqlx::query!(
         r#"
         SELECT id, processor, "processorAccountId", data
         FROM connect_account
         WHERE id = $1
         "#,
+        params.account_id
     )
-    .bind(params.account_id)
     .fetch_optional(&state.pool)
     .await
     .map_err(|e| {
@@ -328,7 +324,7 @@ pub async fn connect_refresh(
         return Err((StatusCode::BAD_REQUEST, "Invalid state".to_string()));
     }
 
-    let Some(processor_account_id) = row.processor_account_id else {
+    let Some(ref processor_account_id) = row.processorAccountId else {
         return Err((
             StatusCode::CONFLICT,
             "Account missing processor_account_id".to_string(),
@@ -352,22 +348,24 @@ pub async fn connect_refresh(
         base, row.id, new_state
     );
 
-    let mut data = row.data;
-    data["connect_state"] = serde_json::Value::String(new_state);
-    sqlx::query("UPDATE connect_account SET data = $1 WHERE id = $2")
-        .bind(data)
-        .bind(row.id)
-        .execute(&state.pool)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Database error: {}", e),
-            )
-        })?;
+    let mut new_data = row.data.clone();
+    new_data["connect_state"] = serde_json::Value::String(new_state);
+    sqlx::query!(
+        r#"UPDATE connect_account SET data = $1 WHERE id = $2"#,
+        new_data,
+        row.id
+    )
+    .execute(&state.pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
 
     let account_link = processor
-        .create_account_link(&processor_account_id, &refresh_url, &return_url)
+        .create_account_link(processor_account_id, &refresh_url, &return_url)
         .await
         .map_err(|e| {
             (
@@ -382,23 +380,16 @@ pub async fn connect_refresh(
 pub async fn oauth_callback(
     State(state): State<AppState>,
     Query(params): Query<OAuthCallbackParams>,
-) -> Result<Json<OAuthCallbackResponse>, (StatusCode, String)> {
+) -> Result<Redirect, (StatusCode, String)> {
     // Look up account by state in data JSONB
-    #[derive(Debug, FromRow)]
-    struct AccountRow {
-        pub id: Uuid,
-        pub processor: String,
-        pub data: serde_json::Value,
-    }
-
-    let row = sqlx::query_as::<_, AccountRow>(
+    let row = sqlx::query!(
         r#"
-        SELECT id, processor, data
+        SELECT id, processor, data, "projectId"
         FROM connect_account
         WHERE data->>'connect_state' = $1
         "#,
+        &params.state
     )
-    .bind(&params.state)
     .fetch_optional(&state.pool)
     .await
     .map_err(|e| {
@@ -457,11 +448,12 @@ pub async fn oauth_callback(
     };
 
     // Update account with processor_account_id and status
-    let mut data = row.data;
-    data.as_object_mut()
-        .and_then(|map| map.remove("connect_state"));
+    let mut data = row.data.clone();
+    if let Some(map) = data.as_object_mut() {
+        map.remove("connect_state");
+    }
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         UPDATE connect_account
         SET "processorAccountId" = $1,
@@ -472,14 +464,14 @@ pub async fn oauth_callback(
             "isPayoutsEnabled" = $6
         WHERE id = $7
         "#,
+        &token_response.processor_account_id,
+        "connected",
+        data,
+        details_submitted,
+        charges_enabled,
+        payouts_enabled,
+        row.id
     )
-    .bind(&token_response.processor_account_id)
-    .bind("connected")
-    .bind(data)
-    .bind(details_submitted)
-    .bind(charges_enabled)
-    .bind(payouts_enabled)
-    .bind(row.id)
     .execute(&state.pool)
     .await
     .map_err(|e| {
@@ -489,10 +481,12 @@ pub async fn oauth_callback(
         )
     })?;
 
-    Ok(Json(OAuthCallbackResponse {
-        account_id: row.id,
-        processor_account_id: token_response.processor_account_id,
-    }))
+    let redirect_url = format!(
+        "{}/project/{}?stripe_connected=true",
+        state.config.web_base_url.trim_end_matches('/'),
+        row.projectId
+    );
+    Ok(Redirect::temporary(&redirect_url))
 }
 
 /// Get account by ID
@@ -515,11 +509,11 @@ pub async fn oauth_callback(
     )
 )]
 pub async fn get_account(
-    State(pool): State<PgPool>,
-    auth: AuthenticatedProject,
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ConnectedAccountResponse>, (StatusCode, String)> {
-    let account = sqlx::query_as::<_, Account>(
+    let account = sqlx::query!(
         r#"
         SELECT
             id,
@@ -532,17 +526,13 @@ pub async fn get_account(
             status,
             "detailsSubmitted",
             "chargesEnabled",
-            "businessType",
-            data,
-            "createdAt",
-            "updatedAt"
+            "businessType"
         FROM connect_account
-        WHERE id = $1 AND "projectId" = $2
+        WHERE id = $1
         "#,
+        id
     )
-    .bind(id)
-    .bind(auth.project_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await
     .map_err(|e| {
         (
@@ -552,18 +542,25 @@ pub async fn get_account(
     })?
     .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
 
+    verify_project_access(&state.pool, auth.user_id, account.projectId).await?;
+
     Ok(Json(ConnectedAccountResponse {
         id: account.id,
         processor: account.processor,
-        processor_account_id: account.processor_account_id,
+        processor_account_id: account.processorAccountId,
         status: account.status,
         country: account.country,
         currency: account.currency,
-        business_type: account.business_type,
-        details_submitted: account.details_submitted,
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.is_payouts_enabled,
+        business_type: account.businessType,
+        details_submitted: account.detailsSubmitted,
+        charges_enabled: account.chargesEnabled,
+        payouts_enabled: account.isPayoutsEnabled,
     }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListAccountsQuery {
+    pub project_id: Uuid,
 }
 
 /// List all accounts
@@ -581,14 +578,16 @@ pub async fn get_account(
     )
 )]
 pub async fn list_accounts(
-    State(pool): State<PgPool>,
-    auth: AuthenticatedProject,
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<ListAccountsQuery>,
 ) -> Result<Json<Vec<ConnectedAccountResponse>>, (StatusCode, String)> {
-    let accounts = sqlx::query_as::<_, Account>(
+    verify_project_access(&state.pool, auth.user_id, query.project_id).await?;
+
+    let accounts = sqlx::query!(
         r#"
         SELECT
             id,
-            "projectId",
             country,
             currency,
             "isPayoutsEnabled",
@@ -597,17 +596,14 @@ pub async fn list_accounts(
             status,
             "detailsSubmitted",
             "chargesEnabled",
-            "businessType",
-            data,
-            "createdAt",
-            "updatedAt"
+            "businessType"
         FROM connect_account
         WHERE "projectId" = $1
         ORDER BY "createdAt" DESC
         "#,
+        query.project_id
     )
-    .bind(auth.project_id)
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| {
         (
@@ -621,14 +617,14 @@ pub async fn list_accounts(
         .map(|acc| ConnectedAccountResponse {
             id: acc.id,
             processor: acc.processor,
-            processor_account_id: acc.processor_account_id,
+            processor_account_id: acc.processorAccountId,
             status: acc.status,
             country: acc.country,
             currency: acc.currency,
-            business_type: acc.business_type,
-            details_submitted: acc.details_submitted,
-            charges_enabled: acc.charges_enabled,
-            payouts_enabled: acc.is_payouts_enabled,
+            business_type: acc.businessType,
+            details_submitted: acc.detailsSubmitted,
+            charges_enabled: acc.chargesEnabled,
+            payouts_enabled: acc.isPayoutsEnabled,
         })
         .collect();
 

@@ -1,20 +1,18 @@
 use axum::{Json, extract::State, http::StatusCode};
 use serde::Serialize;
-use sqlx::{FromRow, PgPool};
+use sqlx::PgPool;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::core::auth::AuthenticatedProject;
 
-#[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
     pub id: Uuid,
-    #[sqlx(rename = "organizationId")]
-    pub organization_id: Option<Uuid>,
+    pub organization_id: Uuid,
     pub name: String,
     pub slug: String,
-    #[sqlx(rename = "externalId")]
     pub external_id: Option<Uuid>,
 }
 
@@ -44,14 +42,14 @@ pub async fn list_projects(
     State(pool): State<PgPool>,
     auth: AuthenticatedProject,
 ) -> Result<(StatusCode, Json<ListProjectsResponse>), (StatusCode, String)> {
-    let projects = sqlx::query_as::<_, Project>(
+    let rows = sqlx::query!(
         r#"
         SELECT id, "organizationId", name, slug, "externalId"
         FROM project
         WHERE "organizationId" = $1
         "#,
+        auth.organization_id
     )
-    .bind(auth.organization_id)
     .fetch_all(&pool)
     .await
     .map_err(|e| {
@@ -60,6 +58,17 @@ pub async fn list_projects(
             format!("Database error: {}", e),
         )
     })?;
+
+    let projects = rows
+        .into_iter()
+        .map(|r| Project {
+            id: r.id,
+            organization_id: r.organizationId,
+            name: r.name,
+            slug: r.slug,
+            external_id: r.externalId,
+        })
+        .collect();
 
     Ok((StatusCode::OK, Json(ListProjectsResponse { projects })))
 }

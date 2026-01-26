@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::AuthenticatedProject;
+use crate::core::auth::{AuthenticatedUser, verify_project_access};
 use crate::integrations::types::ProcessorPriceRequest;
 use crate::types::RecurringInterval;
 
@@ -45,12 +45,10 @@ pub struct CreateProductPriceResponse {
 )]
 pub async fn create_product_price(
     State(state): State<crate::AppState>,
-    auth: AuthenticatedProject,
+    auth: AuthenticatedUser,
     Json(req): Json<CreateProductPriceRequest>,
 ) -> Result<(StatusCode, Json<CreateProductPriceResponse>), (StatusCode, String)> {
-    if req.project_id != auth.project_id {
-        return Err((StatusCode::FORBIDDEN, "Invalid product".to_string()));
-    }
+    verify_project_access(&state.pool, auth.user_id, req.project_id).await?;
 
     let pool = &state.pool;
     let product = sqlx::query!(
@@ -63,7 +61,7 @@ pub async fn create_product_price(
         LIMIT 1
         "#,
         req.product_group_id,
-        auth.project_id
+        req.project_id
     )
     .fetch_optional(pool)
     .await
@@ -109,6 +107,11 @@ pub async fn create_product_price(
         "Payment processor not available".to_string(),
     ))?;
 
+    let org_id = auth
+        .organization_id
+        .map(|id| id.to_string())
+        .unwrap_or_default();
+
     let processor_req = ProcessorPriceRequest {
         product: processor_product_id,
         currency: req.price_currency.to_lowercase(),
@@ -116,7 +119,7 @@ pub async fn create_product_price(
         recurring_interval: normalized_recurring_interval.cloned(),
         metadata: HashMap::from([
             ("surpay_price_id".to_string(), product_price_id.to_string()),
-            ("org_id".to_string(), auth.organization_id.to_string()),
+            ("org_id".to_string(), org_id),
             (
                 "product_group_id".to_string(),
                 req.product_group_id.to_string(),

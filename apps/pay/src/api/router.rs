@@ -1,9 +1,10 @@
 use axum::{
     Router,
-    http::StatusCode,
+    http::{Method, StatusCode, header},
     response::IntoResponse,
     routing::{get, post, put},
 };
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -51,6 +52,18 @@ pub fn create_router(state: AppState) -> Router {
         .route("/{id}", get(get_account))
         .route("/", get(list_accounts));
 
+    let origins: Vec<_> = state
+        .config
+        .trusted_origins
+        .split(',')
+        .map(|s| s.trim().parse().expect("Invalid origin in TRUSTED_ORIGINS"))
+        .collect();
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::list(origins))
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::OPTIONS])
+        .allow_headers([header::CONTENT_TYPE, header::COOKIE])
+        .allow_credentials(true);
+
     Router::new()
         .route("/health", get(health_check))
         .route("/projects", get(list_projects))
@@ -61,6 +74,7 @@ pub fn create_router(state: AppState) -> Router {
         .nest("/accounts", account_routes)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .fallback(fallback)
+        .layer(cors)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|req: &axum::http::Request<_>| {
