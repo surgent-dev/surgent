@@ -26,7 +26,6 @@ import UsageDialog from '@/components/usage-dialog'
 import { authClient } from '@/lib/auth-client'
 import { useDeployProject, useRenameProject, useLatestDeploymentQuery } from '@/queries/projects'
 import { http } from '@/lib/http'
-import DeployDialog from '@/components/deploy-dialog'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
 import { useGitHubStatus } from '@/queries/github'
@@ -75,16 +74,17 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   }, [])
 
   // Dialog states
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
   const [isUsageOpen, setIsUsageOpen] = useState(false)
   const [isDeploymentStatusOpen, setIsDeploymentStatusOpen] = useState(false)
+  const [isPublishOpen, setIsPublishOpen] = useState(false)
 
   // Edit states
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState('')
   const [isEditingHostname, setIsEditingHostname] = useState(false)
   const [hostnameInput, setHostnameInput] = useState('')
+  const [pendingHostname, setPendingHostname] = useState('')
 
   // Loading states
   const [isDeploying, setIsDeploying] = useState(false)
@@ -106,9 +106,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
     if (prev && !TERMINAL_STATUSES.includes(prev) && TERMINAL_STATUSES.includes(curr)) {
       if (curr === 'deployed') {
-        toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, { position: 'bottom-left' })
+        toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, { position: 'top-right' })
       } else {
-        toast.error(`Deployment failed`, { position: 'bottom-left' })
+        toast.error(`Deployment failed`, { position: 'top-right' })
       }
     }
     prevStatusRef.current = curr
@@ -121,6 +121,14 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const isDeployed = workerStatus === 'active'
   const isFailed = workerStatus === 'error'
   const isDeploymentInProgress = latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status)
+
+  useEffect(() => {
+    if (!pendingHostname) return
+    if (!workerName) return
+    if (pendingHostname !== workerName) return
+    setPendingHostname('')
+    setIsEditingHostname(false)
+  }, [pendingHostname, workerName])
 
   // Handlers
   const handleStartEdit = () => {
@@ -136,7 +144,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     }
     renameProject.mutate(
       { id: projectId, name: trimmed },
-      { onSuccess: () => setIsEditing(false), onError: () => toast.error('Failed to rename') },
+      {
+        onSuccess: () => setIsEditing(false),
+        onError: () => toast.error('Failed to rename', { position: 'top-right' }),
+      },
     )
   }
 
@@ -147,12 +158,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       deployProject.mutate(
         { id: projectId, deployName: name },
         {
-          onSuccess: () => {
-            setIsDialogOpen(false)
-            setIsDeploying(false)
-          },
+          onSuccess: () => setIsDeploying(false),
           onError: () => {
-            toast.error('Failed to deploy')
+            toast.error('Failed to deploy', { position: 'top-right' })
             setIsDeploying(false)
           },
         },
@@ -160,15 +168,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     },
     [deployProject, isDeploying, projectId],
   )
-
-  const handlePublishClick = useCallback(() => {
-    if (!projectId) return
-    if (isDeployed && workerName) {
-      handleDeploy(workerName)
-      return
-    }
-    setIsDialogOpen(true)
-  }, [projectId, isDeployed, workerName, handleDeploy])
 
   const handleDownload = useCallback(async () => {
     if (!projectId || downloading) return
@@ -185,7 +184,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       link.click()
       URL.revokeObjectURL(url)
     } catch {
-      toast.error('Download failed')
+      toast.error('Download failed', { position: 'top-right' })
     } finally {
       setDownloading(false)
     }
@@ -198,7 +197,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
   const copyUrl = () => {
     navigator.clipboard.writeText(`https://${workerName}.surgent.site`)
-    toast.success('Copied')
+    toast.success('Copied', { position: 'top-right' })
   }
 
   const startEditHostname = () => {
@@ -208,12 +207,22 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
   const cancelEditHostname = () => setIsEditingHostname(false)
 
-  const submitHostname = () => {
-    const name = isEditingHostname ? hostnameInput.trim() : workerName
-    if (name) {
-      handleDeploy(name)
+  const handlePublishOpenChange = (open: boolean) => {
+    setIsPublishOpen(open)
+    if (open) {
+      // Reset state when opening
+      setHostnameInput(workerName || '')
       setIsEditingHostname(false)
     }
+  }
+
+  const submitHostname = () => {
+    // For first deploy or when editing, use input; otherwise use existing workerName
+    const name = !workerName || isEditingHostname ? hostnameInput.trim() : workerName
+    if (!name) return
+    if (isDeploymentInProgress) return
+    setPendingHostname(name)
+    handleDeploy(name)
   }
 
   return (
@@ -307,132 +316,131 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         </button>
 
         {/* Publish */}
-        {!workerName ? (
-          <button
-            onClick={() => setIsDialogOpen(true)}
-            disabled={!projectId || isDeploying}
-            className="flex items-center gap-1.5 px-5 text-sm font-medium bg-brand text-brand-foreground hover:bg-brand/90 border-l disabled:opacity-50"
-          >
-            {isDeploying ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RocketLaunch className="size-4" weight="fill" />
-            )}
-            Publish
-          </button>
-        ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                disabled={!projectId || isDeploying}
-                className="flex items-center gap-1.5 px-5 text-sm font-medium bg-brand text-brand-foreground hover:bg-brand/90 border-l disabled:opacity-50"
-              >
-                {isDeploying ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <RocketLaunch className="size-4" weight="fill" />
-                )}
-                Publish
-                <CaretDown className="size-3" weight="bold" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72 p-0">
-              <div className="px-3 py-2.5 border-b">
-                <div className="text-sm font-medium">Publish your app</div>
-              </div>
-
-              {/* Show status only when deploying or failed */}
-              {latestDeployment && !['deployed'].includes(latestDeployment.status) && (
-                <div
-                  className={`px-3 py-2 border-b text-sm ${
-                    TERMINAL_STATUSES.includes(latestDeployment.status) ? 'bg-destructive/10' : 'bg-brand/5'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    {TERMINAL_STATUSES.includes(latestDeployment.status) ? (
-                      <span className="size-2 rounded-full bg-destructive" />
-                    ) : (
-                      <Loader2 className="size-3 animate-spin text-brand" />
-                    )}
-                    <span
-                      className={
-                        TERMINAL_STATUSES.includes(latestDeployment.status) ? 'text-destructive' : 'text-foreground'
-                      }
-                    >
-                      {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
-                    </span>
-                    <span className="text-xs text-muted-foreground font-mono">{latestDeployment.id.slice(0, 8)}</span>
-                  </div>
-                  {latestDeployment.error && (
-                    <div className="mt-1 text-xs text-destructive/80 truncate">{latestDeployment.error}</div>
-                  )}
-                </div>
+        <DropdownMenu open={isPublishOpen} onOpenChange={handlePublishOpenChange}>
+          <DropdownMenuTrigger asChild>
+            <button
+              disabled={!projectId || isDeploying}
+              className="flex items-center gap-1.5 px-5 text-sm font-medium bg-brand text-brand-foreground hover:bg-brand/90 border-l disabled:opacity-50"
+            >
+              {isDeploying ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RocketLaunch className="size-4" weight="fill" />
               )}
+              Publish
+              <CaretDown className="size-3" weight="bold" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-72 p-0">
+            <div className="px-3 py-2.5 border-b">
+              <div className="text-sm font-medium">Publish your app</div>
+            </div>
 
-              <div className="p-3 space-y-3">
-                {/* URL */}
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Published URL</div>
-                  <div className="flex items-center h-8 px-2.5 rounded-md border text-sm font-mono bg-muted/30">
-                    {isEditingHostname ? (
-                      <>
-                        <input
-                          value={hostnameInput}
-                          onChange={(e) => setHostnameInput(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Escape' && cancelEditHostname()}
-                          className="flex-1 bg-transparent outline-none min-w-0"
-                          autoFocus
-                        />
-                        <span className="text-muted-foreground shrink-0">.surgent.site</span>
+            {/* Show status only when deploying or failed */}
+            {latestDeployment && !['deployed'].includes(latestDeployment.status) && (
+              <div
+                className={`px-3 py-2 border-b text-sm ${
+                  TERMINAL_STATUSES.includes(latestDeployment.status) ? 'bg-destructive/10' : 'bg-brand/5'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {TERMINAL_STATUSES.includes(latestDeployment.status) ? (
+                    <span className="size-2 rounded-full bg-destructive" />
+                  ) : (
+                    <Loader2 className="size-3 animate-spin text-brand" />
+                  )}
+                  <span
+                    className={
+                      TERMINAL_STATUSES.includes(latestDeployment.status) ? 'text-destructive' : 'text-foreground'
+                    }
+                  >
+                    {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
+                  </span>
+                  <span className="text-xs text-muted-foreground font-mono">{latestDeployment.id.slice(0, 8)}</span>
+                </div>
+                {latestDeployment.error && (
+                  <div className="mt-1 text-xs text-destructive/80 truncate">{latestDeployment.error}</div>
+                )}
+              </div>
+            )}
+
+            <div className="p-3 space-y-3">
+              {/* URL */}
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">
+                  {workerName ? 'Published URL' : 'Choose a subdomain'}
+                </div>
+                <div className="flex items-center h-8 px-2.5 rounded-md border text-sm font-mono bg-muted/30">
+                  {!workerName || isEditingHostname ? (
+                    <>
+                      <input
+                        value={hostnameInput}
+                        onChange={(e) => setHostnameInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && hostnameInput.trim()) submitHostname()
+                          if (e.key === 'Escape' && workerName) cancelEditHostname()
+                        }}
+                        placeholder="my-app"
+                        className="flex-1 bg-transparent outline-none min-w-0"
+                        autoFocus
+                      />
+                      <span className="text-muted-foreground shrink-0">.surgent.site</span>
+                      {workerName && (
                         <button onClick={cancelEditHostname} className={`${iconBtn} ml-1`}>
                           <X className="size-3.5 text-muted-foreground" />
                         </button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="flex-1 truncate">{workerName}.surgent.site</span>
-                        <a
-                          href={`https://${workerName}.surgent.site`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={iconBtn}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <ArrowSquareOut className="size-3.5 text-muted-foreground" />
-                        </a>
-                        <button onClick={copyUrl} className={iconBtn}>
-                          <Copy className="size-3.5 text-muted-foreground" />
-                        </button>
-                        <button onClick={startEditHostname} className={iconBtn}>
-                          <PencilSimple className="size-3.5 text-muted-foreground" />
-                        </button>
-                      </>
-                    )}
-                  </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 truncate">{workerName}.surgent.site</span>
+                      <a
+                        href={`https://${workerName}.surgent.site`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={iconBtn}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ArrowSquareOut className="size-3.5 text-muted-foreground" />
+                      </a>
+                      <button onClick={copyUrl} className={iconBtn}>
+                        <Copy className="size-3.5 text-muted-foreground" />
+                      </button>
+                      <button onClick={startEditHostname} className={iconBtn}>
+                        <PencilSimple className="size-3.5 text-muted-foreground" />
+                      </button>
+                    </>
+                  )}
                 </div>
+              </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                  <Button
-                    className="flex-1 h-8 bg-brand hover:bg-brand/90 text-brand-foreground"
-                    onClick={submitHostname}
-                    disabled={isDeploying || Boolean(isDeploymentInProgress)}
-                  >
-                    {isDeploying ? (
-                      <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                    ) : (
-                      <RocketLaunch className="size-3.5 mr-1.5" weight="fill" />
-                    )}
-                    {isEditingHostname && hostnameInput.trim() !== workerName ? 'Save & Publish' : 'Republish'}
-                  </Button>
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                <Button
+                  className="flex-1 h-8 bg-brand hover:bg-brand/90 text-brand-foreground"
+                  onClick={submitHostname}
+                  disabled={isDeploying || Boolean(isDeploymentInProgress) || (!workerName && !hostnameInput.trim())}
+                >
+                  {isDeploying ? (
+                    <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <RocketLaunch className="size-3.5 mr-1.5" weight="fill" />
+                  )}
+                  {!workerName
+                    ? 'Deploy'
+                    : isEditingHostname && hostnameInput.trim() !== workerName
+                      ? 'Save & Publish'
+                      : 'Republish'}
+                </Button>
+                {workerName && (
                   <Button variant="outline" className="h-8 px-3" onClick={() => setIsDeploymentStatusOpen(true)}>
                     <Clock className="size-3.5" />
                   </Button>
-                </div>
+                )}
               </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* User menu */}
         <DropdownMenu>
@@ -467,13 +475,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       </header>
 
       {/* Dialogs */}
-      <DeployDialog
-        open={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        defaultName={workerName}
-        onConfirm={handleDeploy}
-        isSubmitting={isDeploying}
-      />
       <GitHubDialog open={isGitHubDialogOpen} onOpenChange={setIsGitHubDialogOpen} projectId={projectId} />
       <UsageDialog open={isUsageOpen} onOpenChange={setIsUsageOpen} />
       <DeploymentStatusDialog
