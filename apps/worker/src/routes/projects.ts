@@ -1,12 +1,14 @@
 import { Hono } from 'hono'
 import type { AppContext } from '@/types/application'
 import { db } from '@/lib/db'
+import { sql } from 'kysely'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../middleware/auth'
 import { config } from '@/lib/config'
 import {
   deployProject,
+  createDeploymentRecord,
   undeployProject,
   initializeProject,
   resumeProject,
@@ -15,7 +17,6 @@ import {
   downloadProject,
   getSandboxLogs,
   HttpError,
-  getRecentDeployments,
   redeployVersion,
 } from '@/controllers/projects'
 import { listDeploymentEnvVars, setDeploymentEnvVars, buildDashboardCredentials } from '@/apis/convex'
@@ -31,8 +32,7 @@ projects.use('*', async (c, next) => {
   return next()
 })
 
-// Helper to fetch project and verify ownership
-async function getOwnedProject(id: string, userId: string) {
+async function getProject(id: string, userId: string) {
   const row = await db
     .selectFrom('project')
     .leftJoin('member', (join) =>
@@ -41,17 +41,14 @@ async function getOwnedProject(id: string, userId: string) {
     .selectAll('project')
     .select('member.id as memberId')
     .where('project.id', '=', id)
+    .where('project.deletedAt', 'is', null)
     .executeTakeFirst()
 
   if (!row) return { error: 'Project not found', status: 404 as const }
   if (!row.memberId) return { error: 'Forbidden', status: 403 as const }
 
-  const { memberId: _memberId, ...project } = row
+  const { memberId: _, ...project } = row
   return { project }
-}
-
-async function getProject(id: string, userId: string) {
-  return getOwnedProject(id, userId)
 }
 
 function sanitizeDeployName(input: string): string {
@@ -63,8 +60,6 @@ function sanitizeDeployName(input: string): string {
     .slice(0, 63)
 }
 
-// removed unused sandbox client helper
-
 // GET /projects - List all projects for user
 projects.get('/', requireAuth, async (c) => {
   const organizationId = c.get('session')?.activeOrganizationId
@@ -73,12 +68,158 @@ projects.get('/', requireAuth, async (c) => {
   const rows = await db
     .selectFrom('project')
     .innerJoin('member', 'member.organizationId', 'project.organizationId')
-    .selectAll('project')
+    .leftJoin('sandbox', 'sandbox.projectId', 'project.id')
+    .leftJoin('worker', 'worker.projectId', 'project.id')
+    .select([
+      'project.id',
+      'project.userId',
+      'project.organizationId',
+      'project.name',
+      'project.github',
+      'project.settings',
+      'project.metadata',
+      'project.createdAt',
+      'project.updatedAt',
+      'sandbox.id as sandboxId',
+      'sandbox.status as sandboxStatus',
+      'sandbox.host as sandboxUrl',
+      'worker.scriptName as workerName',
+      'worker.status as workerStatus',
+      'worker.hostname as workerHostname',
+    ])
     .where('member.userId', '=', c.get('user')!.id)
     .where('project.organizationId', '=', organizationId)
+    .where('project.deletedAt', 'is', null)
     .orderBy('project.createdAt', 'desc')
     .execute()
-  return c.json(rows)
+
+  return c.json(
+    rows.map((r: any) => ({
+      id: r.id,
+      userId: r.userId,
+      organizationId: r.organizationId,
+      name: r.name,
+      github: r.github,
+      settings: r.settings,
+      metadata: r.metadata,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      sandbox: r.sandboxId ? { id: r.sandboxId, status: r.sandboxStatus, url: r.sandboxUrl } : null,
+      worker: r.workerName ? { name: r.workerName, status: r.workerStatus, hostname: r.workerHostname } : null,
+    })),
+  )
+})
+
+// GET /projects/usage - Usage overview grouped by project
+projects.get('/usage', requireAuth, async (c) => {
+  const organizationId = c.get('session')?.activeOrganizationId
+  if (!organizationId) return c.json({ error: 'No active organization' }, 400)
+
+  const parsed = z
+    .object({
+      days: z.coerce.number().int().min(1).max(365).optional(),
+      limit: z.coerce.number().int().min(1).max(200).optional(),
+      projectId: z.string().uuid().optional(),
+    })
+    .safeParse(c.req.query())
+  if (!parsed.success) return c.json({ error: 'Invalid query' }, 400)
+
+  const days = parsed.data.days ?? 30
+  const limit = parsed.data.limit ?? 50
+  const projectId = parsed.data.projectId
+
+  const to = new Date()
+  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000)
+
+  const baseAll = db
+    .selectFrom('usage')
+    .innerJoin('project', 'project.id', 'usage.projectId')
+    .innerJoin('member', 'member.organizationId', 'project.organizationId')
+    .where('member.userId', '=', c.get('user')!.id)
+    .where('project.organizationId', '=', organizationId)
+    .where('project.deletedAt', 'is', null)
+    .where('usage.deletedAt', 'is', null)
+    .where('usage.createdAt', '>=', from)
+
+  const base = projectId ? baseAll.where('usage.projectId', '=', projectId) : baseAll
+
+  const totals = (await base
+    .select([
+      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
+      sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
+      sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
+    ])
+    .executeTakeFirst()) ?? { cost: '0', messages: '0' }
+
+  const projects = await baseAll
+    .select([
+      'usage.projectId as projectId',
+      'project.name as projectName',
+      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
+      sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
+      sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
+    ])
+    .groupBy(['usage.projectId', 'project.name'])
+    .orderBy(sql`COALESCE(SUM(cost), 0)`, 'desc')
+    .limit(50)
+    .execute()
+
+  const models = await base
+    .select([
+      'usage.model as model',
+      'usage.provider as provider',
+      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
+      sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
+      sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
+    ])
+    .groupBy(['usage.model', 'usage.provider'])
+    .orderBy(sql`COALESCE(SUM("usage"."inputTokens"), 0) + COALESCE(SUM("usage"."outputTokens"), 0)`, 'desc')
+    .limit(20)
+    .execute()
+
+  const daily = await base
+    .select([
+      sql<string>`to_char(date_trunc('day', "usage"."createdAt" AT TIME ZONE 'UTC'), 'YYYY-MM-DD')`.as('date'),
+      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
+      sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
+      sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
+    ])
+    .groupBy(sql`date_trunc('day', "usage"."createdAt" AT TIME ZONE 'UTC')`)
+    .orderBy(sql`date_trunc('day', "usage"."createdAt" AT TIME ZONE 'UTC')`, 'desc')
+    .limit(30)
+    .execute()
+
+  const history = await base
+    .select([
+      'usage.id',
+      'usage.projectId as projectId',
+      'project.name as projectName',
+      'usage.model as model',
+      'usage.provider as provider',
+      'usage.inputTokens as inputTokens',
+      'usage.outputTokens as outputTokens',
+      'usage.cost',
+      'usage.createdAt',
+    ])
+    .orderBy('usage.createdAt', 'desc')
+    .limit(limit)
+    .execute()
+
+  return c.json({
+    range: { from: from.toISOString(), to: to.toISOString(), days },
+    totals,
+    projects,
+    models,
+    daily,
+    history: history.map((row) => ({
+      ...row,
+      createdAt: row.createdAt?.toISOString?.() ?? null,
+    })),
+  })
 })
 
 // GET /projects/:id - Get single project
@@ -86,7 +227,27 @@ projects.get('/:id', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const result = await getProject(id, c.get('user')!.id)
   if ('error' in result) return c.json({ error: result.error }, result.status)
-  return c.json(result.project)
+
+  const row = await db
+    .selectFrom('project')
+    .leftJoin('sandbox', 'sandbox.projectId', 'project.id')
+    .leftJoin('worker', 'worker.projectId', 'project.id')
+    .select([
+      'sandbox.id as sandboxId',
+      'sandbox.status as sandboxStatus',
+      'sandbox.host as sandboxUrl',
+      'worker.scriptName as workerName',
+      'worker.status as workerStatus',
+      'worker.hostname as workerHostname',
+    ])
+    .where('project.id', '=', id)
+    .executeTakeFirst()
+
+  return c.json({
+    ...result.project,
+    sandbox: row?.sandboxId ? { id: row.sandboxId, status: row.sandboxStatus, url: row.sandboxUrl } : null,
+    worker: row?.workerName ? { name: row.workerName, status: row.workerStatus, hostname: row.workerHostname } : null,
+  })
 })
 
 // PATCH /projects/:id - Rename project
@@ -109,7 +270,7 @@ projects.patch(
   },
 )
 
-// DELETE /projects/:id - Delete project
+// DELETE /projects/:id - Soft delete project
 projects.delete('/:id', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
 
@@ -118,13 +279,11 @@ projects.delete('/:id', zValidator('param', idParam), async (c) => {
     return c.json({ error: result.error }, result.status)
   }
 
-  // Delete sandbox before removing project
+  // Delete sandbox before soft deleting project
   await deleteSandbox({ projectId: id })
 
-  // Delete apikeys before removing project
-  await db.deleteFrom('apikey').where('projectId', '=', id).execute()
-
-  await db.deleteFrom('project').where('id', '=', id).execute()
+  // Soft delete: set deletedAt instead of hard delete
+  await db.updateTable('project').set({ deletedAt: new Date(), updatedAt: new Date() }).where('id', '=', id).execute()
 
   return c.json({ deleted: true })
 })
@@ -197,35 +356,20 @@ projects.post(
 
       const result = await getProject(id, c.get('user')!.id)
       if ('error' in result) return c.json({ error: result.error }, result.status)
-      const row = result.project
-
       const name = deployName ? sanitizeDeployName(deployName) : undefined
-      const previewUrl = name ? `https://${name}.surgent.site` : undefined
 
-      await db
-        .updateTable('project')
-        .set({
-          deployment: {
-            ...((row.deployment as any) || {}),
-            projectId: id,
-            status: 'queued',
-            name,
-            previewUrl,
-          },
-          updatedAt: new Date(),
-        })
-        .where('id', '=', id)
-        .execute()
+      const deployment = await createDeploymentRecord(id, name)
 
-      deployProject({ projectId: id, deployName: name }).catch((err) => {
+      deployProject({ projectId: id, deployName: name, deploymentId: deployment.id }).catch((err) => {
         console.error('[deploy] background failed', {
           projectId: id,
+          deploymentId: deployment.id,
           error: err?.stack ?? err?.message ?? String(err),
         })
       })
 
-      console.log('[deploy] scheduled', { projectId: id })
-      return c.json({ scheduled: true })
+      console.log('[deploy] scheduled', { projectId: id, deploymentId: deployment.id })
+      return c.json({ deploymentId: deployment.id, status: 'queued' })
     } catch (err: any) {
       console.error('[deploy] request failed', {
         userId: c.get('user')?.id,
@@ -245,13 +389,37 @@ projects.get('/:id/deployments', zValidator('param', idParam), async (c) => {
   }
 
   const deployments = await db
-    .selectFrom('deployment_history')
-    .selectAll()
+    .selectFrom('deployment')
+    .select([
+      'id',
+      'status',
+      'createdAt',
+      'startedAt',
+      'finishedAt',
+      'error',
+      'cloudflareVersionId',
+      'hostname',
+      'rollbackOf',
+      'scriptName',
+    ])
     .where('projectId', '=', id)
     .orderBy('createdAt', 'desc')
     .execute()
 
-  return c.json(deployments)
+  const response = deployments.map((row: any) => ({
+    id: row.id,
+    status: row.status,
+    createdAt: row.createdAt ? row.createdAt.toISOString() : new Date().toISOString(),
+    startedAt: row.startedAt ? row.startedAt.toISOString() : undefined,
+    deployedAt: row.finishedAt ? row.finishedAt.toISOString() : undefined,
+    error: row.error ?? undefined,
+    cloudflareVersionId: row.cloudflareVersionId ?? null,
+    hostname: row.hostname ?? null,
+    rollbackOf: row.rollbackOf ?? null,
+    scriptName: row.scriptName,
+  }))
+
+  return c.json(response)
 })
 
 // POST /projects/:id/undeploy - Undeploy project from Cloudflare
@@ -286,30 +454,7 @@ projects.post('/:id/undeploy', zValidator('param', idParam), async (c) => {
   }
 })
 
-// GET /projects/:id/cloudflare-deployments - Get recent Cloudflare deployments
-projects.get('/:id/cloudflare-deployments', zValidator('param', idParam), async (c) => {
-  const { id } = c.req.valid('param')
-  const result = await getProject(id, c.get('user')!.id)
-  if ('error' in result) {
-    return c.json({ error: result.error }, result.status)
-  }
-
-  const scriptName = (result.project.sandbox as any)?.deployName || `project-${id.slice(0, 8)}`
-  const accountId = config.cloudflare.accountId
-  if (!accountId) return c.json({ error: 'Cloudflare account not configured' }, 500)
-
-  try {
-    const deployments = await getRecentDeployments(accountId, scriptName)
-    return c.json({ deployments })
-  } catch (err) {
-    const status = err instanceof HttpError ? err.status : 500
-    const message = err instanceof Error ? err.message : 'Failed to fetch deployments'
-    console.error('[cloudflare-deployments] failed', { projectId: id, error: message })
-    return c.json({ error: message }, status as 400 | 500)
-  }
-})
-
-// POST /projects/:id/cloudflare-redeploy - Redeploy specific version
+// POST /projects/:id/cloudflare-redeploy - Redeploy specific version (rollback)
 projects.post(
   '/:id/cloudflare-redeploy',
   zValidator('param', idParam),
@@ -322,13 +467,9 @@ projects.post(
       return c.json({ error: result.error }, result.status)
     }
 
-    const scriptName = (result.project.sandbox as any)?.deployName || `project-${id.slice(0, 8)}`
-    const accountId = config.cloudflare.accountId
-    if (!accountId) return c.json({ error: 'Cloudflare account not configured' }, 500)
-
     try {
-      await redeployVersion(accountId, scriptName, versionId)
-      return c.json({ redeployed: true, versionId })
+      await redeployVersion(id, versionId)
+      return c.json({ scheduled: true, versionId })
     } catch (err) {
       const status = err instanceof HttpError ? err.status : 500
       const message = err instanceof Error ? err.message : 'Failed to redeploy version'
@@ -356,27 +497,38 @@ projects.post(
 
       const result = await getProject(id, c.get('user')!.id)
       if ('error' in result) return c.json({ error: result.error }, result.status)
-      const row = result.project
 
       const sanitized = sanitizeDeployName(name)
       const previewUrl = `https://${sanitized}.surgent.site`
-      const currentDeployment = (row.deployment as any) || {}
+      const now = new Date()
 
       await db
-        .updateTable('project')
+        .updateTable('worker')
         .set({
-          deployment: {
-            ...currentDeployment,
-            projectId: id,
-            name: sanitized,
-            previewUrl,
-            status: currentDeployment.status || 'idle',
-            updatedAt: new Date(),
-          },
-          updatedAt: new Date(),
+          scriptName: sanitized,
+          hostname: previewUrl,
+          updatedAt: now,
         })
-        .where('id', '=', id)
+        .where('projectId', '=', id)
         .execute()
+
+      const latest = await db
+        .selectFrom('deployment')
+        .select(['id'])
+        .where('projectId', '=', id)
+        .orderBy('createdAt', 'desc')
+        .executeTakeFirst()
+
+      if (latest) {
+        await db
+          .updateTable('deployment')
+          .set({
+            scriptName: sanitized,
+            hostname: previewUrl,
+          })
+          .where('id', '=', latest.id)
+          .execute()
+      }
 
       console.log('[confirm-hostname] success', { projectId: id, name: sanitized })
       return c.json({ confirmed: true, name: sanitized, previewUrl })
@@ -397,7 +549,8 @@ projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
   if ('error' in result) return c.json({ error: result.error }, result.status)
   const row = result.project
 
-  const sandboxId = row.sandbox?.id
+  const sandboxRow = await db.selectFrom('sandbox').select(['id']).where('projectId', '=', id).executeTakeFirst()
+  const sandboxId = sandboxRow?.id
   if (!sandboxId) return c.json({ error: 'Sandbox not found' }, 400)
 
   resumeProject({ projectId: id, sandboxId }).catch(() => {})
@@ -428,7 +581,8 @@ projects.get('/:id/health', zValidator('param', idParam), async (c) => {
   if ('error' in result) return c.json({ status: result.status === 404 ? 'not_found' : 'forbidden' }, result.status)
   const row = result.project
 
-  const previewUrl = row.sandbox?.previewUrl
+  const sandboxRow = await db.selectFrom('sandbox').select(['host']).where('projectId', '=', id).executeTakeFirst()
+  const previewUrl = sandboxRow?.host
   if (!previewUrl) return c.json({ status: 'no_sandbox' })
 
   try {

@@ -25,6 +25,7 @@ async function getProjectForUser(id: string, userId: string) {
     .selectAll('project')
     .select('member.id as memberId')
     .where('project.id', '=', id)
+    .where('project.deletedAt', 'is', null)
     .executeTakeFirst()
 
   if (!row) return { error: 'Project not found', status: 404 as const }
