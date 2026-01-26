@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Toaster, toast } from 'react-hot-toast'
+import { toast } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { authClient } from '@/lib/auth-client'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -102,7 +102,7 @@ export default function DashboardPage() {
 
   const handleDeployClick = (e: React.MouseEvent, project: Project) => {
     e.stopPropagation()
-    if (project.deployment?.status === 'deployed') {
+    if (project.worker?.status === 'active') {
       router.push(`/project/${project.id}`)
     } else {
       setProjectToDeploy(project)
@@ -148,7 +148,6 @@ export default function DashboardPage() {
             ))}
           </div>
         </div>
-        <Toaster position="top-right" />
       </div>
     )
   }
@@ -355,8 +354,6 @@ export default function DashboardPage() {
         onConfirm={handleDeployConfirm}
         isSubmitting={deploy.isPending}
       />
-
-      <Toaster position="top-right" />
     </div>
   )
 }

@@ -1,26 +1,33 @@
 import { z } from 'zod'
 
-export const ProjectSandboxSchema = z
+export const SandboxSchema = z
   .object({
-    id: z.string().optional(),
-    previewUrl: z.string().optional(),
-    status: z.string().optional(),
-    isInitialized: z.boolean().optional(),
-    deployed: z.boolean().optional(),
+    id: z.string(),
+    status: z.string().nullable(),
+    url: z.string().nullable(),
+  })
+  .nullable()
+
+export const WorkerSchema = z
+  .object({
+    name: z.string(),
+    status: z.string().nullable(),
+    hostname: z.string().nullable(),
   })
   .nullable()
 
 export const ProjectSchema = z.object({
   id: z.string(),
   userId: z.string(),
+  organizationId: z.string().optional(),
   name: z.string(),
   github: z.any().nullable(),
   settings: z.any().nullable(),
-  deployment: z.any().nullable(),
-  sandbox: ProjectSandboxSchema,
   metadata: z.any().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  sandbox: SandboxSchema,
+  worker: WorkerSchema,
 })
 
 export const ProjectsSchema = z.array(ProjectSchema)
@@ -28,4 +35,3 @@ export const ProjectsSchema = z.array(ProjectSchema)
 export const CreateProjectResponseSchema = z.object({ id: z.string() })
 
 export type Project = z.infer<typeof ProjectSchema>
-

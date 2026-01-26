@@ -1,36 +1,16 @@
-"use client"
+'use client'
 
-import { useRouter, useSearchParams } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { AdminRangeSelect } from "@/components/admin/admin-range-select"
-import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts"
-import { Users, FolderKanban, UserPlus, Layers, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react"
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { AdminRangeSelect } from '@/components/admin/admin-range-select'
+import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { Users, FolderKanban, UserPlus, Layers, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface AdminOverview {
   range: string
@@ -38,7 +18,7 @@ interface AdminOverview {
   pagination: {
     page: number
     perPage: number
-    sort: "asc" | "desc"
+    sort: 'asc' | 'desc'
     totalUsers: number
     totalProjects: number
   }
@@ -71,7 +51,7 @@ interface AdminOverview {
     createdAt: string
     userName: string | null
     userEmail: string
-    deployment: { name?: string; status?: string; previewUrl?: string } | null
+    worker: { name: string; status: string | null; hostname: string | null } | null
   }>
   charts: {
     users: Array<{ date: string; count: string }>
@@ -80,10 +60,10 @@ interface AdminOverview {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   })
 }
 
@@ -107,28 +87,18 @@ function StatCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
-        {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </CardContent>
     </Card>
   )
 }
 
-function SignupsChart({
-  data,
-  total,
-}: {
-  data: Array<{ date: string; count: string }>
-  total: string
-}) {
+function SignupsChart({ data, total }: { data: Array<{ date: string; count: string }>; total: string }) {
   const chartData = data.map((d) => ({ date: d.date, count: Number(d.count) }))
 
   return (
@@ -138,7 +108,7 @@ function SignupsChart({
         <span className="text-xs text-muted-foreground">{total} in range</span>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={{ count: { label: "Signups", color: "hsl(var(--chart-1))" } }} className="h-[250px]">
+        <ChartContainer config={{ count: { label: 'Signups', color: 'hsl(var(--chart-1))' } }} className="h-[250px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
               <defs>
@@ -171,13 +141,7 @@ function SignupsChart({
   )
 }
 
-function ProjectsChart({
-  data,
-  total,
-}: {
-  data: Array<{ date: string; count: string }>
-  total: string
-}) {
+function ProjectsChart({ data, total }: { data: Array<{ date: string; count: string }>; total: string }) {
   const chartData = data.map((d) => ({ date: d.date, count: Number(d.count) }))
 
   return (
@@ -187,7 +151,7 @@ function ProjectsChart({
         <span className="text-xs text-muted-foreground">{total} in range</span>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={{ count: { label: "Projects", color: "hsl(var(--chart-2))" } }} className="h-[250px]">
+        <ChartContainer config={{ count: { label: 'Projects', color: 'hsl(var(--chart-2))' } }} className="h-[250px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
               <defs>
@@ -250,16 +214,14 @@ function Last10UsersTable({
           <TableBody>
             {users.map((user) => (
               <TableRow key={user.id}>
-                <TableCell className="font-medium">{user.name || "—"}</TableCell>
+                <TableCell className="font-medium">{user.name || '—'}</TableCell>
                 <TableCell>{user.email}</TableCell>
                 <TableCell>
-                  <Badge variant={user.emailVerified ? "default" : "secondary"}>
-                    {user.emailVerified ? "Yes" : "No"}
+                  <Badge variant={user.emailVerified ? 'default' : 'secondary'}>
+                    {user.emailVerified ? 'Yes' : 'No'}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatDate(user.createdAt)}
-                </TableCell>
+                <TableCell className="text-muted-foreground">{formatDate(user.createdAt)}</TableCell>
               </TableRow>
             ))}
             {users.length === 0 && (
@@ -285,7 +247,7 @@ function Pagination({
   page: number
   perPage: number
   total: number
-  type: "users" | "projects"
+  type: 'users' | 'projects'
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -294,7 +256,7 @@ function Pagination({
 
   function goTo(newPage: number) {
     const params = new URLSearchParams(searchParams.toString())
-    params.set("page", String(newPage))
+    params.set('page', String(newPage))
     router.push(`/admin?${params.toString()}`)
   }
 
@@ -307,24 +269,14 @@ function Pagination({
         Showing {start}-{end} of {total} {type}
       </p>
       <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => goTo(page - 1)}
-          disabled={page <= 1}
-        >
+        <Button variant="outline" size="sm" onClick={() => goTo(page - 1)} disabled={page <= 1}>
           <ChevronLeft className="h-4 w-4" />
           Prev
         </Button>
         <span className="text-sm text-muted-foreground">
           Page {page} of {totalPages}
         </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => goTo(page + 1)}
-          disabled={page >= totalPages}
-        >
+        <Button variant="outline" size="sm" onClick={() => goTo(page + 1)} disabled={page >= totalPages}>
           Next
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -333,21 +285,21 @@ function Pagination({
   )
 }
 
-function SortToggle({ currentSort }: { currentSort: "asc" | "desc" }) {
+function SortToggle({ currentSort }: { currentSort: 'asc' | 'desc' }) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
   function toggle() {
     const params = new URLSearchParams(searchParams.toString())
-    params.set("sort", currentSort === "desc" ? "asc" : "desc")
-    params.set("page", "1")
+    params.set('sort', currentSort === 'desc' ? 'asc' : 'desc')
+    params.set('page', '1')
     router.push(`/admin?${params.toString()}`)
   }
 
   return (
     <Button variant="ghost" size="sm" className="h-8 gap-1" onClick={toggle}>
       <ArrowUpDown className="h-3 w-3" />
-      {currentSort === "desc" ? "Newest" : "Oldest"}
+      {currentSort === 'desc' ? 'Newest' : 'Oldest'}
     </Button>
   )
 }
@@ -364,14 +316,12 @@ function AllUsersTable({
     image: string | null
     createdAt: string
   }>
-  pagination: AdminOverview["pagination"]
+  pagination: AdminOverview['pagination']
 }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-muted-foreground">
-          {pagination.totalUsers} users in selected range
-        </p>
+        <p className="text-sm text-muted-foreground">{pagination.totalUsers} users in selected range</p>
         <SortToggle currentSort={pagination.sort} />
       </div>
       <Table>
@@ -386,16 +336,14 @@ function AllUsersTable({
         <TableBody>
           {users.map((user) => (
             <TableRow key={user.id}>
-              <TableCell className="font-medium">{user.name || "—"}</TableCell>
+              <TableCell className="font-medium">{user.name || '—'}</TableCell>
               <TableCell>{user.email}</TableCell>
               <TableCell>
-                <Badge variant={user.emailVerified ? "default" : "secondary"}>
-                  {user.emailVerified ? "Yes" : "No"}
+                <Badge variant={user.emailVerified ? 'default' : 'secondary'}>
+                  {user.emailVerified ? 'Yes' : 'No'}
                 </Badge>
               </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatDate(user.createdAt)}
-              </TableCell>
+              <TableCell className="text-muted-foreground">{formatDate(user.createdAt)}</TableCell>
             </TableRow>
           ))}
           {users.length === 0 && (
@@ -407,12 +355,7 @@ function AllUsersTable({
           )}
         </TableBody>
       </Table>
-      <Pagination
-        page={pagination.page}
-        perPage={pagination.perPage}
-        total={pagination.totalUsers}
-        type="users"
-      />
+      <Pagination page={pagination.page} perPage={pagination.perPage} total={pagination.totalUsers} type="users" />
     </div>
   )
 }
@@ -421,22 +364,22 @@ function AllProjectsTable({
   projects,
   pagination,
 }: {
-  projects: AdminOverview["allProjects"]
-  pagination: AdminOverview["pagination"]
+  projects: AdminOverview['allProjects']
+  pagination: AdminOverview['pagination']
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const deployed = searchParams.get("deployed") === "true"
-  const filterValue = deployed ? "deployed" : "all"
-  const listLabel = deployed ? "deployed projects" : "projects"
-  const emptyLabel = deployed ? "No deployments in this range" : "No projects in this range"
+  const deployed = searchParams.get('deployed') === 'true'
+  const filterValue = deployed ? 'deployed' : 'all'
+  const listLabel = deployed ? 'deployed projects' : 'projects'
+  const emptyLabel = deployed ? 'No deployments in this range' : 'No projects in this range'
 
   function onFilter(value: string) {
     const params = new URLSearchParams(searchParams.toString())
-    const next = value === "deployed"
-    if (next) params.set("deployed", "true")
-    if (!next) params.delete("deployed")
-    params.set("page", "1")
+    const next = value === 'deployed'
+    if (next) params.set('deployed', 'true')
+    if (!next) params.delete('deployed')
+    params.set('page', '1')
     router.push(`/admin?${params.toString()}`)
   }
 
@@ -471,40 +414,32 @@ function AllProjectsTable({
         <TableBody>
           {projects.map((project) => (
             <TableRow key={project.id}>
-              <TableCell className="font-medium">{project.name || "Untitled"}</TableCell>
+              <TableCell className="font-medium">{project.name || 'Untitled'}</TableCell>
               <TableCell>{project.userEmail}</TableCell>
               <TableCell>
-                {project.deployment ? (
+                {project.worker ? (
                   <div className="flex flex-col gap-1">
                     <Badge
                       variant={
-                        project.deployment.status?.includes("failed")
-                          ? "destructive"
-                          : project.deployment.status === "deployed"
-                            ? "default"
-                            : "secondary"
+                        project.worker.status === 'error'
+                          ? 'destructive'
+                          : project.worker.status === 'active'
+                            ? 'default'
+                            : 'secondary'
                       }
                     >
-                      {project.deployment.status
-                        ? project.deployment.status.replaceAll("_", " ")
-                        : "deployment"}
+                      {project.worker.status ?? 'inactive'}
                     </Badge>
-                    {project.deployment.name ? (
-                      <span className="text-xs text-muted-foreground">
-                        {project.deployment.name}
-                      </span>
-                    ) : null}
-                    <span className="text-xs text-muted-foreground">
-                      by {project.userName || project.userEmail}
-                    </span>
-                    {project.deployment.previewUrl ? (
+                    <span className="text-xs text-muted-foreground">{project.worker.name}</span>
+                    <span className="text-xs text-muted-foreground">by {project.userName || project.userEmail}</span>
+                    {project.worker.hostname ? (
                       <a
                         className="text-xs text-muted-foreground underline underline-offset-2"
-                        href={project.deployment.previewUrl}
+                        href={project.worker.hostname}
                         target="_blank"
                         rel="noreferrer"
                       >
-                        {project.deployment.previewUrl}
+                        {project.worker.hostname}
                       </a>
                     ) : null}
                   </div>
@@ -512,9 +447,7 @@ function AllProjectsTable({
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatDate(project.createdAt)}
-              </TableCell>
+              <TableCell className="text-muted-foreground">{formatDate(project.createdAt)}</TableCell>
             </TableRow>
           ))}
           {projects.length === 0 && (
@@ -539,12 +472,12 @@ function AllProjectsTable({
 export function AdminDashboard({ data }: { data: AdminOverview }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const tab = searchParams.get("tab") || "users"
+  const tab = searchParams.get('tab') || 'users'
 
   function onTabChange(value: string) {
     const params = new URLSearchParams(searchParams.toString())
-    params.set("tab", value)
-    params.set("page", "1")
+    params.set('tab', value)
+    params.set('page', '1')
     router.push(`/admin?${params.toString()}`)
   }
 
@@ -557,26 +490,10 @@ export function AdminDashboard({ data }: { data: AdminOverview }) {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Total Users"
-            value={data.totals.users}
-            icon={Users}
-          />
-          <StatCard
-            title="Users in Range"
-            value={data.totals.usersInRange}
-            icon={UserPlus}
-          />
-          <StatCard
-            title="Total Projects"
-            value={data.totals.projects}
-            icon={FolderKanban}
-          />
-          <StatCard
-            title="Projects in Range"
-            value={data.totals.projectsInRange}
-            icon={Layers}
-          />
+          <StatCard title="Total Users" value={data.totals.users} icon={Users} />
+          <StatCard title="Users in Range" value={data.totals.usersInRange} icon={UserPlus} />
+          <StatCard title="Total Projects" value={data.totals.projects} icon={FolderKanban} />
+          <StatCard title="Projects in Range" value={data.totals.projectsInRange} icon={Layers} />
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">

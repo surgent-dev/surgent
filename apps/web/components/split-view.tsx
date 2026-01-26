@@ -1,14 +1,14 @@
-"use client"
+'use client'
 
-import { useEffect, useRef, useState, useCallback } from "react"
-import Conversation from "./conversation"
-import PreviewPanel, { type PreviewTab } from "./preview-panel"
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { useActivateProject, useProjectQuery } from "@/queries/projects"
-import { useSandbox } from "@/hooks/use-sandbox"
-import { useIsMobile } from "@/hooks/use-mobile"
-import ProjectHeader from "./project-header"
+import { useEffect, useRef, useState, useCallback } from 'react'
+import Conversation from './conversation'
+import PreviewPanel, { type PreviewTab } from './preview-panel'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { useActivateProject, useProjectQuery } from '@/queries/projects'
+import { useSandbox } from '@/hooks/use-sandbox'
+import { useIsMobile } from '@/hooks/use-mobile'
+import ProjectHeader from './project-header'
 
 interface SplitViewProps {
   projectId?: string
@@ -26,11 +26,8 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   const hasConvex = Boolean((project?.metadata as any)?.convex)
   const convexTabAdded = useRef(false)
 
-  const [tabs, setTabs] = useState<PreviewTab[]>([
-    { id: "preview", type: "preview", title: "Preview" },
-    { id: "payments", type: "payments", title: "Payments" },
-  ])
-  const [activeTabId, setActiveTabId] = useState("preview")
+  const [tabs, setTabs] = useState<PreviewTab[]>([{ id: 'preview', type: 'preview', title: 'Preview' }])
+  const [activeTabId, setActiveTabId] = useState('preview')
   const tabCounter = useRef(0)
 
   // Add Convex tab once when project has Convex enabled (insert after Preview, before Payments)
@@ -38,8 +35,8 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
     if (hasConvex && !convexTabAdded.current) {
       convexTabAdded.current = true
       setTabs((prev) => {
-        const previewIdx = prev.findIndex((t) => t.id === "preview")
-        const newTab = { id: "convex", type: "convex" as const, title: "Database" }
+        const previewIdx = prev.findIndex((t) => t.id === 'preview')
+        const newTab = { id: 'convex', type: 'convex' as const, title: 'Database' }
         const result = [...prev]
         result.splice(previewIdx + 1, 0, newTab)
         return result
@@ -49,15 +46,15 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
 
   const handleCloseTab = useCallback((tabId: string) => {
     setTabs((t) => t.filter((tab) => tab.id !== tabId))
-    setActiveTabId((prev) => (prev === tabId ? "preview" : prev))
+    setActiveTabId((prev) => (prev === tabId ? 'preview' : prev))
   }, [])
 
-  const handleAddTab = useCallback((type: PreviewTab["type"]) => {
+  const handleAddTab = useCallback((type: PreviewTab['type']) => {
     setTabs((prev) => {
-      if (type !== "mcp" && type !== "logs") return prev
+      if (type !== 'mcp' && type !== 'logs') return prev
       if (prev.some((tab) => tab.type === type)) return prev
       tabCounter.current += 1
-      const title = type === "mcp" ? "MCP" : "Server Logs"
+      const title = type === 'mcp' ? 'MCP' : 'Server Logs'
       const id = `${type}-${tabCounter.current}`
       return [...prev, { id, type, title }]
     })
@@ -74,8 +71,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
 
   // Set sandbox ID when project data loads
   useEffect(() => {
-    const sandboxId = (project as any)?.sandbox?.id
-    setSandboxId(sandboxId || null)
+    setSandboxId(project?.sandbox?.id || null)
   }, [project, setSandboxId])
 
   return (
