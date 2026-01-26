@@ -37,7 +37,6 @@ export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .alterTable('project')
     .addColumn('slug', 'text', (col) => col.notNull())
-    .addColumn('externalId', 'uuid')
     .execute()
 
   // Step 3: Create Surpay tables
