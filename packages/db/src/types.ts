@@ -219,7 +219,6 @@ export interface ProjectTable {
   deployment: any | null
   sandbox: any | null
   metadata: any | null
-  externalId: string | null
   createdAt?: Date
   updatedAt?: Date
   deletedAt?: Date | null

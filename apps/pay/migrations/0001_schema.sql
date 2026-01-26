@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict oH8iKC0dxwzibvqka8jAVdlEJtizvfaaLOEA5K5ejHZwMUS52NVXCbRQxxiHjGw
+\restrict A4eateb45h2IGtFmV2CiNflXT8j0xPvHwrN3ln9D3ZfsxIgxOotDbz68QoR3geq
 
 -- Dumped from database version 18.1 (Debian 18.1-1.pgdg13+2)
 -- Dumped by pg_dump version 18.1
@@ -394,23 +394,26 @@ CREATE TABLE public.customer_product (
 ALTER TABLE public.customer_product OWNER TO surgent;
 
 --
--- Name: deployment_history; Type: TABLE; Schema: public; Owner: surgent
+-- Name: deployment; Type: TABLE; Schema: public; Owner: surgent
 --
 
-CREATE TABLE public.deployment_history (
+CREATE TABLE public.deployment (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     "projectId" uuid NOT NULL,
-    name text NOT NULL,
-    "previewUrl" text NOT NULL,
+    "scriptName" text NOT NULL,
     status text NOT NULL,
     error text,
-    "startedAt" timestamp without time zone NOT NULL,
-    "deployedAt" timestamp without time zone,
-    "createdAt" timestamp without time zone DEFAULT now() NOT NULL
+    "startedAt" timestamp with time zone,
+    "finishedAt" timestamp with time zone,
+    "cloudflareDeploymentId" text,
+    "cloudflareVersionId" text,
+    "rollbackOf" uuid,
+    hostname text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
-ALTER TABLE public.deployment_history OWNER TO surgent;
+ALTER TABLE public.deployment OWNER TO surgent;
 
 --
 -- Name: dispute; Type: TABLE; Schema: public; Owner: surgent
@@ -459,6 +462,24 @@ CREATE TABLE public.entitlement (
 
 
 ALTER TABLE public.entitlement OWNER TO surgent;
+
+--
+-- Name: env_var; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.env_var (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    environment text NOT NULL,
+    key text NOT NULL,
+    value text,
+    "integrationId" uuid,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.env_var OWNER TO surgent;
 
 --
 -- Name: feature; Type: TABLE; Schema: public; Owner: surgent
@@ -520,6 +541,22 @@ CREATE TABLE public.held_balance (
 
 
 ALTER TABLE public.held_balance OWNER TO surgent;
+
+--
+-- Name: integration; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.integration (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    provider text NOT NULL,
+    config jsonb,
+    status text DEFAULT 'connected'::text NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.integration OWNER TO surgent;
 
 --
 -- Name: invitation; Type: TABLE; Schema: public; Owner: surgent
@@ -839,8 +876,8 @@ CREATE TABLE public.project (
     metadata jsonb,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp without time zone DEFAULT now() NOT NULL,
-    slug text NOT NULL,
-    "externalId" uuid
+    "deletedAt" timestamp with time zone,
+    slug text NOT NULL
 );
 
 
@@ -884,6 +921,23 @@ CREATE TABLE public.refund (
 
 
 ALTER TABLE public.refund OWNER TO surgent;
+
+--
+-- Name: sandbox; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.sandbox (
+    id text NOT NULL,
+    "projectId" uuid NOT NULL,
+    provider text NOT NULL,
+    status text NOT NULL,
+    host text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.sandbox OWNER TO surgent;
 
 --
 -- Name: session; Type: TABLE; Schema: public; Owner: surgent
@@ -1091,6 +1145,25 @@ CREATE TABLE public.verification (
 ALTER TABLE public.verification OWNER TO surgent;
 
 --
+-- Name: worker; Type: TABLE; Schema: public; Owner: surgent
+--
+
+CREATE TABLE public.worker (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "projectId" uuid NOT NULL,
+    "accountId" text NOT NULL,
+    "scriptName" text NOT NULL,
+    "dispatchNamespace" text,
+    hostname text,
+    status text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.worker OWNER TO surgent;
+
+--
 -- Name: account account_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
 --
 
@@ -1187,11 +1260,11 @@ ALTER TABLE ONLY public.customer
 
 
 --
--- Name: deployment_history deployment_history_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+-- Name: deployment deployment_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
 --
 
-ALTER TABLE ONLY public.deployment_history
-    ADD CONSTRAINT deployment_history_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.deployment
+    ADD CONSTRAINT deployment_pkey PRIMARY KEY (id);
 
 
 --
@@ -1224,6 +1297,14 @@ ALTER TABLE ONLY public.entitlement
 
 ALTER TABLE ONLY public.entitlement
     ADD CONSTRAINT entitlement_product_id_feature_id_key UNIQUE ("productId", "featureId");
+
+
+--
+-- Name: env_var env_var_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.env_var
+    ADD CONSTRAINT env_var_pkey PRIMARY KEY (id);
 
 
 --
@@ -1264,6 +1345,14 @@ ALTER TABLE ONLY public.github_installations
 
 ALTER TABLE ONLY public.held_balance
     ADD CONSTRAINT held_balance_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: integration integration_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.integration
+    ADD CONSTRAINT integration_pkey PRIMARY KEY (id);
 
 
 --
@@ -1451,6 +1540,14 @@ ALTER TABLE ONLY public.refund
 
 
 --
+-- Name: sandbox sandbox_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.sandbox
+    ADD CONSTRAINT sandbox_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: session session_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
 --
 
@@ -1539,6 +1636,14 @@ ALTER TABLE ONLY public.verification
 
 
 --
+-- Name: worker worker_pkey; Type: CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.worker
+    ADD CONSTRAINT worker_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: apikey_key_idx; Type: INDEX; Schema: public; Owner: surgent
 --
 
@@ -1560,10 +1665,17 @@ CREATE INDEX "chats_projectId_idx" ON public.chats USING btree ("projectId");
 
 
 --
--- Name: deployment_history_projectId_idx; Type: INDEX; Schema: public; Owner: surgent
+-- Name: deployment_projectId_idx; Type: INDEX; Schema: public; Owner: surgent
 --
 
-CREATE INDEX "deployment_history_projectId_idx" ON public.deployment_history USING btree ("projectId");
+CREATE INDEX "deployment_projectId_idx" ON public.deployment USING btree ("projectId");
+
+
+--
+-- Name: env_var_projectId_env_key_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE UNIQUE INDEX "env_var_projectId_env_key_idx" ON public.env_var USING btree ("projectId", environment, key);
 
 
 --
@@ -1763,6 +1875,13 @@ CREATE INDEX idx_transfer_destination ON public.transfer USING btree ("destinati
 
 
 --
+-- Name: integration_projectId_provider_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE UNIQUE INDEX "integration_projectId_provider_idx" ON public.integration USING btree ("projectId", provider);
+
+
+--
 -- Name: ix_connect_account_processor_account_id; Type: INDEX; Schema: public; Owner: surgent
 --
 
@@ -1868,6 +1987,13 @@ CREATE INDEX ix_refund_status ON public.refund USING btree (status);
 
 
 --
+-- Name: ix_transaction_charge_id_unique; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE UNIQUE INDEX ix_transaction_charge_id_unique ON public.transaction USING btree ("chargeId") WHERE (("chargeId" IS NOT NULL) AND (type = 'payment'::public.transaction_type));
+
+
+--
 -- Name: ix_transaction_processor_invoice_id; Type: INDEX; Schema: public; Owner: surgent
 --
 
@@ -1924,6 +2050,13 @@ CREATE UNIQUE INDEX provider_project_provider_uq ON public.provider USING btree 
 
 
 --
+-- Name: sandbox_projectId_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX "sandbox_projectId_idx" ON public.sandbox USING btree ("projectId");
+
+
+--
 -- Name: teamMember_teamId_idx; Type: INDEX; Schema: public; Owner: surgent
 --
 
@@ -1942,6 +2075,13 @@ CREATE INDEX "team_organizationId_idx" ON public.team USING btree ("organization
 --
 
 CREATE INDEX usage_project_created_idx ON public.usage USING btree ("projectId", "createdAt");
+
+
+--
+-- Name: worker_projectId_idx; Type: INDEX; Schema: public; Owner: surgent
+--
+
+CREATE INDEX "worker_projectId_idx" ON public.worker USING btree ("projectId");
 
 
 --
@@ -2097,11 +2237,19 @@ ALTER TABLE ONLY public.customer
 
 
 --
--- Name: deployment_history deployment_history_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+-- Name: deployment deployment_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
 --
 
-ALTER TABLE ONLY public.deployment_history
-    ADD CONSTRAINT "deployment_history_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.deployment
+    ADD CONSTRAINT "deployment_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id) ON DELETE CASCADE;
+
+
+--
+-- Name: deployment deployment_rollbackOf_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.deployment
+    ADD CONSTRAINT "deployment_rollbackOf_fkey" FOREIGN KEY ("rollbackOf") REFERENCES public.deployment(id);
 
 
 --
@@ -2145,6 +2293,22 @@ ALTER TABLE ONLY public.entitlement
 
 
 --
+-- Name: env_var env_var_integrationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.env_var
+    ADD CONSTRAINT "env_var_integrationId_fkey" FOREIGN KEY ("integrationId") REFERENCES public.integration(id) ON DELETE SET NULL;
+
+
+--
+-- Name: env_var env_var_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.env_var
+    ADD CONSTRAINT "env_var_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id) ON DELETE CASCADE;
+
+
+--
 -- Name: feature feature_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
 --
 
@@ -2182,6 +2346,14 @@ ALTER TABLE ONLY public.held_balance
 
 ALTER TABLE ONLY public.held_balance
     ADD CONSTRAINT "held_balance_sourceTransactionId_fkey" FOREIGN KEY ("sourceTransactionId") REFERENCES public.transaction(id);
+
+
+--
+-- Name: integration integration_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.integration
+    ADD CONSTRAINT "integration_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id) ON DELETE CASCADE;
 
 
 --
@@ -2366,6 +2538,14 @@ ALTER TABLE ONLY public.refund
 
 ALTER TABLE ONLY public.refund
     ADD CONSTRAINT "refund_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: sandbox sandbox_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.sandbox
+    ADD CONSTRAINT "sandbox_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id) ON DELETE CASCADE;
 
 
 --
@@ -2585,8 +2765,16 @@ ALTER TABLE ONLY public.usage
 
 
 --
+-- Name: worker worker_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: surgent
+--
+
+ALTER TABLE ONLY public.worker
+    ADD CONSTRAINT "worker_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id) ON DELETE CASCADE;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict oH8iKC0dxwzibvqka8jAVdlEJtizvfaaLOEA5K5ejHZwMUS52NVXCbRQxxiHjGw
+\unrestrict A4eateb45h2IGtFmV2CiNflXT8j0xPvHwrN3ln9D3ZfsxIgxOotDbz68QoR3geq
 

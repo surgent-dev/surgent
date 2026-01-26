@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, \"organizationId\", name, slug, \"externalId\"\n        FROM project\n        WHERE \"organizationId\" = $1\n        ",
+  "query": "\n        SELECT id, \"organizationId\", name, slug\n        FROM project\n        WHERE \"organizationId\" = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -22,11 +22,6 @@
         "ordinal": 3,
         "name": "slug",
         "type_info": "Text"
-      },
-      {
-        "ordinal": 4,
-        "name": "externalId",
-        "type_info": "Uuid"
       }
     ],
     "parameters": {
@@ -38,9 +33,8 @@
       false,
       false,
       false,
-      false,
-      true
+      false
     ]
   },
-  "hash": "09f7758b40636135e9472dc0f16bd71a29048219b7f4fc017ef22715de28bf69"
+  "hash": "d2a14dfbd9f4563c5729ac3997180a10d7b2b1f9b77a6e7bba4baf5d596a28f2"
 }

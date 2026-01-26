@@ -771,7 +771,6 @@ export async function down(db: Kysely<any>): Promise<void> {
   await sql`ALTER TABLE project DROP CONSTRAINT IF EXISTS project_slug_key`.execute(db)
 
   // Drop columns from existing tables
-  await db.schema.alterTable('project').dropColumn('externalId').execute()
   await db.schema.alterTable('project').dropColumn('slug').execute()
   await db.schema.alterTable('organization').dropColumn('platformFeeFixed').execute()
   await db.schema.alterTable('organization').dropColumn('platformFeePercent').execute()

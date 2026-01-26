@@ -13,7 +13,6 @@ pub struct Project {
     pub organization_id: Uuid,
     pub name: String,
     pub slug: String,
-    pub external_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -44,7 +43,7 @@ pub async fn list_projects(
 ) -> Result<(StatusCode, Json<ListProjectsResponse>), (StatusCode, String)> {
     let rows = sqlx::query!(
         r#"
-        SELECT id, "organizationId", name, slug, "externalId"
+        SELECT id, "organizationId", name, slug
         FROM project
         WHERE "organizationId" = $1
         "#,
@@ -66,7 +65,6 @@ pub async fn list_projects(
             organization_id: r.organizationId,
             name: r.name,
             slug: r.slug,
-            external_id: r.externalId,
         })
         .collect();
 
