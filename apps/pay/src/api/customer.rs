@@ -74,7 +74,7 @@ pub struct CustomerWithDetails {
         (status = 500, description = "Internal server error")
     ),
     security(
-        ("org_key" = [])
+        ("project_key" = [])
     )
 )]
 pub async fn list_customers(
@@ -126,7 +126,7 @@ pub struct GetCustomerParams {
         (status = 500, description = "Internal server error")
     ),
     security(
-        ("org_key" = [])
+        ("project_key" = [])
     )
 )]
 pub async fn get_customer(

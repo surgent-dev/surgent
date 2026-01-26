@@ -75,7 +75,7 @@ use utoipa::{Modify, OpenApi};
         )
     ),
     tags(
-        (name = "project", description = "Project management"),
+        (name = "project", description = "Project listing (read-only). Projects and API keys are created via apps/worker."),
         (name = "customer", description = "Customer management"),
         (name = "transaction", description = "Transaction history"),
         (name = "subscription", description = "Subscription management"),
@@ -93,14 +93,15 @@ impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         let components = openapi.components.get_or_insert_with(Default::default);
 
-        // Organization API key (for merchant operations)
+        // Project-scoped API key (for merchant operations)
+        // Keys are provisioned by apps/worker during project creation.
         components.add_security_scheme(
-            "org_key",
+            "project_key",
             SecurityScheme::Http(
                 HttpBuilder::new()
                     .scheme(HttpAuthScheme::Bearer)
-                    .bearer_format("sp_org_<prefix>_<secret>")
-                    .description(Some("Organization API key for merchant operations"))
+                    .bearer_format("sp_org_xxx")
+                    .description(Some("Project-scoped API key for merchant operations. Keys are provisioned during project creation and grant access to a specific project's resources."))
                     .build(),
             ),
         );

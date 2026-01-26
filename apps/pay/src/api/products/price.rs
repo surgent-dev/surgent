@@ -40,7 +40,7 @@ pub struct CreateProductPriceResponse {
         (status = 500, description = "Internal server error")
     ),
     security(
-        ("org_key" = [])
+        ("project_key" = [])
     )
 )]
 pub async fn create_product_price(

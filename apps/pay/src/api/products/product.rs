@@ -64,7 +64,7 @@ pub struct CreateProductResponse {
         (status = 500, description = "Internal server error")
     ),
     security(
-        ("org_key" = [])
+        ("project_key" = [])
     )
 )]
 pub async fn create_product(
@@ -226,7 +226,7 @@ pub struct ProductWithPricesResponse {
         (status = 500, description = "Internal server error")
     ),
     security(
-        ("org_key" = [])
+        ("project_key" = [])
     )
 )]
 pub async fn update_product(
@@ -328,7 +328,7 @@ pub async fn update_product(
         (status = 500, description = "Internal server error")
     ),
     security(
-        ("org_key" = [])
+        ("project_key" = [])
     )
 )]
 pub async fn list_products_with_prices(

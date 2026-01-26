@@ -65,7 +65,7 @@ pub struct CreateCheckoutResponse {
         (status = 500, description = "Internal server error")
     ),
     security(
-        ("org_key" = [])
+        ("project_key" = [])
     )
 )]
 pub async fn create_checkout_session(

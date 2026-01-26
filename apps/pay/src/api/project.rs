@@ -23,7 +23,10 @@ pub struct ListProjectsResponse {
     pub projects: Vec<Project>,
 }
 
-/// List all projects for the authenticated organization
+/// List all projects for the authenticated organization.
+///
+/// Returns projects belonging to the organization associated with the API key.
+/// Project creation is handled by apps/worker, not this API.
 #[utoipa::path(
     get,
     path = "/projects",
@@ -34,7 +37,7 @@ pub struct ListProjectsResponse {
         (status = 500, description = "Internal server error")
     ),
     security(
-        ("org_key" = [])
+        ("project_key" = [])
     )
 )]
 pub async fn list_projects(
