@@ -19,7 +19,7 @@
   "scripts": {
     "build": "tsc",
     "prebuild": "bun install",
-    "dev": "tsc --watch",
+    "watch": "tsc --watch",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun install && bun run clean && bun run build",
     "changeset": "bunx changeset",

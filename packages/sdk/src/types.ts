@@ -247,6 +247,8 @@ export interface Subscription {
 // ============================================================================
 
 export interface ConnectAccountRequest {
+  /** Required for session auth, optional for API key auth */
+  project_id?: string
   processor: string
   account_type?: string
   country?: string
@@ -261,6 +263,7 @@ export interface ConnectAccountResponse {
 
 export interface ConnectedAccount {
   id: string
+  project_id: string
   processor: string
   status: string
   country: string
