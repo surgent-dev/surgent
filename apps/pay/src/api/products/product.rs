@@ -23,7 +23,7 @@ pub struct Product {
     pub name: String,
     pub description: Option<String>,
     #[sqlx(rename = "projectId")]
-    pub project_id: Option<Uuid>,
+    pub project_id: Uuid,
     pub slug: String,
     pub version: Option<i32>,
     #[sqlx(rename = "isArchived")]
@@ -196,15 +196,37 @@ pub struct UpdateProductResponse {
 }
 
 // Response structs for GET /product/prices
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, ToSchema, FromRow)]
 pub struct ProductPriceResponse {
     pub id: Uuid,
     pub name: Option<String>,
     pub description: Option<String>,
-    pub price_amount: Option<i32>,
-    pub price_currency: Option<String>,
+    #[sqlx(rename = "priceAmount")]
+    pub price_amount: i32,
+    #[sqlx(rename = "priceCurrency")]
+    pub price_currency: String,
+    #[sqlx(rename = "recurringInterval")]
     pub recurring_interval: Option<RecurringInterval>,
+    #[sqlx(rename = "isDefault")]
     pub is_default: Option<bool>,
+}
+
+// Internal struct for query that includes productId for grouping
+#[derive(Debug, FromRow)]
+struct ProductPriceRow {
+    #[sqlx(rename = "productId")]
+    product_id: Uuid,
+    id: Uuid,
+    name: Option<String>,
+    description: Option<String>,
+    #[sqlx(rename = "priceAmount")]
+    price_amount: i32,
+    #[sqlx(rename = "priceCurrency")]
+    price_currency: String,
+    #[sqlx(rename = "recurringInterval")]
+    recurring_interval: Option<RecurringInterval>,
+    #[sqlx(rename = "isDefault")]
+    is_default: Option<bool>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -259,10 +281,7 @@ pub async fn update_product(
     let existing = existing.ok_or((StatusCode::NOT_FOUND, "Product not found".to_string()))?;
 
     // Verify access via product's project
-    let project_id = existing
-        .project_id
-        .ok_or((StatusCode::FORBIDDEN, "Product has no project".to_string()))?;
-    verify_project_access(&state.pool, auth.user_id, project_id).await?;
+    verify_project_access(&state.pool, auth.user_id, existing.project_id).await?;
 
     let max_version = sqlx::query_scalar!(
         r#"
@@ -378,15 +397,15 @@ pub async fn list_products_with_prices(
 
     let product_ids: Vec<Uuid> = products.iter().map(|p| p.id).collect();
 
-    let prices = sqlx::query!(
+    let prices = sqlx::query_as::<_, ProductPriceRow>(
         r#"
-        SELECT id, "productId" as "product_id!", name, description, "priceAmount" as "price_amount?",
-               "priceCurrency" as "price_currency?", "recurringInterval" as "recurring_interval: RecurringInterval", "isDefault" as "is_default?"
+        SELECT id, "productId", name, description, "priceAmount",
+               "priceCurrency", "recurringInterval", "isDefault"
         FROM product_price
         WHERE "productId" = ANY($1)
         "#,
-        &product_ids
     )
+    .bind(&product_ids)
     .fetch_all(&state.pool)
     .await
     .map_err(|e| {
@@ -397,18 +416,18 @@ pub async fn list_products_with_prices(
     })?;
 
     let mut prices_by_product: HashMap<Uuid, Vec<ProductPriceResponse>> = HashMap::new();
-    for price in prices {
+    for row in prices {
         prices_by_product
-            .entry(price.product_id)
+            .entry(row.product_id)
             .or_default()
             .push(ProductPriceResponse {
-                id: price.id,
-                name: price.name,
-                description: price.description,
-                price_amount: price.price_amount,
-                price_currency: price.price_currency,
-                recurring_interval: price.recurring_interval,
-                is_default: price.is_default,
+                id: row.id,
+                name: row.name,
+                description: row.description,
+                price_amount: row.price_amount,
+                price_currency: row.price_currency,
+                recurring_interval: row.recurring_interval,
+                is_default: row.is_default,
             });
     }
 

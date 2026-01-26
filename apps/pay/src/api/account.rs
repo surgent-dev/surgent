@@ -26,8 +26,8 @@ pub struct Account {
     pub charges_enabled: bool,
     pub business_type: Option<String>,
     pub data: serde_json::Value,
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
