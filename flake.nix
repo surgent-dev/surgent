@@ -52,6 +52,7 @@
             rust-analyzer
             sqlx-cli
             cargo-nextest
+            cargo-watch
 
             # Stripe test tools
             stripe-cli

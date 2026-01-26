@@ -38,12 +38,18 @@ export async function createProject(args: {
   githubUrl?: string
 }) {
   const now = new Date()
+  const slug =
+    args.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') + `-${crypto.randomUUID().slice(0, 8)}`
   const row = await db
     .insertInto('project')
     .values({
       userId: args.userId,
       organizationId: args.organizationId,
       name: args.name,
+      slug,
       github: { url: args.githubUrl } as any,
       createdAt: now,
       updatedAt: now,

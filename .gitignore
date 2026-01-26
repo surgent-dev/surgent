@@ -95,3 +95,6 @@ cdk.context.json
 
 # deployments
 .env.prod
+
+# code references
+references/

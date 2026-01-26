@@ -1,13 +1,15 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 type SandboxState = {
-  sandboxId?: string | null;
-  setSandboxId: (id: string | null | undefined) => void;
+  sandboxId?: string | null
+  setSandboxId: (id: string | null | undefined) => void
   // Per-project active session
-  activeSessionId: Record<string, string>;
-  setActiveSession: (projectId: string, sessionId: string) => void;
-};
+  activeSessionId: Record<string, string>
+  setActiveSession: (projectId: string, sessionId: string) => void
+  pulsePaymentsTab: boolean
+  setPulsePaymentsTab: (pulse: boolean) => void
+}
 
 export const useSandbox = create<SandboxState>()(
   persist(
@@ -17,9 +19,9 @@ export const useSandbox = create<SandboxState>()(
       activeSessionId: {},
       setActiveSession: (projectId, sessionId) =>
         set((s) => ({ activeSessionId: { ...s.activeSessionId, [projectId]: sessionId } })),
+      pulsePaymentsTab: false,
+      setPulsePaymentsTab: (pulse) => set({ pulsePaymentsTab: pulse }),
     }),
-    { name: "sandbox-store", partialize: (s) => ({ activeSessionId: s.activeSessionId }) }
-  )
-);
-
-
+    { name: 'sandbox-store', partialize: (s) => ({ activeSessionId: s.activeSessionId }) },
+  ),
+)

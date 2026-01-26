@@ -1,0 +1,5 @@
+/target
+.env
+.nomad-vars.hcl
+docs/plans
+code-ref

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO refund (id, \"createdAt\", amount, currency, reason, status, processor, \"processorId\", \"projectId\", \"customerId\")\n        VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8)\n        ON CONFLICT (\"processorId\") WHERE \"processorId\" IS NOT NULL DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Varchar",
+        "Text",
+        {
+          "Custom": {
+            "name": "refund_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "requires_action",
+                "succeeded",
+                "failed",
+                "canceled"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9daa91cb7e800b3abc141b0ffa33c05747afda5a5ae7b340ab2da425d4cf13d3"
+}

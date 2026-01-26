@@ -13,3 +13,9 @@ export const http = ky.create({
 })
 
 export const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL
+
+export const payHttp = ky.create({
+  prefixUrl: process.env.NEXT_PUBLIC_PAY_URL,
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+})

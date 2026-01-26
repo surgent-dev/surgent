@@ -1,8 +1,19 @@
 'use client'
 
 import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from '@/components/agent/web-preview'
-import { useEffect, useMemo, type ElementType } from 'react'
-import { X, Database, Monitor, GitCompare, Terminal, ScrollText, Plus, Power, RefreshCw } from 'lucide-react'
+import { useEffect, useMemo, useState, type ElementType } from 'react'
+import {
+  X,
+  Database,
+  Monitor,
+  GitCompare,
+  Terminal,
+  ScrollText,
+  Plus,
+  Power,
+  RefreshCw,
+  CreditCard,
+} from 'lucide-react'
 import type { FileDiff } from '@opencode-ai/sdk'
 import { useQuery } from '@tanstack/react-query'
 
@@ -14,10 +25,22 @@ import {
   type ConvexDashboardCredentials,
 } from '@/queries/projects'
 
+import { useSurpayAccounts, useSurpayConnect, useSurpayDisconnect } from '@/queries/surpay'
+import { useSandbox } from '@/hooks/use-sandbox'
+
 import DiffView from '@/components/diff/diff-view'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 
 import { cn } from '@/lib/utils'
 import { http } from '@/lib/http'
@@ -25,7 +48,7 @@ import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
 
 export interface PreviewTab {
   id: string
-  type: 'preview' | 'changes' | 'convex' | 'mcp' | 'logs'
+  type: 'preview' | 'changes' | 'convex' | 'mcp' | 'logs' | 'payments'
   title: string
   diffs?: FileDiff[]
   messageId?: string
@@ -192,6 +215,124 @@ function McpContent({ entries, isLoading }: { entries: Array<{ name: string; sta
   )
 }
 
+function PaymentsContent({ projectId }: { projectId?: string }) {
+  const { data: accounts, isLoading } = useSurpayAccounts(projectId)
+  const connect = useSurpayConnect()
+  const disconnect = useSurpayDisconnect()
+  const [disconnectOpen, setDisconnectOpen] = useState(false)
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
+
+  if (isLoading) {
+    return <LoadingState icon={CreditCard} message="Loading payment accounts..." />
+  }
+
+  const handleConnect = async () => {
+    if (!projectId) return
+    const result = await connect.mutateAsync(projectId)
+    if (result.oauth_url) {
+      window.location.href = result.oauth_url
+    }
+  }
+
+  if (!accounts?.length) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="rounded-full bg-muted p-4">
+            <CreditCard className="size-8 text-muted-foreground" strokeWidth={1.5} />
+          </div>
+          <div className="space-y-1">
+            <p className="font-medium">Connect Payments</p>
+            <p className="text-sm text-muted-foreground">Connect your Stripe account to accept payments</p>
+          </div>
+          <Button onClick={handleConnect} disabled={connect.isPending}>
+            {connect.isPending ? 'Connecting...' : 'Connect Stripe'}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="px-3 py-4 space-y-2">
+        {accounts.map((account) => (
+          <div
+            key={account.id}
+            className="flex items-center justify-between rounded-lg border bg-background/60 px-3 py-2"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={cn('size-2 rounded-full', getStatusDot(account.status))} />
+              <span className="font-medium text-sm truncate">{account.processor}</span>
+            </div>
+            {account.status === 'pending' ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleConnect}
+                disabled={connect.isPending}
+                className="h-6 text-xs"
+              >
+                {connect.isPending ? 'Connecting...' : 'Continue Setup'}
+              </Button>
+            ) : (
+              <div className="flex items-center gap-3">
+                <span className={cn('text-xs font-medium capitalize', getStatusTone(account.status))}>
+                  {formatStatus(account.status)}
+                </span>
+                <Dialog
+                  open={disconnectOpen && selectedAccount === account.id}
+                  onOpenChange={(open) => {
+                    setDisconnectOpen(open)
+                    if (!open) setSelectedAccount(null)
+                  }}
+                >
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setSelectedAccount(account.id)}
+                    >
+                      Disconnect
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Disconnect Stripe Account</DialogTitle>
+                      <DialogDescription>
+                        Are you sure you want to disconnect your Stripe account? This will disable payment processing
+                        for this project.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setDisconnectOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => {
+                          if (projectId) {
+                            disconnect.mutate({ projectId, accountId: account.id })
+                            setDisconnectOpen(false)
+                          }
+                        }}
+                        disabled={disconnect.isPending}
+                      >
+                        {disconnect.isPending ? 'Disconnecting...' : 'Disconnect'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </ScrollArea>
+  )
+}
+
 function SandboxPausedContent({ onActivate, isActivating }: { onActivate: () => void; isActivating: boolean }) {
   return (
     <div className="w-full h-full flex items-center justify-center">
@@ -236,6 +377,8 @@ function getTabIcon(type: PreviewTab['type']) {
       return Terminal
     case 'logs':
       return ScrollText
+    case 'payments':
+      return CreditCard
   }
 }
 
@@ -245,11 +388,13 @@ function TabButton({
   isActive,
   onSelect,
   onClose,
+  isPulsing,
 }: {
   tab: PreviewTab
   isActive: boolean
   onSelect: () => void
   onClose?: () => void
+  isPulsing?: boolean
 }) {
   const closable = tab.type !== 'preview' && tab.type !== 'convex'
   const Icon = getTabIcon(tab.type)
@@ -260,6 +405,7 @@ function TabButton({
       className={cn(
         'group flex items-center gap-1.5 px-2.5 text-sm border-r transition-colors shrink-0',
         isActive ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-muted/50',
+        isPulsing && 'animate-pulse bg-brand/15 ring-1 ring-inset ring-brand/40',
       )}
     >
       {Icon && <Icon className="size-4" />}
@@ -304,6 +450,8 @@ export default function PreviewPanel({
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const tab = activeTab ?? tabs[0]
   const type = tab?.type ?? 'preview'
+  const pulsePaymentsTab = useSandbox((s) => s.pulsePaymentsTab)
+  const setPulsePaymentsTab = useSandbox((s) => s.setPulsePaymentsTab)
 
   const hasConvex = Boolean((project?.metadata as any)?.convex)
   const hasMcp = tabs.some((tab) => tab.type === 'mcp')
@@ -392,6 +540,8 @@ export default function PreviewPanel({
         return <McpContent entries={mcpEntries} isLoading={mcpLoading} />
       case 'logs':
         return <LogsContent app={sandboxLogs?.app} opencode={sandboxLogs?.opencode} isLoading={logsLoading} />
+      case 'payments':
+        return <PaymentsContent projectId={projectId} />
     }
   })()
 
@@ -405,8 +555,12 @@ export default function PreviewPanel({
               key={tab.id}
               tab={tab}
               isActive={activeTabId === tab.id}
-              onSelect={() => onTabChange?.(tab.id)}
+              onSelect={() => {
+                onTabChange?.(tab.id)
+                if (tab.type === 'payments') setPulsePaymentsTab(false)
+              }}
               onClose={onCloseTab ? () => onCloseTab(tab.id) : undefined}
+              isPulsing={tab.type === 'payments' && pulsePaymentsTab}
             />
           ))}
           {addTabMenu}

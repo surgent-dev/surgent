@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import { Loader2 } from 'lucide-react'
 import {
@@ -20,6 +20,14 @@ import {
   ArrowSquareOut,
 } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import UsageDialog from '@/components/usage-dialog'
@@ -29,6 +37,7 @@ import { http } from '@/lib/http'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
 import { useGitHubStatus } from '@/queries/github'
+import { useSandbox } from '@/hooks/use-sandbox'
 
 // Types
 interface User {
@@ -66,6 +75,8 @@ const TERMINAL_STATUSES = ['deployed', 'deploy_failed', 'build_failed']
 
 export default function ProjectHeader({ projectId, project }: ProjectHeaderProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
 
   // User state
   const [user, setUser] = useState<User | null>(null)
@@ -78,6 +89,19 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const [isUsageOpen, setIsUsageOpen] = useState(false)
   const [isDeploymentStatusOpen, setIsDeploymentStatusOpen] = useState(false)
   const [isPublishOpen, setIsPublishOpen] = useState(false)
+  const [isStripeSuccessOpen, setIsStripeSuccessOpen] = useState(false)
+
+  // Stripe success handling
+  const setPulsePaymentsTab = useSandbox((s) => s.setPulsePaymentsTab)
+  useEffect(() => {
+    if (searchParams.get('stripe_connected') === 'true') {
+      setIsStripeSuccessOpen(true)
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('stripe_connected')
+      const newQuery = params.toString()
+      router.replace(newQuery ? `${pathname}?${newQuery}` : pathname)
+    }
+  }, [searchParams, pathname, router])
 
   // Edit states
   const [isEditing, setIsEditing] = useState(false)
@@ -483,6 +507,35 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         projectId={projectId}
         worker={worker}
       />
+
+      <Dialog
+        open={isStripeSuccessOpen}
+        onOpenChange={(open) => {
+          setIsStripeSuccessOpen(open)
+          if (!open) {
+            setPulsePaymentsTab(true)
+            setTimeout(() => setPulsePaymentsTab(false), 10000)
+          }
+        }}
+      >
+        <DialogContent overlayClassName="backdrop-blur-sm">
+          <DialogHeader>
+            <DialogTitle>Stripe Connected Successfully!</DialogTitle>
+            <DialogDescription>You can now head to the Payments tab to configure pricing and more.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setIsStripeSuccessOpen(false)
+                setPulsePaymentsTab(true)
+                setTimeout(() => setPulsePaymentsTab(false), 10000)
+              }}
+            >
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

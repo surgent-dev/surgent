@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \"userId\", \"projectId\", \"organizationId\", enabled, \"expiresAt\"\n            FROM apikey\n            WHERE key = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "userId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "projectId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "organizationId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "expiresAt",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "5524659af135dd43c78be011a26d7a8d536b395f6243e10ddc1ff30903cc024d"
+}
