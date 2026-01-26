@@ -26,6 +26,7 @@ import {
 } from '@/queries/projects'
 
 import { useSurpayAccounts, useSurpayConnect } from '@/queries/surpay'
+import { useSandbox } from '@/hooks/use-sandbox'
 
 import DiffView from '@/components/diff/diff-view'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -329,11 +330,13 @@ function TabButton({
   isActive,
   onSelect,
   onClose,
+  isPulsing,
 }: {
   tab: PreviewTab
   isActive: boolean
   onSelect: () => void
   onClose?: () => void
+  isPulsing?: boolean
 }) {
   const closable = tab.type !== 'preview' && tab.type !== 'convex'
   const Icon = getTabIcon(tab.type)
@@ -344,6 +347,7 @@ function TabButton({
       className={cn(
         'group flex items-center gap-1.5 px-2.5 text-sm border-r transition-colors shrink-0',
         isActive ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-muted/50',
+        isPulsing && 'animate-pulse bg-brand/15 ring-1 ring-inset ring-brand/40',
       )}
     >
       {Icon && <Icon className="size-4" />}
@@ -388,6 +392,8 @@ export default function PreviewPanel({
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const tab = activeTab ?? tabs[0]
   const type = tab?.type ?? 'preview'
+  const pulsePaymentsTab = useSandbox((s) => s.pulsePaymentsTab)
+  const setPulsePaymentsTab = useSandbox((s) => s.setPulsePaymentsTab)
 
   const hasConvex = Boolean((project?.metadata as any)?.convex)
   const hasMcp = tabs.some((tab) => tab.type === 'mcp')
@@ -491,8 +497,12 @@ export default function PreviewPanel({
               key={tab.id}
               tab={tab}
               isActive={activeTabId === tab.id}
-              onSelect={() => onTabChange?.(tab.id)}
+              onSelect={() => {
+                onTabChange?.(tab.id)
+                if (tab.type === 'payments') setPulsePaymentsTab(false)
+              }}
               onClose={onCloseTab ? () => onCloseTab(tab.id) : undefined}
+              isPulsing={tab.type === 'payments' && pulsePaymentsTab}
             />
           ))}
           {addTabMenu}
