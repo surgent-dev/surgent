@@ -15,7 +15,8 @@
     "hello": "echo 'Hello World!'",
     "db:migrate": "bun --filter @repo/db db:migrate",
     "db:rollback": "bun --filter @repo/db db:rollback",
-    "db:migrate-dump": "bun --filter @repo/db db:migrate-dump"
+    "db:migrate-dump": "bun --filter @repo/db db:migrate-dump",
+    "tunnel": "bun scripts/tunnel.ts"
   },
   "devDependencies": {
     "@tsconfig/bun": "1.0.10",
