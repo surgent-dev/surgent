@@ -8,7 +8,8 @@ export type {
   AccountTable,
   VerificationTable,
   ProjectTable,
+  ProjectMetadata,
   ChatsTable,
   GitHubInstallationsTable,
-  DeploymentHistoryTable,
+  DeploymentTable,
 } from './src/types'

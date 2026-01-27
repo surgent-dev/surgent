@@ -23,6 +23,7 @@ export interface Database {
   deployment: DeploymentTable
   chats: ChatsTable
   github_installations: GitHubInstallationsTable
+  github_oauth_tokens: GitHubOAuthTokensTable
 }
 
 export interface UserTable {
@@ -208,8 +209,14 @@ export interface IpRateLimitTable {
   count: number
 }
 
+export interface ProjectMetadata {
+  workingDirectory: string
+  processName?: string
+  startCommand?: string
+}
+
 export interface ProjectTable {
-  id: string
+  id?: string
   userId: string
   organizationId: string
   name: string
@@ -218,7 +225,7 @@ export interface ProjectTable {
   settings: any | null
   deployment: any | null
   sandbox: any | null
-  metadata: any | null
+  metadata: ProjectMetadata | null
   createdAt?: Date
   updatedAt?: Date
   deletedAt?: Date | null
@@ -293,15 +300,26 @@ export interface ChatsTable {
 }
 
 export interface GitHubInstallationsTable {
-  id: string
+  id?: string
   userId: string
   installationId: number
   accountLogin: string
   accountType: string
-  userAccessToken: string | null
-  userAccessTokenExpiresAt: Date | null
-  userRefreshToken: string | null
-  userRefreshTokenExpiresAt: Date | null
+  userAccessToken?: string | null
+  userAccessTokenExpiresAt?: Date | null
+  userRefreshToken?: string | null
+  userRefreshTokenExpiresAt?: Date | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface GitHubOAuthTokensTable {
+  id?: string
+  userId: string
+  accessToken: string | null
+  accessTokenExpiresAt: Date | null
+  refreshToken: string | null
+  refreshTokenExpiresAt: Date | null
   createdAt?: Date
   updatedAt?: Date
 }
