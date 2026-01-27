@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE connect_account\n        SET \"projectId\" = NULL, status = 'disconnected'\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "700baeb77aca0a9255f4061073a772713dc547fb14d3883f6542f110391be07d"
+}

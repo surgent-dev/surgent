@@ -362,110 +362,6 @@ async fn test_get_account_success(pool: PgPool) -> TestResult {
     Ok(())
 }
 
-// ==================== GET /accounts/connect/callback ====================
-
-#[sqlx::test(migrations = "./migrations")]
-async fn test_callback_account_not_found(pool: PgPool) -> TestResult {
-    let mut app = create_router(create_test_state(pool).await);
-    let account_id = Uuid::new_v4();
-    let state = "test_state_123";
-
-    let response = app
-        .call(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/accounts/connect/callback?account_id={}&state={}",
-                    account_id, state
-                ))
-                .body(Body::empty())?,
-        )
-        .await?;
-
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Account not found");
-    Ok(())
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn test_callback_success(pool: PgPool) -> TestResult {
-    let mut app = create_router(create_test_state(pool.clone()).await);
-
-    // Seed organization first to avoid foreign key constraint violation
-    let (_org_id, project_id, _) = seed_organization(&pool).await;
-
-    // Insert account with connect_state
-    let account_id = Uuid::new_v4();
-    let connect_state = "test_state_123";
-    sqlx::query!(
-        r#"
-        INSERT INTO connect_account (
-            id,
-            "projectId",
-            country,
-            currency,
-            "isPayoutsEnabled",
-            processor,
-            "processorAccountId",
-            status,
-            "detailsSubmitted",
-            "chargesEnabled",
-            "businessType",
-            data
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        "#,
-        account_id,
-        project_id,
-        "US",
-        "usd",
-        false,
-        "stripe",
-        "acct_test_123",
-        "pending",
-        false,
-        false,
-        None::<String>,
-        json!({ "connect_state": connect_state })
-    )
-    .execute(&pool)
-    .await?;
-
-    // Call callback
-    let response = app
-        .call(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/accounts/connect/callback?account_id={}&state={}",
-                    account_id, connect_state
-                ))
-                .body(Body::empty())?,
-        )
-        .await?;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = read_body(response.into_body()).await;
-    assert_eq!(body["account_id"].as_str().unwrap(), account_id.to_string());
-    assert_eq!(body["status"].as_str().unwrap(), "success");
-    assert_eq!(
-        body["message"].as_str().unwrap(),
-        "Account callback received"
-    );
-
-    // Verify status was updated
-    let account = sqlx::query!(
-        r#"SELECT status FROM connect_account WHERE id = $1"#,
-        account_id
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert_eq!(account.status, "onboarding_returned");
-
-    Ok(())
-}
-
 // ==================== POST /accounts/connect (create_connect_account) ====================
 
 #[sqlx::test(migrations = "./migrations")]
@@ -524,27 +420,19 @@ async fn test_create_connect_account_success(pool: PgPool) -> TestResult {
     assert_eq!(response.status(), StatusCode::OK);
     let body = read_body(response.into_body()).await;
 
-    assert!(body.get("account_id").is_some());
-    let account_id = body["account_id"].as_str().unwrap();
-    assert!(Uuid::parse_str(account_id).is_ok());
-
+    // Response only contains oauth_url (no account_id since no DB row is created)
     assert!(body.get("oauth_url").is_some());
     let oauth_url = body["oauth_url"].as_str().unwrap();
     assert!(oauth_url.contains("oauth"));
 
-    // Verify account was created in database with pending status
-    let account = sqlx::query!(
-        r#"SELECT "projectId", country, currency, processor, "processorAccountId", status, "businessType" FROM connect_account WHERE id = $1"#,
-        Uuid::parse_str(account_id).unwrap()
+    // Verify no account was created in database (state is self-contained)
+    let count = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM connect_account WHERE "projectId" = $1"#,
+        project_id
     )
     .fetch_one(&pool)
     .await?;
-
-    assert_eq!(account.projectId, project_id);
-    assert_eq!(account.country, "US");
-    assert_eq!(account.processor, "stripe");
-    assert_eq!(account.status, "pending");
-    assert!(account.processorAccountId.is_none()); // Initially NULL for OAuth flow
+    assert_eq!(count, 0);
 
     Ok(())
 }
@@ -620,11 +508,7 @@ async fn test_create_connect_account_real_stripe(pool: PgPool) -> TestResult {
     }
     let body = read_body(response.into_body()).await;
 
-    // Verify response contains expected fields
-    assert!(body.get("account_id").is_some());
-    let account_id = body["account_id"].as_str().unwrap();
-    assert!(Uuid::parse_str(account_id).is_ok());
-
+    // Response only contains oauth_url (no account_id since state is self-contained)
     assert!(body.get("oauth_url").is_some());
     let oauth_url = body["oauth_url"].as_str().unwrap();
     assert!(
@@ -633,33 +517,14 @@ async fn test_create_connect_account_real_stripe(pool: PgPool) -> TestResult {
         oauth_url
     );
 
-    // Verify account was created in database with pending status and NULL processorAccountId
-    let account = sqlx::query!(
-        r#"
-        SELECT
-            id,
-            "projectId",
-            country,
-            currency,
-            processor,
-            "processorAccountId",
-            status,
-            "businessType"
-        FROM connect_account
-        WHERE id = $1
-        "#,
-        Uuid::parse_str(account_id).unwrap()
+    // Verify no account was created in database (state is self-contained)
+    let count = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM connect_account WHERE "projectId" = $1"#,
+        project_id
     )
     .fetch_one(&pool)
     .await?;
-
-    assert_eq!(account.projectId, project_id);
-    assert_eq!(account.country, "US");
-    assert_eq!(account.currency, "usd");
-    assert_eq!(account.processor, "stripe");
-    assert_eq!(account.status, "pending");
-    assert!(account.processorAccountId.is_none()); // Initially NULL for OAuth flow
-    // business_type is optional - Stripe may not return it if not specified in the request
+    assert_eq!(count, 0);
 
     Ok(())
 }

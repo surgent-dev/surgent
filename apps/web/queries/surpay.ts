@@ -16,7 +16,6 @@ export interface SurpayAccount {
 }
 
 export interface SurpayConnectResponse {
-  account_id: string
   oauth_url: string
 }
 

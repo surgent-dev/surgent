@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, \"processorAccountId\", data\n        FROM connect_account\n        WHERE \"projectId\" = $1 AND processor = $2\n        ",
+  "query": "\n        SELECT id, \"processorAccountId\"\n        FROM connect_account\n        WHERE \"projectId\" = $1 AND processor = $2\n        ",
   "describe": {
     "columns": [
       {
@@ -12,11 +12,6 @@
         "ordinal": 1,
         "name": "processorAccountId",
         "type_info": "Text"
-      },
-      {
-        "ordinal": 2,
-        "name": "data",
-        "type_info": "Jsonb"
       }
     ],
     "parameters": {
@@ -27,9 +22,8 @@
     },
     "nullable": [
       false,
-      true,
-      false
+      true
     ]
   },
-  "hash": "1075f502a0dcca9fbbbdf8e197006c06117ca04c73844d25d33eda5ae270e6bc"
+  "hash": "dde83da5ea54dbe7a010cc88d8f588049b54e5d5dd2579ed1dd001ff6d429216"
 }
