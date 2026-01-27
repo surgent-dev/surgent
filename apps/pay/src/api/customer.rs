@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
 };
 use chrono;
@@ -83,9 +83,9 @@ pub struct ListCustomersQuery {
 pub async fn list_customers(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
-    Query(query): Query<ListCustomersQuery>,
+    Path(project_id): Path<Uuid>,
 ) -> Result<Json<Vec<Customer>>, (StatusCode, String)> {
-    verify_project_access(&state.pool, auth.user_id, query.project_id).await?;
+    verify_project_access(&state.pool, auth.user_id, project_id).await?;
 
     let rows = sqlx::query!(
         r#"
@@ -98,7 +98,7 @@ pub async fn list_customers(
         FROM customer c
         WHERE c."projectId" = $1
         "#,
-        query.project_id
+        project_id
     )
     .fetch_all(&state.pool)
     .await

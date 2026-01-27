@@ -33,21 +33,24 @@ async fn test_list_accounts_requires_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing API key");
+    assert_eq!(body, "Missing session");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_accounts_empty(pool: PgPool) -> TestResult {
-    let (_org_id, _project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let response = app
         .call(
             Request::builder()
                 .method("GET")
-                .uri("/accounts")
-                .header("Authorization", format!("Bearer {}", api_key))
+                .uri(format!("/accounts?project_id={}", project_id))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie),
+                )
                 .body(Body::empty())?,
         )
         .await?;
@@ -60,8 +63,8 @@ async fn test_list_accounts_empty(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_accounts_returns_project_accounts(pool: PgPool) -> TestResult {
-    let (_org_id1, project_id1, api_key1) = seed_organization(&pool).await;
-    let (_org_id2, project_id2, api_key2) = seed_organization(&pool).await;
+    let (_org_id1, project_id1, session_cookie1) = seed_organization(&pool).await;
+    let (_org_id2, project_id2, session_cookie2) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     // Insert account for project1
@@ -141,8 +144,11 @@ async fn test_list_accounts_returns_project_accounts(pool: PgPool) -> TestResult
         .call(
             Request::builder()
                 .method("GET")
-                .uri("/accounts")
-                .header("Authorization", format!("Bearer {}", api_key1))
+                .uri(format!("/accounts?project_id={}", project_id1))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie1),
+                )
                 .body(Body::empty())?,
         )
         .await?;
@@ -158,8 +164,11 @@ async fn test_list_accounts_returns_project_accounts(pool: PgPool) -> TestResult
         .call(
             Request::builder()
                 .method("GET")
-                .uri("/accounts")
-                .header("Authorization", format!("Bearer {}", api_key2))
+                .uri(format!("/accounts?project_id={}", project_id2))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie2),
+                )
                 .body(Body::empty())?,
         )
         .await?;
@@ -191,13 +200,13 @@ async fn test_get_account_requires_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing API key");
+    assert_eq!(body, "Missing session");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_get_account_not_found(pool: PgPool) -> TestResult {
-    let (_org_id, _project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, _project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
     let account_id = Uuid::new_v4();
 
@@ -206,7 +215,10 @@ async fn test_get_account_not_found(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("GET")
                 .uri(format!("/accounts/{}", account_id))
-                .header("Authorization", format!("Bearer {}", api_key))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie),
+                )
                 .body(Body::empty())?,
         )
         .await?;
@@ -219,8 +231,8 @@ async fn test_get_account_not_found(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_get_account_access_denied(pool: PgPool) -> TestResult {
-    let (_org_id1, project_id1, _api_key1) = seed_organization(&pool).await;
-    let (_org_id2, _project_id2, api_key2) = seed_organization(&pool).await;
+    let (_org_id1, project_id1, _session_cookie1) = seed_organization(&pool).await;
+    let (_org_id2, _project_id2, session_cookie2) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     // Insert account for project1
@@ -259,26 +271,28 @@ async fn test_get_account_access_denied(pool: PgPool) -> TestResult {
     .execute(&pool)
     .await?;
 
-    // Try to access with project2's API key
+    // Try to access with project2's session
     let response = app
         .call(
             Request::builder()
                 .method("GET")
                 .uri(format!("/accounts/{}", account_id))
-                .header("Authorization", format!("Bearer {}", api_key2))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie2),
+                )
                 .body(Body::empty())?,
         )
         .await?;
 
-    // Returns 404 (not found in caller's project context) rather than 403
-    // This is more secure as it doesn't leak existence of accounts in other projects
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    // Returns 403 FORBIDDEN when user doesn't have access to the project
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_get_account_success(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     // Insert account
@@ -323,7 +337,10 @@ async fn test_get_account_success(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("GET")
                 .uri(format!("/accounts/{}", account_id))
-                .header("Authorization", format!("Bearer {}", api_key))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie),
+                )
                 .body(Body::empty())?,
         )
         .await?;
@@ -473,16 +490,17 @@ async fn test_create_connect_account_requires_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body_text = read_body_text(response.into_body()).await;
-    assert_eq!(body_text, "Missing API key");
+    assert_eq!(body_text, "Missing session");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_connect_account_success(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     let body = json!({
+        "project_id": project_id,
         "processor": "stripe",
         "country": "US",
         "email": "test@example.com",
@@ -494,7 +512,10 @@ async fn test_create_connect_account_success(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("POST")
                 .uri("/accounts/connect")
-                .header("Authorization", format!("Bearer {}", api_key))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie),
+                )
                 .header("Content-Type", "application/json")
                 .body(Body::from(body.to_string()))?,
         )
@@ -530,10 +551,11 @@ async fn test_create_connect_account_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_connect_account_missing_country(pool: PgPool) -> TestResult {
-    let (_org_id, _project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let body = json!({
+        "project_id": project_id,
         "processor": "stripe",
         "email": "test@example.com"
         // Note: no country field
@@ -544,7 +566,10 @@ async fn test_create_connect_account_missing_country(pool: PgPool) -> TestResult
             Request::builder()
                 .method("POST")
                 .uri("/accounts/connect")
-                .header("Authorization", format!("Bearer {}", api_key))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie),
+                )
                 .header("Content-Type", "application/json")
                 .body(Body::from(body.to_string()))?,
         )
@@ -564,10 +589,11 @@ async fn test_create_connect_account_real_stripe(pool: PgPool) -> TestResult {
         return Ok(());
     }
 
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state_real_stripe(pool.clone()).await);
 
     let body = json!({
+        "project_id": project_id,
         "processor": "stripe",
         "country": "US",
         "email": "test@example.com"
@@ -578,7 +604,10 @@ async fn test_create_connect_account_real_stripe(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("POST")
                 .uri("/accounts/connect")
-                .header("Authorization", format!("Bearer {}", api_key))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie),
+                )
                 .header("Content-Type", "application/json")
                 .body(Body::from(body.to_string()))?,
         )

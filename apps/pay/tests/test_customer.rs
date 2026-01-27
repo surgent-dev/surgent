@@ -15,7 +15,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_customers_empty(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let response = app
@@ -23,7 +23,10 @@ async fn test_list_customers_empty(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("GET")
                 .uri(format!("/project/{}/customers", project_id))
-                .header("Authorization", format!("Bearer {}", api_key))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie),
+                )
                 .body(Body::empty())?,
         )
         .await?;
@@ -38,7 +41,7 @@ async fn test_list_customers_empty(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_customers_success(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     // Seed a customer directly in the database
@@ -50,7 +53,10 @@ async fn test_list_customers_success(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("GET")
                 .uri(format!("/project/{}/customers", project_id))
-                .header("Authorization", format!("Bearer {}", api_key))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie),
+                )
                 .body(Body::empty())?,
         )
         .await?;
@@ -73,39 +79,38 @@ async fn test_list_customers_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_customers_unauthorized(pool: PgPool) -> TestResult {
-    let (_org1_id, project_id, _api_key1) = seed_organization(&pool).await;
-    let (_org2_id, _project_id2, api_key2) = seed_organization(&pool).await;
+    let (_org1_id, project_id, _session_cookie1) = seed_organization(&pool).await;
+    let (_org2_id, _project_id2, session_cookie2) = seed_organization(&pool).await;
 
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     // Seed a customer in org1's project
     seed_customer(&pool, project_id, "test@example.com", Some("Test Customer")).await;
 
-    // Try to list customers using org2's API key
+    // Try to list customers using org2's session
     let response = app
         .call(
             Request::builder()
                 .method("GET")
                 .uri(format!("/project/{}/customers", project_id))
-                .header("Authorization", format!("Bearer {}", api_key2))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie2),
+                )
                 .body(Body::empty())?,
         )
         .await?;
 
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 
-    let body = read_body(response.into_body()).await;
-    let customers = body.as_array().expect("Expected array response");
-    assert!(
-        customers.is_empty(),
-        "Should return empty array for unauthorized project access"
-    );
+    let body = read_body_text(response.into_body()).await;
+    assert_eq!(body, "Access denied");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_customers_invalid_project(pool: PgPool) -> TestResult {
-    let (_org_id, _project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, _project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let invalid_project_id = Uuid::new_v4();
@@ -115,25 +120,24 @@ async fn test_list_customers_invalid_project(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("GET")
                 .uri(format!("/project/{}/customers", invalid_project_id))
-                .header("Authorization", format!("Bearer {}", api_key))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie),
+                )
                 .body(Body::empty())?,
         )
         .await?;
 
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 
-    let body = read_body(response.into_body()).await;
-    let customers = body.as_array().expect("Expected array response");
-    assert!(
-        customers.is_empty(),
-        "Should return empty array for invalid project"
-    );
+    let body = read_body_text(response.into_body()).await;
+    assert_eq!(body, "Access denied");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_get_customer_success(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     // Seed a customer directly in the database
@@ -145,7 +149,10 @@ async fn test_get_customer_success(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("GET")
                 .uri(format!("/project/{}/customer/{}", project_id, customer_id))
-                .header("Authorization", format!("Bearer {}", api_key))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie),
+                )
                 .body(Body::empty())?,
         )
         .await?;
@@ -172,7 +179,7 @@ async fn test_get_customer_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_get_customer_not_found(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let invalid_customer_id = Uuid::new_v4();
@@ -185,7 +192,10 @@ async fn test_get_customer_not_found(pool: PgPool) -> TestResult {
                     "/project/{}/customer/{}",
                     project_id, invalid_customer_id
                 ))
-                .header("Authorization", format!("Bearer {}", api_key))
+                .header(
+                    "Cookie",
+                    format!("better-auth.session_token={}", session_cookie),
+                )
                 .body(Body::empty())?,
         )
         .await?;

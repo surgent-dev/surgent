@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::{Path, State},
     http::StatusCode,
 };
 use chrono;
@@ -68,9 +68,9 @@ pub struct ListSubscriptionsQuery {
 pub async fn list_subscriptions(
     State(state): State<crate::AppState>,
     auth: AuthenticatedUser,
-    Query(query): Query<ListSubscriptionsQuery>,
+    Path(project_id): Path<Uuid>,
 ) -> Result<Json<Vec<Subscription>>, (StatusCode, String)> {
-    verify_project_access(&state.pool, auth.user_id, query.project_id).await?;
+    verify_project_access(&state.pool, auth.user_id, project_id).await?;
 
     let subscriptions = sqlx::query_as::<_, Subscription>(
         r#"
@@ -83,7 +83,7 @@ pub async fn list_subscriptions(
         ORDER BY "createdAt" DESC
         "#,
     )
-    .bind(query.project_id)
+    .bind(project_id)
     .fetch_all(&state.pool)
     .await
     .map_err(|e| {

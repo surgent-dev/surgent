@@ -963,7 +963,7 @@ async fn create_payment_transaction(
             "projectId", "customerId", "productId", "productPriceId",
             "checkoutSessionId", "chargeId", "succeededAt")
         VALUES ($1, NOW(), 'payment', $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-        ON CONFLICT ("chargeId") DO NOTHING
+        ON CONFLICT ("chargeId") WHERE ("chargeId" IS NOT NULL AND type = 'payment') DO NOTHING
         "#,
         transaction_id,
         params.amount,

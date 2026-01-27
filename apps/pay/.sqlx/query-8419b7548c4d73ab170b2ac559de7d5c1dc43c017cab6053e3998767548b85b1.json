@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO project (id, name, slug, \"organizationId\") VALUES ($1, $2, $3, $4)",
+  "query": "INSERT INTO project (id, name, slug, \"organizationId\", \"userId\") VALUES ($1, $2, $3, $4, $5)",
   "describe": {
     "columns": [],
     "parameters": {
@@ -8,10 +8,11 @@
         "Uuid",
         "Text",
         "Text",
+        "Uuid",
         "Uuid"
       ]
     },
     "nullable": []
   },
-  "hash": "934db4a17d1ad492f6bcd6d4bfadd49136b355c988bc2a7210cc6c240fb5633f"
+  "hash": "8419b7548c4d73ab170b2ac559de7d5c1dc43c017cab6053e3998767548b85b1"
 }

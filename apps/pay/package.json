@@ -10,6 +10,7 @@
     "fmt": "cargo fmt --all --check",
     "fmt:fix": "cargo fmt --all",
     "prepare": "cargo prepare",
-    "prepare:check": "cargo prepare-check"
+    "prepare:check": "cargo prepare-check",
+    "postinstall": "cargo install cargo-watch cargo-nextest --locked"
   }
 }

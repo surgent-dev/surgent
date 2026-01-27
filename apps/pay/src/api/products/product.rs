@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
@@ -366,9 +366,9 @@ pub struct ListProductsWithPricesQuery {
 pub async fn list_products_with_prices(
     State(state): State<crate::AppState>,
     auth: AuthenticatedUser,
-    Query(query): Query<ListProductsWithPricesQuery>,
+    Path(project_id): Path<Uuid>,
 ) -> Result<Json<Vec<ProductWithPricesResponse>>, (StatusCode, String)> {
-    verify_project_access(&state.pool, auth.user_id, query.project_id).await?;
+    verify_project_access(&state.pool, auth.user_id, project_id).await?;
 
     // DISTINCT ON gets the latest version per product_group (sorted by version DESC)
     let products = sqlx::query_as::<_, Product>(
@@ -381,7 +381,7 @@ pub async fn list_products_with_prices(
         ORDER BY p."productGroupId", p.version DESC NULLS LAST
         "#,
     )
-    .bind(query.project_id)
+    .bind(project_id)
     .fetch_all(&state.pool)
     .await
     .map_err(|e| {

@@ -9,7 +9,9 @@ use sqlx::PgPool;
 use tower::Service;
 use uuid::Uuid;
 
-use common::{TestAppExt, create_test_state, read_body, read_body_text, seed_organization};
+use common::{
+    TestAppExt, create_test_state, read_body, read_body_text, seed_api_key, seed_organization,
+};
 use surpay::api::create_router;
 use surpay::types::CheckoutStatus;
 
@@ -43,12 +45,13 @@ async fn test_create_checkout_missing_auth(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_invalid_product(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let (_product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
     let price_id = app
-        .create_product_price(&api_key, project_id, product_group_id)
+        .create_product_price(&session_cookie, project_id, product_group_id)
         .await;
 
     let body = json!({
@@ -77,10 +80,11 @@ async fn test_create_checkout_invalid_product(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_invalid_price(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (product_id, _) = app.create_product(&api_key, project_id).await;
+    let (product_id, _) = app.create_product(&session_cookie, project_id).await;
 
     let body = json!({
         "product_id": product_id,
@@ -108,17 +112,18 @@ async fn test_create_checkout_invalid_price(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_price_not_for_product(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
     // Create product 1 and its price
-    let (_product_id1, product_group_id1) = app.create_product(&api_key, project_id).await;
+    let (_product_id1, product_group_id1) = app.create_product(&session_cookie, project_id).await;
     let price_id1 = app
-        .create_product_price(&api_key, project_id, product_group_id1)
+        .create_product_price(&session_cookie, project_id, product_group_id1)
         .await;
 
     // Create product 2
-    let (product_id2, _) = app.create_product(&api_key, project_id).await;
+    let (product_id2, _) = app.create_product(&session_cookie, project_id).await;
 
     // Try to create checkout with product_id2 but price_id1 (which belongs to product_id1)
     let body = json!({
@@ -147,15 +152,18 @@ async fn test_create_checkout_price_not_for_product(pool: PgPool) -> TestResult 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_wrong_org(pool: PgPool) -> TestResult {
-    let (_org1_id, project_id1, api_key1) = seed_organization(&pool).await;
-    let (_org2_id, _project_id2, api_key2) = seed_organization(&pool).await;
+    let (_org1_id, project_id1, session_cookie1) = seed_organization(&pool).await;
+    let (_org2_id, project_id2, _session_cookie2) = seed_organization(&pool).await;
+
+    let _api_key1 = seed_api_key(&pool, project_id1).await;
+    let api_key2 = seed_api_key(&pool, project_id2).await;
 
     let mut app = create_router(create_test_state(pool).await);
 
     // Create product under org1
-    let (product_id1, product_group_id1) = app.create_product(&api_key1, project_id1).await;
+    let (product_id1, product_group_id1) = app.create_product(&session_cookie1, project_id1).await;
     let price_id1 = app
-        .create_product_price(&api_key1, project_id1, product_group_id1)
+        .create_product_price(&session_cookie1, project_id1, product_group_id1)
         .await;
 
     // Try to create checkout with org2's API key for org1's product
@@ -199,15 +207,16 @@ async fn test_create_checkout_wrong_org(pool: PgPool) -> TestResult {
 #[sqlx::test(migrations = "./migrations")]
 async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
     // Step 1: Create organization (includes project)
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     // Step 2: Create product (auto-creates Stripe product)
-    let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let (product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
 
     // Step 4: Create product price (auto-creates Stripe price)
     let price_id = app
-        .create_product_price(&api_key, project_id, product_group_id)
+        .create_product_price(&session_cookie, project_id, product_group_id)
         .await;
 
     // Step 5: Create checkout session
@@ -321,16 +330,17 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
 #[sqlx::test(migrations = "./migrations")]
 async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestResult {
     // Step 1: Create organization (includes project)
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
     // Step 2: Create product (auto-creates Stripe product)
-    let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let (product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
 
     // Step 4: Create recurring product price (auto-creates Stripe price with recurring interval)
     let price_id = app
         .create_product_price_with_details(
-            &api_key,
+            &session_cookie,
             common::ProductPriceDetails {
                 project_id,
                 product_group_id,
