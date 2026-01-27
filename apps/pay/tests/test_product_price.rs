@@ -19,11 +19,11 @@ async fn test_create_product_price_success(pool: PgPool) -> TestResult {
     let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&session_cookie, project_id).await;
 
     let body = json!({
         "project_id": project_id,
-        "product_group_id": product_group_id,
+        "product_group_id": product.product_group_id,
         "name": "Monthly Plan",
         "description": "Monthly subscription",
         "price": 1999,
@@ -58,11 +58,11 @@ async fn test_create_product_price_minimal(pool: PgPool) -> TestResult {
     let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&session_cookie, project_id).await;
 
     let body = json!({
         "project_id": project_id,
-        "product_group_id": product_group_id,
+        "product_group_id": product.product_group_id,
         "price": 999,
         "price_currency": "USD"
     });
@@ -125,11 +125,11 @@ async fn test_create_product_price_wrong_project(pool: PgPool) -> TestResult {
     let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&session_cookie, project_id).await;
 
     let body = json!({
         "project_id": Uuid::new_v4(),
-        "product_group_id": product_group_id,
+        "product_group_id": product.product_group_id,
         "price": 999,
         "price_currency": "USD"
     });
@@ -161,11 +161,11 @@ async fn test_create_product_price_cross_org_access(pool: PgPool) -> TestResult 
 
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&session_cookie1, project_id).await;
+    let product = app.create_product(&session_cookie1, project_id).await;
 
     let body = json!({
         "project_id": project_id,
-        "product_group_id": product_group_id,
+        "product_group_id": product.product_group_id,
         "price": 999,
         "price_currency": "USD"
     });
@@ -221,11 +221,11 @@ async fn test_create_product_price_missing_required_fields(pool: PgPool) -> Test
     let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&session_cookie, project_id).await;
 
     let body = json!({
         "project_id": project_id,
-        "product_group_id": product_group_id
+        "product_group_id": product.product_group_id
     });
 
     let response = app
@@ -257,11 +257,11 @@ async fn test_create_product_price_stripe_integration(pool: PgPool) -> TestResul
     let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
-    let (_product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&session_cookie, project_id).await;
 
     let body = json!({
         "project_id": project_id,
-        "product_group_id": product_group_id,
+        "product_group_id": product.product_group_id,
         "name": "Monthly Plan",
         "description": "Monthly subscription",
         "price": 1999,
@@ -320,12 +320,12 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
     let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&session_cookie, project_id).await;
 
     // Create a recurring monthly price at $10
     let monthly_body = json!({
         "project_id": project_id,
-        "product_group_id": product_group_id,
+        "product_group_id": product.product_group_id,
         "name": "Monthly",
         "price": 1000,
         "price_currency": "USD",
@@ -354,7 +354,7 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
     // Create a one-time price at $10 (same amount, no interval)
     let onetime_body = json!({
         "project_id": project_id,
-        "product_group_id": product_group_id,
+        "product_group_id": product.product_group_id,
         "name": "One-time",
         "price": 1000,
         "price_currency": "USD"

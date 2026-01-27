@@ -12,33 +12,39 @@ use crate::core::config::Config;
 use crate::integrations::ProcessorRegistry;
 use crate::integrations::stripe::fetch_checkout_session;
 use crate::integrations::types::{CheckoutLineItem, CreateCheckoutSessionRequest};
-use crate::types::RecurringInterval;
+use crate::types::{CheckoutMode, RecurringInterval};
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CustomerData {
+    pub email: Option<String>,
+    pub name: Option<String>,
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateCheckoutRequest {
-    pub product_id: Uuid,
-    pub price_id: Uuid,
-    pub success_url: String,
-    pub cancel_url: String,
+    pub customer_id: String,
+    pub product_id: String,
+    pub price_id: Option<String>,
+    pub success_url: Option<String>,
+    pub cancel_url: Option<String>,
+    pub customer_data: Option<CustomerData>,
 }
 
 impl CreateCheckoutRequest {
-    /// Validates that success_url and cancel_url are valid HTTPS URLs
+    /// Validates that success_url and cancel_url (if provided) are valid HTTPS URLs
     pub fn validate(&self) -> Result<(), String> {
-        // Validate success_url
-        let success_url =
-            Url::parse(&self.success_url).map_err(|e| format!("Invalid success_url: {}", e))?;
-
-        if success_url.scheme() != "https" {
-            return Err("success_url must use HTTPS".to_string());
+        if let Some(ref url) = self.success_url {
+            let parsed = Url::parse(url).map_err(|e| format!("Invalid success_url: {}", e))?;
+            if parsed.scheme() != "https" {
+                return Err("success_url must use HTTPS".to_string());
+            }
         }
 
-        // Validate cancel_url
-        let cancel_url =
-            Url::parse(&self.cancel_url).map_err(|e| format!("Invalid cancel_url: {}", e))?;
-
-        if cancel_url.scheme() != "https" {
-            return Err("cancel_url must use HTTPS".to_string());
+        if let Some(ref url) = self.cancel_url {
+            let parsed = Url::parse(url).map_err(|e| format!("Invalid cancel_url: {}", e))?;
+            if parsed.scheme() != "https" {
+                return Err("cancel_url must use HTTPS".to_string());
+            }
         }
 
         Ok(())
@@ -48,7 +54,7 @@ impl CreateCheckoutRequest {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CreateCheckoutResponse {
     pub checkout_url: String,
-    pub session_id: Uuid,
+    pub customer_id: String,
 }
 
 /// Create a new checkout session
@@ -79,12 +85,12 @@ pub async fn create_checkout_session(
     req.validate()
         .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
 
-    // Validate product belongs to the authenticated project
+    // Look up product by slug + project_id
     let product = sqlx::query!(
         r#"
         SELECT p.id, p."projectId"
         FROM product p
-        WHERE p.id = $1 AND p."projectId" = $2
+        WHERE p.slug = $1 AND p."projectId" = $2
         "#,
         req.product_id,
         auth.project_id
@@ -104,16 +110,55 @@ pub async fn create_checkout_session(
     ))?;
 
     let project_id = product.projectId;
+    let product_id = product.id;
 
-    // Same with price
+    // Look up price by slug if provided, otherwise get first price for product
     let price = sqlx::query!(
         r#"
         SELECT id, "processorPriceId", "priceAmount", "recurringInterval" as "recurring_interval: Option<RecurringInterval>"
         FROM product_price
-        WHERE id = $1 AND "productId" = $2
+        WHERE "productId" = $1 AND ($2::text IS NULL OR slug = $2)
+        ORDER BY "createdAt" ASC
+        LIMIT 1
         "#,
-        req.price_id,
-        req.product_id
+        product_id,
+        req.price_id.as_deref()
+    )
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?
+    .ok_or((
+        StatusCode::NOT_FOUND,
+        "Price not found for this product".to_string(),
+    ))?;
+
+    let price_id = price.id;
+
+    let processor_price_id = price.processorPriceId.ok_or((
+        StatusCode::BAD_REQUEST,
+        "Price must have a processorPriceId".to_string(),
+    ))?;
+
+    let mode = if price.recurring_interval.is_some() {
+        CheckoutMode::Subscription
+    } else {
+        CheckoutMode::Payment
+    };
+
+    // Get-or-create customer by (project_id, external_id)
+    let existing_customer = sqlx::query!(
+        r#"
+        SELECT id, "processorCustomerId"
+        FROM customer
+        WHERE "projectId" = $1 AND "externalId" = $2
+        "#,
+        project_id,
+        req.customer_id
     )
     .fetch_optional(&pool)
     .await
@@ -124,20 +169,39 @@ pub async fn create_checkout_session(
         )
     })?;
 
-    let price = price.ok_or((
-        StatusCode::NOT_FOUND,
-        "Price not found for this product".to_string(),
-    ))?;
+    let (customer_id, processor_customer_id) = match existing_customer {
+        Some(c) => (c.id, c.processorCustomerId),
+        None => {
+            let new_id = Uuid::new_v4();
+            let email = req
+                .customer_data
+                .as_ref()
+                .and_then(|d| d.email.clone())
+                .unwrap_or_default();
+            let name = req.customer_data.as_ref().and_then(|d| d.name.clone());
 
-    let processor_price_id = price.processorPriceId.ok_or((
-        StatusCode::BAD_REQUEST,
-        "Price must have a processorPriceId".to_string(),
-    ))?;
+            sqlx::query!(
+                r#"
+                INSERT INTO customer (id, "projectId", "externalId", email, name)
+                VALUES ($1, $2, $3, $4, $5)
+                "#,
+                new_id,
+                project_id,
+                req.customer_id,
+                email,
+                name
+            )
+            .execute(&pool)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Database error: {}", e),
+                )
+            })?;
 
-    let mode = if price.recurring_interval.is_some() {
-        "subscription"
-    } else {
-        "payment"
+            (new_id, None)
+        }
     };
 
     // Look up project's connected account for destination charges
@@ -221,8 +285,13 @@ pub async fn create_checkout_session(
             }],
             success_url: proxy_success_url,
             cancel_url: proxy_cancel_url,
-            mode: mode.to_string(),
-            customer: None,
+            mode: match mode {
+                CheckoutMode::Payment => "payment",
+                CheckoutMode::Subscription => "subscription",
+                CheckoutMode::Setup => "setup",
+            }
+            .to_string(),
+            customer: processor_customer_id,
             // Stripe's current implementation derives idempotency from metadata. Use a random
             // value to preserve the current "new session per request" behavior.
             metadata: HashMap::from([("idempotency_key".to_string(), Uuid::new_v4().to_string())]),
@@ -233,13 +302,29 @@ pub async fn create_checkout_session(
         .map_err(|e| {
             tracing::error!(
                 processor_price_id = %processor_price_id,
-                product_id = %req.product_id,
-                price_id = %req.price_id,
+                product_slug = %req.product_id,
+                price_slug = ?req.price_id,
                 error = %e,
                 "Failed to create checkout session"
             );
             (StatusCode::BAD_GATEWAY, e)
         })?;
+
+    // Default success/cancel URLs to app's redirect endpoints if not provided
+    let final_success_url = req.success_url.clone().unwrap_or_else(|| {
+        format!(
+            "{}/checkout/success/{}",
+            config.surpay_base_url.trim_end_matches('/'),
+            processor_session.id
+        )
+    });
+    let final_cancel_url = req.cancel_url.clone().unwrap_or_else(|| {
+        format!(
+            "{}/checkout/cancel/{}",
+            config.surpay_base_url.trim_end_matches('/'),
+            processor_session.id
+        )
+    });
 
     let session_id = Uuid::new_v4();
     sqlx::query!(
@@ -250,18 +335,22 @@ pub async fn create_checkout_session(
             "projectId",
             "productId",
             "priceId",
+            "customerId",
             "successUrl",
-            "cancelUrl"
+            "cancelUrl",
+            mode
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
         session_id,
         &processor_session.id,
         project_id,
-        req.product_id,
-        req.price_id,
-        &req.success_url,
-        &req.cancel_url
+        product_id,
+        price_id,
+        customer_id,
+        &final_success_url,
+        &final_cancel_url,
+        mode as CheckoutMode
     )
     .execute(&pool)
     .await
@@ -272,7 +361,7 @@ pub async fn create_checkout_session(
         )
     })?;
 
-    let checkout_url = processor_session.url.ok_or((
+    let url = processor_session.url.ok_or((
         StatusCode::INTERNAL_SERVER_ERROR,
         "Processor did not return a checkout URL".to_string(),
     ))?;
@@ -280,8 +369,8 @@ pub async fn create_checkout_session(
     Ok((
         StatusCode::CREATED,
         Json(CreateCheckoutResponse {
-            checkout_url,
-            session_id,
+            checkout_url: url,
+            customer_id: req.customer_id,
         }),
     ))
 }

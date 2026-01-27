@@ -163,6 +163,14 @@ pub async fn create_product(
     .execute(pool)
     .await
     .map_err(|e| {
+        if let sqlx::Error::Database(db_err) = &e
+            && db_err.constraint() == Some("product_project_id_slug_key")
+        {
+            return (
+                StatusCode::CONFLICT,
+                "Product with this slug already exists in project".to_string(),
+            );
+        }
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Database error: {}", e),
@@ -303,6 +311,11 @@ pub async fn update_product(
     let new_version = max_version + 1;
     let new_product_id = Uuid::new_v4();
 
+    // Generate new slug: use provided slug, or append version to existing slug
+    let new_slug = req
+        .slug
+        .unwrap_or_else(|| format!("{}-v{}", existing.slug, new_version));
+
     sqlx::query!(
         r#"
         INSERT INTO product (
@@ -316,7 +329,7 @@ pub async fn update_product(
         existing.project_id,
         req.name.unwrap_or(existing.name),
         req.description.or(existing.description),
-        req.slug.unwrap_or(existing.slug),
+        new_slug,
         new_version,
         req.is_default.or(existing.is_default).unwrap_or(false),
         req.is_archived.or(existing.is_archived).unwrap_or(false)

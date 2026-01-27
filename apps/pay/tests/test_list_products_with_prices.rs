@@ -21,9 +21,9 @@ async fn test_list_products_with_prices_success(pool: PgPool) -> TestResult {
     let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&session_cookie, project_id).await;
     let _price_id = app
-        .create_product_price(&session_cookie, project_id, product_group_id)
+        .create_product_price(&session_cookie, project_id, product.product_group_id)
         .await;
 
     let response = app
@@ -128,7 +128,7 @@ async fn test_list_products_with_prices_returns_only_latest_version(pool: PgPool
     assert_eq!(product["version"].as_i64(), Some(2));
     assert_eq!(
         product["id"].as_str(),
-        Some(v2_product_id.to_string().as_str())
+        Some(v2_product_id.0.to_string().as_str())
     );
     Ok(())
 }
@@ -175,7 +175,7 @@ async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestRes
     let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&session_cookie, project_id).await;
 
     // Add multiple prices (with different amounts to avoid idempotency collisions)
     let _price1 = app
@@ -183,7 +183,7 @@ async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestRes
             &session_cookie,
             ProductPriceDetails {
                 project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Price 1",
                 price: 1001,
                 currency: "USD",
@@ -196,7 +196,7 @@ async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestRes
             &session_cookie,
             ProductPriceDetails {
                 project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Price 2",
                 price: 1002,
                 currency: "USD",
@@ -209,7 +209,7 @@ async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestRes
             &session_cookie,
             ProductPriceDetails {
                 project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Price 3",
                 price: 1003,
                 currency: "USD",
@@ -288,14 +288,14 @@ async fn test_list_products_with_prices_price_values_are_correct(pool: PgPool) -
     let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&session_cookie, project_id).await;
 
     let price_id = app
         .create_product_price_with_details(
             &session_cookie,
             ProductPriceDetails {
                 project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Monthly Plan",
                 price: 2999,
                 currency: "EUR",
@@ -345,14 +345,14 @@ async fn test_list_products_with_prices_multiple_prices_with_different_values(
     let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&session_cookie, project_id).await;
 
     let monthly_id = app
         .create_product_price_with_details(
             &session_cookie,
             ProductPriceDetails {
                 project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Monthly",
                 price: 999,
                 currency: "USD",
@@ -365,7 +365,7 @@ async fn test_list_products_with_prices_multiple_prices_with_different_values(
             &session_cookie,
             ProductPriceDetails {
                 project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Yearly",
                 price: 9999,
                 currency: "USD",
@@ -423,14 +423,14 @@ async fn test_list_products_with_prices_organization_isolation(pool: PgPool) -> 
 
     let mut app = create_router(create_test_state(pool).await);
 
-    let (product1_id, product_group1) = app.create_product(&session_cookie1, project1_id).await;
-    let (_product2_id, product_group2) = app.create_product(&session_cookie2, project2_id).await;
+    let product1 = app.create_product(&session_cookie1, project1_id).await;
+    let product2 = app.create_product(&session_cookie2, project2_id).await;
 
     let _price1 = app
-        .create_product_price(&session_cookie1, project1_id, product_group1)
+        .create_product_price(&session_cookie1, project1_id, product1.product_group_id)
         .await;
     let _price2 = app
-        .create_product_price(&session_cookie2, project2_id, product_group2)
+        .create_product_price(&session_cookie2, project2_id, product2.product_group_id)
         .await;
 
     // Authenticate as org1, should only see org1's products
@@ -454,6 +454,6 @@ async fn test_list_products_with_prices_organization_isolation(pool: PgPool) -> 
     assert_eq!(products.len(), 1, "Should only see org1's product");
 
     let product_id = products[0]["product"]["id"].as_str();
-    assert_eq!(product_id, Some(product1_id.to_string().as_str()));
+    assert_eq!(product_id, Some(product1.id.to_string().as_str()));
     Ok(())
 }

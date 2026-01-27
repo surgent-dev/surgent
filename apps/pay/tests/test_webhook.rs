@@ -123,9 +123,9 @@ async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) 
     let state = create_test_state(pool.clone()).await;
     let mut app = create_router(state.clone());
 
-    let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let product = app.create_product(&api_key, project_id).await;
     let price_id = app
-        .create_product_price(&api_key, project_id, product_group_id)
+        .create_product_price(&api_key, project_id, product.product_group_id)
         .await;
 
     // Create a checkout session directly in DB (simulating what /checkout does)
@@ -141,7 +141,7 @@ async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) 
     .bind(checkout_id)
     .bind(&processor_checkout_id)
     .bind(project_id)
-    .bind(product_id)
+    .bind(product.id)
     .bind(price_id)
     .execute(&pool)
     .await?;
@@ -224,7 +224,7 @@ async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) 
     .fetch_one(&pool)
     .await?;
 
-    assert_eq!(customer.email, "buyer@example.com");
+    assert_eq!(customer.email.as_deref(), Some("buyer@example.com"));
     assert_eq!(customer.name.as_deref(), Some("Test Buyer"));
     assert_eq!(customer.processorCustomerId.as_deref(), Some("cus_test123"));
 
@@ -250,9 +250,9 @@ async fn test_checkout_expired_updates_status(pool: PgPool) -> TestResult {
     let state = create_test_state(pool.clone()).await;
     let mut app = create_router(state.clone());
 
-    let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let product = app.create_product(&api_key, project_id).await;
     let price_id = app
-        .create_product_price(&api_key, project_id, product_group_id)
+        .create_product_price(&api_key, project_id, product.product_group_id)
         .await;
 
     // Create checkout session
@@ -268,7 +268,7 @@ async fn test_checkout_expired_updates_status(pool: PgPool) -> TestResult {
     .bind(checkout_id)
     .bind(&processor_checkout_id)
     .bind(project_id)
-    .bind(product_id)
+    .bind(product.id)
     .bind(price_id)
     .execute(&pool)
     .await?;

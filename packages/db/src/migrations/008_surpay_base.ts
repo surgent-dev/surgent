@@ -51,7 +51,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .createTable('connect_account')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id'))
+    .addColumn('projectId', 'uuid', (col) => col.references('project.id'))
     .addColumn('country', 'varchar(2)', (col) => col.notNull())
     .addColumn('currency', 'varchar(3)', (col) => col.notNull())
     .addColumn('isPayoutsEnabled', 'boolean', (col) => col.notNull())
@@ -107,6 +107,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('isDefault', 'boolean')
     .addColumn('processor', 'text', (col) => col.notNull().defaultTo('stripe'))
     .addColumn('processorPriceId', 'text')
+    .addColumn('slug', 'text')
     .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
@@ -117,7 +118,8 @@ export async function up(db: Kysely<any>): Promise<void> {
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id'))
-    .addColumn('email', 'varchar(320)', (col) => col.notNull())
+    .addColumn('externalId', 'text', (col) => col.notNull())
+    .addColumn('email', 'varchar(320)')
     .addColumn('name', 'text')
     .addColumn('processor', 'text', (col) => col.notNull().defaultTo('stripe'))
     .addColumn('processorCustomerId', 'text')
@@ -499,6 +501,8 @@ export async function up(db: Kysely<any>): Promise<void> {
   // Unique constraints via raw SQL (complex constraints not easily expressed in Kysely)
   await sql`ALTER TABLE project ADD CONSTRAINT project_slug_key UNIQUE (slug)`.execute(db)
   await sql`ALTER TABLE customer ADD CONSTRAINT customer_project_id_email_key UNIQUE ("projectId", email)`.execute(
+  await sql`ALTER TABLE product ADD CONSTRAINT product_project_id_slug_key UNIQUE ("projectId", slug)`.execute(db)
+  await sql`ALTER TABLE customer ADD CONSTRAINT customer_project_id_external_id_key UNIQUE ("projectId", "externalId")`.execute(
     db,
   )
   await sql`ALTER TABLE checkout_session ADD CONSTRAINT checkout_session_processor_checkout_id_key UNIQUE (processor, "processorCheckoutId")`.execute(
@@ -529,6 +533,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     db,
   )
   await sql`ALTER TABLE feature ADD CONSTRAINT feature_project_id_name_key UNIQUE ("projectId", name)`.execute(
+    db,
+  )
+  await sql`CREATE UNIQUE INDEX ix_product_price_product_id_slug ON product_price("productId", slug) WHERE slug IS NOT NULL`.execute(
     db,
   )
   await sql`ALTER TABLE entitlement ADD CONSTRAINT entitlement_product_id_feature_id_key UNIQUE ("productId", "featureId")`.execute(
@@ -814,6 +821,7 @@ export async function down(db: Kysely<any>): Promise<void> {
   // Drop indexes (PostgreSQL automatically drops indexes when table is dropped, but we can be explicit)
   await db.schema.dropIndex('ix_processed_webhook_event_unprocessed').ifExists().execute()
   await db.schema.dropIndex('ix_payout_processor_payout_id').ifExists().execute()
+  await db.schema.dropIndex('ix_product_price_product_id_slug').ifExists().execute()
   await db.schema.dropIndex('ix_connect_account_processor_account_id').ifExists().execute()
   await db.schema.dropIndex('ix_refund_processor_id').ifExists().execute()
   await db.schema.dropIndex('ix_transaction_processor_invoice_id').ifExists().execute()
@@ -887,6 +895,8 @@ export async function down(db: Kysely<any>): Promise<void> {
 
   // Drop unique constraints before dropping columns
   await sql`ALTER TABLE project DROP CONSTRAINT IF EXISTS project_slug_key`.execute(db)
+  await sql`ALTER TABLE product DROP CONSTRAINT IF EXISTS product_project_id_slug_key`.execute(db)
+  await sql`ALTER TABLE customer DROP CONSTRAINT IF EXISTS customer_project_id_external_id_key`.execute(db)
 
   // Drop columns from existing tables
   await db.schema.alterTable('project').dropColumn('slug').execute()

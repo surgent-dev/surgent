@@ -272,7 +272,7 @@ CREATE TABLE public.checkout_session (
 
 CREATE TABLE public.connect_account (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    "projectId" uuid NOT NULL,
+    "projectId" uuid,
     country character varying(2) NOT NULL,
     currency character varying(3) NOT NULL,
     "isPayoutsEnabled" boolean NOT NULL,
@@ -295,7 +295,8 @@ CREATE TABLE public.connect_account (
 CREATE TABLE public.customer (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     "projectId" uuid NOT NULL,
-    email character varying(320) NOT NULL,
+    "externalId" text NOT NULL,
+    email character varying(320),
     name text,
     processor text DEFAULT 'stripe'::text NOT NULL,
     "processorCustomerId" text,
@@ -765,6 +766,7 @@ CREATE TABLE public.product_price (
     "isDefault" boolean,
     processor text DEFAULT 'stripe'::text NOT NULL,
     "processorPriceId" text,
+    slug text,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -1134,11 +1136,11 @@ ALTER TABLE ONLY public.customer_product
 
 
 --
--- Name: customer customer_project_id_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: customer customer_project_id_external_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.customer
-    ADD CONSTRAINT customer_project_id_email_key UNIQUE ("projectId", email);
+    ADD CONSTRAINT customer_project_id_external_id_key UNIQUE ("projectId", "externalId");
 
 
 --
@@ -1387,6 +1389,14 @@ ALTER TABLE ONLY public.product
 
 ALTER TABLE ONLY public.product_price
     ADD CONSTRAINT product_price_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: product product_project_id_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.product
+    ADD CONSTRAINT product_project_id_slug_key UNIQUE ("projectId", slug);
 
 
 --
@@ -1838,6 +1848,13 @@ CREATE INDEX ix_processed_webhook_event_handled_at ON public.processed_webhook_e
 --
 
 CREATE INDEX ix_processed_webhook_event_unprocessed ON public.processed_webhook_event USING btree ("processedAt") WHERE ("handledAt" IS NULL);
+
+
+--
+-- Name: ix_product_price_product_id_slug; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ix_product_price_product_id_slug ON public.product_price USING btree ("productId", slug) WHERE (slug IS NOT NULL);
 
 
 --

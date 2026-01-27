@@ -378,14 +378,16 @@ pub async fn seed_customer(
     name: Option<&str>,
 ) -> Uuid {
     let customer_id = Uuid::new_v4();
+    let external_id = format!("test-{}", &customer_id.to_string()[..8]);
 
     sqlx::query!(
         r#"
-        INSERT INTO customer (id, "projectId", email, name)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO customer (id, "projectId", "externalId", email, name)
+        VALUES ($1, $2, $3, $4, $5)
         "#,
         customer_id,
         project_id,
+        external_id,
         email,
         name
     )
@@ -578,6 +580,13 @@ pub struct ProductPriceDetails<'a> {
     pub recurring_interval: Option<&'a str>,
 }
 
+/// Result of creating a product, containing both UUID and slug
+pub struct CreatedProduct {
+    pub id: Uuid,
+    pub slug: String,
+    pub product_group_id: Uuid,
+}
+
 pub trait TestAppExt {
     fn create_project(
         &mut self,
@@ -588,14 +597,14 @@ pub trait TestAppExt {
         &mut self,
         session_cookie: &str,
         project_id: Uuid,
-    ) -> impl std::future::Future<Output = (Uuid, Uuid)> + Send;
+    ) -> impl std::future::Future<Output = CreatedProduct> + Send;
 
     fn create_product_with_group(
         &mut self,
         session_cookie: &str,
         project_id: Uuid,
         product_group_id: Uuid,
-    ) -> impl std::future::Future<Output = Uuid> + Send;
+    ) -> impl std::future::Future<Output = (Uuid, String)> + Send;
 
     fn create_product_price(
         &mut self,
@@ -640,7 +649,7 @@ impl TestAppExt for Router {
         Uuid::parse_str(body["id"].as_str().unwrap()).unwrap()
     }
 
-    async fn create_product(&mut self, session_cookie: &str, project_id: Uuid) -> (Uuid, Uuid) {
+    async fn create_product(&mut self, session_cookie: &str, project_id: Uuid) -> CreatedProduct {
         let product_group_id = Uuid::new_v4();
         let slug = format!("test-product-{}", &Uuid::new_v4().to_string()[..8]);
         let response = self
@@ -668,8 +677,12 @@ impl TestAppExt for Router {
             .unwrap();
 
         let body = read_body(response.into_body()).await;
-        let product_id = Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap();
-        (product_id, product_group_id)
+        let id = Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap();
+        CreatedProduct {
+            id,
+            slug,
+            product_group_id,
+        }
     }
 
     async fn create_product_with_group(
@@ -677,7 +690,7 @@ impl TestAppExt for Router {
         session_cookie: &str,
         project_id: Uuid,
         product_group_id: Uuid,
-    ) -> Uuid {
+    ) -> (Uuid, String) {
         let slug = format!("test-product-{}", &Uuid::new_v4().to_string()[..8]);
         let response = self
             .call(
@@ -704,7 +717,8 @@ impl TestAppExt for Router {
             .unwrap();
 
         let body = read_body(response.into_body()).await;
-        Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap()
+        let id = Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap();
+        (id, slug)
     }
 
     async fn create_product_price(

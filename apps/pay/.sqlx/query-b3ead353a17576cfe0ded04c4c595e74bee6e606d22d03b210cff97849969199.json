@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \"projectId\", \"productId\", status as \"status: CheckoutStatus\", \"processorCheckoutId\", mode as \"mode: CheckoutMode\"\n        FROM checkout_session\n        WHERE \"projectId\" = $1\n        ORDER BY \"createdAt\" DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "projectId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "productId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status: CheckoutStatus",
+        "type_info": {
+          "Custom": {
+            "name": "checkout_status",
+            "kind": {
+              "Enum": [
+                "open",
+                "complete",
+                "expired"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "processorCheckoutId",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "mode: CheckoutMode",
+        "type_info": {
+          "Custom": {
+            "name": "checkout_mode",
+            "kind": {
+              "Enum": [
+                "payment",
+                "subscription",
+                "setup"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "b3ead353a17576cfe0ded04c4c595e74bee6e606d22d03b210cff97849969199"
+}

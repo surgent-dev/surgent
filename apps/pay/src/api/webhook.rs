@@ -928,19 +928,23 @@ async fn find_or_create_customer(
     name: Option<&str>,
     processor_customer_id: Option<&str>,
 ) -> Result<Uuid, String> {
+    let external_id =
+        processor_customer_id.ok_or("processor_customer_id required for customer lookup")?;
     let new_customer_id = Uuid::new_v4();
     let result = sqlx::query!(
         r#"
-        INSERT INTO customer (id, "projectId", email, name, "processorCustomerId")
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT ("projectId", email) DO UPDATE
+        INSERT INTO customer (id, "projectId", "externalId", email, name, "processorCustomerId")
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT ("projectId", "externalId") DO UPDATE
         SET "processorCustomerId" = COALESCE(EXCLUDED."processorCustomerId", customer."processorCustomerId"),
             name = COALESCE(EXCLUDED.name, customer.name),
+            email = COALESCE(EXCLUDED.email, customer.email),
             "updatedAt" = NOW()
         RETURNING id
         "#,
         new_customer_id,
         project_id,
+        external_id,
         email,
         name,
         processor_customer_id

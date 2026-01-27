@@ -290,7 +290,7 @@ async fn test_create_product_wrong_org_project(pool: PgPool) -> TestResult {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn test_create_product_duplicate_slug_allowed(pool: PgPool) -> TestResult {
+async fn test_create_product_duplicate_slug_rejected(pool: PgPool) -> TestResult {
     let (org_id, project_id, _api_key) = seed_organization(&pool).await;
     let (_user_id, session_cookie) = seed_session(&pool, org_id).await;
     let mut app = create_router(create_test_state(pool).await);
@@ -321,7 +321,7 @@ async fn test_create_product_duplicate_slug_allowed(pool: PgPool) -> TestResult 
 
     assert_eq!(response.status(), StatusCode::CREATED);
 
-    // Second request with same slug should also succeed (slug not unique)
+    // Second request with same slug should fail (slug unique per project)
     let response = app
         .call(
             Request::builder()
@@ -336,7 +336,7 @@ async fn test_create_product_duplicate_slug_allowed(pool: PgPool) -> TestResult 
         )
         .await?;
 
-    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(response.status(), StatusCode::CONFLICT);
     Ok(())
 }
 

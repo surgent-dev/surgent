@@ -19,7 +19,7 @@ use super::subscription::Subscription;
 pub struct Customer {
     pub id: Uuid,
     pub project_id: Uuid,
-    pub email: String,
+    pub email: Option<String>,
     pub name: Option<String>,
     pub processor_customer_id: Option<String>,
 }
@@ -51,7 +51,7 @@ pub struct SubscriptionSummary {
 pub struct CustomerWithDetails {
     pub id: Uuid,
     pub project_id: Uuid,
-    pub email: String,
+    pub email: Option<String>,
     pub name: Option<String>,
     pub processor_customer_id: Option<String>,
     pub transactions: Vec<TransactionSummary>,
