@@ -1,150 +1,85 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { http } from "@/lib/http";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { http } from '@/lib/http'
 
-// Types
 export interface GitHubInstallation {
-  id: number;
-  account: string;
-  accountType: string;
+  id: number
+  account: string
+  accountType: string
 }
 
 export interface GitHubStatus {
-  installed: boolean;
-  connected: boolean;
-  oauthLinked?: boolean;
-  installation?: GitHubInstallation;
-  installations?: GitHubInstallation[];
+  installed: boolean
+  connected: boolean
+  hasToken: boolean
+  installations: GitHubInstallation[]
   repo?: {
-    owner: string;
-    name: string;
-    fullName: string;
-    lastPushedSha?: string;
-    lastPushAt?: string;
-  };
+    owner: string
+    name: string
+    fullName: string
+    installationId?: number
+    lastPushedSha?: string
+    lastPushAt?: string
+  }
 }
 
-// API functions
-async function fetchGitHubStatus(projectId: string): Promise<GitHubStatus> {
-  return http.get(`api/projects/${projectId}/github/status`).json();
+interface CreateRepoResult {
+  success: boolean
+  repo?: { id: number; name: string; full_name: string; default_branch: string; html_url: string }
+  error?: string
 }
 
-async function fetchGitHubInstallUrl(
-  projectId: string,
-): Promise<{ url: string }> {
-  return http.get(`api/projects/${projectId}/github/install-url`).json();
-}
-
-async function disconnectGitHubRepo(
-  projectId: string,
-): Promise<{ disconnected: boolean }> {
-  return http.post(`api/projects/${projectId}/github/disconnect`).json();
-}
-
-async function pushToGitHub(
-  projectId: string,
-): Promise<{ success: boolean; sha?: string; error?: string }> {
-  return http.post(`api/projects/${projectId}/github/push`).json();
-}
-
-async function createGitHubRepo(
-  projectId: string,
-  data: {
-    name: string;
-    description?: string;
-    private?: boolean;
-    installationId?: number;
-  },
-): Promise<{
-  success: boolean;
-  repo?: {
-    id: number;
-    name: string;
-    full_name: string;
-    default_branch: string;
-    html_url: string;
-  };
-  error?: string;
-}> {
-  return http
-    .post(`api/projects/${projectId}/github/create-repo`, { json: data })
-    .json();
-}
-
-
-// Hooks
-export function useGitHubStatus(
-  projectId?: string,
-  options?: { enabled?: boolean },
-) {
+export function useGitHubStatus(projectId?: string, opts?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: ["github-status", projectId],
-    queryFn: () => fetchGitHubStatus(projectId!),
-    enabled: Boolean(projectId) && (options?.enabled ?? true),
-    staleTime: 1000 * 30, // 30 seconds
-  });
+    queryKey: ['github-status', projectId],
+    queryFn: (): Promise<GitHubStatus> => http.get(`api/projects/${projectId}/github/status`).json(),
+    enabled: Boolean(projectId) && (opts?.enabled ?? true),
+    staleTime: 30_000,
+  })
 }
 
-export function useGitHubInstallUrl(
-  projectId?: string,
-  options?: { enabled?: boolean },
-) {
+export function useGitHubInstallUrl(projectId?: string, opts?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: ["github-install-url", projectId],
-    queryFn: () => fetchGitHubInstallUrl(projectId!),
-    enabled: Boolean(projectId) && (options?.enabled ?? true),
-    staleTime: 1000 * 60, // 1 minute
-  });
+    queryKey: ['github-install-url', projectId],
+    queryFn: (): Promise<{ url: string }> => http.get(`api/projects/${projectId}/github/install-url`).json(),
+    enabled: Boolean(projectId) && (opts?.enabled ?? true),
+    staleTime: 60_000,
+  })
 }
 
 export function useGitHubDisconnect() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: (projectId: string) => disconnectGitHubRepo(projectId),
-    onSuccess: (_res, projectId) => {
-      queryClient.invalidateQueries({ queryKey: ["github-status", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    mutationFn: (projectId: string) => http.post(`api/projects/${projectId}/github/disconnect`).json(),
+    onSuccess: (_, projectId) => {
+      qc.invalidateQueries({ queryKey: ['github-status', projectId] })
+      qc.invalidateQueries({ queryKey: ['project', projectId] })
     },
-  });
-}
-
-export function useGitHubPush() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (projectId: string) => pushToGitHub(projectId),
-    onSuccess: (_res, projectId) => {
-      queryClient.invalidateQueries({ queryKey: ["github-status", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-    },
-  });
+  })
 }
 
 export function useGitHubCreateRepo() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({
-      projectId,
-      name,
-      description,
-      private: isPrivate,
-      installationId,
-    }: {
-      projectId: string;
-      name: string;
-      description?: string;
-      private?: boolean;
-      installationId?: number;
-    }) =>
-      createGitHubRepo(projectId, {
-        name,
-        description,
-        private: isPrivate,
-        installationId,
-      }),
-    onSuccess: (_res, vars) => {
-      queryClient.invalidateQueries({
-        queryKey: ["github-status", vars.projectId],
-      });
-      queryClient.invalidateQueries({ queryKey: ["project", vars.projectId] });
+    mutationFn: (vars: {
+      projectId: string
+      name: string
+      description?: string
+      private?: boolean
+      installationId?: number
+    }): Promise<CreateRepoResult> =>
+      http
+        .post(`api/projects/${vars.projectId}/github/create-repo`, {
+          json: {
+            name: vars.name,
+            description: vars.description,
+            private: vars.private,
+            installationId: vars.installationId,
+          },
+        })
+        .json(),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['github-status', vars.projectId] })
+      qc.invalidateQueries({ queryKey: ['project', vars.projectId] })
     },
-  });
+  })
 }

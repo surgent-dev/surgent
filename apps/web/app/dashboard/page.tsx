@@ -19,9 +19,8 @@ import {
 import { Plus, MoreVertical, Code2, Clock, Activity, Pencil, Trash2, Play } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { useProjectsQuery, useRenameProject, useDeleteProject, useDeployProject } from '@/queries/projects'
+import { useProjectsQuery, useRenameProject, useDeleteProject } from '@/queries/projects'
 import type { Project } from '@/types/project'
-import DeployDialog from '@/components/deploy-dialog'
 
 // Project type moved to '@/types/project'
 
@@ -38,12 +37,9 @@ export default function DashboardPage() {
   const { data: projects = [], isLoading } = useProjectsQuery()
   const rename = useRenameProject()
   const deleteProject = useDeleteProject()
-  const deploy = useDeployProject()
 
   const [projectToRename, setProjectToRename] = useState<Project | null>(null)
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
-  const [projectToDeploy, setProjectToDeploy] = useState<Project | null>(null)
-  const [deployDialogOpen, setDeployDialogOpen] = useState(false)
   const [newName, setNewName] = useState('')
 
   useEffect(() => {
@@ -98,28 +94,6 @@ export default function DashboardPage() {
         onError: () => toast.error('Failed to delete project'),
       },
     )
-  }
-
-  const handleDeployClick = (e: React.MouseEvent, project: Project) => {
-    e.stopPropagation()
-    if (project.worker?.status === 'active') {
-      router.push(`/project/${project.id}`)
-    } else {
-      setProjectToDeploy(project)
-      setDeployDialogOpen(true)
-    }
-  }
-
-  const handleDeployConfirm = async (sanitizedName: string) => {
-    if (!projectToDeploy) return
-    try {
-      await deploy.mutateAsync({ id: projectToDeploy.id, deployName: sanitizedName })
-      toast.success('Deployment started')
-      setDeployDialogOpen(false)
-      setProjectToDeploy(null)
-    } catch {
-      toast.error('Failed to start deployment')
-    }
   }
 
   if (isLoading) {
@@ -280,7 +254,12 @@ export default function DashboardPage() {
                         <span>Updated recently</span>
                       </div>
                     </div>
-                    {project.github?.repo && (
+                    {project.github?.repoOwner && project.github?.repoName && (
+                      <Badge variant="secondary" className="text-xs rounded-full px-2 py-0.5">
+                        {`${project.github.repoOwner}/${project.github.repoName}`}
+                      </Badge>
+                    )}
+                    {!project.github?.repoOwner && project.github?.repo && (
                       <Badge variant="secondary" className="text-xs rounded-full px-2 py-0.5">
                         {project.github.repo}
                       </Badge>
@@ -346,14 +325,6 @@ export default function DashboardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Deploy Dialog */}
-      <DeployDialog
-        open={deployDialogOpen}
-        onOpenChange={setDeployDialogOpen}
-        onConfirm={handleDeployConfirm}
-        isSubmitting={deploy.isPending}
-      />
     </div>
   )
 }

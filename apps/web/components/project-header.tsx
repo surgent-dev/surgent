@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { toast } from 'react-hot-toast'
-import { Loader2 } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import {
   ArrowLeft,
   RocketLaunch,
@@ -32,7 +32,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import UsageDialog from '@/components/usage-dialog'
 import { authClient } from '@/lib/auth-client'
-import { useDeployProject, useRenameProject, useLatestDeploymentQuery } from '@/queries/projects'
+import {
+  useDeployProject,
+  useRenameProject,
+  useLatestDeploymentQuery,
+  useHostnameAvailability,
+} from '@/queries/projects'
 import { http } from '@/lib/http'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
@@ -72,6 +77,15 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 const TERMINAL_STATUSES = ['deployed', 'deploy_failed', 'build_failed']
+
+function sanitizeHostname(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63)
+}
 
 export default function ProjectHeader({ projectId, project }: ProjectHeaderProps) {
   const router = useRouter()
@@ -146,6 +160,16 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const isFailed = workerStatus === 'error'
   const isDeploymentInProgress = latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status)
 
+  // Hostname availability check
+  const sanitizedHostname = sanitizeHostname(hostnameInput)
+  const isNewHostname = !workerName || sanitizedHostname !== workerName
+  const { data: availability, isLoading: checkingHostname } = useHostnameAvailability(
+    sanitizedHostname,
+    projectId,
+    isPublishOpen && sanitizedHostname.length > 0 && isNewHostname,
+  )
+  const hostnameTaken = isNewHostname && availability?.available === false
+
   useEffect(() => {
     if (!pendingHostname) return
     if (!workerName) return
@@ -183,8 +207,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         { id: projectId, deployName: name },
         {
           onSuccess: () => setIsDeploying(false),
-          onError: () => {
-            toast.error('Failed to deploy', { position: 'top-right' })
+          onError: (err) => {
+            toast.error(err instanceof Error ? err.message : 'Failed to deploy', { position: 'top-right' })
             setIsDeploying(false)
           },
         },
@@ -391,17 +415,33 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             <div className="p-3 space-y-3">
               {/* URL */}
               <div className="space-y-1">
-                <div className="text-xs text-muted-foreground">
-                  {workerName ? 'Published URL' : 'Choose a subdomain'}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{workerName ? 'Published URL' : 'Choose a subdomain'}</span>
+                  {(!workerName || isEditingHostname) && sanitizedHostname && isNewHostname && (
+                    <>
+                      {checkingHostname && <Loader2 className="size-3 animate-spin" />}
+                      {!checkingHostname && availability?.available && (
+                        <CheckCircle2 className="size-3 text-green-600" />
+                      )}
+                      {!checkingHostname && hostnameTaken && (
+                        <span className="flex items-center gap-1 text-red-600">
+                          <XCircle className="size-3" />
+                          Taken
+                        </span>
+                      )}
+                    </>
+                  )}
                 </div>
-                <div className="flex items-center h-8 px-2.5 rounded-md border text-sm font-mono bg-muted/30">
+                <div
+                  className={`flex items-center h-8 px-2.5 rounded-md border text-sm font-mono bg-muted/30 ${hostnameTaken ? 'border-red-500' : ''}`}
+                >
                   {!workerName || isEditingHostname ? (
                     <>
                       <input
                         value={hostnameInput}
                         onChange={(e) => setHostnameInput(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter' && hostnameInput.trim()) submitHostname()
+                          if (e.key === 'Enter' && hostnameInput.trim() && !hostnameTaken) submitHostname()
                           if (e.key === 'Escape' && workerName) cancelEditHostname()
                         }}
                         placeholder="my-app"
@@ -443,7 +483,13 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 <Button
                   className="flex-1 h-8 bg-brand hover:bg-brand/90 text-brand-foreground"
                   onClick={submitHostname}
-                  disabled={isDeploying || Boolean(isDeploymentInProgress) || (!workerName && !hostnameInput.trim())}
+                  disabled={
+                    isDeploying ||
+                    Boolean(isDeploymentInProgress) ||
+                    hostnameTaken ||
+                    checkingHostname ||
+                    (!workerName && !hostnameInput.trim())
+                  }
                 >
                   {isDeploying ? (
                     <Loader2 className="size-3.5 animate-spin mr-1.5" />

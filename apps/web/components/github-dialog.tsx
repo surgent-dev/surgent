@@ -1,478 +1,397 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import { toast } from "react-hot-toast";
-import {
-  Github,
-  ExternalLink,
-  Loader2,
-  Check,
-  Unplug,
-  Clock,
-  GitBranch,
-  Plus,
-  X,
-} from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import {
-  useGitHubStatus,
-  useGitHubInstallUrl,
-  useGitHubDisconnect,
-  useGitHubPush,
-  useGitHubCreateRepo,
-} from "@/queries/github";
-import { cn } from "@/lib/utils";
+import { useEffect, useState } from 'react'
+import { toast } from 'react-hot-toast'
+import { Github, ExternalLink, Loader2, Check, Plus, X, Circle } from 'lucide-react'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { useGitHubStatus, useGitHubInstallUrl, useGitHubDisconnect, useGitHubCreateRepo } from '@/queries/github'
+import { useGitLog, useGitPush, useGitPull, useGitStatus, useGitCommit } from '@/queries/git'
+import { cn } from '@/lib/utils'
 
-interface GitHubDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  projectId?: string;
+interface Props {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  projectId?: string
 }
 
-export default function GitHubDialog({
-  open,
-  onOpenChange,
-  projectId,
-}: GitHubDialogProps) {
-  const [repoName, setRepoName] = useState("");
-  const [description, setDescription] = useState("");
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [selectedInstallationId, setSelectedInstallationId] = useState<
-    number | null
-  >(null);
+function timeAgo(date: string): string {
+  const ms = Date.now() - new Date(date).getTime()
+  const mins = Math.floor(ms / 60000)
+  if (mins < 1) return 'now'
+  if (mins < 60) return `${mins}m`
+  const hrs = Math.floor(ms / 3600000)
+  if (hrs < 24) return `${hrs}h`
+  const days = Math.floor(ms / 86400000)
+  if (days < 7) return `${days}d`
+  return new Date(date).toLocaleDateString()
+}
 
-  const { data: status, isLoading: statusLoading } = useGitHubStatus(
-    projectId,
-    { enabled: open },
-  );
+export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
+  const [repoName, setRepoName] = useState('')
+  const [description, setDescription] = useState('')
+  const [isPrivate, setIsPrivate] = useState(false)
+  const [installationId, setInstallationId] = useState<number | null>(null)
+  const [commitMessage, setCommitMessage] = useState('')
+
+  // Queries
+  const { data: status, isLoading } = useGitHubStatus(projectId, { enabled: open })
   const {
-    data: installUrlData,
-    refetch: refetchInstallUrl,
-    isFetching: isFetchingInstallUrl,
-  } = useGitHubInstallUrl(projectId, { enabled: false });
+    data: installUrl,
+    refetch: fetchInstallUrl,
+    isFetching: fetchingUrl,
+  } = useGitHubInstallUrl(projectId, { enabled: false })
+  const {
+    data: gitLog,
+    isLoading: loadingLog,
+    refetch: refetchLog,
+    isFetching: fetchingLog,
+  } = useGitLog(projectId, { enabled: open && status?.connected })
+  const { data: gitStatus, refetch: refetchStatus } = useGitStatus(projectId, { enabled: open && status?.connected })
 
-  const createRepoMutation = useGitHubCreateRepo();
-  const disconnectMutation = useGitHubDisconnect();
-  const pushMutation = useGitHubPush();
+  // Mutations
+  const create = useGitHubCreateRepo()
+  const disconnect = useGitHubDisconnect()
+  const push = useGitPush()
+  const pull = useGitPull()
+  const commit = useGitCommit()
 
-  // Reset form when dialog closes
+  // Derived state
+  const installations = status?.installations ?? []
+  const connected = status?.connected
+  const installed = status?.installed
+  const hasToken = status?.hasToken ?? false
+  const commits = gitLog?.commits ?? []
+  const branch = gitLog?.branch || 'main'
+  const unpushed = commits.filter((c) => !c.pushed).length
+  const behind = gitLog?.behind ?? 0
+  const modified = gitStatus?.modified ?? []
+  const untracked = gitStatus?.untracked ?? []
+  const hasChanges = modified.length > 0 || untracked.length > 0
+
+  // Reset on close
   useEffect(() => {
     if (!open) {
-      setRepoName("");
-      setDescription("");
-      setIsPrivate(false);
-      setSelectedInstallationId(null);
+      setRepoName('')
+      setDescription('')
+      setIsPrivate(false)
+      setInstallationId(null)
+      setCommitMessage('')
     }
-  }, [open]);
+  }, [open])
 
-  const handleInstall = async () => {
-    if (!projectId) return;
-    if (installUrlData?.url) {
-      window.location.href = installUrlData.url;
-      return;
+  // Default installation
+  useEffect(() => {
+    if (open && installations[0]?.id && !installationId) {
+      setInstallationId(installations[0].id)
     }
-    const result = await refetchInstallUrl();
-    if (result.data?.url) {
-      window.location.href = result.data.url;
-    }
-  };
+  }, [open, installations, installationId])
+
+  // Handlers
+  const goToInstall = async () => {
+    const url = installUrl?.url || (await fetchInstallUrl()).data?.url
+    if (url) window.location.href = url
+  }
 
   const handleCreate = async () => {
-    if (!projectId || !repoName.trim() || !status?.oauthLinked) return;
-    const installationId = Number(
-      selectedInstallationId ??
-        status?.installation?.id ??
-        installations[0]?.id,
-    );
-
+    if (!projectId || !repoName.trim()) return
     try {
-      const result = await createRepoMutation.mutateAsync({
+      const res = await create.mutateAsync({
         projectId,
         name: repoName,
         description,
         private: isPrivate,
-        installationId,
-      });
-
-      if (result.success) {
-        toast.success("Repository created and connected!");
+        installationId: installationId ?? installations[0]?.id,
+      })
+      if (res.success) {
+        toast.success('Repository created!')
+        refetchLog()
       } else {
-        toast.error(result.error || "Failed to create repository");
+        toast.error(res.error || 'Failed')
       }
-    } catch (error: unknown) {
-      const err = error as { response?: Response };
-      const body = await err.response?.json().catch(() => null);
-      const message =
-        body?.error?.message || body?.error || "Failed to create repository";
-      toast.error(message);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed')
     }
-  };
-
-  const handleDisconnect = async () => {
-    if (!projectId) return;
-
-    try {
-      await disconnectMutation.mutateAsync(projectId);
-      toast.success("Repository disconnected");
-    } catch {
-      toast.error("Failed to disconnect");
-    }
-  };
+  }
 
   const handlePush = async () => {
-    if (!projectId) return;
-
+    if (!projectId) return
     try {
-      const result = await pushMutation.mutateAsync(projectId);
-      if (result.success) {
-        const shortSha = result.sha?.slice(0, 7);
-        toast.success(
-          shortSha
-            ? `Pushed successfully! SHA: ${shortSha}`
-            : "Pushed successfully!",
-        );
-        onOpenChange(false);
+      const res = await push.mutateAsync(projectId)
+      if (res.success) {
+        toast.success('Pushed!')
+        refetchLog()
+        refetchStatus()
       } else {
-        toast.error(result.error || "Push failed");
+        toast.error(res.error || 'Push failed')
       }
     } catch {
-      toast.error("Failed to push to GitHub");
+      toast.error('Push failed')
     }
-  };
+  }
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return null;
-    return new Date(dateStr).toLocaleString();
-  };
+  const handlePull = async () => {
+    if (!projectId) return
+    try {
+      const res = await pull.mutateAsync(projectId)
+      if (res.success) {
+        toast.success('Pulled!')
+        refetchLog()
+        refetchStatus()
+      } else {
+        toast.error(res.error || 'Pull failed')
+      }
+    } catch {
+      toast.error('Pull failed')
+    }
+  }
 
-  const installations =
-    status?.installations && status.installations.length > 0
-      ? status.installations
-      : status?.installation
-        ? [status.installation]
-        : [];
-  const userAccount = installations.find(
-    (item) => item.accountType.toLowerCase() === "user",
-  );
-  const accountTypeLabel = (type: string) =>
-    type.toLowerCase() === "user" ? "Personal" : "Org";
-  const defaultInstallationId =
-    status?.installation?.id ?? installations[0]?.id ?? null;
+  const handleCommit = async () => {
+    if (!projectId || !commitMessage.trim()) return
+    try {
+      const res = await commit.mutateAsync({ projectId, message: commitMessage.trim() })
+      if (res.success) {
+        toast.success('Committed!')
+        setCommitMessage('')
+        refetchLog()
+        refetchStatus()
+      } else {
+        toast.error(res.error || 'Commit failed')
+      }
+    } catch {
+      toast.error('Commit failed')
+    }
+  }
 
-  useEffect(() => {
-    if (!open || !defaultInstallationId || selectedInstallationId) return;
-    setSelectedInstallationId(defaultInstallationId);
-  }, [defaultInstallationId, open, selectedInstallationId]);
-
-  const isConnected = status?.connected;
-  const isInstalled = status?.installed;
-  const isOauthLinked = status?.oauthLinked;
+  const handleDisconnect = async () => {
+    if (!projectId) return
+    try {
+      await disconnect.mutateAsync(projectId)
+      toast.success('Disconnected')
+    } catch {
+      toast.error('Failed')
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="sm:max-w-md p-0 gap-0 overflow-hidden rounded-2xl border shadow-lg bg-background"
-      >
-        {/* Header Row */}
-        <div className="flex h-10 items-center justify-between px-4 border-b bg-muted/30">
-          <div className="flex items-center gap-2">
+      <DialogContent showCloseButton={false} className="sm:max-w-md p-0 gap-0 overflow-hidden">
+        {/* Header */}
+        <div className="h-11 px-4 flex items-center justify-between border-b bg-muted/30">
+          <DialogTitle className="flex items-center gap-2 font-medium">
             <Github className="size-4" />
-            <DialogTitle className="text-sm font-medium">GitHub</DialogTitle>
-            {statusLoading ? (
-              <Loader2 className="size-2.5 animate-spin text-muted-foreground" />
-            ) : (
-              <div
-                className={cn(
-                  "size-2 rounded-full",
-                  isOauthLinked ? "bg-success" : "bg-muted-foreground/30",
-                )}
-                title={isOauthLinked ? "Authorized" : "Not authorized"}
-              />
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 rounded-full hover:bg-muted/50"
+            GitHub
+          </DialogTitle>
+          <button
             onClick={() => onOpenChange(false)}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
           >
-            <X className="size-3.5 text-muted-foreground" />
-          </Button>
+            <X className="size-4" />
+          </button>
         </div>
 
-        {statusLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        {isLoading ? (
+          <div className="py-16 flex justify-center">
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
           </div>
-        ) : !isInstalled ? (
-          // Not installed state
-          <div className="flex flex-col items-center justify-center py-8 px-6 space-y-4">
-            <div className="size-12 rounded-full bg-muted/50 flex items-center justify-center">
-              <Github className="size-6 text-foreground" />
+        ) : !installed ? (
+          <div className="py-12 px-6 text-center space-y-4">
+            <Github className="size-10 mx-auto text-muted-foreground/30" />
+            <div>
+              <p className="font-medium">Connect to GitHub</p>
+              <p className="text-sm text-muted-foreground">Sync your code with a repository</p>
             </div>
-            <div className="text-center space-y-1">
-              <h3 className="font-medium">Connect GitHub</h3>
-              <p className="text-xs text-muted-foreground max-w-[240px] mx-auto">
-                Install the Surgent GitHub App to create repositories and push
-                your code.
-              </p>
-            </div>
-            <Button
-              onClick={handleInstall}
-              size="sm"
-              className="px-6 text-sm"
-              disabled={isFetchingInstallUrl}
-            >
+            <Button onClick={goToInstall} disabled={fetchingUrl}>
+              {fetchingUrl && <Loader2 className="size-4 animate-spin mr-2" />}
               Install GitHub App
-              <ExternalLink className="size-3 ml-2 opacity-50" />
             </Button>
           </div>
-        ) : !isConnected ? (
-          // Installed but not connected (Create Repo)
-          <div className="flex flex-col">
-            {/* Stats Bar */}
-            <div className="h-8 flex items-center px-4 gap-2 text-xs border-b bg-muted/10">
-              <span className="text-muted-foreground">Connected as</span>
-              <span className="font-medium text-foreground">
-                {userAccount ? userAccount.account : "User"}
-              </span>
+        ) : !connected ? (
+          <div className="p-4 space-y-4">
+            {installations.length > 1 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Account</Label>
+                <Select
+                  value={installationId ? String(installationId) : ''}
+                  onValueChange={(v) => setInstallationId(Number(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {installations.map((i) => (
+                      <SelectItem key={i.id} value={String(i.id)}>
+                        {i.account}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-              {installations.length > 1 && (
-                <>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="text-muted-foreground">
-                    {installations.length} accounts
-                  </span>
-                </>
-              )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Repository name</Label>
+              <Input placeholder="my-project" value={repoName} onChange={(e) => setRepoName(e.target.value)} />
+            </div>
 
-              <div className="flex-1" />
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                Description <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                placeholder="A short description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
 
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Private</Label>
+              <Switch checked={isPrivate} onCheckedChange={setIsPrivate} />
+            </div>
+
+            <Button
+              onClick={handleCreate}
+              disabled={!repoName.trim() || create.isPending || !hasToken}
+              className="w-full"
+            >
+              {create.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
+              Create Repository
+            </Button>
+
+            {!hasToken && (
+              <p className="text-center text-sm text-amber-600">
+                <button onClick={goToInstall} className="underline">
+                  Authorize
+                </button>{' '}
+                to continue
+              </p>
+            )}
+
+            <button onClick={goToInstall} className="w-full text-xs text-muted-foreground hover:text-foreground">
+              <Plus className="size-3 inline mr-1" />
+              Add account
+            </button>
+          </div>
+        ) : (
+          // Connected
+          <>
+            {/* Repo */}
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <div>
+                <a
+                  href={`https://github.com/${status.repo?.fullName}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium hover:underline inline-flex items-center gap-1"
+                >
+                  {status.repo?.fullName}
+                  <ExternalLink className="size-3 opacity-50" />
+                </a>
+                <p className="text-xs text-muted-foreground">{branch}</p>
+              </div>
               <button
-                onClick={handleInstall}
-                disabled={isFetchingInstallUrl}
-                className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 disabled:opacity-50"
+                onClick={handleDisconnect}
+                disabled={disconnect.isPending}
+                className="text-xs text-muted-foreground hover:text-destructive"
               >
-                <Plus className="size-3" />
-                Add account
+                {disconnect.isPending ? <Loader2 className="size-3 animate-spin" /> : 'Disconnect'}
               </button>
             </div>
 
-            {/* Create Form */}
-            <div className="p-4 space-y-4">
-              <div className="space-y-3">
-                {installations.length > 1 ? (
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="github-account"
-                      className="text-xs font-medium text-muted-foreground ml-1"
-                    >
-                      Target account
-                    </Label>
-                    <Select
-                      value={
-                        selectedInstallationId
-                          ? String(selectedInstallationId)
-                          : ""
-                      }
-                      onValueChange={(value) =>
-                        setSelectedInstallationId(Number(value))
-                      }
-                    >
-                      <SelectTrigger
-                        id="github-account"
-                        className="h-9 rounded-lg bg-muted/30 border-transparent focus:border-input focus:bg-background transition-all"
-                      >
-                        <SelectValue placeholder="Choose account" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {installations.map((item) => (
-                          <SelectItem key={item.id} value={String(item.id)}>
-                            {item.account} ·{" "}
-                            {accountTypeLabel(item.accountType)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="repo-name"
-                    className="text-xs font-medium text-muted-foreground ml-1"
-                  >
-                    Repository Name
-                  </Label>
-                  <Input
-                    id="repo-name"
-                    placeholder="e.g. my-awesome-project"
-                    value={repoName}
-                    onChange={(e) => setRepoName(e.target.value)}
-                    className="h-9 rounded-lg bg-muted/30 border-transparent focus:border-input focus:bg-background transition-all"
-                  />
+            {loadingLog ? (
+              <div className="py-12 flex justify-center">
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <>
+                {/* Commits */}
+                <div className="min-h-[100px] max-h-[180px] overflow-y-auto py-2">
+                  {commits.length > 0 ? (
+                    commits.slice(0, 10).map((c) => (
+                      <div key={c.hash} className="px-4 py-1.5 flex items-center gap-2.5 text-sm">
+                        <span
+                          className={cn('size-1.5 rounded-full shrink-0', c.pushed ? 'bg-emerald-500' : 'bg-amber-500')}
+                        />
+                        <span className="truncate flex-1">{c.message}</span>
+                        <span className="text-[11px] text-muted-foreground">{timeAgo(c.date)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="h-[100px] flex items-center justify-center text-sm text-muted-foreground">
+                      No commits yet
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="repo-desc"
-                    className="text-xs font-medium text-muted-foreground ml-1"
-                  >
-                    Description{" "}
-                    <span className="opacity-50 font-normal">(optional)</span>
-                  </Label>
-                  <Input
-                    id="repo-desc"
-                    placeholder="Brief description of your project"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="h-9 rounded-lg bg-muted/30 border-transparent focus:border-input focus:bg-background transition-all"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between py-1 px-1">
-                  <div className="space-y-0.5">
-                    <Label
-                      htmlFor="private-mode"
-                      className="text-sm font-medium"
-                    >
-                      Private Repository
-                    </Label>
-                    <p className="text-[10px] text-muted-foreground">
-                      Only you can see this repository
+                {/* Actions */}
+                <div className="p-4 pt-3 border-t space-y-3">
+                  {hasChanges ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-amber-600">{modified.length + untracked.length} unsaved changes</p>
+                      <div className="flex gap-2">
+                        <Input
+                          value={commitMessage}
+                          onChange={(e) => setCommitMessage(e.target.value)}
+                          placeholder="What changed?"
+                          className="h-9"
+                          onKeyDown={(e) => e.key === 'Enter' && handleCommit()}
+                        />
+                        <Button
+                          className="h-9"
+                          onClick={handleCommit}
+                          disabled={!commitMessage.trim() || commit.isPending}
+                        >
+                          {commit.isPending ? <Loader2 className="size-4 animate-spin" /> : 'Save'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm">
+                      {unpushed === 0 && behind === 0 ? (
+                        <span className="text-emerald-600 flex items-center gap-1.5">
+                          <Check className="size-4" />
+                          Synced
+                        </span>
+                      ) : (
+                        <>
+                          {unpushed > 0 && <span className="text-amber-600">{unpushed} to push</span>}
+                          {unpushed > 0 && behind > 0 && <span className="text-muted-foreground mx-1">·</span>}
+                          {behind > 0 && <span className="text-blue-600">{behind} to pull</span>}
+                        </>
+                      )}
                     </p>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-9"
+                      onClick={handlePull}
+                      disabled={pull.isPending || behind === 0}
+                    >
+                      {pull.isPending && <Loader2 className="size-4 animate-spin mr-1.5" />}
+                      Pull
+                    </Button>
+                    <Button
+                      className="flex-1 h-9"
+                      onClick={handlePush}
+                      disabled={push.isPending || unpushed === 0 || hasChanges}
+                    >
+                      {push.isPending && <Loader2 className="size-4 animate-spin mr-1.5" />}
+                      Push
+                    </Button>
                   </div>
-                  <Switch
-                    id="private-mode"
-                    checked={isPrivate}
-                    onCheckedChange={setIsPrivate}
-                    className="scale-90"
-                  />
                 </div>
-              </div>
-
-              <Button
-                onClick={handleCreate}
-                disabled={
-                  !repoName.trim() ||
-                  createRepoMutation.isPending ||
-                  !isOauthLinked
-                }
-                className="w-full font-medium"
-              >
-                {createRepoMutation.isPending ? (
-                  <Loader2 className="size-4 animate-spin mr-2" />
-                ) : (
-                  <Github className="size-4 mr-2" />
-                )}
-                {createRepoMutation.isPending
-                  ? "Creating..."
-                  : "Create & Connect"}
-              </Button>
-
-              {!isOauthLinked && (
-                <div className="text-center">
-                  <p className="text-xs text-warning mb-2">
-                    Authorization required
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleInstall}
-                    className="text-xs"
-                    disabled={isFetchingInstallUrl}
-                  >
-                    Authorize GitHub
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          // Connected State
-          <div className="flex flex-col">
-            {/* Repo Info Bar */}
-            <div className="h-8 flex items-center px-4 gap-2 text-xs border-b bg-muted/10">
-              <a
-                href={`https://github.com/${status.repo?.fullName}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium hover:underline flex items-center gap-1.5 truncate"
-              >
-                {status.repo?.fullName}
-                <ExternalLink className="size-2.5 text-muted-foreground" />
-              </a>
-
-              <span className="text-muted-foreground">·</span>
-
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <GitBranch className="size-3" />
-                <span>main</span>
-              </div>
-
-              {status.repo?.lastPushedSha && (
-                <>
-                  <span className="text-muted-foreground">·</span>
-                  <div className="flex items-center gap-1 text-muted-foreground truncate">
-                    <Clock className="size-3" />
-                    <span>{formatDate(status.repo.lastPushAt)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="p-5 space-y-4">
-              <div className="rounded-xl border bg-muted/20 p-4 flex flex-col items-center justify-center text-center space-y-2">
-                <div className="size-10 rounded-full bg-background border shadow-sm flex items-center justify-center mb-1">
-                  <Github className="size-5" />
-                </div>
-                <h4 className="text-sm font-medium">Ready to push</h4>
-                <p className="text-xs text-muted-foreground max-w-[200px]">
-                  Sync your latest changes to the remote repository.
-                </p>
-              </div>
-
-              <Button
-                onClick={handlePush}
-                disabled={pushMutation.isPending}
-                className="w-full font-medium shadow-sm"
-              >
-                {pushMutation.isPending ? (
-                  <Loader2 className="size-4 animate-spin mr-2" />
-                ) : (
-                  <Github className="size-4 mr-2" />
-                )}
-                {pushMutation.isPending ? "Pushing..." : "Push to GitHub"}
-              </Button>
-
-              <div className="flex justify-center">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleDisconnect}
-                  disabled={disconnectMutation.isPending}
-                  className="text-xs text-muted-foreground hover:text-destructive"
-                >
-                  <Unplug className="size-3 mr-1.5" />
-                  Disconnect repository
-                </Button>
-              </div>
-            </div>
-          </div>
+              </>
+            )}
+          </>
         )}
       </DialogContent>
     </Dialog>
-  );
+  )
 }

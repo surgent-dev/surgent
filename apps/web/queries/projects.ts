@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { HTTPError } from 'ky'
 import { http } from '@/lib/http'
 import { ProjectsSchema, CreateProjectResponseSchema, ProjectSchema } from '@/lib/schemas/project'
 import { z } from 'zod'
@@ -10,16 +9,8 @@ async function fetchProjects() {
 }
 
 async function postProject(githubUrl: string, name: string, initConvex: boolean) {
-  try {
-    const data = await http.post('api/projects', { json: { githubUrl, name, initConvex } }).json()
-    return CreateProjectResponseSchema.parse(data)
-  } catch (err) {
-    if (err instanceof HTTPError) {
-      const body = await err.response.json<{ error?: string }>().catch(() => null)
-      throw new Error(body?.error ?? 'Failed to create project')
-    }
-    throw err
-  }
+  const data = await http.post('api/projects', { json: { githubUrl, name, initConvex } }).json()
+  return CreateProjectResponseSchema.parse(data)
 }
 
 export function useProjectsQuery() {
@@ -40,8 +31,6 @@ async function fetchProject(id: string) {
   const data = await http.get(`api/projects/${id}`).json()
   return ProjectSchema.parse(data)
 }
-
-const DEPLOYMENT_IN_PROGRESS_STATUSES = ['queued', 'starting', 'building', 'uploading']
 
 export function useProjectQuery(id?: string) {
   return useQuery({
@@ -125,6 +114,24 @@ export function useConfirmHostname() {
       queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
+  })
+}
+
+// Check hostname availability
+async function checkHostnameAvailability(name: string, projectId?: string) {
+  const params = new URLSearchParams({ name })
+  if (projectId) params.set('projectId', projectId)
+  const data: { available: boolean } = await http.get(`api/projects/check-hostname?${params}`).json()
+  return data
+}
+
+export function useHostnameAvailability(name: string, projectId?: string, enabled = true) {
+  return useQuery({
+    queryKey: ['hostname-availability', name, projectId],
+    queryFn: () => checkHostnameAvailability(name, projectId),
+    enabled: enabled && name.length > 0,
+    staleTime: 10000,
+    placeholderData: (prev) => prev,
   })
 }
 
