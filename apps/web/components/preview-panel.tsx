@@ -534,6 +534,7 @@ export default function PreviewPanel({
   const hasConvex = Boolean((project?.metadata as any)?.convex)
   const hasMcp = tabs.some((tab) => tab.type === 'mcp')
   const hasLogs = tabs.some((tab) => tab.type === 'logs')
+  const hasPayments = tabs.some((tab) => tab.type === 'payments')
 
   const { data: convexCredentials, isLoading: convexLoading } = useConvexDashboardQuery(
     projectId,
@@ -594,6 +595,10 @@ export default function PreviewPanel({
         <DropdownMenuItem onClick={() => onAddTab('logs')} disabled={hasLogs} className="gap-2">
           <span className="text-sm leading-none text-muted-foreground">📜︎</span>
           Server Logs
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAddTab('payments')} disabled={hasPayments} className="gap-2">
+          <CreditCard className="size-4 text-muted-foreground" />
+          Payments
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

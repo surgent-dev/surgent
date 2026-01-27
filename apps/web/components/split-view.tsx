@@ -30,6 +30,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
 
   const [tabs, setTabs] = useState<PreviewTab[]>([
     { id: 'preview', type: 'preview', title: 'Preview' },
+    { id: 'payments', type: 'payments', title: 'Payments' },
   ])
   const [activeTabId, setActiveTabId] = useState('preview')
   const tabCounter = useRef(0)
@@ -55,10 +56,10 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
 
   const handleAddTab = useCallback((type: PreviewTab['type']) => {
     setTabs((prev) => {
-      if (type !== 'mcp' && type !== 'logs') return prev
+      if (type !== 'mcp' && type !== 'logs' && type !== 'payments') return prev
       if (prev.some((tab) => tab.type === type)) return prev
       tabCounter.current += 1
-      const title = type === 'mcp' ? 'MCP' : 'Server Logs'
+      const title = type === 'mcp' ? 'MCP' : type === 'logs' ? 'Server Logs' : 'Payments'
       const id = `${type}-${tabCounter.current}`
       return [...prev, { id, type, title }]
     })
