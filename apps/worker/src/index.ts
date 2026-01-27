@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import projects from './routes/projects'
+import git from './routes/git'
 import preview from './routes/preview'
 import agent from './routes/agent'
 import upload from './routes/upload'
@@ -102,6 +103,7 @@ app.get('/api/session', (c) => {
 
 // Routes
 app.route('/api/projects', projects)
+app.route('/api/projects', git)
 app.route('/api/agent', agent)
 app.route('/api/upload', upload)
 app.route('/api/github', github)

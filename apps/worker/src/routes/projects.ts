@@ -1,11 +1,13 @@
 import { Hono } from 'hono'
 import type { AppContext } from '@/types/application'
+import type { ProjectGitHub } from '@/types/github'
 import { db } from '@/lib/db'
 import { sql } from 'kysely'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../middleware/auth'
 import { config } from '@/lib/config'
+import { sanitizeHostname } from '@/lib/utils'
 import {
   deployProject,
   createDeploymentRecord,
@@ -16,12 +18,13 @@ import {
   deleteSandbox,
   downloadProject,
   getSandboxLogs,
-  HttpError,
   redeployVersion,
 } from '@/controllers/projects'
+import { HttpError } from '@/lib/errors'
 import { listDeploymentEnvVars, setDeploymentEnvVars, buildDashboardCredentials } from '@/apis/convex'
 import { createGitHubApp, GitHubService } from '@/apis/github'
-import { ungzip } from 'pako'
+import { isHostnameAvailable, getProjectWithAuth } from '@/services/projects'
+import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
 
 const projects = new Hono<AppContext>()
 
@@ -32,33 +35,17 @@ projects.use('*', async (c, next) => {
   return next()
 })
 
-async function getProject(id: string, userId: string) {
-  const row = await db
-    .selectFrom('project')
-    .leftJoin('member', (join) =>
-      join.onRef('member.organizationId', '=', 'project.organizationId').on('member.userId', '=', userId),
-    )
-    .selectAll('project')
-    .select('member.id as memberId')
-    .where('project.id', '=', id)
-    .where('project.deletedAt', 'is', null)
-    .executeTakeFirst()
-
-  if (!row) return { error: 'Project not found', status: 404 as const }
-  if (!row.memberId) return { error: 'Forbidden', status: 403 as const }
-
-  const { memberId: _, ...project } = row
-  return { project }
-}
-
-function sanitizeDeployName(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 63)
-}
+// GET /projects/check-hostname - Check if a hostname is available
+projects.get(
+  '/check-hostname',
+  zValidator('query', z.object({ name: z.string().min(1).max(63), projectId: z.string().uuid().optional() })),
+  async (c) => {
+    const { name, projectId } = c.req.valid('query')
+    const sanitized = sanitizeHostname(name)
+    if (!sanitized) return c.json({ available: false })
+    return c.json({ available: await isHostnameAvailable(sanitized, projectId) })
+  },
+)
 
 // GET /projects - List all projects for user
 projects.get('/', requireAuth, async (c) => {
@@ -225,7 +212,7 @@ projects.get('/usage', requireAuth, async (c) => {
 // GET /projects/:id - Get single project
 projects.get('/:id', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProject(id, c.get('user')!.id)
+  const result = await getProjectWithAuth(id, c.get('user')!.id)
   if ('error' in result) return c.json({ error: result.error }, result.status)
 
   const row = await db
@@ -259,7 +246,7 @@ projects.patch(
     const { id } = c.req.valid('param')
     const { name } = c.req.valid('json')
 
-    const result = await getProject(id, c.get('user')!.id)
+    const result = await getProjectWithAuth(id, c.get('user')!.id)
     if ('error' in result) {
       return c.json({ error: result.error }, result.status)
     }
@@ -274,7 +261,7 @@ projects.patch(
 projects.delete('/:id', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
 
-  const result = await getProject(id, c.get('user')!.id)
+  const result = await getProjectWithAuth(id, c.get('user')!.id)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -356,9 +343,16 @@ projects.post(
         deployName,
       })
 
-      const result = await getProject(id, c.get('user')!.id)
+      const result = await getProjectWithAuth(id, c.get('user')!.id)
       if ('error' in result) return c.json({ error: result.error }, result.status)
-      const name = deployName ? sanitizeDeployName(deployName) : undefined
+      const name = deployName ? sanitizeHostname(deployName) : undefined
+
+      if (name) {
+        const available = await isHostnameAvailable(name, id)
+        if (!available) {
+          return c.json({ error: `Hostname "${name}" is already taken. Please choose a different name.` }, 409)
+        }
+      }
 
       const deployment = await createDeploymentRecord(id, name)
 
@@ -385,7 +379,7 @@ projects.post(
 // GET /projects/:id/deployments - Get deployment history for a project
 projects.get('/:id/deployments', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProject(id, c.get('user')!.id)
+  const result = await getProjectWithAuth(id, c.get('user')!.id)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -434,7 +428,7 @@ projects.post('/:id/undeploy', zValidator('param', idParam), async (c) => {
       userId: c.get('user')?.id,
     })
 
-    const result = await getProject(id, c.get('user')!.id)
+    const result = await getProjectWithAuth(id, c.get('user')!.id)
     if ('error' in result) return c.json({ error: result.error }, result.status)
     const row = result.project
 
@@ -464,13 +458,13 @@ projects.post(
   async (c) => {
     const { id } = c.req.valid('param')
     const { versionId } = c.req.valid('json')
-    const result = await getProject(id, c.get('user')!.id)
+    const result = await getProjectWithAuth(id, c.get('user')!.id)
     if ('error' in result) {
       return c.json({ error: result.error }, result.status)
     }
 
     try {
-      await redeployVersion(id, versionId)
+      await redeployVersion({ projectId: id, versionId })
       return c.json({ scheduled: true, versionId })
     } catch (err) {
       const status = err instanceof HttpError ? err.status : 500
@@ -497,11 +491,17 @@ projects.post(
         name,
       })
 
-      const result = await getProject(id, c.get('user')!.id)
+      const result = await getProjectWithAuth(id, c.get('user')!.id)
       if ('error' in result) return c.json({ error: result.error }, result.status)
 
-      const sanitized = sanitizeDeployName(name)
-      const previewUrl = `https://${sanitized}.surgent.site`
+      const sanitized = sanitizeHostname(name)
+
+      const available = await isHostnameAvailable(sanitized, id)
+      if (!available) {
+        return c.json({ error: `Hostname "${sanitized}" is already taken. Please choose a different name.` }, 409)
+      }
+
+      const previewUrl = `https://${sanitized}.${config.cloudflare.deployDomain}`
       const now = new Date()
 
       await db
@@ -547,7 +547,7 @@ projects.post(
 // POST /projects/:id/activate - Resume project sandbox (alias)
 projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProject(id, c.get('user')!.id)
+  const result = await getProjectWithAuth(id, c.get('user')!.id)
   if ('error' in result) return c.json({ error: result.error }, result.status)
   const row = result.project
 
@@ -563,11 +563,11 @@ projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
 // GET /projects/:id/logs - Get PM2 logs from sandbox
 projects.get('/:id/logs', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProject(id, c.get('user')!.id)
+  const result = await getProjectWithAuth(id, c.get('user')!.id)
   if ('error' in result) return c.json({ error: result.error }, result.status)
 
   try {
-    const logs = await getSandboxLogs(id)
+    const logs = await getSandboxLogs({ projectId: id })
     return c.json(logs)
   } catch (err) {
     const status = err instanceof HttpError ? err.status : 500
@@ -579,7 +579,7 @@ projects.get('/:id/logs', zValidator('param', idParam), async (c) => {
 // GET /projects/:id/health - Check if sandbox preview is reachable
 projects.get('/:id/health', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProject(id, c.get('user')!.id)
+  const result = await getProjectWithAuth(id, c.get('user')!.id)
   if ('error' in result) return c.json({ status: result.status === 404 ? 'not_found' : 'forbidden' }, result.status)
   const row = result.project
 
@@ -602,13 +602,13 @@ projects.get('/:id/health', zValidator('param', idParam), async (c) => {
 projects.get('/:id/download', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
 
-  const result = await getProject(id, c.get('user')!.id)
+  const result = await getProjectWithAuth(id, c.get('user')!.id)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
 
   try {
-    const { buffer, filename } = await downloadProject(id)
+    const { buffer, filename } = await downloadProject({ projectId: id })
 
     return new Response(new Uint8Array(buffer), {
       headers: {
@@ -628,7 +628,7 @@ projects.get('/:id/download', zValidator('param', idParam), async (c) => {
 // Convex prod deploy (promote)
 projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProject(id, c.get('user')!.id)
+  const result = await getProjectWithAuth(id, c.get('user')!.id)
   if ('error' in result) return c.json({ error: result.error }, result.status)
 
   await deployConvexProd({ projectId: id })
@@ -638,7 +638,7 @@ projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c)
 // GET /projects/:id/convex/env - List all environment variables
 projects.get('/:id/convex/env', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProject(id, c.get('user')!.id)
+  const result = await getProjectWithAuth(id, c.get('user')!.id)
   if ('error' in result) return c.json({ error: result.error }, result.status)
   const row = result.project
 
@@ -660,7 +660,7 @@ projects.post(
     const { id } = c.req.valid('param')
     const { vars } = c.req.valid('json')
 
-    const result = await getProject(id, c.get('user')!.id)
+    const result = await getProjectWithAuth(id, c.get('user')!.id)
     if ('error' in result) return c.json({ error: result.error }, result.status)
     const row = result.project
 
@@ -677,7 +677,7 @@ projects.post(
 // GET /projects/:id/convex/dashboard - Get dashboard embed credentials
 projects.get('/:id/convex/dashboard', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProject(id, c.get('user')!.id)
+  const result = await getProjectWithAuth(id, c.get('user')!.id)
   if ('error' in result) return c.json({ error: result.error }, result.status)
   const row = result.project
 
@@ -698,55 +698,40 @@ projects.get('/:id/convex/dashboard', zValidator('param', idParam), async (c) =>
 // GitHub Integration Endpoints
 // ============================================
 
-interface ProjectGitHub {
-  installationId: number
-  repoOwner: string
-  repoName: string
-  repoId: number
-  defaultBranch?: string
-  lastPushedSha?: string
-  lastPushAt?: string
-}
-
 // GET /projects/:id/github/status - Check GitHub installation and connection status
 projects.get('/:id/github/status', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getProject(id, userId)
+  const result = await getProjectWithAuth(id, userId)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
 
+  // Get installations (per org/account)
   const installations = await db.selectFrom('github_installations').selectAll().where('userId', '=', userId).execute()
-  const oauthLinked = installations.some((item) => item.userAccessToken)
+
+  // Get OAuth token (per user - one token for all installations)
+  const oauthToken = await db
+    .selectFrom('github_oauth_tokens')
+    .select('accessToken')
+    .where('userId', '=', userId)
+    .executeTakeFirst()
+  const hasToken = Boolean(oauthToken?.accessToken)
+
   const installationList = installations.map((item) => ({
-    id: item.installationId,
+    id: Number(item.installationId),
     account: item.accountLogin,
     accountType: item.accountType,
   }))
-  const installed = installationList.length > 0
-
-  if (!installed) {
-    return c.json({
-      installed: false,
-      connected: false,
-      oauthLinked,
-      installations: [],
-    })
-  }
 
   const projectGithub = result.project.github as ProjectGitHub | null
-  const connectedInstallation = projectGithub?.installationId
-    ? installationList.find((item) => item.id === projectGithub.installationId)
-    : installationList[0]
 
   if (!projectGithub?.repoOwner) {
     return c.json({
-      installed: true,
+      installed: installationList.length > 0,
       connected: false,
-      oauthLinked,
-      installation: connectedInstallation,
+      hasToken,
       installations: installationList,
     })
   }
@@ -754,13 +739,13 @@ projects.get('/:id/github/status', zValidator('param', idParam), async (c) => {
   return c.json({
     installed: true,
     connected: true,
-    oauthLinked,
-    installation: connectedInstallation,
+    hasToken,
     installations: installationList,
     repo: {
       owner: projectGithub.repoOwner,
       name: projectGithub.repoName,
       fullName: `${projectGithub.repoOwner}/${projectGithub.repoName}`,
+      installationId: projectGithub.installationId,
       lastPushedSha: projectGithub.lastPushedSha,
       lastPushAt: projectGithub.lastPushAt,
     },
@@ -772,15 +757,11 @@ projects.get('/:id/github/install-url', zValidator('param', idParam), async (c) 
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getProject(id, userId)
-  if ('error' in result) {
-    return c.json({ error: result.error }, result.status)
-  }
+  const result = await getProjectWithAuth(id, userId)
+  if ('error' in result) return c.json({ error: result.error }, result.status)
 
   const githubApp = createGitHubApp()
-  if (!githubApp) {
-    return c.json({ error: 'GitHub App not configured' }, 500)
-  }
+  if (!githubApp) return c.json({ error: 'GitHub App not configured' }, 500)
 
   const url = await githubApp.buildInstallUrl(userId, id)
   return c.json({ url })
@@ -791,7 +772,7 @@ projects.get('/:id/github/repos', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getProject(id, userId)
+  const result = await getProjectWithAuth(id, userId)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -838,7 +819,7 @@ projects.post(
     const { owner, repo, repoId, defaultBranch } = c.req.valid('json')
     const userId = c.get('user')!.id
 
-    const result = await getProject(id, userId)
+    const result = await getProjectWithAuth(id, userId)
     if ('error' in result) {
       return c.json({ error: result.error }, result.status)
     }
@@ -863,6 +844,40 @@ projects.post(
 
     await db.updateTable('project').set({ github, updatedAt: new Date() }).where('id', '=', id).execute()
 
+    // Update git remote in sandbox
+    const sandboxRow = await db
+      .selectFrom('sandbox')
+      .select(['id', 'provider'])
+      .where('projectId', '=', id)
+      .executeTakeFirst()
+
+    if (sandboxRow?.id) {
+      const repoUrl = `https://github.com/${owner}/${repo}.git`
+      const cwd = `/home/user/workspace/${id.replace(/[^a-zA-Z0-9_-]+/g, '-') || 'project'}`
+
+      try {
+        const providerName = sandboxRow.provider || config.sandbox.provider
+        const sandbox =
+          providerName === 'daytona'
+            ? await new DaytonaProvider(
+                config.daytona.apiKey,
+                config.daytona.serverUrl,
+                config.daytona.snapshot,
+              ).resume(sandboxRow.id)
+            : await new E2BProvider(config.e2b.template).resume(sandboxRow.id)
+
+        const remoteCheck = await sandbox.exec('git remote get-url origin 2>/dev/null', { cwd })
+        if (remoteCheck.code === 0) {
+          await sandbox.exec(`git remote set-url origin '${repoUrl}'`, { cwd })
+        } else {
+          await sandbox.exec(`git remote add origin '${repoUrl}'`, { cwd })
+        }
+        console.log('[github] Updated git remote to', repoUrl)
+      } catch (err) {
+        console.warn('[github] Failed to update git remote', err)
+      }
+    }
+
     return c.json({ connected: true })
   },
 )
@@ -872,7 +887,7 @@ projects.post('/:id/github/disconnect', zValidator('param', idParam), async (c) 
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getProject(id, userId)
+  const result = await getProjectWithAuth(id, userId)
   if ('error' in result) {
     return c.json({ error: result.error }, result.status)
   }
@@ -904,7 +919,7 @@ projects.post(
     const { name, description, private: isPrivate, installationId } = c.req.valid('json')
     const userId = c.get('user')!.id
 
-    const result = await getProject(id, userId)
+    const result = await getProjectWithAuth(id, userId)
     if ('error' in result) {
       return c.json({ error: result.error }, result.status)
     }
@@ -927,26 +942,26 @@ projects.post(
       )
     }
 
+    // Get OAuth token (per-user, stored separately from installations)
     const oauthToken = await db
-      .selectFrom('github_installations')
-      .select(['userAccessToken', 'userAccessTokenExpiresAt'])
+      .selectFrom('github_oauth_tokens')
+      .selectAll()
       .where('userId', '=', userId)
-      .where('userAccessToken', 'is not', null)
       .executeTakeFirst()
 
     try {
-      if (!oauthToken?.userAccessToken) {
+      if (!oauthToken?.accessToken) {
         return c.json(
           {
-            error: 'GitHub authorization missing. Please authorize the GitHub App to create repositories.',
+            error: 'GitHub authorization missing. Please authorize the GitHub App.',
           },
           400,
         )
       }
-      if (oauthToken.userAccessTokenExpiresAt && new Date(oauthToken.userAccessTokenExpiresAt) <= new Date()) {
+      if (oauthToken.accessTokenExpiresAt && new Date(oauthToken.accessTokenExpiresAt) <= new Date()) {
         return c.json(
           {
-            error: 'GitHub authorization expired. Please authorize again.',
+            error: 'GitHub authorization expired. Please re-authorize.',
           },
           401,
         )
@@ -960,13 +975,15 @@ projects.post(
             name,
             description,
             private: isPrivate ?? false,
-            token: oauthToken.userAccessToken,
+            auto_init: false,
+            token: oauthToken.accessToken,
           })
         : await GitHubService.createUserRepository({
             name,
             description,
             private: isPrivate ?? false,
-            token: oauthToken.userAccessToken,
+            auto_init: false,
+            token: oauthToken.accessToken,
           })
 
       if (!createResult.success || !createResult.repository) {
@@ -986,8 +1003,89 @@ projects.post(
 
       await db.updateTable('project').set({ github, updatedAt: new Date() }).where('id', '=', id).execute()
 
+      // Initialize git and push to new repo (single shell call)
+      const sandboxRow = await db
+        .selectFrom('sandbox')
+        .select(['id', 'provider'])
+        .where('projectId', '=', id)
+        .executeTakeFirst()
+
+      let pushed = false
+      let sha: string | undefined
+
+      if (sandboxRow?.id) {
+        const cleanUrl = `https://github.com/${repo.owner.login}/${repo.name}.git`
+        const cwd = `/home/user/workspace/${id.replace(/[^a-zA-Z0-9_-]+/g, '-') || 'project'}`
+        const branch = repo.default_branch || 'main'
+
+        try {
+          const providerName = sandboxRow.provider || config.sandbox.provider
+          const sandbox =
+            providerName === 'daytona'
+              ? await new DaytonaProvider(
+                  config.daytona.apiKey,
+                  config.daytona.serverUrl,
+                  config.daytona.snapshot,
+                ).resume(sandboxRow.id)
+              : await new E2BProvider(config.e2b.template).resume(sandboxRow.id)
+
+          // Get auth URL
+          const githubApp = createGitHubApp()
+          let authUrl = cleanUrl
+          if (githubApp) {
+            const { token } = await githubApp.getInstallationToken(installation.installationId)
+            authUrl = `https://x-access-token:${token}@github.com/${repo.owner.login}/${repo.name}.git`
+          }
+
+          // Commit and push to GitHub
+          const script = `
+cd '${cwd}' || exit 1
+
+# Stage and commit changes
+git add -A
+git diff --cached --quiet || git commit -m 'Initial commit'
+
+# Set remote and push
+git remote remove origin 2>/dev/null || true
+git remote add origin '${authUrl}'
+
+if git push -u origin '${branch}' 2>&1; then
+  git remote set-url origin '${cleanUrl}'
+  echo "PUSHED:true"
+  echo "SHA:$(git rev-parse HEAD)"
+else
+  git remote set-url origin '${cleanUrl}'
+  echo "PUSHED:false"
+fi
+`
+          const res = await sandbox.exec(script, { cwd: '/', timeout: 60000 })
+          const output = res.output || ''
+
+          pushed = output.includes('PUSHED:true')
+          const shaMatch = output.match(/SHA:([a-f0-9]+)/)
+          sha = shaMatch?.[1]
+
+          if (pushed && sha) {
+            await db
+              .updateTable('project')
+              .set({
+                github: { ...github, lastPushedSha: sha, lastPushAt: new Date().toISOString() },
+                updatedAt: new Date(),
+              })
+              .where('id', '=', id)
+              .execute()
+          }
+
+          console.log('[github] Initialized git and pushed:', pushed)
+        } catch (err) {
+          console.warn('[github] Failed to init git (sandbox may be offline)', err)
+        }
+      }
+
       return c.json({
         success: true,
+        pushed,
+        sha,
         repo: {
           id: repo.id,
           name: repo.name,
@@ -1003,137 +1101,5 @@ projects.post(
     }
   },
 )
-
-// POST /projects/:id/github/push - Push project files to connected repo
-projects.post('/:id/github/push', zValidator('param', idParam), async (c) => {
-  const { id } = c.req.valid('param')
-  const userId = c.get('user')!.id
-
-  const result = await getProject(id, userId)
-  if ('error' in result) {
-    return c.json({ error: result.error }, result.status)
-  }
-
-  const projectGithub = result.project.github as ProjectGitHub | null
-  if (!projectGithub?.repoOwner) {
-    return c.json({ error: 'No GitHub repo connected' }, 400)
-  }
-
-  const githubApp = createGitHubApp()
-  if (!githubApp) {
-    return c.json({ error: 'GitHub App not configured' }, 500)
-  }
-
-  try {
-    // Get installation token
-    const { token } = await githubApp.getInstallationToken(projectGithub.installationId)
-
-    // Download project files
-    const { buffer } = await downloadProject(id)
-
-    // Extract files from tar.gz
-    const files = extractFilesFromTarGz(buffer)
-
-    if (files.length === 0) {
-      return c.json({ error: 'No files to push' }, 400)
-    }
-
-    // Push to GitHub
-    const pushResult = await GitHubService.pushFilesToRepository(files, {
-      token,
-      repositoryHtmlUrl: `https://github.com/${projectGithub.repoOwner}/${projectGithub.repoName}`,
-    })
-
-    if (!pushResult.success) {
-      if (pushResult.status === 404) {
-        await db.updateTable('project').set({ github: null, updatedAt: new Date() }).where('id', '=', id).execute()
-        return c.json({ error: 'Repository not found. Connection removed.' }, 404)
-      }
-      return c.json({ error: pushResult.error || 'Push failed' }, 500)
-    }
-
-    // Update project with last push info
-    const updatedGithub: ProjectGitHub = {
-      ...projectGithub,
-      lastPushedSha: pushResult.commitSha,
-      lastPushAt: new Date().toISOString(),
-    }
-
-    await db.updateTable('project').set({ github: updatedGithub, updatedAt: new Date() }).where('id', '=', id).execute()
-
-    return c.json({ success: true, sha: pushResult.commitSha })
-  } catch (err) {
-    console.error('[github] Push failed', err)
-    const message = err instanceof Error ? err.message : 'Push failed'
-    return c.json({ error: message }, 500)
-  }
-})
-
-/**
- * Extract files from a tar.gz buffer
- */
-function extractFilesFromTarGz(buffer: Buffer): Array<{ filePath: string; fileContents: string; isBinary?: boolean }> {
-  // Decompress gzip
-  const decompressed = ungzip(new Uint8Array(buffer))
-
-  const files: Array<{
-    filePath: string
-    fileContents: string
-    isBinary?: boolean
-  }> = []
-  let offset = 0
-
-  while (offset < decompressed.length) {
-    // Read tar header (512 bytes)
-    const header = decompressed.slice(offset, offset + 512)
-
-    // Check for end of archive (empty block)
-    if (header.every((b) => b === 0)) break
-
-    // Extract filename (first 100 bytes, null-terminated)
-    let nameEnd = 0
-    while (nameEnd < 100 && header[nameEnd] !== 0) nameEnd++
-    const name = new TextDecoder().decode(header.slice(0, nameEnd))
-
-    // Extract file size (octal, bytes 124-135)
-    const sizeStr = new TextDecoder().decode(header.slice(124, 136)).replace(/\0/g, '').trim()
-    const size = parseInt(sizeStr, 8) || 0
-
-    // Extract file type (byte 156)
-    const type = header[156]
-
-    offset += 512 // Move past header
-
-    // Type 0 or ASCII '0' (48) = regular file
-    if ((type === 0 || type === 48) && size > 0 && name && !name.endsWith('/')) {
-      const content = decompressed.slice(offset, offset + size)
-      const isBinary = content.some((b) => b === 0)
-
-      // Remove the first path component (project folder name)
-      const pathParts = name.split('/')
-      const cleanPath = pathParts.slice(1).join('/')
-
-      if (cleanPath) {
-        if (isBinary) {
-          files.push({
-            filePath: cleanPath,
-            fileContents: Buffer.from(content).toString('base64'),
-            isBinary: true,
-          })
-        } else {
-          files.push({
-            filePath: cleanPath,
-            fileContents: new TextDecoder().decode(content),
-          })
-        }
-      }
-    }
-
-    // Move to next file (size rounded up to 512-byte boundary)
-    offset += Math.ceil(size / 512) * 512
-  }
-
-  return files
-}
 
 export default projects

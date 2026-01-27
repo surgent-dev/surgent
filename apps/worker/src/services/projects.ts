@@ -1,5 +1,37 @@
 import { db } from '@/lib/db'
 
+export async function getProjectWithAuth(id: string, userId: string) {
+  const row = await db
+    .selectFrom('project')
+    .leftJoin('member', (join) =>
+      join.onRef('member.organizationId', '=', 'project.organizationId').on('member.userId', '=', userId),
+    )
+    .selectAll('project')
+    .select('member.id as memberId')
+    .where('project.id', '=', id)
+    .where('project.deletedAt', 'is', null)
+    .executeTakeFirst()
+
+  if (!row) return { error: 'Project not found', status: 404 as const }
+  if (!row.memberId) return { error: 'Forbidden', status: 403 as const }
+
+  const { memberId: _, ...project } = row
+  return { project }
+}
+
+export async function attachApiKeyToProject(
+  apiKeyId: string,
+  projectId: string,
+  organizationId: string,
+): Promise<boolean> {
+  const result = await db
+    .updateTable('apikey')
+    .set({ projectId, organizationId })
+    .where('id', '=', apiKeyId)
+    .executeTakeFirst()
+  return result.numUpdatedRows > 0n
+}
+
 export function getProjectById(id: string) {
   return db.selectFrom('project').selectAll().where('id', '=', id).where('deletedAt', 'is', null).executeTakeFirst()
 }
@@ -50,7 +82,7 @@ export async function createProject(args: {
       organizationId: args.organizationId,
       name: args.name,
       slug,
-      github: { url: args.githubUrl } as any,
+      github: args.githubUrl ? { url: args.githubUrl } : null,
       createdAt: now,
       updatedAt: now,
     })
@@ -198,4 +230,35 @@ export async function updateDeployment(
     })
     .where('id', '=', id)
     .execute()
+}
+
+export async function isHostnameAvailable(scriptName: string, excludeProjectId?: string): Promise<boolean> {
+  let query = db.selectFrom('worker').select('id').where('scriptName', '=', scriptName)
+
+  if (excludeProjectId) {
+    query = query.where('projectId', '!=', excludeProjectId)
+  }
+
+  const existing = await query.executeTakeFirst()
+  return !existing
+}
+
+export async function getLatestDeploymentScriptName(projectId: string): Promise<string | null> {
+  const row = await db
+    .selectFrom('deployment')
+    .select(['scriptName'])
+    .where('projectId', '=', projectId)
+    .orderBy('createdAt', 'desc')
+    .executeTakeFirst()
+  return row?.scriptName ?? null
+}
+
+export async function getDeploymentByVersionId(projectId: string, versionId: string): Promise<{ id: string } | null> {
+  const row = await db
+    .selectFrom('deployment')
+    .select(['id'])
+    .where('projectId', '=', projectId)
+    .where('cloudflareVersionId', '=', versionId)
+    .executeTakeFirst()
+  return row ? { id: row.id as string } : null
 }

@@ -1,6 +1,9 @@
-import { E2BProvider, DaytonaProvider } from '@/apis/sandbox'
-import type { Sandbox, SandboxProvider } from '@/apis/sandbox'
+import type { Sandbox } from '@/apis/sandbox'
+import type { ProjectMetadata } from '@repo/db'
 import { config } from '@/lib/config'
+import { HttpError } from '@/lib/errors'
+import { getProvider, resumeSandbox, workspacePath, defaultProviderName } from '@/lib/sandbox'
+import { sanitizeHostname } from '@/lib/utils'
 import { createHash } from 'crypto'
 import { parse as parseDotEnv } from 'dotenv'
 import path from 'path'
@@ -8,31 +11,26 @@ import stripJsonComments from 'strip-json-comments'
 import * as ProjectService from '@/services/projects'
 import { buildDeploymentConfig, parseWranglerConfig, deployToDispatch } from '@/apis/deployer/deploy'
 import { auth } from '@/lib/auth'
-import { db } from '@/lib/db'
 import { WorkerDeployer } from '@/apis/deployer/deployer'
 import Cloudflare from 'cloudflare'
 
-const MAX_PROJECTS_PER_ORG = 2
+// ============================================================================
+// Constants
+// ============================================================================
 
-const DEFAULT_WORKER = `export default { 
-  async fetch(request, env) { 
-    return env.ASSETS.fetch(request); 
-  } 
+const MAX_PROJECTS_PER_ORG = 2
+const PREVIEW_PORT = 3000
+
+const DEFAULT_WORKER = `export default {
+  async fetch(request, env) {
+    return env.ASSETS.fetch(request);
+  }
 };`
 
 const DEFAULT_WRANGLER = {
   compatibility_date: '2025-04-24',
   assets: { binding: 'ASSETS', not_found_handling: 'single-page-application' as const },
   observability: { enabled: true, head_sampling_rate: 0.1 },
-}
-
-export class HttpError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message)
-  }
 }
 
 // ============================================================================
@@ -77,15 +75,25 @@ export interface DeleteProjectArgs {
   projectId: string
 }
 
+export interface DownloadProjectArgs {
+  projectId: string
+}
+
+export interface GetSandboxLogsArgs {
+  projectId: string
+  lines?: number
+}
+
+export interface RedeployVersionArgs {
+  projectId: string
+  versionId: string
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
 
 const posix = path.posix
-
-function localWorkspacePath(projectId: string): string {
-  return posix.join('/home/user/workspace', projectId.replace(/[^a-zA-Z0-9_-]+/g, '-') || 'project')
-}
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\"'\"'")}'`
@@ -93,17 +101,6 @@ function shellQuote(value: string): string {
 
 function buildBashCommand(cwd: string, script: string): string {
   return `bash -lc '${['set -euo pipefail', `cd ${shellQuote(cwd)}`, script].join('\n').replace(/'/g, "'\"'\"'")}'`
-}
-
-type ProviderName = 'e2b' | 'daytona'
-
-const sandboxProviderName: ProviderName = config.sandbox.provider === 'daytona' ? 'daytona' : 'e2b'
-
-function getSandboxProvider(): SandboxProvider {
-  if (config.sandbox.provider === 'daytona') {
-    return new DaytonaProvider(config.daytona.apiKey, config.daytona.serverUrl, config.daytona.snapshot)
-  }
-  return new E2BProvider(config.e2b.template)
 }
 
 function stripTrailingSlash(s: string): string {
@@ -115,15 +112,6 @@ function resolveEntryPath(currentDir: string, entry: unknown): string {
   if (typeof info.path === 'string' && info.path) return info.path
   const name = typeof info.name === 'string' ? info.name : ''
   return name ? posix.join(stripTrailingSlash(currentDir), name) : currentDir
-}
-
-function sanitizeScriptName(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 63)
 }
 
 async function getProjectEnvVars(projectId: string, environment: string) {
@@ -225,7 +213,7 @@ async function getOrCreateSandbox(opts: {
   env?: Record<string, string>
   name?: string
 }) {
-  const provider = getSandboxProvider()
+  const provider = getProvider()
   let sandbox: Sandbox
 
   if (opts.sandboxId) {
@@ -246,8 +234,8 @@ async function getOrCreateSandbox(opts: {
 // ============================================================================
 
 export async function createDeploymentRecord(projectId: string, deployName?: string) {
-  const scriptName = deployName ? sanitizeScriptName(deployName) : `project-${projectId.slice(0, 8)}`
-  const hostname = `https://${scriptName}.surgent.site`
+  const scriptName = deployName ? sanitizeHostname(deployName) : `project-${projectId.slice(0, 8)}`
+  const hostname = `https://${scriptName}.${config.cloudflare.deployDomain}`
   return ProjectService.createDeployment({
     projectId,
     scriptName,
@@ -266,8 +254,8 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
   const sandboxRow = await ProjectService.getSandboxByProjectId(projectId)
   if (!sandboxRow?.id) throw new Error('Sandbox not initialized')
 
-  const scriptName = rawName ? sanitizeScriptName(rawName) : `project-${projectId.slice(0, 8)}`
-  const workingDir = localWorkspacePath(projectId)
+  const scriptName = rawName ? sanitizeHostname(rawName) : `project-${projectId.slice(0, 8)}`
+  const workingDir = workspacePath(projectId)
   const accountId = config.cloudflare.accountId!
 
   const prevName = (await ProjectService.getWorkerByProjectId(projectId))?.scriptName
@@ -279,7 +267,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
   await updateStatus('starting')
 
   try {
-    const sandbox = await getSandboxProvider().resume(sandboxRow.id)
+    const sandbox = await getProvider().resume(sandboxRow.id)
 
     await updateStatus('building')
     const build = await sandbox.exec('bun run build', { cwd: workingDir, timeout: 180_000 })
@@ -322,7 +310,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     // Fetch Cloudflare deployment info for version tracking
     const cfDeployment = await fetchLatestCloudflareDeployment(accountId, scriptName)
     const finishedAt = new Date()
-    const workerHostname = `https://${scriptName}.surgent.site`
+    const workerHostname = `https://${scriptName}.${config.cloudflare.deployDomain}`
 
     await ProjectService.updateDeployment(deploymentId, {
       status: 'deployed',
@@ -379,13 +367,8 @@ export async function undeployProject(args: UndeployProjectArgs): Promise<void> 
   if (!project) throw new Error(`Project ${projectId} not found`)
 
   const worker = await ProjectService.getWorkerByProjectId(projectId)
-  const latestDeployment = await db
-    .selectFrom('deployment')
-    .select(['scriptName'])
-    .where('projectId', '=', projectId)
-    .orderBy('createdAt', 'desc')
-    .executeTakeFirst()
-  const scriptName = worker?.scriptName || latestDeployment?.scriptName
+  const latestScriptName = await ProjectService.getLatestDeploymentScriptName(projectId)
+  const scriptName = worker?.scriptName || latestScriptName
   if (!scriptName) throw new Error('No deployment name found')
 
   const deployment = await ProjectService.createDeployment({
@@ -455,20 +438,15 @@ export async function initializeProject(
     githubUrl: args.githubUrl,
   })
   const projectId = created.id
-  const workingDirectory = localWorkspacePath(projectId)
+  const workingDirectory = workspacePath(projectId)
 
   const apiKeyResult = await auth.api.createApiKey({
     body: { name: `p-${projectId.slice(0, 8)}` },
     headers: args.headers,
   })
 
-  const apiKeyUpdate = await db
-    .updateTable('apikey')
-    .set({ projectId, organizationId: args.organizationId })
-    .where('id', '=', apiKeyResult.id)
-    .executeTakeFirst()
-
-  if (!apiKeyUpdate || apiKeyUpdate.numUpdatedRows === 0n) {
+  const attached = await ProjectService.attachApiKeyToProject(apiKeyResult.id, projectId, args.organizationId)
+  if (!attached) {
     throw new Error('Failed to attach API key to project')
   }
 
@@ -478,7 +456,7 @@ export async function initializeProject(
   }
   const devEnv = await getProjectEnvVars(projectId, 'development')
   const { sandbox, previewUrl } = await getOrCreateSandbox({
-    port: 3000,
+    port: PREVIEW_PORT,
     workingDirectory,
     name: 'server',
     env: {
@@ -489,12 +467,18 @@ export async function initializeProject(
       OPENCODE_BASE_URL: config.opencode.baseUrl,
     },
   })
-  console.log('[init] sandbox created:', sandbox.id, 'provider:', sandboxProviderName)
+  console.log('[init] sandbox created:', sandbox.id, 'provider:', defaultProviderName)
 
   if (args.githubUrl) {
-    console.log('[init] cloning repo...')
+    console.log('[init] cloning template...')
     await sandbox.clone(args.githubUrl, workingDirectory)
-    console.log('[init] clone complete')
+    const reset = await sandbox.exec(buildBashCommand(workingDirectory, 'rm -rf .git && git init -b main'), {
+      timeout: 60_000,
+    })
+    if (reset.code !== 0) {
+      throw new Error(`Failed to reset git after clone: ${reset.output}`)
+    }
+    console.log('[init] template cloned, git reset')
   }
 
   let initScript: string | undefined
@@ -525,7 +509,7 @@ export async function initializeProject(
   await ProjectService.upsertSandbox({
     id: sandbox.id,
     projectId,
-    provider: sandboxProviderName,
+    provider: defaultProviderName,
     status: 'started',
     host: previewUrl,
   })
@@ -534,21 +518,21 @@ export async function initializeProject(
 }
 
 export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxId: string; previewUrl: string }> {
-  const workingDirectory = localWorkspacePath(args.projectId)
+  const workingDirectory = workspacePath(args.projectId)
   const devEnv = await getProjectEnvVars(args.projectId, 'development')
 
   const { sandbox, previewUrl } = await getOrCreateSandbox({
     sandboxId: args.sandboxId,
-    port: 3000,
+    port: PREVIEW_PORT,
     workingDirectory,
     name: 'server',
   })
 
   try {
     const project = await ProjectService.getProjectById(args.projectId)
-    const { startCommand, processName } = (project?.metadata ?? {}) as any
-    if (startCommand && processName) {
-      await ensurePm2Process(sandbox, workingDirectory, processName, startCommand, devEnv)
+    const metadata = project?.metadata as ProjectMetadata | null
+    if (metadata?.startCommand && metadata?.processName) {
+      await ensurePm2Process(sandbox, workingDirectory, metadata.processName, metadata.startCommand, devEnv)
     }
 
     const opencodeConfigDir = config.opencode.configDir
@@ -561,7 +545,7 @@ export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxI
   await ProjectService.upsertSandbox({
     id: sandbox.id,
     projectId: args.projectId,
-    provider: sandboxProviderName,
+    provider: defaultProviderName,
     status: 'started',
     host: previewUrl,
   })
@@ -576,49 +560,50 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
   const sandboxRow = await ProjectService.getSandboxByProjectId(args.projectId)
   if (!sandboxRow?.id) throw new Error('Sandbox not found')
 
-  const sandbox = await getSandboxProvider().resume(sandboxRow.id)
-  const cwd = project.metadata?.workingDirectory || localWorkspacePath(args.projectId)
+  const sandbox = await getProvider().resume(sandboxRow.id)
+  const cwd = project.metadata?.workingDirectory || workspacePath(args.projectId)
 
   const res = await sandbox.exec('bunx convex deploy -y', { cwd, timeout: 180_000 })
   if (res.code !== 0) throw new Error(`convex deploy failed: ${res.output}`)
 }
 
-export async function downloadProject(projectId: string): Promise<{ buffer: Buffer; filename: string }> {
+export async function downloadProject(args: DownloadProjectArgs): Promise<{ buffer: Buffer; filename: string }> {
+  const { projectId } = args
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new HttpError(404, 'Project not found')
 
   const sandboxRow = await ProjectService.getSandboxByProjectId(projectId)
   if (!sandboxRow?.id) throw new HttpError(400, 'Sandbox not initialized')
 
-  const sandbox = await getSandboxProvider().resume(sandboxRow.id)
-  const workingDir = (project.metadata as any)?.workingDirectory || localWorkspacePath(projectId)
+  const sandbox = await getProvider().resume(sandboxRow.id)
+  const metadata = project.metadata as ProjectMetadata | null
+  const workingDir = metadata?.workingDirectory || workspacePath(projectId)
   const archivePath = `/tmp/${projectId}-download.tar.gz`
 
-  // Use tar (always available) with excludes for large/irrelevant directories
-  const tarCmd = [
-    'tar -czf',
-    shellQuote(archivePath),
-    '--exclude=node_modules',
-    '--exclude=.git',
-    '--exclude=.next',
-    '--exclude=dist',
-    '--exclude=.turbo',
-    '--exclude=*.log',
-    '.',
-  ].join(' ')
+  try {
+    const tarCmd = [
+      'tar -czf',
+      shellQuote(archivePath),
+      '--exclude=node_modules',
+      '--exclude=.git',
+      '--exclude=.next',
+      '--exclude=dist',
+      '--exclude=.turbo',
+      '--exclude=*.log',
+      '.',
+    ].join(' ')
 
-  const result = await sandbox.exec(tarCmd, { cwd: workingDir, timeout: 180_000 })
-  if (result.code !== 0) {
-    throw new HttpError(500, `Failed to create archive: ${result.output}`)
+    const result = await sandbox.exec(tarCmd, { cwd: workingDir, timeout: 180_000 })
+    if (result.code !== 0) {
+      throw new HttpError(500, `Failed to create archive: ${result.output}`)
+    }
+
+    const buffer = await downloadFileSafe(sandbox, archivePath, workingDir)
+    const safeName = (project.name || 'project').replace(/[^a-zA-Z0-9_-]/g, '-')
+    return { buffer, filename: `${safeName}.tar.gz` }
+  } finally {
+    await sandbox.exec(`rm -f ${shellQuote(archivePath)}`).catch(() => {})
   }
-
-  const buffer = await downloadFileSafe(sandbox, archivePath, workingDir)
-
-  // Cleanup
-  await sandbox.exec(`rm -f ${shellQuote(archivePath)}`).catch(() => {})
-
-  const safeName = (project.name || 'project').replace(/[^a-zA-Z0-9_-]/g, '-')
-  return { buffer, filename: `${safeName}.tar.gz` }
 }
 
 export async function deleteSandbox(args: DeleteProjectArgs): Promise<void> {
@@ -629,7 +614,7 @@ export async function deleteSandbox(args: DeleteProjectArgs): Promise<void> {
   if (!sandboxRow?.id) return
 
   try {
-    await getSandboxProvider().kill(sandboxRow.id)
+    await getProvider().kill(sandboxRow.id)
     console.log('[delete] sandbox deleted', { projectId: args.projectId, sandboxId: sandboxRow.id })
   } catch (err) {
     console.error('[delete] sandbox deletion failed', {
@@ -640,19 +625,20 @@ export async function deleteSandbox(args: DeleteProjectArgs): Promise<void> {
   }
 }
 
-export async function getSandboxLogs(projectId: string, lines = 100): Promise<{ app: string; opencode: string }> {
+export async function getSandboxLogs(args: GetSandboxLogsArgs): Promise<{ app: string; opencode: string }> {
+  const { projectId, lines = 100 } = args
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new HttpError(404, 'Project not found')
 
   const sandboxRow = await ProjectService.getSandboxByProjectId(projectId)
   if (!sandboxRow?.id) throw new HttpError(400, 'Sandbox not initialized')
 
-  const sandbox = await getSandboxProvider().resume(sandboxRow.id)
-  const processName = (project.metadata as any)?.processName
+  const sandbox = await getProvider().resume(sandboxRow.id)
+  const metadata = project.metadata as ProjectMetadata | null
 
   const [app, opencode] = await Promise.all([
-    processName
-      ? sandbox.exec(`pm2 logs ${processName} --nostream --lines ${lines} 2>&1 || echo "No app logs"`, {
+    metadata?.processName
+      ? sandbox.exec(`pm2 logs ${metadata.processName} --nostream --lines ${lines} 2>&1 || echo "No app logs"`, {
           timeout: 10_000,
         })
       : Promise.resolve({ code: 0, output: 'No app process configured' }),
@@ -664,7 +650,8 @@ export async function getSandboxLogs(projectId: string, lines = 100): Promise<{ 
   return { app: app.output, opencode: opencode.output }
 }
 
-export async function redeployVersion(projectId: string, versionId: string) {
+export async function redeployVersion(args: RedeployVersionArgs): Promise<void> {
+  const { projectId, versionId } = args
   if (config.cloudflare.dispatchNamespace) {
     throw new Error('Rollback is not supported for dispatch deployments')
   }
@@ -675,14 +662,8 @@ export async function redeployVersion(projectId: string, versionId: string) {
   const { scriptName, accountId, hostname } = worker
   const client = new Cloudflare({ apiToken: config.cloudflare.apiToken })
 
-  const previous = await db
-    .selectFrom('deployment')
-    .select(['id'])
-    .where('projectId', '=', projectId)
-    .where('cloudflareVersionId', '=', versionId)
-    .executeTakeFirst()
+  const previous = await ProjectService.getDeploymentByVersionId(projectId, versionId)
 
-  // Create deployment record for rollback
   const deployment = await ProjectService.createDeployment({
     projectId,
     scriptName,

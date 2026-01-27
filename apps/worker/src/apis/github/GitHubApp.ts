@@ -84,7 +84,7 @@ export class GitHubApp {
    */
   async buildInstallUrl(userId: string, projectId: string): Promise<string> {
     const state = await this.createState(userId, projectId)
-    return `https://github.com/apps/${this.config.appSlug}/installations/new?state=${encodeURIComponent(state)}`
+    return `https://github.com/apps/${this.config.appSlug}/installations/new?state=${state}`
   }
 
   /**
@@ -146,7 +146,7 @@ export class GitHubApp {
       encoder.encode(this.config.stateSecret),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
-      ['sign']
+      ['sign'],
     )
     const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(data))
     return Buffer.from(signature).toString('base64url')

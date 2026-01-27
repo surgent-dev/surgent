@@ -57,6 +57,7 @@ export const config = {
     apiToken: env.CLOUDFLARE_API_TOKEN,
     dispatchNamespace: env.DISPATCH_NAMESPACE_NAME,
     deployUrl: env.CLOUDFLARE_DEPLOY_URL,
+    deployDomain: env.DEPLOY_DOMAIN || 'surgent.site',
   },
   convex: {
     host: env.CONVEX_HOST || 'https://api.convex.dev',
