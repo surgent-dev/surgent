@@ -59,6 +59,9 @@
 
             # cloud management tools
             awscli2
+
+            # tunnel for local testing
+            cloudflared
           ];
 
           env.RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";

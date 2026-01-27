@@ -417,6 +417,35 @@ pub async fn oauth_callback(
             )
         })?;
 
+    // Check if processorAccountId already exists in another row (not this one)
+    let existing = sqlx::query!(
+        r#"
+        SELECT id FROM connect_account
+        WHERE processor = $1 AND "processorAccountId" = $2 AND id != $3
+        "#,
+        &row.processor,
+        &token_response.processor_account_id,
+        row.id
+    )
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
+
+    if let Some(existing) = existing {
+        let redirect_url = format!(
+            "{}/project/{}?stripe_conflict=true&conflict_account_id={}",
+            state.config.web_base_url.trim_end_matches('/'),
+            row.projectId,
+            existing.id
+        );
+        return Ok(Redirect::temporary(&redirect_url));
+    }
+
     // Fetch account details from processor
     let account_details = processor
         .get_account(&token_response.processor_account_id)
@@ -629,6 +658,76 @@ pub async fn list_accounts(
         .collect();
 
     Ok(Json(response))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateAccountRequest {
+    pub project_id: Uuid,
+}
+
+/// Update account's project
+#[utoipa::path(
+    patch,
+    path = "/accounts/{id}",
+    tag = "account",
+    params(
+        ("id" = Uuid, Path, description = "Account ID")
+    ),
+    request_body = UpdateAccountRequest,
+    responses(
+        (status = 200, description = "Account updated", body = ConnectedAccountResponse),
+        (status = 404, description = "Account not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn update_account(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Json(req): Json<UpdateAccountRequest>,
+) -> Result<Json<ConnectedAccountResponse>, (StatusCode, String)> {
+    let account = sqlx::query!(
+        r#"
+        UPDATE connect_account
+        SET "projectId" = $1
+        WHERE id = $2
+        RETURNING
+            id,
+            "projectId",
+            country,
+            currency,
+            "isPayoutsEnabled",
+            processor,
+            "processorAccountId",
+            status,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType"
+        "#,
+        req.project_id,
+        id
+    )
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?
+    .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+
+    Ok(Json(ConnectedAccountResponse {
+        id: account.id,
+        processor: account.processor,
+        processor_account_id: account.processorAccountId,
+        status: account.status,
+        country: account.country,
+        currency: account.currency,
+        business_type: account.businessType,
+        details_submitted: account.detailsSubmitted,
+        charges_enabled: account.chargesEnabled,
+        payouts_enabled: account.isPayoutsEnabled,
+    }))
 }
 
 /// Delete/disconnect an account

@@ -41,6 +41,10 @@ async function disconnectSurpay(accountId: string): Promise<{ disconnected: bool
   return payHttp.delete(`accounts/${accountId}`).json()
 }
 
+async function moveAccount(accountId: string, projectId: string): Promise<SurpayAccount> {
+  return payHttp.patch(`accounts/${accountId}`, { json: { project_id: projectId } }).json()
+}
+
 // Hooks
 export function useSurpayAccounts(projectId?: string) {
   return useQuery({
@@ -79,6 +83,17 @@ export function useSurpayDisconnect() {
   return useMutation({
     mutationFn: ({ accountId }: { projectId: string; accountId: string }) =>
       disconnectSurpay(accountId),
+    onSuccess: (_res, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['surpay-accounts', projectId] })
+    },
+  })
+}
+
+export function useSurpayMoveAccount() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ accountId, projectId }: { accountId: string; projectId: string }) =>
+      moveAccount(accountId, projectId),
     onSuccess: (_res, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['surpay-accounts', projectId] })
     },

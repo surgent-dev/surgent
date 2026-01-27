@@ -48,6 +48,7 @@ import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
 import { useGitHubStatus } from '@/queries/github'
 import { useSandbox } from '@/hooks/use-sandbox'
+import { useSurpayConnect, useSurpayMoveAccount } from '@/queries/surpay'
 
 // Types
 interface User {
@@ -109,6 +110,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const [isDeploymentStatusOpen, setIsDeploymentStatusOpen] = useState(false)
   const [isPublishOpen, setIsPublishOpen] = useState(false)
   const [isStripeSuccessOpen, setIsStripeSuccessOpen] = useState(false)
+  const [isStripeConflictOpen, setIsStripeConflictOpen] = useState(false)
+  const [conflictAccountId, setConflictAccountId] = useState<string | null>(null)
 
   // Stripe success handling
   const setPulsePaymentsTab = useSandbox((s) => s.setPulsePaymentsTab)
@@ -117,6 +120,22 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       setIsStripeSuccessOpen(true)
       const params = new URLSearchParams(searchParams.toString())
       params.delete('stripe_connected')
+      const newQuery = params.toString()
+      router.replace(newQuery ? `${pathname}?${newQuery}` : pathname)
+    }
+  }, [searchParams, pathname, router])
+
+  // Stripe conflict handling
+  useEffect(() => {
+    if (searchParams.get('stripe_conflict') === 'true') {
+      const accountId = searchParams.get('conflict_account_id')
+      if (accountId) {
+        setConflictAccountId(accountId)
+        setIsStripeConflictOpen(true)
+      }
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('stripe_conflict')
+      params.delete('conflict_account_id')
       const newQuery = params.toString()
       router.replace(newQuery ? `${pathname}?${newQuery}` : pathname)
     }
@@ -139,6 +158,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const renameProject = useRenameProject()
   useGitHubStatus(projectId, { enabled: isGitHubDialogOpen }) // Prefetch for dialog
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
+  const surpayConnect = useSurpayConnect()
+  const surpayMoveAccount = useSurpayMoveAccount()
 
   // Toast when deployment completes
   const prevStatusRef = useRef<string | null>(null)
@@ -622,6 +643,60 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               }}
             >
               Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isStripeConflictOpen} onOpenChange={setIsStripeConflictOpen}>
+        <DialogContent overlayClassName="backdrop-blur-sm">
+          <DialogHeader>
+            <DialogTitle>Stripe Account Already Connected</DialogTitle>
+            <DialogDescription>
+              This Stripe account is already connected to another project. Would you like to move it to this project
+              instead?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              disabled={surpayConnect.isPending}
+              onClick={() => {
+                if (!projectId) return
+                surpayConnect.mutate(projectId, {
+                  onSuccess: (data) => {
+                    setIsStripeConflictOpen(false)
+                    setConflictAccountId(null)
+                    window.location.href = data.oauth_url
+                  },
+                  onError: () => toast.error('Failed to start Stripe connection', { position: 'top-right' }),
+                })
+              }}
+            >
+              {surpayConnect.isPending && <Loader2 className="size-4 animate-spin mr-1.5" />}
+              Connect different account
+            </Button>
+            <Button
+              disabled={surpayMoveAccount.isPending}
+              onClick={() => {
+                if (!projectId || !conflictAccountId) return
+                surpayMoveAccount.mutate(
+                  { accountId: conflictAccountId, projectId },
+                  {
+                    onSuccess: () => {
+                      setIsStripeConflictOpen(false)
+                      setConflictAccountId(null)
+                      toast.success('Stripe account moved successfully', { position: 'top-right' })
+                      setPulsePaymentsTab(true)
+                      setTimeout(() => setPulsePaymentsTab(false), 10000)
+                    },
+                    onError: () => toast.error('Failed to move Stripe account', { position: 'top-right' }),
+                  },
+                )
+              }}
+            >
+              {surpayMoveAccount.isPending && <Loader2 className="size-4 animate-spin mr-1.5" />}
+              Move to this project
             </Button>
           </DialogFooter>
         </DialogContent>

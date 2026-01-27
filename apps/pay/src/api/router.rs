@@ -12,7 +12,7 @@ use utoipa_swagger_ui::SwaggerUi;
 use crate::AppState;
 use crate::api::account::{
     connect_callback, connect_refresh, create_connect_account, disconnect, get_account,
-    list_accounts, oauth_callback,
+    list_accounts, oauth_callback, update_account,
 };
 use crate::api::checkout::{checkout_cancel, checkout_success, create_checkout_session};
 use crate::api::customer::{get_customer, list_customers};
@@ -49,7 +49,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/connect/callback", get(connect_callback))
         .route("/connect/refresh", get(connect_refresh))
         .route("/connect/oauth/callback", get(oauth_callback))
-        .route("/{id}", get(get_account).delete(disconnect))
+        .route(
+            "/{id}",
+            get(get_account).patch(update_account).delete(disconnect),
+        )
         .route("/", get(list_accounts));
 
     let origins: Vec<_> = state
@@ -64,6 +67,7 @@ pub fn create_router(state: AppState) -> Router {
             Method::GET,
             Method::POST,
             Method::PUT,
+            Method::PATCH,
             Method::DELETE,
             Method::OPTIONS,
         ])
