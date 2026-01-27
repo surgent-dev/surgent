@@ -21,10 +21,12 @@ const TUNNELS: TunnelConfig[] = [
   {
     name: 'worker',
     port: 4000,
-    envInjections: [
-      { key: 'SURGENT_BASE_URL', file: 'apps/worker/.env.local' },
-      { key: 'OPENCODE_BASE_URL', file: 'apps/worker/.env.local', suffix: '/zen/v1' },
-    ],
+    envInjections: [{ key: 'SURGENT_BASE_URL', file: 'apps/worker/.env.local' }],
+  },
+  {
+    name: 'gateway',
+    port: 8080,
+    envInjections: [{ key: 'OPENCODE_BASE_URL', file: 'apps/worker/.env.local', suffix: '/zen/v1' }],
   },
 ]
 
