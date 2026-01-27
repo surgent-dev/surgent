@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id\n        FROM customer\n        WHERE \"projectId\" = $1 AND \"externalId\" = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "086adf8749b0b7e1bac2313b2382ed4fcdf6c1d1fe37dd98b1bdd9bbbf405430"
+}

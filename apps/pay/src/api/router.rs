@@ -14,6 +14,7 @@ use crate::api::account::{
     connect_callback, connect_refresh, create_connect_account, disconnect, get_account,
     list_accounts, oauth_callback, update_account,
 };
+use crate::api::check::check;
 use crate::api::checkout::{checkout_cancel, checkout_success, create_checkout_session};
 use crate::api::customer::{get_customer, list_customers};
 use crate::api::openapi::ApiDoc;
@@ -77,6 +78,7 @@ pub fn create_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health_check))
         .route("/projects", get(list_projects))
+        .route("/check", post(check))
         .nest("/webhooks", webhook_routes)
         .nest("/project", project_routes)
         .nest("/product", product_routes)

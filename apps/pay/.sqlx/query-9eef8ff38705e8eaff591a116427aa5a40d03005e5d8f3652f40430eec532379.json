@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, \"processorPriceId\", \"priceAmount\", \"recurringInterval\" as \"recurring_interval: Option<RecurringInterval>\"\n        FROM product_price\n        WHERE id = $1 AND \"productId\" = $2\n        ",
+  "query": "\n            SELECT id, \"processorPriceId\", \"priceAmount\", \"recurringInterval\" as \"recurring_interval: Option<RecurringInterval>\"\n            FROM product_price\n            WHERE \"productId\" = $1\n            ORDER BY \"createdAt\" ASC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -38,7 +38,6 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Uuid"
       ]
     },
@@ -49,5 +48,5 @@
       true
     ]
   },
-  "hash": "5a935c70bec9d5d3d7930e02a75314fa44f2514a7f5beabce9168759f13b1a69"
+  "hash": "9eef8ff38705e8eaff591a116427aa5a40d03005e5d8f3652f40430eec532379"
 }
