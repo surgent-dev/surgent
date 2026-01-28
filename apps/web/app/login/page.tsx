@@ -1,33 +1,36 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { authClient } from "@/lib/auth-client";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { isWaitlistMode } from "@/lib/waitlist";
+import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { authClient } from '@/lib/auth-client'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { isWaitlistMode } from '@/lib/waitlist'
 
 export default function LoginPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const searchParams = useSearchParams()
+  const next = searchParams.get('next')
 
   const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    setError("");
+    setIsLoading(true)
+    setError('')
     try {
-      const base = process.env.NEXT_PUBLIC_APP_URL;
-      const callbackURL = base
-        ? new URL(isWaitlistMode() ? "/waitlist" : "/dashboard", base).toString()
-        : undefined;
+      const base = process.env.NEXT_PUBLIC_APP_URL
+      // Use 'next' param if provided, otherwise default to main page
+      const redirectPath = isWaitlistMode() ? '/waitlist' : next || '/'
+      const callbackURL = base ? new URL(redirectPath, base).toString() : undefined
 
       await authClient.signIn.social({
-        provider: "google",
+        provider: 'google',
         callbackURL,
-      });
+      })
     } catch (err) {
-      setError("Failed to login with Google");
-      setIsLoading(false);
+      setError('Failed to login with Google')
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background relative">
@@ -40,9 +43,9 @@ export default function LoginPage() {
           <div className="mb-10">
             <h1 className="text-4xl font-bold text-foreground">Surgent</h1>
           </div>
-          
+
           <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-            {isWaitlistMode() ? "Join the waitlist" : "Log in to Surgent"}
+            {isWaitlistMode() ? 'Join the waitlist' : 'Log in to Surgent'}
           </h2>
         </div>
 
@@ -83,18 +86,12 @@ export default function LoginPage() {
             </Button>
 
             <div className="prose text-center text-sm text-muted-foreground">
-              By clicking continue, you agree to our{" "}
-              <a 
-                href="/terms" 
-                className="underline hover:text-foreground transition-colors"
-              >
+              By clicking continue, you agree to our{' '}
+              <a href="/terms" className="underline hover:text-foreground transition-colors">
                 Terms of Service
-              </a>{" "}
-              and{" "}
-              <a 
-                href="/privacy" 
-                className="underline hover:text-foreground transition-colors"
-              >
+              </a>{' '}
+              and{' '}
+              <a href="/privacy" className="underline hover:text-foreground transition-colors">
                 Privacy Policy
               </a>
             </div>
@@ -102,15 +99,12 @@ export default function LoginPage() {
         </div>
 
         <div className="prose text-center text-sm text-muted-foreground">
-          Don&apos;t have an account yet?{" "}
-          <a 
-            href="/signup" 
-            className="text-foreground underline hover:no-underline font-medium"
-          >
+          Don&apos;t have an account yet?{' '}
+          <a href="/signup" className="text-foreground underline hover:no-underline font-medium">
             Sign up
           </a>
         </div>
       </div>
     </div>
-  );
-} 
+  )
+}

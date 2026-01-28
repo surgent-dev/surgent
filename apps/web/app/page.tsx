@@ -10,7 +10,7 @@ import { isWaitlistMode } from '@/lib/waitlist'
 import { WaitlistScreen } from '@/components/waitlist-screen'
 import { ChatComposer } from '@/components/chat/chat-composer'
 import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useCreateProject } from '@/queries/projects'
 import { toast } from 'react-hot-toast'
 
@@ -119,6 +119,7 @@ export default function Index() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [promptValue, setPromptValue] = useState('')
   const router = useRouter()
+  const searchParams = useSearchParams()
   const create = useCreateProject()
   const typingPlaceholder = useTypingPlaceholder(typingPlaceholders)
 
@@ -172,12 +173,41 @@ export default function Index() {
         },
       )
     } else {
-      const q = new URLSearchParams({ initial }).toString()
-      const next = `/project/new?${q}`
-      const qp = new URLSearchParams({ next }).toString()
-      router.push(`/signup?${qp}`)
+      // Save prompt to sessionStorage as backup
+      sessionStorage.setItem('pendingPrompt', JSON.stringify({ text: initial, projectType }))
+      // Redirect to signup, then back to main page with initial param
+      const next = `/?initial=${encodeURIComponent(initial)}`
+      router.push(`/signup?next=${encodeURIComponent(next)}`)
     }
   }
+
+  // Restore pending prompt from URL or sessionStorage after auth
+  useEffect(() => {
+    // First check URL param
+    const initialFromUrl = searchParams.get('initial')
+    if (initialFromUrl) {
+      setPromptValue(initialFromUrl)
+      // Clean up URL
+      router.replace('/', { scroll: false })
+      sessionStorage.removeItem('pendingPrompt')
+      return
+    }
+
+    // Fallback to sessionStorage
+    if (!isLoggedIn) return
+    const pending = sessionStorage.getItem('pendingPrompt')
+    if (!pending) return
+
+    try {
+      const { text } = JSON.parse(pending)
+      sessionStorage.removeItem('pendingPrompt')
+      if (text) {
+        setPromptValue(text)
+      }
+    } catch {
+      sessionStorage.removeItem('pendingPrompt')
+    }
+  }, [isLoggedIn, searchParams, router])
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
