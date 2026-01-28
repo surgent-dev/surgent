@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::AuthenticatedProject;
+use crate::core::auth::AuthenticatedUser;
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -22,7 +22,7 @@ pub struct ListProjectsResponse {
 
 /// List all projects for the authenticated organization.
 ///
-/// Returns projects belonging to the organization associated with the API key.
+/// Returns projects belonging to the organization associated with the authenticated user.
 /// Project creation is handled by apps/worker, not this API.
 #[utoipa::path(
     get,
@@ -30,16 +30,16 @@ pub struct ListProjectsResponse {
     tag = "project",
     responses(
         (status = 200, description = "Projects retrieved", body = ListProjectsResponse),
-        (status = 401, description = "Unauthorized - invalid or missing API key"),
+        (status = 401, description = "Unauthorized - invalid or missing session"),
         (status = 500, description = "Internal server error")
     ),
     security(
-        ("project_key" = [])
+        ("session_cookie" = [])
     )
 )]
 pub async fn list_projects(
     State(pool): State<PgPool>,
-    auth: AuthenticatedProject,
+    auth: AuthenticatedUser,
 ) -> Result<(StatusCode, Json<ListProjectsResponse>), (StatusCode, String)> {
     let rows = sqlx::query!(
         r#"
