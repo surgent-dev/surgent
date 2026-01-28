@@ -7,7 +7,7 @@ use url::Url;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::AuthenticatedProject;
+use crate::core::auth::{AuthenticatedUser, verify_project_access};
 use crate::core::config::Config;
 use crate::integrations::ProcessorRegistry;
 use crate::integrations::stripe::fetch_checkout_session;
@@ -22,6 +22,7 @@ pub struct CustomerData {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateCheckoutRequest {
+    pub project_id: Uuid,
     pub customer_id: String,
     pub product_id: String,
     pub price_id: Option<String>,
@@ -71,19 +72,22 @@ pub struct CreateCheckoutResponse {
         (status = 500, description = "Internal server error")
     ),
     security(
-        ("project_key" = [])
+        ("session_cookie" = [])
     )
 )]
 pub async fn create_checkout_session(
     State(pool): State<PgPool>,
     State(config): State<Config>,
     State(registry): State<Arc<ProcessorRegistry>>,
-    auth: AuthenticatedProject,
+    auth: AuthenticatedUser,
     Json(req): Json<CreateCheckoutRequest>,
 ) -> Result<(StatusCode, Json<CreateCheckoutResponse>), (StatusCode, String)> {
     // Validate URLs to prevent phishing attacks
     req.validate()
         .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
+
+    // Verify user has access to the project
+    verify_project_access(&pool, auth.user_id, req.project_id).await?;
 
     // Look up product by slug + project_id
     let product = sqlx::query!(
@@ -93,7 +97,7 @@ pub async fn create_checkout_session(
         WHERE p.slug = $1 AND p."projectId" = $2
         "#,
         req.product_id,
-        auth.project_id
+        req.project_id
     )
     .fetch_optional(&pool)
     .await
@@ -212,7 +216,7 @@ pub async fn create_checkout_session(
         WHERE "projectId" = $1 AND "processorAccountId" IS NOT NULL
         LIMIT 1
         "#,
-        auth.project_id
+        req.project_id
     )
     .fetch_optional(&pool)
     .await
@@ -224,14 +228,15 @@ pub async fn create_checkout_session(
     })?
     .flatten();
 
-    // Fetch org config for platform fee calculation
+    // Fetch org config for platform fee calculation (get org_id from project)
     let org_config = sqlx::query!(
         r#"
-        SELECT "platformFeePercent", "platformFeeFixed"
-        FROM organization
-        WHERE id = $1
+        SELECT o."platformFeePercent", o."platformFeeFixed"
+        FROM organization o
+        INNER JOIN project p ON p."organizationId" = o.id
+        WHERE p.id = $1
         "#,
-        auth.organization_id
+        req.project_id
     )
     .fetch_optional(&pool)
     .await

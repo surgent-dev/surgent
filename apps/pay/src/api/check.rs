@@ -3,11 +3,14 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use utoipa::ToSchema;
 
-use crate::core::auth::AuthenticatedProject;
+use uuid::Uuid;
+
+use crate::core::auth::{AuthenticatedUser, verify_project_access};
 use crate::types::SubscriptionStatus;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CheckRequest {
+    pub project_id: Uuid,
     pub customer_id: String,
     pub product_id: String,
 }
@@ -30,14 +33,17 @@ pub struct CheckResponse {
         (status = 500, description = "Internal server error")
     ),
     security(
-        ("project_key" = [])
+        ("session_cookie" = [])
     )
 )]
 pub async fn check(
     State(pool): State<PgPool>,
-    auth: AuthenticatedProject,
+    auth: AuthenticatedUser,
     Json(req): Json<CheckRequest>,
 ) -> Result<Json<CheckResponse>, (StatusCode, String)> {
+    // Verify user has access to the project
+    verify_project_access(&pool, auth.user_id, req.project_id).await?;
+
     // Look up customer by (project_id, external_id)
     let customer = sqlx::query!(
         r#"
@@ -45,7 +51,7 @@ pub async fn check(
         FROM customer
         WHERE "projectId" = $1 AND "externalId" = $2
         "#,
-        auth.project_id,
+        req.project_id,
         req.customer_id
     )
     .fetch_optional(&pool)
@@ -71,7 +77,7 @@ pub async fn check(
         WHERE slug = $1 AND "projectId" = $2
         "#,
         req.product_id,
-        auth.project_id
+        req.project_id
     )
     .fetch_optional(&pool)
     .await
