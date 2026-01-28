@@ -1,9 +1,10 @@
 import { useState, useRef, useMemo } from 'react'
-import { ArrowUp, Paperclip, X, Loader2, FileText, ChevronDown } from 'lucide-react'
+import { ArrowUp, Paperclip, X, Loader2, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { fileToDataUrl, uploadFile, attachmentsToParts, type UploadingAttachment, type FilePart } from '@/lib/upload'
-import ModelSelectorDialog, { type ProviderModel } from './model-selector-dialog'
+import ModelSelectorDropdown, { type ProviderModel } from './model-selector-dropdown'
 
 export type { FilePart, ProviderModel }
 
@@ -24,19 +25,12 @@ type Props = {
   onModelChange?: (modelId: string, providerId: string) => void
 }
 
-const PROVIDER_COLORS: Record<string, string> = {
-  opencode: 'bg-primary',
-  anthropic: 'bg-provider-anthropic',
-  openai: 'bg-provider-openai',
-  google: 'bg-provider-google',
-  'github-copilot': 'bg-provider-github-copilot',
-}
-
 // Fallback models when no providers are connected
 const FALLBACK_MODELS: ProviderModel[] = [
   { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', providerId: 'opencode', providerName: 'OpenCode' },
   { id: 'claude-opus-4-5', name: 'Claude Opus 4.5', providerId: 'opencode', providerName: 'OpenCode' },
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', providerId: 'opencode', providerName: 'OpenCode' },
+  { id: 'gemini-3-flash', name: 'Gemini 3 Flash', providerId: 'opencode', providerName: 'OpenCode' },
+  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', providerId: 'opencode', providerName: 'OpenCode' },
 ]
 
 const MAX_FILES = 5
@@ -65,8 +59,6 @@ export default function ChatInput({
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragCounter = useRef(0)
-
-  const [modelDialogOpen, setModelDialogOpen] = useState(false)
 
   // Find current selected model
   const currentModel = useMemo(() => {
@@ -251,41 +243,35 @@ export default function ChatInput({
               <Paperclip className="size-4" />
             </Button>
 
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onToggleMode}
-              className={cn(
-                'h-8 px-2 sm:px-3 rounded-full text-xs font-medium transition-colors shrink-0',
-                mode === 'plan' ? 'bg-brand/10 text-brand hover:bg-brand/15' : 'text-muted-foreground hover:bg-muted',
-              )}
-            >
-              <span
-                className={cn('sm:mr-1.5 size-1.5 rounded-full', mode === 'plan' ? 'bg-brand' : 'bg-muted-foreground')}
-              />
-              <span className="hidden sm:inline">Chat mode</span>
-            </Button>
-
-            <button
-              onClick={() => setModelDialogOpen(true)}
-              className="h-8 px-2 sm:px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors flex items-center gap-1.5"
-            >
-              {currentModel ? (
-                <>
-                  <span
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onToggleMode}
+                  className="h-8 px-2 flex items-center gap-2 rounded-lg text-xs font-medium transition-colors hover:bg-muted/60"
+                >
+                  <span className="text-muted-foreground hidden sm:inline">Chat</span>
+                  <div
                     className={cn(
-                      'size-1.5 rounded-full',
-                      PROVIDER_COLORS[currentModel.providerId] || 'bg-muted-foreground',
+                      'relative w-7 h-4 rounded-full transition-colors',
+                      mode === 'plan' ? 'bg-brand' : 'bg-muted-foreground/30',
                     )}
-                  />
-                  <span className="max-w-28 truncate">{currentModel.name || currentModel.id}</span>
-                </>
-              ) : (
-                <span>Select model</span>
-              )}
-              <ChevronDown className="size-3 opacity-50" />
-            </button>
+                  >
+                    <div
+                      className={cn(
+                        'absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-transform duration-200',
+                        mode === 'plan' ? 'translate-x-[14px]' : 'translate-x-0.5',
+                      )}
+                    />
+                  </div>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={8}>
+                {mode === 'plan' ? 'Chat only — no file changes' : 'Agent mode — can edit files'}
+              </TooltipContent>
+            </Tooltip>
+
+            <ModelSelectorDropdown models={models} selectedModel={selectedModel} onSelect={handleModelSelect} />
           </div>
 
           <Button
@@ -316,14 +302,6 @@ export default function ChatInput({
           </Button>
         </div>
       </div>
-
-      <ModelSelectorDialog
-        open={modelDialogOpen}
-        onOpenChange={setModelDialogOpen}
-        models={models}
-        selectedModel={selectedModel}
-        onSelect={handleModelSelect}
-      />
     </div>
   )
 }

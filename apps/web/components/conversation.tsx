@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ElementType } from 'react'
+import { useEffect, useRef, useState, type ElementType } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
@@ -31,18 +31,6 @@ import ProviderDialog from '@/components/provider-dialog'
 export interface ConversationProps {
   projectId?: string
   initialPrompt?: string
-}
-
-type ProviderList = {
-  all: Array<{ id: string; models: Record<string, { name?: string; limit?: { context: number } }> }>
-  connected: string[]
-}
-
-const PROVIDER_LABELS: Record<string, string> = {
-  anthropic: 'Claude',
-  openai: 'OpenAI',
-  google: 'Gemini',
-  'github-copilot': 'Copilot',
 }
 
 const formatTitle = (title: string) => {
@@ -286,34 +274,37 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     return { message: isContext ? 'Context limit reached. Start a new session.' : msg, isContext }
   })()
 
-  const { data: providers } = useQuery<ProviderList>({
-    queryKey: ['providers', projectId],
-    enabled: Boolean(projectId),
-    staleTime: 60_000,
-    queryFn: async () => (await http.get(`api/agent/${projectId}/provider`).json()) as ProviderList,
-  })
-
-  // Transform providers into a flat list of models from connected providers only
-  const availableModels = useMemo<ProviderModel[]>(() => {
-    if (!providers?.all || !providers.connected) return []
-
-    const models: ProviderModel[] = []
-    for (const provider of providers.all) {
-      // Only include models from connected providers
-      if (!providers.connected.includes(provider.id)) continue
-
-      for (const [modelId, modelInfo] of Object.entries(provider.models)) {
-        models.push({
-          id: modelId,
-          name: modelInfo.name,
-          providerId: provider.id,
-          providerName: PROVIDER_LABELS[provider.id] || provider.id,
-          limit: modelInfo.limit,
-        })
-      }
-    }
-    return models
-  }, [providers])
+  // Hardcoded models - no API call needed
+  const availableModels: ProviderModel[] = [
+    {
+      id: 'gpt-5.2-codex',
+      name: 'GPT-5.2 Codex',
+      providerId: 'opencode',
+      providerName: 'OpenCode',
+      limit: { context: 400000 },
+    },
+    {
+      id: 'claude-opus-4-5',
+      name: 'Claude Opus 4.5',
+      providerId: 'opencode',
+      providerName: 'OpenCode',
+      limit: { context: 200000 },
+    },
+    {
+      id: 'gemini-3-flash',
+      name: 'Gemini 3 Flash',
+      providerId: 'opencode',
+      providerName: 'OpenCode',
+      limit: { context: 1048576 },
+    },
+    {
+      id: 'gemini-3-pro',
+      name: 'Gemini 3 Pro',
+      providerId: 'opencode',
+      providerName: 'OpenCode',
+      limit: { context: 1048576 },
+    },
+  ]
 
   const handleModelChange = (modelId: string, providerId: string) => {
     setSelectedModel({ modelId, providerId })
@@ -346,7 +337,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       let pct = usageRef.current?.contextPct
 
       if ('providerID' in last && 'modelID' in last) {
-        const limit = providers?.all.find((p) => p.id === last.providerID)?.models?.[last.modelID]?.limit?.context
+        const limit = availableModels.find((m) => m.id === last.modelID)?.limit?.context
         if (limit) pct = Math.round((tokens / limit) * 100)
       }
 
@@ -359,7 +350,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       // Just update cost if we have a cache but no new tokens yet
       usageRef.current.costSpent = currentCost
     }
-  }, [assistantMessages, providers, lastAssistantError?.isContext, sessionError])
+  }, [assistantMessages, availableModels, lastAssistantError?.isContext, sessionError])
 
   const shownTokens = usageRef.current?.ctxTokens
   const shownPct = usageRef.current?.contextPct
