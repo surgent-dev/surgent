@@ -175,33 +175,33 @@ export default function ChatInput({
       >
         {/* File previews */}
         {attachments.length > 0 && (
-          <div className="flex gap-1 sm:gap-1.5 p-2 sm:p-3 pb-0 flex-wrap">
+          <div className="flex gap-2 p-3 pb-1 flex-wrap">
             {attachments.map((a) => (
               <div key={a.id} className="relative group">
-                <div className="size-8 sm:size-10 rounded-lg overflow-hidden bg-muted">
+                <div className="size-12 sm:size-14 rounded-xl overflow-hidden bg-muted border border-border">
                   {a.url || a.preview ? (
                     <img src={a.url || a.preview} alt={a.file.name} className="size-full object-cover" />
                   ) : (
                     <div className="size-full flex items-center justify-center">
-                      <FileText className="size-3 sm:size-4 text-muted-foreground" />
+                      <FileText className="size-5 text-muted-foreground" />
                     </div>
                   )}
                   {a.status === 'uploading' && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                      <Loader2 className="size-4 text-white animate-spin" />
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <Loader2 className="size-5 text-white animate-spin" />
                     </div>
                   )}
                   {a.status === 'error' && (
-                    <div className="absolute inset-0 bg-danger/40 flex items-center justify-center">
-                      <X className="size-4 text-white" />
+                    <div className="absolute inset-0 bg-destructive/60 flex items-center justify-center">
+                      <X className="size-5 text-white" />
                     </div>
                   )}
                 </div>
                 <button
                   onClick={() => removeAttachment(a.id)}
-                  className="absolute -top-1 -right-1 size-4 rounded-full bg-foreground text-background flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                  className="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-800 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all shadow-md border border-background"
                 >
-                  <X className="size-2.5" />
+                  <X className="size-3" strokeWidth={2.5} />
                 </button>
               </div>
             ))}
