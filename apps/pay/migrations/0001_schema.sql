@@ -55,16 +55,6 @@ CREATE TYPE public.dispute_status AS ENUM (
 
 
 --
--- Name: feature_type; Type: TYPE; Schema: public; Owner: -
---
-
-CREATE TYPE public.feature_type AS ENUM (
-    'metered',
-    'boolean'
-);
-
-
---
 -- Name: invoice_status; Type: TYPE; Schema: public; Owner: -
 --
 
@@ -74,16 +64,6 @@ CREATE TYPE public.invoice_status AS ENUM (
     'paid',
     'void',
     'uncollectible'
-);
-
-
---
--- Name: meter_type; Type: TYPE; Schema: public; Owner: -
---
-
-CREATE TYPE public.meter_type AS ENUM (
-    'consumable',
-    'non_consumable'
 );
 
 
@@ -184,13 +164,13 @@ CREATE TABLE public.account (
     "providerId" text NOT NULL,
     "accessToken" text,
     "refreshToken" text,
-    "accessTokenExpiresAt" timestamp without time zone,
-    "refreshTokenExpiresAt" timestamp without time zone,
+    "accessTokenExpiresAt" timestamp with time zone,
+    "refreshTokenExpiresAt" timestamp with time zone,
     scope text,
     "idToken" text,
     password text,
-    "createdAt" timestamp without time zone NOT NULL,
-    "updatedAt" timestamp without time zone NOT NULL
+    "createdAt" timestamp with time zone NOT NULL,
+    "updatedAt" timestamp with time zone NOT NULL
 );
 
 
@@ -236,8 +216,8 @@ CREATE TABLE public.chats (
     title text,
     metadata jsonb,
     stats jsonb,
-    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -303,27 +283,6 @@ CREATE TABLE public.customer (
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "defaultPaymentMethodId" uuid
-);
-
-
---
--- Name: customer_entitlement; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.customer_entitlement (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    "customerProductId" uuid NOT NULL,
-    "entitlementId" uuid NOT NULL,
-    "customerId" uuid NOT NULL,
-    "featureId" uuid NOT NULL,
-    unlimited boolean DEFAULT false,
-    balance bigint DEFAULT 0,
-    "usageAllowed" boolean DEFAULT false,
-    "nextResetAt" timestamp with time zone,
-    "additionalBalance" bigint DEFAULT 0,
-    "expiresAt" timestamp with time zone,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -397,26 +356,6 @@ CREATE TABLE public.dispute (
 
 
 --
--- Name: entitlement; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.entitlement (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    "productId" uuid,
-    "featureId" uuid NOT NULL,
-    "allowanceType" text,
-    allowance bigint,
-    "interval" text,
-    "intervalCount" integer DEFAULT 1,
-    "carryFromPrevious" boolean DEFAULT false,
-    rollover jsonb,
-    "usageLimit" bigint,
-    "isCustom" boolean DEFAULT false,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
 -- Name: env_var; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -433,27 +372,6 @@ CREATE TABLE public.env_var (
 
 
 --
--- Name: feature; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.feature (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    "projectId" uuid NOT NULL,
-    name text NOT NULL,
-    type public.feature_type NOT NULL,
-    "meterType" public.meter_type,
-    "isCreditSystem" boolean DEFAULT false,
-    "creditSchema" jsonb,
-    config jsonb DEFAULT '{}'::jsonb,
-    display jsonb,
-    "eventNames" text[] DEFAULT '{}'::text[],
-    "isArchived" boolean DEFAULT false,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
 -- Name: github_installations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -464,11 +382,11 @@ CREATE TABLE public.github_installations (
     "accountLogin" text NOT NULL,
     "accountType" text NOT NULL,
     "userAccessToken" text,
-    "userAccessTokenExpiresAt" timestamp without time zone,
+    "userAccessTokenExpiresAt" timestamp with time zone,
     "userRefreshToken" text,
-    "userRefreshTokenExpiresAt" timestamp without time zone,
-    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL
+    "userRefreshTokenExpiresAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -480,26 +398,11 @@ CREATE TABLE public.github_oauth_tokens (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     "userId" uuid NOT NULL,
     "accessToken" text,
-    "accessTokenExpiresAt" timestamp without time zone,
+    "accessTokenExpiresAt" timestamp with time zone,
     "refreshToken" text,
-    "refreshTokenExpiresAt" timestamp without time zone,
-    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL
-);
-
-
---
--- Name: held_balance; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.held_balance (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    "projectId" uuid NOT NULL,
-    "connectedAccountId" uuid,
-    "sourceTransactionId" uuid,
-    amount bigint NOT NULL,
-    currency character varying(3) NOT NULL,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+    "refreshTokenExpiresAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -749,7 +652,7 @@ CREATE TABLE public.processed_webhook_event (
 
 CREATE TABLE public.product (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    "productGroupId" uuid NOT NULL,
+    "productGroup" text NOT NULL,
     name text NOT NULL,
     description text,
     "projectId" uuid NOT NULL,
@@ -802,8 +705,8 @@ CREATE TABLE public.project (
     deployment jsonb,
     sandbox jsonb,
     metadata jsonb,
-    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
     slug text NOT NULL
 );
@@ -867,13 +770,13 @@ CREATE TABLE public.session (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     "userId" uuid NOT NULL,
     token text NOT NULL,
-    "expiresAt" timestamp without time zone NOT NULL,
+    "expiresAt" timestamp with time zone NOT NULL,
     "ipAddress" text,
     "userAgent" text,
     "activeOrganizationId" uuid,
-    "activeTeamId" text,
-    "createdAt" timestamp without time zone NOT NULL,
-    "updatedAt" timestamp without time zone NOT NULL
+    "activeTeamId" uuid,
+    "createdAt" timestamp with time zone NOT NULL,
+    "updatedAt" timestamp with time zone NOT NULL
 );
 
 
@@ -1027,8 +930,8 @@ CREATE TABLE public."user" (
     email text NOT NULL,
     "emailVerified" boolean NOT NULL,
     image text,
-    "createdAt" timestamp without time zone NOT NULL,
-    "updatedAt" timestamp without time zone NOT NULL
+    "createdAt" timestamp with time zone NOT NULL,
+    "updatedAt" timestamp with time zone NOT NULL
 );
 
 
@@ -1040,9 +943,9 @@ CREATE TABLE public.verification (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     identifier text NOT NULL,
     value text NOT NULL,
-    "expiresAt" timestamp without time zone NOT NULL,
-    "createdAt" timestamp without time zone NOT NULL,
-    "updatedAt" timestamp without time zone NOT NULL
+    "expiresAt" timestamp with time zone NOT NULL,
+    "createdAt" timestamp with time zone NOT NULL,
+    "updatedAt" timestamp with time zone NOT NULL
 );
 
 
@@ -1120,22 +1023,6 @@ ALTER TABLE ONLY public.connect_account
 
 
 --
--- Name: customer_entitlement customer_entitlement_customer_id_feature_id_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.customer_entitlement
-    ADD CONSTRAINT customer_entitlement_customer_id_feature_id_key UNIQUE ("customerId", "featureId");
-
-
---
--- Name: customer_entitlement customer_entitlement_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.customer_entitlement
-    ADD CONSTRAINT customer_entitlement_pkey PRIMARY KEY (id);
-
-
---
 -- Name: customer customer_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1192,43 +1079,11 @@ ALTER TABLE ONLY public.dispute
 
 
 --
--- Name: entitlement entitlement_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.entitlement
-    ADD CONSTRAINT entitlement_pkey PRIMARY KEY (id);
-
-
---
--- Name: entitlement entitlement_product_id_feature_id_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.entitlement
-    ADD CONSTRAINT entitlement_product_id_feature_id_key UNIQUE ("productId", "featureId");
-
-
---
 -- Name: env_var env_var_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.env_var
     ADD CONSTRAINT env_var_pkey PRIMARY KEY (id);
-
-
---
--- Name: feature feature_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.feature
-    ADD CONSTRAINT feature_pkey PRIMARY KEY (id);
-
-
---
--- Name: feature feature_project_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.feature
-    ADD CONSTRAINT feature_project_id_name_key UNIQUE ("projectId", name);
 
 
 --
@@ -1261,14 +1116,6 @@ ALTER TABLE ONLY public.github_oauth_tokens
 
 ALTER TABLE ONLY public.github_oauth_tokens
     ADD CONSTRAINT "github_oauth_tokens_userId_key" UNIQUE ("userId");
-
-
---
--- Name: held_balance held_balance_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.held_balance
-    ADD CONSTRAINT held_balance_pkey PRIMARY KEY (id);
 
 
 --
@@ -1653,27 +1500,6 @@ CREATE INDEX idx_connect_payout_account ON public.payout USING btree ("accountId
 
 
 --
--- Name: idx_customer_entitlement_customer_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_customer_entitlement_customer_id ON public.customer_entitlement USING btree ("customerId");
-
-
---
--- Name: idx_customer_entitlement_customer_product_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_customer_entitlement_customer_product_id ON public.customer_entitlement USING btree ("customerProductId");
-
-
---
--- Name: idx_customer_entitlement_feature_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_customer_entitlement_feature_id ON public.customer_entitlement USING btree ("featureId");
-
-
---
 -- Name: idx_customer_product_customer_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1685,41 +1511,6 @@ CREATE INDEX idx_customer_product_customer_id ON public.customer_product USING b
 --
 
 CREATE INDEX idx_customer_product_product_id ON public.customer_product USING btree ("productId");
-
-
---
--- Name: idx_entitlement_feature_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_entitlement_feature_id ON public.entitlement USING btree ("featureId");
-
-
---
--- Name: idx_entitlement_product_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_entitlement_product_id ON public.entitlement USING btree ("productId");
-
-
---
--- Name: idx_feature_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_feature_project_id ON public.feature USING btree ("projectId");
-
-
---
--- Name: idx_held_balance_connected_account; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_held_balance_connected_account ON public.held_balance USING btree ("connectedAccountId");
-
-
---
--- Name: idx_held_balance_project; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_held_balance_project ON public.held_balance USING btree ("projectId");
 
 
 --
@@ -1748,6 +1539,13 @@ CREATE INDEX idx_invoice_subscription_id ON public.invoice USING btree ("subscri
 --
 
 CREATE INDEX idx_processed_webhook_event_type ON public.processed_webhook_event USING btree ("eventType");
+
+
+--
+-- Name: idx_product_group; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_product_group ON public.product USING btree ("productGroup");
 
 
 --
@@ -2119,38 +1917,6 @@ ALTER TABLE ONLY public.customer
 
 
 --
--- Name: customer_entitlement customer_entitlement_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.customer_entitlement
-    ADD CONSTRAINT "customer_entitlement_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.customer(id) ON DELETE CASCADE;
-
-
---
--- Name: customer_entitlement customer_entitlement_customerProductId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.customer_entitlement
-    ADD CONSTRAINT "customer_entitlement_customerProductId_fkey" FOREIGN KEY ("customerProductId") REFERENCES public.customer_product(id) ON DELETE CASCADE;
-
-
---
--- Name: customer_entitlement customer_entitlement_entitlementId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.customer_entitlement
-    ADD CONSTRAINT "customer_entitlement_entitlementId_fkey" FOREIGN KEY ("entitlementId") REFERENCES public.entitlement(id) ON DELETE CASCADE;
-
-
---
--- Name: customer_entitlement customer_entitlement_featureId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.customer_entitlement
-    ADD CONSTRAINT "customer_entitlement_featureId_fkey" FOREIGN KEY ("featureId") REFERENCES public.feature(id) ON DELETE CASCADE;
-
-
---
 -- Name: customer_product customer_product_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2223,22 +1989,6 @@ ALTER TABLE ONLY public.dispute
 
 
 --
--- Name: entitlement entitlement_featureId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.entitlement
-    ADD CONSTRAINT "entitlement_featureId_fkey" FOREIGN KEY ("featureId") REFERENCES public.feature(id) ON DELETE CASCADE;
-
-
---
--- Name: entitlement entitlement_productId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.entitlement
-    ADD CONSTRAINT "entitlement_productId_fkey" FOREIGN KEY ("productId") REFERENCES public.product(id) ON DELETE CASCADE;
-
-
---
 -- Name: env_var env_var_integrationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2255,14 +2005,6 @@ ALTER TABLE ONLY public.env_var
 
 
 --
--- Name: feature feature_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.feature
-    ADD CONSTRAINT "feature_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
-
-
---
 -- Name: github_installations github_installations_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2276,30 +2018,6 @@ ALTER TABLE ONLY public.github_installations
 
 ALTER TABLE ONLY public.github_oauth_tokens
     ADD CONSTRAINT "github_oauth_tokens_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
-
-
---
--- Name: held_balance held_balance_connectedAccountId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.held_balance
-    ADD CONSTRAINT "held_balance_connectedAccountId_fkey" FOREIGN KEY ("connectedAccountId") REFERENCES public.connect_account(id);
-
-
---
--- Name: held_balance held_balance_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.held_balance
-    ADD CONSTRAINT "held_balance_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
-
-
---
--- Name: held_balance held_balance_sourceTransactionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.held_balance
-    ADD CONSTRAINT "held_balance_sourceTransactionId_fkey" FOREIGN KEY ("sourceTransactionId") REFERENCES public.transaction(id);
 
 
 --
@@ -2508,6 +2226,14 @@ ALTER TABLE ONLY public.sandbox
 
 ALTER TABLE ONLY public.session
     ADD CONSTRAINT "session_activeOrganizationId_fkey" FOREIGN KEY ("activeOrganizationId") REFERENCES public.organization(id);
+
+
+--
+-- Name: session session_activeTeamId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.session
+    ADD CONSTRAINT "session_activeTeamId_fkey" FOREIGN KEY ("activeTeamId") REFERENCES public.team(id);
 
 
 --

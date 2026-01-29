@@ -24,7 +24,7 @@ async fn test_list_products_with_prices_success(pool: PgPool) -> TestResult {
 
     let product = app.create_product(&api_key).await;
     let _price_id = app
-        .create_product_price(&api_key, product.product_group_id)
+        .create_product_price(&api_key, &product.product_group)
         .await;
 
     let response = app
@@ -82,18 +82,18 @@ async fn test_list_products_with_prices_returns_only_latest_version(pool: PgPool
     let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let product_group_id = Uuid::new_v4();
+    let product_group = Uuid::new_v4().to_string();
 
     // Create v1 and v2 of the same product group
     let _v1_product_id = app
-        .create_product_with_group(&api_key, product_group_id)
+        .create_product_with_group(&api_key, &product_group)
         .await;
     let v2_product_id = app
-        .create_product_with_group(&api_key, product_group_id)
+        .create_product_with_group(&api_key, &product_group)
         .await;
 
     // Add price only to v2
-    let _price_id = app.create_product_price(&api_key, product_group_id).await;
+    let _price_id = app.create_product_price(&api_key, &product_group).await;
 
     let response = app
         .call(
@@ -173,7 +173,7 @@ async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestRes
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                product_group_id: product.product_group_id,
+                product_group: &product.product_group,
                 name: "Price 1",
                 price: 1001,
                 currency: "USD",
@@ -185,7 +185,7 @@ async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestRes
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                product_group_id: product.product_group_id,
+                product_group: &product.product_group,
                 name: "Price 2",
                 price: 1002,
                 currency: "USD",
@@ -197,7 +197,7 @@ async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestRes
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                product_group_id: product.product_group_id,
+                product_group: &product.product_group,
                 name: "Price 3",
                 price: 1003,
                 currency: "USD",
@@ -278,7 +278,7 @@ async fn test_list_products_with_prices_price_values_are_correct(pool: PgPool) -
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                product_group_id: product.product_group_id,
+                product_group: &product.product_group,
                 name: "Monthly Plan",
                 price: 2999,
                 currency: "EUR",
@@ -332,7 +332,7 @@ async fn test_list_products_with_prices_multiple_prices_with_different_values(
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                product_group_id: product.product_group_id,
+                product_group: &product.product_group,
                 name: "Monthly",
                 price: 999,
                 currency: "USD",
@@ -344,7 +344,7 @@ async fn test_list_products_with_prices_multiple_prices_with_different_values(
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                product_group_id: product.product_group_id,
+                product_group: &product.product_group,
                 name: "Yearly",
                 price: 9999,
                 currency: "USD",
@@ -406,10 +406,10 @@ async fn test_list_products_with_prices_organization_isolation(pool: PgPool) -> 
     let product2 = app.create_product(&api_key2).await;
 
     let _price1 = app
-        .create_product_price(&api_key1, product1.product_group_id)
+        .create_product_price(&api_key1, &product1.product_group)
         .await;
     let _price2 = app
-        .create_product_price(&api_key2, product2.product_group_id)
+        .create_product_price(&api_key2, &product2.product_group)
         .await;
 
     // Authenticate with org1's API key, should only see org1's products

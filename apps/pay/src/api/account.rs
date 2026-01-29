@@ -22,6 +22,107 @@ type HmacSha256 = Hmac<Sha256>;
 const OAUTH_STATE_MAX_AGE_SECS: i64 = 3600; // 1 hour
 const OAUTH_STATE_MAX_LEN: usize = 2048;
 
+// ============================================================================
+// Helper types and functions
+// ============================================================================
+
+/// Common account fields fetched from the database.
+struct AccountRow {
+    id: Uuid,
+    project_id: Option<Uuid>,
+    processor: String,
+    processor_account_id: Option<String>,
+    status: String,
+    country: String,
+    currency: String,
+    business_type: Option<String>,
+    details_submitted: bool,
+    charges_enabled: bool,
+    payouts_enabled: bool,
+}
+
+impl From<AccountRow> for ConnectedAccountResponse {
+    fn from(row: AccountRow) -> Self {
+        ConnectedAccountResponse {
+            id: row.id,
+            processor: row.processor,
+            processor_account_id: row.processor_account_id,
+            status: row.status,
+            country: row.country,
+            currency: row.currency,
+            business_type: row.business_type,
+            details_submitted: row.details_submitted,
+            charges_enabled: row.charges_enabled,
+            payouts_enabled: row.payouts_enabled,
+        }
+    }
+}
+
+/// Fetches an account by ID, returning 404 if not found or 500 on db error.
+async fn fetch_account_by_id(pool: &PgPool, id: Uuid) -> Result<AccountRow, (StatusCode, String)> {
+    sqlx::query!(
+        r#"
+        SELECT
+            id,
+            "projectId",
+            country,
+            currency,
+            "isPayoutsEnabled",
+            processor,
+            "processorAccountId",
+            status,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType"
+        FROM connect_account
+        WHERE id = $1
+        "#,
+        id
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?
+    .map(|row| AccountRow {
+        id: row.id,
+        project_id: row.projectId,
+        processor: row.processor,
+        processor_account_id: row.processorAccountId,
+        status: row.status,
+        country: row.country,
+        currency: row.currency,
+        business_type: row.businessType,
+        details_submitted: row.detailsSubmitted,
+        charges_enabled: row.chargesEnabled,
+        payouts_enabled: row.isPayoutsEnabled,
+    })
+    .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))
+}
+
+/// Verifies the caller has access to the given project.
+/// - API key auth: checks project_id matches auth.project_id
+/// - Session auth: checks user membership via verify_project_access
+async fn verify_account_project_access(
+    auth: &AuthenticatedUser,
+    pool: &PgPool,
+    account_project_id: Uuid,
+) -> Result<(), (StatusCode, String)> {
+    if let Some(api_key_project_id) = auth.project_id {
+        if account_project_id != api_key_project_id {
+            return Err((StatusCode::FORBIDDEN, "Access denied".to_string()));
+        }
+    } else {
+        verify_project_access(pool, auth.user_id, account_project_id).await?;
+    }
+    Ok(())
+}
+
+// ============================================================================
+
 #[derive(Debug, Serialize, Deserialize)]
 struct OAuthStatePayload {
     project_id: Uuid,
@@ -605,54 +706,16 @@ pub async fn get_account(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ConnectedAccountResponse>, (StatusCode, String)> {
-    let account = sqlx::query!(
-        r#"
-        SELECT
-            id,
-            "projectId",
-            country,
-            currency,
-            "isPayoutsEnabled",
-            processor,
-            "processorAccountId",
-            status,
-            "detailsSubmitted",
-            "chargesEnabled",
-            "businessType"
-        FROM connect_account
-        WHERE id = $1
-        "#,
-        id
-    )
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
-        )
-    })?
-    .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+    let account = fetch_account_by_id(&state.pool, id).await?;
 
     // Disconnected accounts (projectId = NULL) are not accessible
-    let Some(project_id) = account.projectId else {
-        return Err((StatusCode::NOT_FOUND, "Account not found".to_string()));
-    };
+    let project_id = account
+        .project_id
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
 
-    verify_project_access(&state.pool, auth.user_id, project_id).await?;
+    verify_account_project_access(&auth, &state.pool, project_id).await?;
 
-    Ok(Json(ConnectedAccountResponse {
-        id: account.id,
-        processor: account.processor,
-        processor_account_id: account.processorAccountId,
-        status: account.status,
-        country: account.country,
-        currency: account.currency,
-        business_type: account.businessType,
-        details_submitted: account.detailsSubmitted,
-        charges_enabled: account.chargesEnabled,
-        payouts_enabled: account.isPayoutsEnabled,
-    }))
+    Ok(Json(account.into()))
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -716,17 +779,21 @@ pub async fn list_accounts(
 
     let response: Vec<ConnectedAccountResponse> = accounts
         .into_iter()
-        .map(|acc| ConnectedAccountResponse {
-            id: acc.id,
-            processor: acc.processor,
-            processor_account_id: acc.processorAccountId,
-            status: acc.status,
-            country: acc.country,
-            currency: acc.currency,
-            business_type: acc.businessType,
-            details_submitted: acc.detailsSubmitted,
-            charges_enabled: acc.chargesEnabled,
-            payouts_enabled: acc.isPayoutsEnabled,
+        .map(|acc| {
+            AccountRow {
+                id: acc.id,
+                project_id: Some(project_id), // list_accounts only returns accounts for a project
+                processor: acc.processor,
+                processor_account_id: acc.processorAccountId,
+                status: acc.status,
+                country: acc.country,
+                currency: acc.currency,
+                business_type: acc.businessType,
+                details_submitted: acc.detailsSubmitted,
+                charges_enabled: acc.chargesEnabled,
+                payouts_enabled: acc.isPayoutsEnabled,
+            }
+            .into()
         })
         .collect();
 
@@ -763,30 +830,16 @@ pub async fn update_account(
     Json(req): Json<UpdateAccountRequest>,
 ) -> Result<Json<ConnectedAccountResponse>, (StatusCode, String)> {
     // Fetch current account to verify access to the source project
-    let current = sqlx::query!(
-        r#"SELECT "projectId" FROM connect_account WHERE id = $1"#,
-        id
-    )
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
-        )
-    })?
-    .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+    let current = fetch_account_by_id(&state.pool, id).await?;
 
     // Disconnected accounts (projectId = NULL) cannot be moved via this endpoint
     let current_project_id = current
-        .projectId
+        .project_id
         .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
 
-    // Verify user has access to the current project (source)
-    verify_project_access(&state.pool, auth.user_id, current_project_id).await?;
-
-    // Verify user has access to the destination project
-    verify_project_access(&state.pool, auth.user_id, req.project_id).await?;
+    // Verify access to both source and destination projects
+    verify_account_project_access(&auth, &state.pool, current_project_id).await?;
+    verify_account_project_access(&auth, &state.pool, req.project_id).await?;
 
     // Move the account to the new project
     let account = sqlx::query!(
@@ -813,6 +866,14 @@ pub async fn update_account(
     .fetch_optional(&state.pool)
     .await
     .map_err(|e| {
+        if let sqlx::Error::Database(db_err) = &e
+            && db_err.constraint() == Some("account_project_processor_key")
+        {
+            return (
+                StatusCode::CONFLICT,
+                "Project already has an account with this processor".to_string(),
+            );
+        }
         tracing::error!(error = %e, account_id = %id, project_id = %req.project_id, "Failed to update account");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -821,18 +882,22 @@ pub async fn update_account(
     })?
     .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
 
-    Ok(Json(ConnectedAccountResponse {
-        id: account.id,
-        processor: account.processor,
-        processor_account_id: account.processorAccountId,
-        status: account.status,
-        country: account.country,
-        currency: account.currency,
-        business_type: account.businessType,
-        details_submitted: account.detailsSubmitted,
-        charges_enabled: account.chargesEnabled,
-        payouts_enabled: account.isPayoutsEnabled,
-    }))
+    Ok(Json(
+        AccountRow {
+            id: account.id,
+            project_id: account.projectId,
+            processor: account.processor,
+            processor_account_id: account.processorAccountId,
+            status: account.status,
+            country: account.country,
+            currency: account.currency,
+            business_type: account.businessType,
+            details_submitted: account.detailsSubmitted,
+            charges_enabled: account.chargesEnabled,
+            payouts_enabled: account.isPayoutsEnabled,
+        }
+        .into(),
+    ))
 }
 
 /// Delete/disconnect an account
@@ -859,30 +924,14 @@ pub async fn disconnect(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    let account = sqlx::query!(
-        r#"
-        SELECT "projectId"
-        FROM connect_account
-        WHERE id = $1
-        "#,
-        id
-    )
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
-        )
-    })?
-    .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+    let account = fetch_account_by_id(&state.pool, id).await?;
 
     // Account already disconnected (projectId is NULL)
-    let Some(project_id) = account.projectId else {
+    let Some(project_id) = account.project_id else {
         return Ok(StatusCode::OK);
     };
 
-    verify_project_access(&state.pool, auth.user_id, project_id).await?;
+    verify_account_project_access(&auth, &state.pool, project_id).await?;
 
     sqlx::query!(
         r#"

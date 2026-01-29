@@ -16,9 +16,9 @@ use surpay::api::create_router;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-/// Helper to create a product using API key auth, returns (product_id, product_group_id)
-async fn create_product_with_api_key(app: &mut axum::Router, api_key: &str) -> (Uuid, Uuid) {
-    let product_group_id = Uuid::new_v4();
+/// Helper to create a product using API key auth, returns (product_id, product_group)
+async fn create_product_with_api_key(app: &mut axum::Router, api_key: &str) -> (Uuid, String) {
+    let product_group = Uuid::new_v4().to_string();
     let slug = format!("test-product-{}", &Uuid::new_v4().to_string()[..8]);
     let response = app
         .call(
@@ -29,7 +29,7 @@ async fn create_product_with_api_key(app: &mut axum::Router, api_key: &str) -> (
                 .header("Content-Type", "application/json")
                 .body(Body::from(
                     json!({
-                        "product_group_id": product_group_id,
+                        "productGroup": product_group,
                         "name": "Test Product",
                         "slug": slug
                     })
@@ -42,14 +42,14 @@ async fn create_product_with_api_key(app: &mut axum::Router, api_key: &str) -> (
 
     let body = read_body(response.into_body()).await;
     let product_id = Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap();
-    (product_id, product_group_id)
+    (product_id, product_group)
 }
 
 /// Helper to create a product with a specific group using API key auth
 async fn create_product_with_group_api_key(
     app: &mut axum::Router,
     api_key: &str,
-    product_group_id: Uuid,
+    product_group: &str,
 ) -> Uuid {
     let slug = format!("test-product-{}", &Uuid::new_v4().to_string()[..8]);
     let response = app
@@ -61,7 +61,7 @@ async fn create_product_with_group_api_key(
                 .header("Content-Type", "application/json")
                 .body(Body::from(
                     json!({
-                        "product_group_id": product_group_id,
+                        "productGroup": product_group,
                         "name": "Test Product",
                         "slug": slug
                     })
@@ -83,7 +83,7 @@ async fn test_create_product_success(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool).await);
 
     let body = json!({
-        "product_group_id": Uuid::new_v4(),
+        "productGroup": Uuid::new_v4(),
         "name": "Test Product",
         "slug": format!("test-product-{}", Uuid::new_v4()),
         "description": "A test product"
@@ -104,7 +104,7 @@ async fn test_create_product_success(pool: PgPool) -> TestResult {
 
     let body = read_body(response.into_body()).await;
     assert!(body.get("product_id").is_some());
-    assert!(body.get("product_group_id").is_some());
+    assert!(body.get("productGroup").is_some());
     assert_eq!(body.get("version").and_then(|v| v.as_i64()), Some(1));
     Ok(())
 }
@@ -116,7 +116,7 @@ async fn test_create_product_missing_name(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool).await);
 
     let body = json!({
-        "product_group_id": Uuid::new_v4(),
+        "productGroup": Uuid::new_v4(),
         "slug": "test-product"
     });
 
@@ -148,7 +148,7 @@ async fn test_create_product_requires_api_key_with_project(pool: PgPool) -> Test
     let mut app = create_router(create_test_state(pool).await);
 
     let body = json!({
-        "product_group_id": Uuid::new_v4(),
+        "productGroup": Uuid::new_v4(),
         "name": "Test Product",
         "slug": "test-product"
     });
@@ -179,7 +179,7 @@ async fn test_create_product_invalid_api_key(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool).await);
 
     let body = json!({
-        "product_group_id": Uuid::new_v4(),
+        "productGroup": Uuid::new_v4(),
         "name": "Test Product",
         "slug": "test-product"
     });
@@ -234,7 +234,7 @@ async fn test_create_product_api_key_scoped_to_project(pool: PgPool) -> TestResu
 
     // Create product using org1's API key - should succeed and be in project1
     let body = json!({
-        "product_group_id": Uuid::new_v4(),
+        "productGroup": Uuid::new_v4(),
         "name": "Test Product",
         "slug": format!("test-product-{}", Uuid::new_v4())
     });
@@ -275,9 +275,9 @@ async fn test_create_product_duplicate_slug_rejected(pool: PgPool) -> TestResult
     let mut app = create_router(create_test_state(pool).await);
 
     let slug = format!("test-product-{}", Uuid::new_v4());
-    let product_group_id = Uuid::new_v4();
+    let product_group = Uuid::new_v4().to_string();
     let body = json!({
-        "product_group_id": product_group_id,
+        "productGroup": product_group,
         "name": "Test Product",
         "slug": slug
     });
@@ -319,7 +319,7 @@ async fn test_update_product_success(pool: PgPool) -> TestResult {
     let (_user_id, session_cookie) = seed_session(&pool, org_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (product_id, product_group_id) = create_product_with_api_key(&mut app, &api_key).await;
+    let (product_id, product_group) = create_product_with_api_key(&mut app, &api_key).await;
 
     let body = json!({
         "name": "Updated Product",
@@ -345,10 +345,7 @@ async fn test_update_product_success(pool: PgPool) -> TestResult {
     let body = read_body(response.into_body()).await;
     assert!(body.get("product_id").is_some());
     assert_ne!(body["product_id"].as_str().unwrap(), product_id.to_string());
-    assert_eq!(
-        body["product_group_id"].as_str().unwrap(),
-        product_group_id.to_string()
-    );
+    assert_eq!(body["productGroup"].as_str().unwrap(), product_group);
     assert_eq!(body.get("version").and_then(|v| v.as_i64()), Some(2));
     Ok(())
 }
@@ -360,10 +357,10 @@ async fn test_update_product_increments_version_correctly(pool: PgPool) -> TestR
     let (_user_id, session_cookie) = seed_session(&pool, org_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let product_group_id = Uuid::new_v4();
+    let product_group = Uuid::new_v4().to_string();
 
     // Create first product (version 1)
-    let product_id = create_product_with_group_api_key(&mut app, &api_key, product_group_id).await;
+    let product_id = create_product_with_group_api_key(&mut app, &api_key, &product_group).await;
 
     // Update to version 2
     let response = app
@@ -495,7 +492,7 @@ async fn test_create_product_with_stripe_integration(pool: PgPool) -> TestResult
     let product_name = "Stripe Integrated Product";
 
     let body = json!({
-        "product_group_id": Uuid::new_v4(),
+        "productGroup": Uuid::new_v4(),
         "name": product_name,
         "slug": format!("stripe-test-{}", Uuid::new_v4()),
         "description": "Testing Stripe integration"

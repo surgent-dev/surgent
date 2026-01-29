@@ -572,7 +572,7 @@ pub async fn create_test_state_real_stripe(pool: PgPool) -> AppState {
 }
 
 pub struct ProductPriceDetails<'a> {
-    pub product_group_id: Uuid,
+    pub product_group: &'a str,
     pub name: &'a str,
     pub price: i32,
     pub currency: &'a str,
@@ -583,7 +583,7 @@ pub struct ProductPriceDetails<'a> {
 pub struct CreatedProduct {
     pub id: Uuid,
     pub slug: String,
-    pub product_group_id: Uuid,
+    pub product_group: String,
 }
 
 pub trait TestAppExt {
@@ -600,14 +600,14 @@ pub trait TestAppExt {
     fn create_product_with_group(
         &mut self,
         api_key: &str,
-        product_group_id: Uuid,
+        product_group: &str,
     ) -> impl std::future::Future<Output = (Uuid, String)> + Send;
 
-    fn create_product_price(
-        &mut self,
-        api_key: &str,
-        product_group_id: Uuid,
-    ) -> impl std::future::Future<Output = Uuid> + Send;
+    fn create_product_price<'a>(
+        &'a mut self,
+        api_key: &'a str,
+        product_group: &'a str,
+    ) -> impl std::future::Future<Output = Uuid> + Send + 'a;
 
     fn create_product_price_with_details(
         &mut self,
@@ -646,7 +646,7 @@ impl TestAppExt for Router {
     }
 
     async fn create_product(&mut self, api_key: &str) -> CreatedProduct {
-        let product_group_id = Uuid::new_v4();
+        let product_group = Uuid::new_v4().to_string();
         let slug = format!("test-product-{}", &Uuid::new_v4().to_string()[..8]);
         let response = self
             .call(
@@ -657,7 +657,7 @@ impl TestAppExt for Router {
                     .header("Content-Type", "application/json")
                     .body(Body::from(
                         json!({
-                            "product_group_id": product_group_id,
+                            "productGroup": product_group,
                             "name": "Test Product",
                             "slug": slug
                         })
@@ -673,14 +673,14 @@ impl TestAppExt for Router {
         CreatedProduct {
             id,
             slug,
-            product_group_id,
+            product_group,
         }
     }
 
     async fn create_product_with_group(
         &mut self,
         api_key: &str,
-        product_group_id: Uuid,
+        product_group: &str,
     ) -> (Uuid, String) {
         let slug = format!("test-product-{}", &Uuid::new_v4().to_string()[..8]);
         let response = self
@@ -692,7 +692,7 @@ impl TestAppExt for Router {
                     .header("Content-Type", "application/json")
                     .body(Body::from(
                         json!({
-                            "product_group_id": product_group_id,
+                            "productGroup": product_group,
                             "name": "Test Product",
                             "slug": slug
                         })
@@ -708,11 +708,11 @@ impl TestAppExt for Router {
         (id, slug)
     }
 
-    async fn create_product_price(&mut self, api_key: &str, product_group_id: Uuid) -> Uuid {
+    async fn create_product_price(&mut self, api_key: &str, product_group: &str) -> Uuid {
         self.create_product_price_with_details(
             api_key,
             ProductPriceDetails {
-                product_group_id,
+                product_group,
                 name: "Test Price",
                 price: 1000,
                 currency: "USD",
@@ -728,7 +728,7 @@ impl TestAppExt for Router {
         details: ProductPriceDetails<'_>,
     ) -> Uuid {
         let mut payload = json!({
-            "product_group_id": details.product_group_id,
+            "productGroup": details.product_group,
             "name": details.name,
             "price": details.price,
             "price_currency": details.currency

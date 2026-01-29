@@ -15,9 +15,11 @@ use crate::types::RecurringInterval;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateProductPriceRequest {
-    pub product_group_id: Uuid,
+    #[serde(rename = "productGroup")]
+    pub product_group: String,
     pub name: Option<String>,
     pub description: Option<String>,
+    pub slug: Option<String>,
     pub is_default: Option<bool>,
     pub price: i32,
     pub price_currency: String,
@@ -40,6 +42,7 @@ pub struct CreateProductPriceResponse {
         (status = 401, description = "Unauthorized - invalid or missing API key"),
         (status = 403, description = "Forbidden - product not owned by organization"),
         (status = 400, description = "Bad request - invalid product or other error"),
+        (status = 409, description = "Conflict - price with this slug already exists for product"),
         (status = 500, description = "Internal server error")
     ),
     security(
@@ -61,12 +64,12 @@ pub async fn create_product_price(
         r#"
         SELECT p.id, p."processorProductId"
         FROM product p
-        WHERE p."productGroupId" = $1
+        WHERE p."productGroup" = $1
           AND p."projectId" = $2
         ORDER BY p.version DESC NULLS LAST
         LIMIT 1
         "#,
-        req.product_group_id,
+        req.product_group,
         project_id
     )
     .fetch_optional(pool)
@@ -83,7 +86,7 @@ pub async fn create_product_price(
         Some(p) => p,
         None => {
             tracing::warn!(
-                product_group_id = %req.product_group_id,
+                product_group = %req.product_group,
                 %project_id,
                 "Product not found or access denied"
             );
@@ -126,10 +129,7 @@ pub async fn create_product_price(
         metadata: HashMap::from([
             ("surpay_price_id".to_string(), product_price_id.to_string()),
             ("org_id".to_string(), org_id),
-            (
-                "product_group_id".to_string(),
-                req.product_group_id.to_string(),
-            ),
+            ("productGroup".to_string(), req.product_group.to_string()),
             ("price".to_string(), req.price.to_string()),
             ("currency".to_string(), req.price_currency.clone()),
             (
@@ -163,18 +163,20 @@ pub async fn create_product_price(
             "productId",
             name,
             description,
+            slug,
             "priceAmount",
             "priceCurrency",
             "recurringInterval",
             "isDefault",
             "processorPriceId"
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         "#,
         product_price_id,
         product.id,
         req.name,
         req.description,
+        req.slug,
         req.price,
         &req.price_currency,
         recurring_interval as Option<RecurringInterval>,
@@ -184,6 +186,14 @@ pub async fn create_product_price(
     .execute(pool)
     .await
     .map_err(|e| {
+        if let sqlx::Error::Database(db_err) = &e
+            && db_err.constraint() == Some("ix_product_price_product_id_slug")
+        {
+            return (
+                StatusCode::CONFLICT,
+                "Price with this slug already exists for product".to_string(),
+            );
+        }
         tracing::error!(
             product_price_id = %product_price_id,
             error = %e,

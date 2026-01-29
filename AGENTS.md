@@ -1,3 +1,18 @@
+## Business Context
+
+Surgent is a vibe coding platform that handles the entire flow of vibe coding apps - dev environments, AI agents, frontend, backend, deployments, database, and payments. The goal is to enable customers to create and publish their apps end-to-end with Surgent.
+
+For detailed architecture, refer to docs/ARCHITECTURE.md.
+
+### Key Components
+
+- @apps/web — Next.js frontend
+- @apps/worker — Bun + Hono backend, orchestrates everything
+- @apps/pay — Rust payment backend (Surpay)
+- @apps/dispatch — Cloudflare Worker router for customer apps
+- @packages/gateway — AI token streaming and usage tracking
+- @packages/db — Shared database client (Kysely + Postgres)
+
 ### Search tooling
 
 - Text: `rg -n -S "<text>" <dir>`

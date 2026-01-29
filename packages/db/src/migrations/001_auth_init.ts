@@ -10,8 +10,8 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('email', 'text', (col) => col.notNull())
     .addColumn('emailVerified', 'boolean', (col) => col.notNull())
     .addColumn('image', 'text')
-    .addColumn('createdAt', 'timestamp', (col) => col.notNull())
-    .addColumn('updatedAt', 'timestamp', (col) => col.notNull())
+    .addColumn('createdAt', 'timestamptz', (col) => col.notNull())
+    .addColumn('updatedAt', 'timestamptz', (col) => col.notNull())
     .execute()
 
   // Create organization table
@@ -130,13 +130,13 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('userId', 'uuid', (col) => col.notNull().references('user.id'))
     .addColumn('token', 'text', (col) => col.notNull())
-    .addColumn('expiresAt', 'timestamp', (col) => col.notNull())
+    .addColumn('expiresAt', 'timestamptz', (col) => col.notNull())
     .addColumn('ipAddress', 'text')
     .addColumn('userAgent', 'text')
     .addColumn('activeOrganizationId', 'uuid', (col) => col.references('organization.id'))
-    .addColumn('activeTeamId', 'text')
-    .addColumn('createdAt', 'timestamp', (col) => col.notNull())
-    .addColumn('updatedAt', 'timestamp', (col) => col.notNull())
+    .addColumn('activeTeamId', 'uuid', (col) => col.references('team.id'))
+    .addColumn('createdAt', 'timestamptz', (col) => col.notNull())
+    .addColumn('updatedAt', 'timestamptz', (col) => col.notNull())
     .execute()
 
   // Create account table
@@ -149,13 +149,13 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('providerId', 'text', (col) => col.notNull())
     .addColumn('accessToken', 'text')
     .addColumn('refreshToken', 'text')
-    .addColumn('accessTokenExpiresAt', 'timestamp')
-    .addColumn('refreshTokenExpiresAt', 'timestamp')
+    .addColumn('accessTokenExpiresAt', 'timestamptz')
+    .addColumn('refreshTokenExpiresAt', 'timestamptz')
     .addColumn('scope', 'text')
     .addColumn('idToken', 'text')
     .addColumn('password', 'text')
-    .addColumn('createdAt', 'timestamp', (col) => col.notNull())
-    .addColumn('updatedAt', 'timestamp', (col) => col.notNull())
+    .addColumn('createdAt', 'timestamptz', (col) => col.notNull())
+    .addColumn('updatedAt', 'timestamptz', (col) => col.notNull())
     .execute()
 
   // Create verification table
@@ -165,9 +165,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('identifier', 'text', (col) => col.notNull())
     .addColumn('value', 'text', (col) => col.notNull())
-    .addColumn('expiresAt', 'timestamp', (col) => col.notNull())
-    .addColumn('createdAt', 'timestamp', (col) => col.notNull())
-    .addColumn('updatedAt', 'timestamp', (col) => col.notNull())
+    .addColumn('expiresAt', 'timestamptz', (col) => col.notNull())
+    .addColumn('createdAt', 'timestamptz', (col) => col.notNull())
+    .addColumn('updatedAt', 'timestamptz', (col) => col.notNull())
     .execute()
 }
 

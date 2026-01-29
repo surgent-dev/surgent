@@ -1,4 +1,4 @@
-use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::{Modify, OpenApi};
 
 #[derive(OpenApi)]
@@ -33,6 +33,8 @@ use utoipa::{Modify, OpenApi};
         crate::api::account::list_accounts,
         crate::api::account::update_account,
         crate::api::account::disconnect,
+        // Check
+        crate::api::check::check,
     ),
     components(
         schemas(
@@ -75,6 +77,9 @@ use utoipa::{Modify, OpenApi};
             crate::api::account::OAuthCallbackResponse,
             crate::api::account::ConnectedAccountResponse,
             crate::api::account::UpdateAccountRequest,
+            // Check DTOs
+            crate::api::check::CheckRequest,
+            crate::api::check::CheckResponse,
         )
     ),
     tags(
@@ -85,6 +90,7 @@ use utoipa::{Modify, OpenApi};
         (name = "product", description = "Product and pricing management"),
         (name = "checkout", description = "Checkout session management"),
         (name = "account", description = "Payment processor account management"),
+        (name = "check", description = "Subscription access verification"),
     ),
     modifiers(&SecurityAddon)
 )]
@@ -107,6 +113,17 @@ impl Modify for SecurityAddon {
                     .description(Some("Project-scoped API key for merchant operations. Keys are provisioned during project creation and grant access to a specific project's resources."))
                     .build(),
             ),
+        );
+
+        // Session cookie (for browser-based dashboard access)
+        components.add_security_scheme(
+            "session_cookie",
+            SecurityScheme::ApiKey(ApiKey::Cookie(
+                ApiKeyValue::with_description(
+                    "better-auth.session_token",
+                    "Session cookie from better-auth. Used for browser-based dashboard access. Requires project_id query parameter.",
+                ),
+            )),
         );
     }
 }

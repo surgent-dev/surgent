@@ -25,7 +25,7 @@ async fn test_create_product_price_success(pool: PgPool) -> TestResult {
     let product = app.create_product(&api_key).await;
 
     let body = json!({
-        "product_group_id": product.product_group_id,
+        "productGroup": product.product_group,
         "name": "Monthly Plan",
         "description": "Monthly subscription",
         "price": 1999,
@@ -61,7 +61,7 @@ async fn test_create_product_price_minimal(pool: PgPool) -> TestResult {
     let product = app.create_product(&api_key).await;
 
     let body = json!({
-        "product_group_id": product.product_group_id,
+        "productGroup": product.product_group,
         "price": 999,
         "price_currency": "USD"
     });
@@ -91,7 +91,7 @@ async fn test_create_product_price_invalid_product(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool).await);
 
     let body = json!({
-        "product_group_id": Uuid::new_v4(),
+        "productGroup": Uuid::new_v4(),
         "price": 999,
         "price_currency": "USD"
     });
@@ -126,7 +126,7 @@ async fn test_create_product_price_wrong_project(pool: PgPool) -> TestResult {
 
     // Try to create price using API key from project 2
     let body = json!({
-        "product_group_id": product.product_group_id,
+        "productGroup": product.product_group,
         "price": 999,
         "price_currency": "USD"
     });
@@ -161,7 +161,7 @@ async fn test_create_product_price_cross_org_access(pool: PgPool) -> TestResult 
 
     // Try to create price using API key from org 2
     let body = json!({
-        "product_group_id": product.product_group_id,
+        "productGroup": product.product_group,
         "price": 999,
         "price_currency": "USD"
     });
@@ -187,7 +187,7 @@ async fn test_create_product_price_cross_org_access(pool: PgPool) -> TestResult 
 async fn test_create_product_price_missing_auth(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool).await);
     let body = json!({
-        "product_group_id": Uuid::new_v4(),
+        "productGroup": Uuid::new_v4(),
         "price": 999,
         "price_currency": "USD"
     });
@@ -217,7 +217,7 @@ async fn test_create_product_price_missing_required_fields(pool: PgPool) -> Test
     let product = app.create_product(&api_key).await;
 
     let body = json!({
-        "product_group_id": product.product_group_id
+        "productGroup": product.product_group
     });
 
     let response = app
@@ -250,7 +250,7 @@ async fn test_create_product_price_stripe_integration(pool: PgPool) -> TestResul
     let product = app.create_product(&api_key).await;
 
     let body = json!({
-        "product_group_id": product.product_group_id,
+        "productGroup": product.product_group,
         "name": "Monthly Plan",
         "description": "Monthly subscription",
         "price": 1999,
@@ -311,7 +311,7 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
 
     // Create a recurring monthly price at $10
     let monthly_body = json!({
-        "product_group_id": product.product_group_id,
+        "productGroup": product.product_group,
         "name": "Monthly",
         "price": 1000,
         "price_currency": "USD",
@@ -336,7 +336,7 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
 
     // Create a one-time price at $10 (same amount, no interval)
     let onetime_body = json!({
-        "product_group_id": product.product_group_id,
+        "productGroup": product.product_group,
         "name": "One-time",
         "price": 1000,
         "price_currency": "USD"

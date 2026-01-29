@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT p.id, p.\"productGroupId\" AS product_group_id, p.name, p.description,\n               p.\"projectId\" AS project_id, p.slug, p.version, p.\"isArchived\" AS is_archived,\n               p.\"isDefault\" AS is_default, p.\"processorProductId\" AS processor_product_id\n        FROM product p\n        WHERE p.id = $1\n        ",
+  "query": "\n        SELECT DISTINCT ON (p.\"productGroup\")\n            p.id, p.\"productGroup\" AS product_group, p.name, p.description,\n            p.\"projectId\" AS project_id, p.slug, p.version, p.\"isArchived\" AS is_archived,\n            p.\"isDefault\" AS is_default, p.\"processorProductId\" AS processor_product_id\n        FROM product p\n        WHERE p.\"projectId\" = $1\n        ORDER BY p.\"productGroup\", p.version DESC NULLS LAST\n        ",
   "describe": {
     "columns": [
       {
@@ -10,8 +10,8 @@
       },
       {
         "ordinal": 1,
-        "name": "product_group_id",
-        "type_info": "Uuid"
+        "name": "product_group",
+        "type_info": "Text"
       },
       {
         "ordinal": 2,
@@ -72,5 +72,5 @@
       true
     ]
   },
-  "hash": "50da4b6f8ce6abf86ea470a88b686309e6cf1b5750e12c0fd4297caf80b7a616"
+  "hash": "6f8e006405f798e6dc6db3b61fead2224336395bca113c8fdce40b972396bd78"
 }
