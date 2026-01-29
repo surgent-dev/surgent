@@ -7,7 +7,8 @@
     "OPENSSL_DIR",
     "OPENSSL_LIB_DIR",
     "OPENSSL_INCLUDE_DIR",
-    "SSL_CERT_FILE"
+    "SSL_CERT_FILE",
+    "NODE_EXTRA_CA_CERTS"
   ],
   "tasks": {
     "build": {
