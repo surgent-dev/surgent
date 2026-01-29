@@ -6,6 +6,7 @@ COPY package.json bun.lock bunfig.toml ./
 COPY apps/web/package.json ./apps/web/
 COPY apps/dispatch/package.json ./apps/dispatch/
 COPY apps/worker/package.json ./apps/worker/
+COPY apps/pay/package.json ./apps/pay/
 COPY packages/db/package.json ./packages/db/
 COPY packages/util/package.json ./packages/util/
 COPY packages/gateway/package.json ./packages/gateway/

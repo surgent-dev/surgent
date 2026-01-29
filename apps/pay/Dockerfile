@@ -31,13 +31,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
     cargo chef cook --release --locked --recipe-path recipe.json
 
-# Copy source code
+# Copy source code (includes apps/pay/.sqlx/ for offline sqlx compilation)
 COPY . .
 
-# Copy sqlx offline data for building without database connection
-COPY .sqlx/ .sqlx/
-
-# so that we can build this without sql connection
+# Build without database connection using offline sqlx data
 ENV SQLX_OFFLINE=true
 
 # Build the binary (dependencies are cached from cook step)
@@ -67,7 +64,7 @@ COPY --from=builder /app/surpay-bin ./surpay
 COPY --from=builder /sbin/tini-static /tini
 
 # required for auto-migration on startup
-COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/apps/pay/migrations ./migrations
 
 ENV SERVICE_HOST=0.0.0.0
 ENV SERVICE_PORT=8090
