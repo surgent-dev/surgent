@@ -46,6 +46,7 @@
             unzip
             pkg-config
             openssl
+            openssl.dev
 
             # Database
             postgresql_18
@@ -73,6 +74,7 @@
 
           env.RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
           env.LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.openssl ];
+          env.PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
           shellHook = ''
             echo "Surgent development environment"

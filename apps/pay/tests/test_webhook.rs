@@ -126,7 +126,7 @@ async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) 
 
     let product = app.create_product(&api_key).await;
     let price_id = app
-        .create_product_price(&api_key, product.product_group_id)
+        .create_product_price(&api_key, &product.product_group)
         .await;
 
     // Create a customer first (simulating what /checkout does)
@@ -271,7 +271,7 @@ async fn test_checkout_expired_updates_status(pool: PgPool) -> TestResult {
 
     let product = app.create_product(&api_key).await;
     let price_id = app
-        .create_product_price(&api_key, product.product_group_id)
+        .create_product_price(&api_key, &product.product_group)
         .await;
 
     // Create checkout session

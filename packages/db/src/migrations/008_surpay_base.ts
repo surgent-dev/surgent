@@ -23,8 +23,6 @@ export async function up(db: Kysely<any>): Promise<void> {
   await sql`CREATE TYPE refund_status AS ENUM ('pending', 'requires_action', 'succeeded', 'failed', 'canceled')`.execute(
     db,
   )
-  await sql`CREATE TYPE feature_type AS ENUM ('metered', 'boolean')`.execute(db)
-  await sql`CREATE TYPE meter_type AS ENUM ('consumable', 'non_consumable')`.execute(db)
   await sql`CREATE TYPE invoice_status AS ENUM ('draft', 'open', 'paid', 'void', 'uncollectible')`.execute(
     db,
   )
@@ -71,7 +69,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .createTable('product')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('productGroupId', 'uuid', (col) => col.notNull())
+    .addColumn('productGroup', 'text', (col) => col.notNull())
     .addColumn('name', 'text', (col) => col.notNull())
     .addColumn('description', 'text')
     .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id'))
@@ -321,19 +319,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
 
-  // held_balance
-  await db.schema
-    .createTable('held_balance')
-    .ifNotExists()
-    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id'))
-    .addColumn('connectedAccountId', 'uuid', (col) => col.references('connect_account.id'))
-    .addColumn('sourceTransactionId', 'uuid', (col) => col.references('transaction.id'))
-    .addColumn('amount', 'bigint', (col) => col.notNull())
-    .addColumn('currency', 'varchar(3)', (col) => col.notNull())
-    .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .execute()
-
   // processed_webhook_event
   await db.schema
     .createTable('processed_webhook_event')
@@ -372,45 +357,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('resolvedAt', 'timestamptz')
     .execute()
 
-  // feature
-  await db.schema
-    .createTable('feature')
-    .ifNotExists()
-    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id'))
-    .addColumn('name', 'text', (col) => col.notNull())
-    .addColumn('type', sql`feature_type`, (col) => col.notNull())
-    .addColumn('meterType', sql`meter_type`)
-    .addColumn('isCreditSystem', 'boolean', (col) => col.defaultTo(false))
-    .addColumn('creditSchema', 'jsonb')
-    .addColumn('config', 'jsonb', (col) => col.defaultTo(sql`'{}'`))
-    .addColumn('display', 'jsonb')
-    .addColumn('eventNames', sql`text[]`, (col) => col.defaultTo(sql`'{}'`))
-    .addColumn('isArchived', 'boolean', (col) => col.defaultTo(false))
-    .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .execute()
-
-  // entitlement (product → feature link)
-  await db.schema
-    .createTable('entitlement')
-    .ifNotExists()
-    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('productId', 'uuid', (col) => col.references('product.id').onDelete('cascade'))
-    .addColumn('featureId', 'uuid', (col) =>
-      col.notNull().references('feature.id').onDelete('cascade'),
-    )
-    .addColumn('allowanceType', 'text')
-    .addColumn('allowance', 'bigint')
-    .addColumn('interval', 'text')
-    .addColumn('intervalCount', 'integer', (col) => col.defaultTo(1))
-    .addColumn('carryFromPrevious', 'boolean', (col) => col.defaultTo(false))
-    .addColumn('rollover', 'jsonb')
-    .addColumn('usageLimit', 'bigint')
-    .addColumn('isCustom', 'boolean', (col) => col.defaultTo(false))
-    .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .execute()
-
   // customer_product (customer's active plans)
   await db.schema
     .createTable('customer_product')
@@ -432,33 +378,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('quantity', 'integer', (col) => col.defaultTo(1))
     .addColumn('isCustom', 'boolean', (col) => col.defaultTo(false))
     .addColumn('options', 'jsonb', (col) => col.defaultTo(sql`'[]'`))
-    .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .execute()
-
-  // customer_entitlement (customer's feature balances)
-  await db.schema
-    .createTable('customer_entitlement')
-    .ifNotExists()
-    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('customerProductId', 'uuid', (col) =>
-      col.notNull().references('customer_product.id').onDelete('cascade'),
-    )
-    .addColumn('entitlementId', 'uuid', (col) =>
-      col.notNull().references('entitlement.id').onDelete('cascade'),
-    )
-    .addColumn('customerId', 'uuid', (col) =>
-      col.notNull().references('customer.id').onDelete('cascade'),
-    )
-    .addColumn('featureId', 'uuid', (col) =>
-      col.notNull().references('feature.id').onDelete('cascade'),
-    )
-    .addColumn('unlimited', 'boolean', (col) => col.defaultTo(false))
-    .addColumn('balance', 'bigint', (col) => col.defaultTo(0))
-    .addColumn('usageAllowed', 'boolean', (col) => col.defaultTo(false))
-    .addColumn('nextResetAt', 'timestamptz')
-    .addColumn('additionalBalance', 'bigint', (col) => col.defaultTo(0))
-    .addColumn('expiresAt', 'timestamptz')
     .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
@@ -536,16 +455,7 @@ export async function up(db: Kysely<any>): Promise<void> {
   await sql`CREATE UNIQUE INDEX ix_payout_processor_payout_id ON payout (processor, "processorPayoutId") WHERE "processorPayoutId" IS NOT NULL`.execute(
     db,
   )
-  await sql`ALTER TABLE feature ADD CONSTRAINT feature_project_id_name_key UNIQUE ("projectId", name)`.execute(
-    db,
-  )
   await sql`CREATE UNIQUE INDEX ix_product_price_product_id_slug ON product_price("productId", slug) WHERE slug IS NOT NULL`.execute(
-    db,
-  )
-  await sql`ALTER TABLE entitlement ADD CONSTRAINT entitlement_product_id_feature_id_key UNIQUE ("productId", "featureId")`.execute(
-    db,
-  )
-  await sql`ALTER TABLE customer_entitlement ADD CONSTRAINT customer_entitlement_customer_id_feature_id_key UNIQUE ("customerId", "featureId")`.execute(
     db,
   )
 
@@ -629,16 +539,10 @@ export async function up(db: Kysely<any>): Promise<void> {
     .column('accountId')
     .execute()
   await db.schema
-    .createIndex('idx_held_balance_project')
+    .createIndex('idx_product_group')
     .ifNotExists()
-    .on('held_balance')
-    .column('projectId')
-    .execute()
-  await db.schema
-    .createIndex('idx_held_balance_connected_account')
-    .ifNotExists()
-    .on('held_balance')
-    .column('connectedAccountId')
+    .on('product')
+    .column('productGroup')
     .execute()
   await db.schema
     .createIndex('ix_payment_method_customer_id')
@@ -712,24 +616,6 @@ export async function up(db: Kysely<any>): Promise<void> {
 
   // Billing layer indexes
   await db.schema
-    .createIndex('idx_feature_project_id')
-    .ifNotExists()
-    .on('feature')
-    .column('projectId')
-    .execute()
-  await db.schema
-    .createIndex('idx_entitlement_product_id')
-    .ifNotExists()
-    .on('entitlement')
-    .column('productId')
-    .execute()
-  await db.schema
-    .createIndex('idx_entitlement_feature_id')
-    .ifNotExists()
-    .on('entitlement')
-    .column('featureId')
-    .execute()
-  await db.schema
     .createIndex('idx_customer_product_customer_id')
     .ifNotExists()
     .on('customer_product')
@@ -740,24 +626,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .ifNotExists()
     .on('customer_product')
     .column('productId')
-    .execute()
-  await db.schema
-    .createIndex('idx_customer_entitlement_customer_product_id')
-    .ifNotExists()
-    .on('customer_entitlement')
-    .column('customerProductId')
-    .execute()
-  await db.schema
-    .createIndex('idx_customer_entitlement_customer_id')
-    .ifNotExists()
-    .on('customer_entitlement')
-    .column('customerId')
-    .execute()
-  await db.schema
-    .createIndex('idx_customer_entitlement_feature_id')
-    .ifNotExists()
-    .on('customer_entitlement')
-    .column('featureId')
     .execute()
   await db.schema
     .createIndex('idx_invoice_customer_id')
@@ -813,14 +681,8 @@ export async function down(db: Kysely<any>): Promise<void> {
   await db.schema.dropIndex('idx_invoice_status').ifExists().execute()
   await db.schema.dropIndex('idx_invoice_subscription_id').ifExists().execute()
   await db.schema.dropIndex('idx_invoice_customer_id').ifExists().execute()
-  await db.schema.dropIndex('idx_customer_entitlement_feature_id').ifExists().execute()
-  await db.schema.dropIndex('idx_customer_entitlement_customer_id').ifExists().execute()
-  await db.schema.dropIndex('idx_customer_entitlement_customer_product_id').ifExists().execute()
   await db.schema.dropIndex('idx_customer_product_product_id').ifExists().execute()
   await db.schema.dropIndex('idx_customer_product_customer_id').ifExists().execute()
-  await db.schema.dropIndex('idx_entitlement_feature_id').ifExists().execute()
-  await db.schema.dropIndex('idx_entitlement_product_id').ifExists().execute()
-  await db.schema.dropIndex('idx_feature_project_id').ifExists().execute()
 
   // Drop indexes (PostgreSQL automatically drops indexes when table is dropped, but we can be explicit)
   await db.schema.dropIndex('ix_processed_webhook_event_unprocessed').ifExists().execute()
@@ -839,8 +701,7 @@ export async function down(db: Kysely<any>): Promise<void> {
   await db.schema.dropIndex('ix_payment_customer_id').ifExists().execute()
   await db.schema.dropIndex('ix_payment_status').ifExists().execute()
   await db.schema.dropIndex('ix_payment_method_customer_id').ifExists().execute()
-  await db.schema.dropIndex('idx_held_balance_connected_account').ifExists().execute()
-  await db.schema.dropIndex('idx_held_balance_project').ifExists().execute()
+  await db.schema.dropIndex('idx_product_group').ifExists().execute()
   await db.schema.dropIndex('idx_connect_payout_account').ifExists().execute()
   await db.schema.dropIndex('idx_transfer_destination').ifExists().execute()
   await db.schema.dropIndex('idx_connect_account_project').ifExists().execute()
@@ -859,21 +720,9 @@ export async function down(db: Kysely<any>): Promise<void> {
   // Drop FK and columns from existing tables before dropping tables
   await db.schema.alterTable('customer').dropColumn('defaultPaymentMethodId').execute()
 
-  // Drop billing layer unique constraints
-  await sql`ALTER TABLE customer_entitlement DROP CONSTRAINT IF EXISTS customer_entitlement_customer_id_feature_id_key`.execute(
-    db,
-  )
-  await sql`ALTER TABLE entitlement DROP CONSTRAINT IF EXISTS entitlement_product_id_feature_id_key`.execute(
-    db,
-  )
-  await sql`ALTER TABLE feature DROP CONSTRAINT IF EXISTS feature_project_id_name_key`.execute(db)
-
   // Drop billing layer tables in reverse order of creation
   await db.schema.dropTable('invoice').ifExists().execute()
-  await db.schema.dropTable('customer_entitlement').ifExists().execute()
   await db.schema.dropTable('customer_product').ifExists().execute()
-  await db.schema.dropTable('entitlement').ifExists().execute()
-  await db.schema.dropTable('feature').ifExists().execute()
 
   // Drop billing layer columns from product
   await db.schema.alterTable('product').dropColumn('env').execute()
@@ -883,7 +732,6 @@ export async function down(db: Kysely<any>): Promise<void> {
   // Drop tables in reverse order of creation (respecting FK dependencies)
   await db.schema.dropTable('dispute').ifExists().execute()
   await db.schema.dropTable('processed_webhook_event').ifExists().execute()
-  await db.schema.dropTable('held_balance').ifExists().execute()
   await db.schema.dropTable('transfer').ifExists().execute()
   await db.schema.dropTable('transaction').ifExists().execute()
   await db.schema.dropTable('payout').ifExists().execute()
@@ -912,8 +760,6 @@ export async function down(db: Kysely<any>): Promise<void> {
 
   // Drop enums
   await sql`DROP TYPE IF EXISTS invoice_status`.execute(db)
-  await sql`DROP TYPE IF EXISTS meter_type`.execute(db)
-  await sql`DROP TYPE IF EXISTS feature_type`.execute(db)
   await sql`DROP TYPE IF EXISTS refund_status`.execute(db)
   await sql`DROP TYPE IF EXISTS dispute_status`.execute(db)
   await sql`DROP TYPE IF EXISTS payment_status`.execute(db)

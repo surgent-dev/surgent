@@ -20,8 +20,9 @@ use crate::types::RecurringInterval;
 #[serde(rename_all = "camelCase")]
 pub struct Product {
     pub id: Uuid,
-    #[sqlx(rename = "productGroupId")]
-    pub product_group_id: Uuid,
+    #[sqlx(rename = "productGroup")]
+    #[serde(rename = "productGroup")]
+    pub product_group: String,
     pub name: String,
     pub description: Option<String>,
     #[sqlx(rename = "projectId")]
@@ -38,7 +39,8 @@ pub struct Product {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateProductRequest {
-    pub product_group_id: Uuid,
+    #[serde(rename = "productGroup")]
+    pub product_group: String,
     pub name: String,
     pub description: Option<String>,
     pub is_default: Option<bool>,
@@ -48,7 +50,8 @@ pub struct CreateProductRequest {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CreateProductResponse {
     pub product_id: Uuid,
-    pub product_group_id: Uuid,
+    #[serde(rename = "productGroup")]
+    pub product_group: String,
     pub version: i32,
 }
 
@@ -78,7 +81,7 @@ pub async fn create_product(
 
     tracing::debug!(
         %project_id,
-        product_group_id = %req.product_group_id,
+        product_group = %req.product_group,
         name = %req.name,
         slug = %req.slug,
         "Creating product"
@@ -92,9 +95,9 @@ pub async fn create_product(
         r#"
         SELECT COALESCE(MAX(version), 0) as "max!"
         FROM product
-        WHERE "productGroupId" = $1
+        WHERE "productGroup" = $1
         "#,
-        req.product_group_id
+        req.product_group
     )
     .fetch_one(pool)
     .await
@@ -122,10 +125,7 @@ pub async fn create_product(
         description: req.description.clone(),
         active: true,
         metadata: HashMap::from([
-            (
-                "product_group_id".to_string(),
-                req.product_group_id.to_string(),
-            ),
+            ("productGroup".to_string(), req.product_group.to_string()),
             ("surpay_product_id".to_string(), product_id.to_string()),
             ("org_id".to_string(), org_id),
             ("slug".to_string(), req.slug.clone()),
@@ -137,7 +137,7 @@ pub async fn create_product(
         tracing::error!(
             %project_id,
             %product_id,
-            product_group_id = %req.product_group_id,
+            product_group = %req.product_group,
             product_name = %req.name,
             error = %e,
             "Failed to create processor product"
@@ -149,7 +149,7 @@ pub async fn create_product(
         r#"
         INSERT INTO product (
             id,
-            "productGroupId",
+            "productGroup",
             "projectId",
             name,
             description,
@@ -161,7 +161,7 @@ pub async fn create_product(
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
         product_id,
-        req.product_group_id,
+        req.product_group,
         project_id,
         req.name,
         req.description,
@@ -191,7 +191,7 @@ pub async fn create_product(
         StatusCode::CREATED,
         Json(CreateProductResponse {
             product_id,
-            product_group_id: req.product_group_id,
+            product_group: req.product_group,
             version,
         }),
     ))
@@ -209,7 +209,8 @@ pub struct UpdateProductRequest {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct UpdateProductResponse {
     pub product_id: Uuid,
-    pub product_group_id: Uuid,
+    #[serde(rename = "productGroup")]
+    pub product_group: String,
     pub version: i32,
 }
 
@@ -281,7 +282,7 @@ pub async fn update_product(
     let existing = sqlx::query_as!(
         Product,
         r#"
-        SELECT p.id, p."productGroupId" AS product_group_id, p.name, p.description,
+        SELECT p.id, p."productGroup" AS product_group, p.name, p.description,
                p."projectId" AS project_id, p.slug, p.version, p."isArchived" AS is_archived,
                p."isDefault" AS is_default, p."processorProductId" AS processor_product_id
         FROM product p
@@ -307,9 +308,9 @@ pub async fn update_product(
         r#"
         SELECT COALESCE(MAX(version), 0) as "max!"
         FROM product
-        WHERE "productGroupId" = $1
+        WHERE "productGroup" = $1
         "#,
-        existing.product_group_id
+        existing.product_group
     )
     .fetch_one(&state.pool)
     .await
@@ -331,13 +332,13 @@ pub async fn update_product(
     sqlx::query!(
         r#"
         INSERT INTO product (
-            id, "productGroupId", "projectId", name, description,
+            id, "productGroup", "projectId", name, description,
             slug, version, "isDefault", "isArchived"
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
         new_product_id,
-        existing.product_group_id,
+        existing.product_group,
         existing.project_id,
         req.name.unwrap_or(existing.name),
         req.description.or(existing.description),
@@ -359,7 +360,7 @@ pub async fn update_product(
         StatusCode::CREATED,
         Json(UpdateProductResponse {
             product_id: new_product_id,
-            product_group_id: existing.product_group_id,
+            product_group: existing.product_group,
             version: new_version,
         }),
     ))
@@ -392,13 +393,13 @@ pub async fn list_products_with_prices(
     let products = sqlx::query_as!(
         Product,
         r#"
-        SELECT DISTINCT ON (p."productGroupId")
-            p.id, p."productGroupId" AS product_group_id, p.name, p.description,
+        SELECT DISTINCT ON (p."productGroup")
+            p.id, p."productGroup" AS product_group, p.name, p.description,
             p."projectId" AS project_id, p.slug, p.version, p."isArchived" AS is_archived,
             p."isDefault" AS is_default, p."processorProductId" AS processor_product_id
         FROM product p
         WHERE p."projectId" = $1
-        ORDER BY p."productGroupId", p.version DESC NULLS LAST
+        ORDER BY p."productGroup", p.version DESC NULLS LAST
         "#,
         project_id
     )

@@ -7,11 +7,11 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('userId', 'uuid', (col) => col.notNull().references('user.id').unique())
     .addColumn('accessToken', 'text')
-    .addColumn('accessTokenExpiresAt', 'timestamp')
+    .addColumn('accessTokenExpiresAt', 'timestamptz')
     .addColumn('refreshToken', 'text')
-    .addColumn('refreshTokenExpiresAt', 'timestamp')
-    .addColumn('createdAt', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updatedAt', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('refreshTokenExpiresAt', 'timestamptz')
+    .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
 
   await sql`

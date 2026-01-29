@@ -10,11 +10,11 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('accountLogin', 'text', (col) => col.notNull())
     .addColumn('accountType', 'text', (col) => col.notNull())
     .addColumn('userAccessToken', 'text')
-    .addColumn('userAccessTokenExpiresAt', 'timestamp')
+    .addColumn('userAccessTokenExpiresAt', 'timestamptz')
     .addColumn('userRefreshToken', 'text')
-    .addColumn('userRefreshTokenExpiresAt', 'timestamp')
-    .addColumn('createdAt', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updatedAt', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('userRefreshTokenExpiresAt', 'timestamptz')
+    .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
 
   await db.schema

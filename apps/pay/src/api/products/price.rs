@@ -15,7 +15,8 @@ use crate::types::RecurringInterval;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateProductPriceRequest {
-    pub product_group_id: Uuid,
+    #[serde(rename = "productGroup")]
+    pub product_group: String,
     pub name: Option<String>,
     pub description: Option<String>,
     pub is_default: Option<bool>,
@@ -61,12 +62,12 @@ pub async fn create_product_price(
         r#"
         SELECT p.id, p."processorProductId"
         FROM product p
-        WHERE p."productGroupId" = $1
+        WHERE p."productGroup" = $1
           AND p."projectId" = $2
         ORDER BY p.version DESC NULLS LAST
         LIMIT 1
         "#,
-        req.product_group_id,
+        req.product_group,
         project_id
     )
     .fetch_optional(pool)
@@ -83,7 +84,7 @@ pub async fn create_product_price(
         Some(p) => p,
         None => {
             tracing::warn!(
-                product_group_id = %req.product_group_id,
+                product_group = %req.product_group,
                 %project_id,
                 "Product not found or access denied"
             );
@@ -126,10 +127,7 @@ pub async fn create_product_price(
         metadata: HashMap::from([
             ("surpay_price_id".to_string(), product_price_id.to_string()),
             ("org_id".to_string(), org_id),
-            (
-                "product_group_id".to_string(),
-                req.product_group_id.to_string(),
-            ),
+            ("productGroup".to_string(), req.product_group.to_string()),
             ("price".to_string(), req.price.to_string()),
             ("currency".to_string(), req.price_currency.clone()),
             (

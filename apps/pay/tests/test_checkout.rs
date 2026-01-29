@@ -50,7 +50,7 @@ async fn test_create_checkout_invalid_product(pool: PgPool) -> TestResult {
 
     let product = app.create_product(&api_key).await;
     let _price_id = app
-        .create_product_price(&api_key, product.product_group_id)
+        .create_product_price(&api_key, &product.product_group)
         .await;
 
     let body = json!({
@@ -119,7 +119,7 @@ async fn test_create_checkout_price_not_for_product(pool: PgPool) -> TestResult 
     // Create product 1 and its price
     let product1 = app.create_product(&api_key).await;
     let _price_id1 = app
-        .create_product_price(&api_key, product1.product_group_id)
+        .create_product_price(&api_key, &product1.product_group)
         .await;
 
     // Create product 2
@@ -166,7 +166,7 @@ async fn test_create_checkout_wrong_org(pool: PgPool) -> TestResult {
     // Create product under org1
     let product1 = app.create_product(&api_key1).await;
     let _price_id1 = app
-        .create_product_price(&api_key1, product1.product_group_id)
+        .create_product_price(&api_key1, &product1.product_group)
         .await;
 
     // Try to create checkout with org2's API key for org1's product
@@ -214,7 +214,7 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
 
     let product = app.create_product(&api_key).await;
     let _price_id = app
-        .create_product_price(&api_key, product.product_group_id)
+        .create_product_price(&api_key, &product.product_group)
         .await;
 
     let body = json!({
@@ -308,7 +308,7 @@ async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestRe
         .create_product_price_with_details(
             &api_key,
             common::ProductPriceDetails {
-                product_group_id: product.product_group_id,
+                product_group: &product.product_group,
                 name: "Monthly Subscription",
                 price: 2000,
                 currency: "USD",
@@ -403,7 +403,7 @@ async fn test_create_checkout_minimal_request(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool).await);
     let product = app.create_product(&api_key).await;
     let _price_id = app
-        .create_product_price(&api_key, product.product_group_id)
+        .create_product_price(&api_key, &product.product_group)
         .await;
     // Minimal SDK request: customer_id and product (project_id derived from API key)
     let body = json!({
@@ -453,7 +453,7 @@ async fn test_create_checkout_with_customer_data(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool.clone()).await);
     let product = app.create_product(&api_key).await;
     let _price_id = app
-        .create_product_price(&api_key, product.product_group_id)
+        .create_product_price(&api_key, &product.product_group)
         .await;
     // SDK request with customer_data (project_id derived from API key)
     let body = json!({

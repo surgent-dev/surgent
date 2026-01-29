@@ -1,6 +1,13 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
+  "globalPassThroughEnv": [
+    "PKG_CONFIG_PATH",
+    "LD_LIBRARY_PATH",
+    "OPENSSL_DIR",
+    "OPENSSL_LIB_DIR",
+    "OPENSSL_INCLUDE_DIR"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
