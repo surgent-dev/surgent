@@ -31,6 +31,8 @@ use utoipa::{Modify, OpenApi};
         crate::api::account::create_connect_account,
         crate::api::account::get_account,
         crate::api::account::list_accounts,
+        crate::api::account::update_account,
+        crate::api::account::disconnect,
     ),
     components(
         schemas(
@@ -72,6 +74,7 @@ use utoipa::{Modify, OpenApi};
             crate::api::account::OAuthInitResponse,
             crate::api::account::OAuthCallbackResponse,
             crate::api::account::ConnectedAccountResponse,
+            crate::api::account::UpdateAccountRequest,
         )
     ),
     tags(

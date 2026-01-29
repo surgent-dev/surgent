@@ -12,7 +12,7 @@ use sqlx::PgPool;
 use tower::Service;
 use uuid::Uuid;
 
-use common::{TestAppExt, create_test_state, seed_organization};
+use common::{TestAppExt, create_test_state, seed_api_key, seed_organization};
 use surpay::api::create_router;
 use surpay::api::webhook::{WebhookMessage, process_webhook_message_directly};
 use surpay::integrations::types::NormalizedEvent;
@@ -119,30 +119,48 @@ async fn test_webhook_valid_signature_enqueues(pool: PgPool) -> TestResult {
 #[sqlx::test(migrations = "./migrations")]
 async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) -> TestResult {
     // Setup: Create org, project, product, price, and checkout session
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let state = create_test_state(pool.clone()).await;
     let mut app = create_router(state.clone());
 
-    let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let product = app.create_product(&api_key).await;
     let price_id = app
-        .create_product_price(&api_key, project_id, product_group_id)
+        .create_product_price(&api_key, product.product_group_id)
         .await;
+
+    // Create a customer first (simulating what /checkout does)
+    let customer_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO customer (id, "projectId", "externalId", email, name)
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+        customer_id,
+        project_id,
+        "test_external_id",
+        "buyer@example.com",
+        "Test Buyer"
+    )
+    .execute(&pool)
+    .await?;
 
     // Create a checkout session directly in DB (simulating what /checkout does)
     let checkout_id = Uuid::new_v4();
     let processor_checkout_id = format!("cs_test_{}", Uuid::new_v4());
 
-    sqlx::query(
+    sqlx::query!(
         r#"
-        INSERT INTO checkout_session (id, "processorCheckoutId", "projectId", "productId", "priceId", status)
-        VALUES ($1, $2, $3, $4, $5, 'open')
-        "#
+        INSERT INTO checkout_session (id, "processorCheckoutId", "projectId", "productId", "priceId", "customerId", status)
+        VALUES ($1, $2, $3, $4, $5, $6, 'open')
+        "#,
+        checkout_id,
+        &processor_checkout_id,
+        project_id,
+        product.id,
+        price_id,
+        customer_id
     )
-    .bind(checkout_id)
-    .bind(&processor_checkout_id)
-    .bind(project_id)
-    .bind(product_id)
-    .bind(price_id)
     .execute(&pool)
     .await?;
 
@@ -224,7 +242,7 @@ async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) 
     .fetch_one(&pool)
     .await?;
 
-    assert_eq!(customer.email, "buyer@example.com");
+    assert_eq!(customer.email.as_deref(), Some("buyer@example.com"));
     assert_eq!(customer.name.as_deref(), Some("Test Buyer"));
     assert_eq!(customer.processorCustomerId.as_deref(), Some("cus_test123"));
 
@@ -246,30 +264,31 @@ async fn test_checkout_completed_creates_customer_and_transaction(pool: PgPool) 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_checkout_expired_updates_status(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let state = create_test_state(pool.clone()).await;
     let mut app = create_router(state.clone());
 
-    let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let product = app.create_product(&api_key).await;
     let price_id = app
-        .create_product_price(&api_key, project_id, product_group_id)
+        .create_product_price(&api_key, product.product_group_id)
         .await;
 
     // Create checkout session
     let checkout_id = Uuid::new_v4();
     let processor_checkout_id = format!("cs_test_{}", Uuid::new_v4());
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO checkout_session (id, "processorCheckoutId", "projectId", "productId", "priceId", status)
         VALUES ($1, $2, $3, $4, $5, 'open')
-        "#
+        "#,
+        checkout_id,
+        &processor_checkout_id,
+        project_id,
+        product.id,
+        price_id
     )
-    .bind(checkout_id)
-    .bind(&processor_checkout_id)
-    .bind(project_id)
-    .bind(product_id)
-    .bind(price_id)
     .execute(&pool)
     .await?;
 

@@ -9,7 +9,7 @@ use tower::Service;
 use uuid::Uuid;
 
 use common::{
-    ProductPriceDetails, TestAppExt, create_test_state, read_body, read_body_text,
+    ProductPriceDetails, TestAppExt, create_test_state, read_body, read_body_text, seed_api_key,
     seed_organization,
 };
 use surpay::api::create_router;
@@ -18,19 +18,20 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_success(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let product = app.create_product(&api_key).await;
     let _price_id = app
-        .create_product_price(&api_key, project_id, product_group_id)
+        .create_product_price(&api_key, product.product_group_id)
         .await;
 
     let response = app
         .call(
             Request::builder()
                 .method("GET")
-                .uri(format!("/project/{}/product/prices", project_id))
+                .uri("/products")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .body(Body::empty())?,
         )
@@ -53,14 +54,15 @@ async fn test_list_products_with_prices_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_empty_when_no_products(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let response = app
         .call(
             Request::builder()
                 .method("GET")
-                .uri(format!("/project/{}/product/prices", project_id))
+                .uri("/products")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .body(Body::empty())?,
         )
@@ -76,29 +78,28 @@ async fn test_list_products_with_prices_empty_when_no_products(pool: PgPool) -> 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_returns_only_latest_version(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let product_group_id = Uuid::new_v4();
 
     // Create v1 and v2 of the same product group
     let _v1_product_id = app
-        .create_product_with_group(&api_key, project_id, product_group_id)
+        .create_product_with_group(&api_key, product_group_id)
         .await;
     let v2_product_id = app
-        .create_product_with_group(&api_key, project_id, product_group_id)
+        .create_product_with_group(&api_key, product_group_id)
         .await;
 
     // Add price only to v2
-    let _price_id = app
-        .create_product_price(&api_key, project_id, product_group_id)
-        .await;
+    let _price_id = app.create_product_price(&api_key, product_group_id).await;
 
     let response = app
         .call(
             Request::builder()
                 .method("GET")
-                .uri(format!("/project/{}/product/prices", project_id))
+                .uri("/products")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .body(Body::empty())?,
         )
@@ -119,24 +120,25 @@ async fn test_list_products_with_prices_returns_only_latest_version(pool: PgPool
     assert_eq!(product["version"].as_i64(), Some(2));
     assert_eq!(
         product["id"].as_str(),
-        Some(v2_product_id.to_string().as_str())
+        Some(v2_product_id.0.to_string().as_str())
     );
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_product_without_prices(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let _product = app.create_product(&api_key, project_id).await;
+    let _product = app.create_product(&api_key).await;
     // No prices added
 
     let response = app
         .call(
             Request::builder()
                 .method("GET")
-                .uri(format!("/project/{}/product/prices", project_id))
+                .uri("/products")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .body(Body::empty())?,
         )
@@ -160,18 +162,18 @@ async fn test_list_products_with_prices_product_without_prices(pool: PgPool) -> 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let product = app.create_product(&api_key).await;
 
     // Add multiple prices (with different amounts to avoid idempotency collisions)
     let _price1 = app
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Price 1",
                 price: 1001,
                 currency: "USD",
@@ -183,8 +185,7 @@ async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestRes
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Price 2",
                 price: 1002,
                 currency: "USD",
@@ -196,8 +197,7 @@ async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestRes
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Price 3",
                 price: 1003,
                 currency: "USD",
@@ -210,7 +210,7 @@ async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestRes
         .call(
             Request::builder()
                 .method("GET")
-                .uri(format!("/project/{}/product/prices", project_id))
+                .uri("/products")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .body(Body::empty())?,
         )
@@ -232,37 +232,32 @@ async fn test_list_products_with_prices_multiple_prices(pool: PgPool) -> TestRes
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_missing_auth(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool).await);
-    let project_id = Uuid::new_v4();
 
     let response = app
         .call(
             Request::builder()
                 .method("GET")
-                .uri(format!("/project/{}/product/prices", project_id))
+                .uri("/products")
                 .body(Body::empty())?,
         )
         .await?;
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing API key");
+    assert_eq!(body, "Missing authentication");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_invalid_auth(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool).await);
-    let project_id = Uuid::new_v4();
 
     let response = app
         .call(
             Request::builder()
                 .method("GET")
-                .uri(format!("/project/{}/product/prices", project_id))
-                .header(
-                    "Authorization",
-                    "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                )
+                .uri("/products")
+                .header("Authorization", "Bearer invalid-api-key")
                 .body(Body::empty())?,
         )
         .await?;
@@ -273,17 +268,17 @@ async fn test_list_products_with_prices_invalid_auth(pool: PgPool) -> TestResult
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_price_values_are_correct(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let product = app.create_product(&api_key).await;
 
     let price_id = app
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Monthly Plan",
                 price: 2999,
                 currency: "EUR",
@@ -296,7 +291,7 @@ async fn test_list_products_with_prices_price_values_are_correct(pool: PgPool) -
         .call(
             Request::builder()
                 .method("GET")
-                .uri(format!("/project/{}/product/prices", project_id))
+                .uri("/products")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .body(Body::empty())?,
         )
@@ -327,17 +322,17 @@ async fn test_list_products_with_prices_price_values_are_correct(pool: PgPool) -
 async fn test_list_products_with_prices_multiple_prices_with_different_values(
     pool: PgPool,
 ) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let product = app.create_product(&api_key).await;
 
     let monthly_id = app
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Monthly",
                 price: 999,
                 currency: "USD",
@@ -349,8 +344,7 @@ async fn test_list_products_with_prices_multiple_prices_with_different_values(
         .create_product_price_with_details(
             &api_key,
             ProductPriceDetails {
-                project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Yearly",
                 price: 9999,
                 currency: "USD",
@@ -363,7 +357,7 @@ async fn test_list_products_with_prices_multiple_prices_with_different_values(
         .call(
             Request::builder()
                 .method("GET")
-                .uri(format!("/project/{}/product/prices", project_id))
+                .uri("/products")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .body(Body::empty())?,
         )
@@ -400,27 +394,30 @@ async fn test_list_products_with_prices_multiple_prices_with_different_values(
 #[sqlx::test(migrations = "./migrations")]
 async fn test_list_products_with_prices_organization_isolation(pool: PgPool) -> TestResult {
     // Create two organizations with their own products
-    let (_org1_id, project1_id, api_key1) = seed_organization(&pool).await;
-    let (_org2_id, project2_id, api_key2) = seed_organization(&pool).await;
+    let (_org1_id, project1_id, _session_cookie1) = seed_organization(&pool).await;
+    let (_org2_id, project2_id, _session_cookie2) = seed_organization(&pool).await;
+
+    let api_key1 = seed_api_key(&pool, project1_id).await;
+    let api_key2 = seed_api_key(&pool, project2_id).await;
 
     let mut app = create_router(create_test_state(pool).await);
 
-    let (product1_id, product_group1) = app.create_product(&api_key1, project1_id).await;
-    let (_product2_id, product_group2) = app.create_product(&api_key2, project2_id).await;
+    let product1 = app.create_product(&api_key1).await;
+    let product2 = app.create_product(&api_key2).await;
 
     let _price1 = app
-        .create_product_price(&api_key1, project1_id, product_group1)
+        .create_product_price(&api_key1, product1.product_group_id)
         .await;
     let _price2 = app
-        .create_product_price(&api_key2, project2_id, product_group2)
+        .create_product_price(&api_key2, product2.product_group_id)
         .await;
 
-    // Authenticate as org1, should only see org1's products
+    // Authenticate with org1's API key, should only see org1's products
     let response = app
         .call(
             Request::builder()
                 .method("GET")
-                .uri(format!("/project/{}/product/prices", project1_id))
+                .uri("/products")
                 .header("Authorization", format!("Bearer {}", api_key1))
                 .body(Body::empty())?,
         )
@@ -433,6 +430,6 @@ async fn test_list_products_with_prices_organization_isolation(pool: PgPool) -> 
     assert_eq!(products.len(), 1, "Should only see org1's product");
 
     let product_id = products[0]["product"]["id"].as_str();
-    assert_eq!(product_id, Some(product1_id.to_string().as_str()));
+    assert_eq!(product_id, Some(product1.id.to_string().as_str()));
     Ok(())
 }

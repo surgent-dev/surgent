@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE transfer\n                SET status = 'reversed',\n                    \"reversalId\" = $1,\n                    \"reversedAt\" = NOW()\n                WHERE \"processorTransferId\" = $2\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d54f7bcaa6f0d586389d41aae0d26ac2047dd74ca8c2cf99509173c559043d0b"
+}

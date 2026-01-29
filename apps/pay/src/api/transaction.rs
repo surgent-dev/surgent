@@ -4,11 +4,11 @@ use axum::{
     http::StatusCode,
 };
 use chrono;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::{AuthenticatedUser, verify_project_access};
+use crate::core::auth::{AuthenticatedUser, ProjectIdQuery, resolve_project_id};
 use crate::types::TransactionType;
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -51,19 +51,11 @@ pub struct Transaction {
     pub refunded_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ListTransactionsQuery {
-    pub project_id: Uuid,
-}
-
 /// List transactions for a project
 #[utoipa::path(
     get,
-    path = "/project/{project_id}/transactions",
+    path = "/transactions",
     tag = "transaction",
-    params(
-        ("project_id" = Uuid, Path, description = "Project ID")
-    ),
     responses(
         (status = 200, description = "List of transactions", body = Vec<Transaction>),
         (status = 401, description = "Unauthorized - invalid or missing API key"),
@@ -76,9 +68,11 @@ pub struct ListTransactionsQuery {
 pub async fn list_transactions(
     State(state): State<crate::AppState>,
     auth: AuthenticatedUser,
-    Query(query): Query<ListTransactionsQuery>,
+    Query(query): Query<ProjectIdQuery>,
 ) -> Result<Json<Vec<Transaction>>, (StatusCode, String)> {
-    verify_project_access(&state.pool, auth.user_id, query.project_id).await?;
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
+
+    tracing::debug!("Listing transactions for project_id={}", project_id);
 
     let rows = sqlx::query!(
         r#"
@@ -121,7 +115,7 @@ pub async fn list_transactions(
         WHERE "projectId" = $1 AND type = 'payment'
         ORDER BY "createdAt" DESC
         "#,
-        query.project_id
+        project_id
     )
     .fetch_all(&state.pool)
     .await

@@ -4,13 +4,91 @@ use axum::{
     http::StatusCode,
     response::Redirect,
 };
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use sqlx::PgPool;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
-use crate::core::auth::{AuthenticatedUser, verify_project_access};
+use crate::core::auth::{
+    AuthenticatedUser, ProjectIdQuery, resolve_project_id, verify_project_access,
+};
+
+type HmacSha256 = Hmac<Sha256>;
+
+const OAUTH_STATE_MAX_AGE_SECS: i64 = 3600; // 1 hour
+const OAUTH_STATE_MAX_LEN: usize = 2048;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OAuthStatePayload {
+    project_id: Uuid,
+    processor: String,
+    country: String,
+    business_type: Option<String>,
+    ts: i64,
+    nonce: String,
+    // user_id is included for audit/logging purposes. The actual user authentication
+    // is handled by the OAuth provider (e.g., Stripe) during the OAuth flow.
+    // We cannot verify this in oauth_callback since it's a redirect without auth headers.
+    user_id: Uuid,
+}
+
+fn sign_oauth_state(
+    payload: &OAuthStatePayload,
+    secret: &str,
+) -> Result<String, (StatusCode, String)> {
+    let json = serde_json::to_string(payload).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to serialize oauth state: {}", e),
+        )
+    })?;
+    let payload_b64 = URL_SAFE_NO_PAD.encode(json.as_bytes());
+
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create HMAC: {}", e),
+        )
+    })?;
+    mac.update(payload_b64.as_bytes());
+    let sig_b64 = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+
+    Ok(format!("{}:{}", payload_b64, sig_b64))
+}
+
+fn verify_oauth_state(state: &str, secret: &str) -> Option<OAuthStatePayload> {
+    if state.len() > OAUTH_STATE_MAX_LEN {
+        return None;
+    }
+
+    let (payload_b64, sig_b64) = state.rsplit_once(':')?;
+
+    // Decode signature and verify using constant-time comparison
+    let sig_bytes = URL_SAFE_NO_PAD.decode(sig_b64).ok()?;
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).ok()?;
+    mac.update(payload_b64.as_bytes());
+    mac.verify_slice(&sig_bytes).ok()?;
+
+    // Decode payload
+    let json_bytes = URL_SAFE_NO_PAD.decode(payload_b64).ok()?;
+    let payload: OAuthStatePayload = serde_json::from_slice(&json_bytes).ok()?;
+
+    // Check expiry (reject future timestamps with small leeway for clock skew)
+    let now = chrono::Utc::now().timestamp();
+    const CLOCK_SKEW_LEEWAY_SECS: i64 = 60;
+    if payload.ts > now + CLOCK_SKEW_LEEWAY_SECS {
+        return None; // Future timestamp not allowed
+    }
+    if now - payload.ts > OAUTH_STATE_MAX_AGE_SECS {
+        return None; // Expired
+    }
+
+    Some(payload)
+}
 
 #[derive(Debug, Clone)]
 pub struct Account {
@@ -32,7 +110,6 @@ pub struct Account {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ConnectAccountRequest {
-    pub project_id: Uuid,
     pub processor: String,
     pub account_type: Option<String>,
     pub country: Option<String>,
@@ -49,7 +126,6 @@ pub struct ConnectAccountResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct OAuthInitResponse {
-    pub account_id: Uuid,
     pub oauth_url: String,
 }
 
@@ -105,14 +181,15 @@ pub struct ConnectedAccountResponse {
 pub async fn create_connect_account(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
+    Query(query): Query<ProjectIdQuery>,
     Json(req): Json<ConnectAccountRequest>,
 ) -> Result<Json<OAuthInitResponse>, (StatusCode, String)> {
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
     tracing::debug!(
-        "create_connect_account called for project: {}",
-        req.project_id
+        project_id = %project_id,
+        processor = %req.processor,
+        "create_connect_account request"
     );
-    verify_project_access(&state.pool, auth.user_id, req.project_id).await?;
-    tracing::debug!("project access verified");
 
     let processor = state
         .registry
@@ -124,14 +201,14 @@ pub async fn create_connect_account(
         })?;
     tracing::debug!("processor found: {}", req.processor);
 
-    // Check for existing account first (before requiring country for new accounts)
-    if let Some(existing) = sqlx::query!(
+    // Check if project already has a connected account for this processor
+    let existing = sqlx::query!(
         r#"
-        SELECT id, "processorAccountId", data
+        SELECT id, "processorAccountId"
         FROM connect_account
         WHERE "projectId" = $1 AND processor = $2
         "#,
-        req.project_id,
+        project_id,
         &req.processor
     )
     .fetch_optional(&state.pool)
@@ -142,106 +219,45 @@ pub async fn create_connect_account(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Database error: {}", e),
         )
-    })? {
-        tracing::debug!("Found existing account");
-        // If account already has a processor_account_id, it's already connected
+    })?;
+
+    if let Some(existing) = existing {
         if existing.processorAccountId.is_some() {
             return Err((
                 StatusCode::CONFLICT,
                 "Account already connected".to_string(),
             ));
         }
-        // If account is pending, generate a new OAuth URL for retry
-        tracing::debug!("Existing account data: {:?}", existing.data);
-        let connect_state = existing
-            .data
-            .get("connect_state")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                tracing::error!("Missing connect_state in account data: {:?}", existing.data);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Missing connect_state".to_string(),
-                )
-            })?;
-        let base = state.config.surpay_base_url.trim_end_matches('/');
-        let redirect_uri = format!("{}/accounts/connect/oauth/callback", base);
-        let oauth_url = processor.generate_oauth_url(connect_state, &redirect_uri);
-        return Ok(Json(OAuthInitResponse {
-            account_id: existing.id,
-            oauth_url,
-        }));
     }
 
-    // Country is only required for new accounts
+    // Country is required
     let country = req
         .country
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "country is required".to_string()))?;
 
-    // Create pending account for OAuth flow
-    let account_id = Uuid::new_v4();
-    let connect_state = Uuid::new_v4().to_string();
-    let currency = match country.to_lowercase().as_str() {
-        "us" => "usd".to_string(),
-        "gb" => "gbp".to_string(),
-        "eu" => "eur".to_string(),
-        _ => "usd".to_string(),
+    // Create signed state containing all info needed for callback
+    let payload = OAuthStatePayload {
+        project_id,
+        processor: req.processor.clone(),
+        country: country.clone(),
+        business_type: req.business_type.clone(),
+        ts: chrono::Utc::now().timestamp(),
+        nonce: Uuid::new_v4().to_string(),
+        user_id: auth.user_id,
     };
-
-    let mut account_data = serde_json::json!({});
-    account_data["connect_state"] = serde_json::Value::String(connect_state.clone());
-
-    sqlx::query!(
-        r#"
-        INSERT INTO connect_account (
-            id,
-            "projectId",
-            country,
-            currency,
-            "isPayoutsEnabled",
-            processor,
-            "processorAccountId",
-            status,
-            "detailsSubmitted",
-            "chargesEnabled",
-            "businessType",
-            data
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        "#,
-        account_id,
-        req.project_id,
-        &country,
-        &currency,
-        false,
-        &req.processor,
-        None::<String>,
-        "pending",
-        false,
-        false,
-        req.business_type,
-        account_data
-    )
-    .execute(&state.pool)
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
-        )
-    })?;
+    let signed_state = sign_oauth_state(&payload, &state.config.better_auth_secret)?;
 
     // Generate OAuth URL
     let base = state.config.surpay_base_url.trim_end_matches('/');
     let redirect_uri = format!("{}/accounts/connect/oauth/callback", base);
-    let oauth_url = processor.generate_oauth_url(&connect_state, &redirect_uri);
+    let oauth_url = processor.generate_oauth_url(&signed_state, &redirect_uri);
 
-    Ok(Json(OAuthInitResponse {
-        account_id,
-        oauth_url,
-    }))
+    Ok(Json(OAuthInitResponse { oauth_url }))
 }
 
+/// DEPRECATED: Legacy endpoint for old connect flow using connect_state in account data.
+/// New accounts use the OAuth flow with signed state tokens instead.
+/// Returns 410 GONE for accounts without connect_state.
 pub async fn connect_callback(
     State(pool): State<PgPool>,
     Query(params): Query<CallbackParams>,
@@ -268,7 +284,7 @@ pub async fn connect_callback(
         .data
         .get("connect_state")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "Missing connect_state".to_string()))?;
+        .ok_or_else(|| (StatusCode::GONE, "Legacy endpoint deprecated".to_string()))?;
     if expected_state != params.state {
         return Err((StatusCode::BAD_REQUEST, "Invalid state".to_string()));
     }
@@ -293,6 +309,9 @@ pub async fn connect_callback(
     })))
 }
 
+/// DEPRECATED: Legacy endpoint for old connect flow using connect_state in account data.
+/// New accounts use the OAuth flow with signed state tokens instead.
+/// Returns 410 GONE for accounts without connect_state.
 pub async fn connect_refresh(
     State(state): State<AppState>,
     Query(params): Query<CallbackParams>,
@@ -319,7 +338,7 @@ pub async fn connect_refresh(
         .data
         .get("connect_state")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "Missing connect_state".to_string()))?;
+        .ok_or_else(|| (StatusCode::GONE, "Legacy endpoint deprecated".to_string()))?;
     if expected_state != params.state {
         return Err((StatusCode::BAD_REQUEST, "Invalid state".to_string()));
     }
@@ -381,28 +400,18 @@ pub async fn oauth_callback(
     State(state): State<AppState>,
     Query(params): Query<OAuthCallbackParams>,
 ) -> Result<Redirect, (StatusCode, String)> {
-    // Look up account by state in data JSONB
-    let row = sqlx::query!(
-        r#"
-        SELECT id, processor, data, "projectId"
-        FROM connect_account
-        WHERE data->>'connect_state' = $1
-        "#,
-        &params.state
-    )
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
-        )
-    })?
-    .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+    // Verify and decode the signed state
+    let payload =
+        verify_oauth_state(&params.state, &state.config.better_auth_secret).ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                "Invalid or expired state".to_string(),
+            )
+        })?;
 
     let processor = state
         .registry
-        .get_connect(&row.processor)
+        .get_connect(&payload.processor)
         .await
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "Invalid processor".to_string()))?;
 
@@ -417,12 +426,81 @@ pub async fn oauth_callback(
             )
         })?;
 
-    // Fetch account details from processor
+    // Check if this processor account already exists
+    let existing = sqlx::query!(
+        r#"
+        SELECT id, "projectId" FROM connect_account
+        WHERE processor = $1 AND "processorAccountId" = $2
+        "#,
+        &payload.processor,
+        &token_response.processor_account_id
+    )
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
+
+    if let Some(existing) = existing {
+        // Case 1: Existing disconnected account → reconnect to this project
+        if existing.projectId.is_none() {
+            // Use atomic update with projectId IS NULL check to prevent race conditions
+            let result = sqlx::query!(
+                r#"UPDATE connect_account SET "projectId" = $1, status = 'connected' WHERE id = $2 AND "projectId" IS NULL"#,
+                payload.project_id,
+                existing.id
+            )
+            .execute(&state.pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+            // Another request reconnected this account first
+            if result.rows_affected() == 0 {
+                let redirect_url = format!(
+                    "{}/project/{}?stripe_conflict=true&conflict_account_id={}",
+                    state.config.web_base_url.trim_end_matches('/'),
+                    payload.project_id,
+                    existing.id
+                );
+                return Ok(Redirect::temporary(&redirect_url));
+            }
+
+            let redirect_url = format!(
+                "{}/project/{}?stripe_connected=true",
+                state.config.web_base_url.trim_end_matches('/'),
+                payload.project_id
+            );
+            return Ok(Redirect::temporary(&redirect_url));
+        }
+
+        // Case 2: Existing connected account on SAME project → just redirect success
+        if existing.projectId == Some(payload.project_id) {
+            let redirect_url = format!(
+                "{}/project/{}?stripe_connected=true",
+                state.config.web_base_url.trim_end_matches('/'),
+                payload.project_id
+            );
+            return Ok(Redirect::temporary(&redirect_url));
+        }
+
+        // Case 3: Existing connected account on DIFFERENT project → conflict
+        let redirect_url = format!(
+            "{}/project/{}?stripe_conflict=true&conflict_account_id={}",
+            state.config.web_base_url.trim_end_matches('/'),
+            payload.project_id,
+            existing.id
+        );
+        return Ok(Redirect::temporary(&redirect_url));
+    }
+
+    // Case 4: No existing account → create new row
     let account_details = processor
         .get_account(&token_response.processor_account_id)
         .await;
 
-    // If fetch fails, use safe defaults and continue
     let (details_submitted, charges_enabled, payouts_enabled) = match account_details {
         Ok(details) => {
             tracing::info!(
@@ -447,30 +525,44 @@ pub async fn oauth_callback(
         }
     };
 
-    // Update account with processor_account_id and status
-    let mut data = row.data.clone();
-    if let Some(map) = data.as_object_mut() {
-        map.remove("connect_state");
-    }
+    let currency = match payload.country.to_lowercase().as_str() {
+        "us" => "usd",
+        "gb" => "gbp",
+        "eu" => "eur",
+        _ => "usd",
+    };
 
+    let account_id = Uuid::new_v4();
     sqlx::query!(
         r#"
-        UPDATE connect_account
-        SET "processorAccountId" = $1,
-            status = $2,
-            data = $3,
-            "detailsSubmitted" = $4,
-            "chargesEnabled" = $5,
-            "isPayoutsEnabled" = $6
-        WHERE id = $7
+        INSERT INTO connect_account (
+            id,
+            "projectId",
+            country,
+            currency,
+            "isPayoutsEnabled",
+            processor,
+            "processorAccountId",
+            status,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType",
+            data
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
+        account_id,
+        payload.project_id,
+        &payload.country,
+        currency,
+        payouts_enabled,
+        &payload.processor,
         &token_response.processor_account_id,
         "connected",
-        data,
         details_submitted,
         charges_enabled,
-        payouts_enabled,
-        row.id
+        payload.business_type,
+        serde_json::json!({})
     )
     .execute(&state.pool)
     .await
@@ -484,7 +576,7 @@ pub async fn oauth_callback(
     let redirect_url = format!(
         "{}/project/{}?stripe_connected=true",
         state.config.web_base_url.trim_end_matches('/'),
-        row.projectId
+        payload.project_id
     );
     Ok(Redirect::temporary(&redirect_url))
 }
@@ -542,7 +634,12 @@ pub async fn get_account(
     })?
     .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
 
-    verify_project_access(&state.pool, auth.user_id, account.projectId).await?;
+    // Disconnected accounts (projectId = NULL) are not accessible
+    let Some(project_id) = account.projectId else {
+        return Err((StatusCode::NOT_FOUND, "Account not found".to_string()));
+    };
+
+    verify_project_access(&state.pool, auth.user_id, project_id).await?;
 
     Ok(Json(ConnectedAccountResponse {
         id: account.id,
@@ -558,9 +655,9 @@ pub async fn get_account(
     }))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ListAccountsQuery {
-    pub project_id: Uuid,
+    pub project_id: Option<Uuid>,
 }
 
 /// List all accounts
@@ -568,9 +665,13 @@ pub struct ListAccountsQuery {
     get,
     path = "/accounts",
     tag = "account",
+    params(
+        ("project_id" = Option<Uuid>, Query, description = "Project ID (required for session auth)")
+    ),
     responses(
         (status = 200, description = "List of accounts", body = Vec<ConnectedAccountResponse>),
         (status = 401, description = "Unauthorized - invalid or missing API key"),
+        (status = 403, description = "Forbidden - access denied"),
         (status = 500, description = "Internal server error")
     ),
     security(
@@ -582,7 +683,8 @@ pub async fn list_accounts(
     auth: AuthenticatedUser,
     Query(query): Query<ListAccountsQuery>,
 ) -> Result<Json<Vec<ConnectedAccountResponse>>, (StatusCode, String)> {
-    verify_project_access(&state.pool, auth.user_id, query.project_id).await?;
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
+    tracing::debug!(project_id = %project_id, "list_accounts request");
 
     let accounts = sqlx::query!(
         r#"
@@ -601,7 +703,7 @@ pub async fn list_accounts(
         WHERE "projectId" = $1
         ORDER BY "createdAt" DESC
         "#,
-        query.project_id
+        project_id
     )
     .fetch_all(&state.pool)
     .await
@@ -629,6 +731,108 @@ pub async fn list_accounts(
         .collect();
 
     Ok(Json(response))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateAccountRequest {
+    pub project_id: Uuid,
+}
+
+/// Update account's project
+#[utoipa::path(
+    patch,
+    path = "/accounts/{id}",
+    tag = "account",
+    params(
+        ("id" = Uuid, Path, description = "Account ID")
+    ),
+    request_body = UpdateAccountRequest,
+    responses(
+        (status = 200, description = "Account updated", body = ConnectedAccountResponse),
+        (status = 401, description = "Unauthorized - invalid or missing API key"),
+        (status = 403, description = "Forbidden - access denied"),
+        (status = 404, description = "Account not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("project_key" = []))
+)]
+pub async fn update_account(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<UpdateAccountRequest>,
+) -> Result<Json<ConnectedAccountResponse>, (StatusCode, String)> {
+    // Fetch current account to verify access to the source project
+    let current = sqlx::query!(
+        r#"SELECT "projectId" FROM connect_account WHERE id = $1"#,
+        id
+    )
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?
+    .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+
+    // Disconnected accounts (projectId = NULL) cannot be moved via this endpoint
+    let current_project_id = current
+        .projectId
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+
+    // Verify user has access to the current project (source)
+    verify_project_access(&state.pool, auth.user_id, current_project_id).await?;
+
+    // Verify user has access to the destination project
+    verify_project_access(&state.pool, auth.user_id, req.project_id).await?;
+
+    // Move the account to the new project
+    let account = sqlx::query!(
+        r#"
+        UPDATE connect_account
+        SET "projectId" = $1
+        WHERE id = $2
+        RETURNING
+            id,
+            "projectId",
+            country,
+            currency,
+            "isPayoutsEnabled",
+            processor,
+            "processorAccountId",
+            status,
+            "detailsSubmitted",
+            "chargesEnabled",
+            "businessType"
+        "#,
+        req.project_id,
+        id
+    )
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, account_id = %id, project_id = %req.project_id, "Failed to update account");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?
+    .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+
+    Ok(Json(ConnectedAccountResponse {
+        id: account.id,
+        processor: account.processor,
+        processor_account_id: account.processorAccountId,
+        status: account.status,
+        country: account.country,
+        currency: account.currency,
+        business_type: account.businessType,
+        details_submitted: account.detailsSubmitted,
+        charges_enabled: account.chargesEnabled,
+        payouts_enabled: account.isPayoutsEnabled,
+    }))
 }
 
 /// Delete/disconnect an account
@@ -673,11 +877,17 @@ pub async fn disconnect(
     })?
     .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
 
-    verify_project_access(&state.pool, auth.user_id, account.projectId).await?;
+    // Account already disconnected (projectId is NULL)
+    let Some(project_id) = account.projectId else {
+        return Ok(StatusCode::OK);
+    };
+
+    verify_project_access(&state.pool, auth.user_id, project_id).await?;
 
     sqlx::query!(
         r#"
-        DELETE FROM connect_account
+        UPDATE connect_account
+        SET "projectId" = NULL, status = 'disconnected'
         WHERE id = $1
         "#,
         id

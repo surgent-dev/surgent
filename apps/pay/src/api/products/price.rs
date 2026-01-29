@@ -1,17 +1,20 @@
 use std::collections::HashMap;
 
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::{Query, State},
+    http::StatusCode,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::{AuthenticatedUser, verify_project_access};
+use crate::core::auth::{AuthenticatedUser, ProjectIdQuery, resolve_project_id};
 use crate::integrations::types::ProcessorPriceRequest;
 use crate::types::RecurringInterval;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateProductPriceRequest {
-    pub project_id: Uuid,
     pub product_group_id: Uuid,
     pub name: Option<String>,
     pub description: Option<String>,
@@ -46,9 +49,12 @@ pub struct CreateProductPriceResponse {
 pub async fn create_product_price(
     State(state): State<crate::AppState>,
     auth: AuthenticatedUser,
+    Query(query): Query<ProjectIdQuery>,
     Json(req): Json<CreateProductPriceRequest>,
 ) -> Result<(StatusCode, Json<CreateProductPriceResponse>), (StatusCode, String)> {
-    verify_project_access(&state.pool, auth.user_id, req.project_id).await?;
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
+
+    tracing::debug!(?req, %project_id, "Creating product price");
 
     let pool = &state.pool;
     let product = sqlx::query!(
@@ -61,7 +67,7 @@ pub async fn create_product_price(
         LIMIT 1
         "#,
         req.product_group_id,
-        req.project_id
+        project_id
     )
     .fetch_optional(pool)
     .await
@@ -78,7 +84,7 @@ pub async fn create_product_price(
         None => {
             tracing::warn!(
                 product_group_id = %req.product_group_id,
-                project_id = %req.project_id,
+                %project_id,
                 "Product not found or access denied"
             );
             return Err((StatusCode::FORBIDDEN, "Invalid product".to_string()));

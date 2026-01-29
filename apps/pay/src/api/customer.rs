@@ -4,12 +4,12 @@ use axum::{
     http::StatusCode,
 };
 use chrono;
-use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
+use serde::Serialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
-use crate::core::auth::{AuthenticatedUser, verify_project_access};
+use crate::core::auth::{AuthenticatedUser, ProjectIdQuery, resolve_project_id};
 use crate::types::{SubscriptionStatus, TransactionType};
 
 use super::subscription::Subscription;
@@ -19,7 +19,7 @@ use super::subscription::Subscription;
 pub struct Customer {
     pub id: Uuid,
     pub project_id: Uuid,
-    pub email: String,
+    pub email: Option<String>,
     pub name: Option<String>,
     pub processor_customer_id: Option<String>,
 }
@@ -51,26 +51,18 @@ pub struct SubscriptionSummary {
 pub struct CustomerWithDetails {
     pub id: Uuid,
     pub project_id: Uuid,
-    pub email: String,
+    pub email: Option<String>,
     pub name: Option<String>,
     pub processor_customer_id: Option<String>,
     pub transactions: Vec<TransactionSummary>,
     pub subscriptions: Vec<SubscriptionSummary>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ListCustomersQuery {
-    pub project_id: Uuid,
-}
-
 /// List customers for a project
 #[utoipa::path(
     get,
-    path = "/project/{project_id}/customers",
+    path = "/customers",
     tag = "customer",
-    params(
-        ("project_id" = Uuid, Path, description = "Project ID")
-    ),
     responses(
         (status = 200, description = "List of customers", body = Vec<Customer>),
         (status = 401, description = "Unauthorized - invalid or missing API key"),
@@ -83,9 +75,11 @@ pub struct ListCustomersQuery {
 pub async fn list_customers(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
-    Query(query): Query<ListCustomersQuery>,
+    Query(query): Query<ProjectIdQuery>,
 ) -> Result<Json<Vec<Customer>>, (StatusCode, String)> {
-    verify_project_access(&state.pool, auth.user_id, query.project_id).await?;
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
+
+    tracing::debug!("Listing customers for project_id={}", project_id);
 
     let rows = sqlx::query!(
         r#"
@@ -98,7 +92,7 @@ pub async fn list_customers(
         FROM customer c
         WHERE c."projectId" = $1
         "#,
-        query.project_id
+        project_id
     )
     .fetch_all(&state.pool)
     .await
@@ -123,19 +117,14 @@ pub async fn list_customers(
     Ok(Json(customers))
 }
 
-#[derive(Debug, Deserialize, IntoParams)]
-pub struct GetCustomerParams {
-    #[allow(dead_code)]
-    project_id: Uuid,
-    id: Uuid,
-}
-
 /// Get customer with details
 #[utoipa::path(
     get,
-    path = "/project/{project_id}/customer/{id}",
+    path = "/customer/{id}",
     tag = "customer",
-    params(GetCustomerParams),
+    params(
+        ("id" = Uuid, Path, description = "Customer ID")
+    ),
     responses(
         (status = 200, description = "Customer with transactions and subscriptions", body = CustomerWithDetails),
         (status = 401, description = "Unauthorized - invalid or missing API key"),
@@ -149,8 +138,17 @@ pub struct GetCustomerParams {
 pub async fn get_customer(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
-    Path(params): Path<GetCustomerParams>,
+    Query(query): Query<ProjectIdQuery>,
+    Path(customer_id): Path<Uuid>,
 ) -> Result<Json<CustomerWithDetails>, (StatusCode, String)> {
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
+
+    tracing::debug!(
+        "Getting customer customer_id={} for project_id={}",
+        customer_id,
+        project_id
+    );
+
     let row = sqlx::query!(
         r#"
         SELECT
@@ -160,9 +158,10 @@ pub async fn get_customer(
             c.name,
             c."processorCustomerId"
         FROM customer c
-        WHERE c.id = $1
+        WHERE c.id = $1 AND c."projectId" = $2
         "#,
-        params.id
+        customer_id,
+        project_id
     )
     .fetch_optional(&state.pool)
     .await
@@ -182,9 +181,6 @@ pub async fn get_customer(
         processor_customer_id: row.processorCustomerId,
     };
 
-    // Verify access via customer's project
-    verify_project_access(&state.pool, auth.user_id, row.projectId).await?;
-
     let transactions = sqlx::query!(
         r#"
         SELECT
@@ -198,7 +194,7 @@ pub async fn get_customer(
           AND t.type = 'payment'
         ORDER BY t."createdAt" DESC
         "#,
-        params.id
+        customer_id
     )
     .fetch_all(&state.pool)
     .await
@@ -230,7 +226,7 @@ pub async fn get_customer(
         WHERE s."customerId" = $1
         ORDER BY s."createdAt" DESC
         "#,
-        params.id
+        customer_id
     )
     .fetch_all(&state.pool)
     .await

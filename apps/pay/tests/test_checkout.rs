@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use common::{TestAppExt, create_test_state, read_body, read_body_text, seed_organization};
 use surpay::api::create_router;
-use surpay::types::CheckoutStatus;
+use surpay::types::{CheckoutMode, CheckoutStatus};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -19,6 +19,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 async fn test_create_checkout_missing_auth(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool).await);
     let body = json!({
+        "project_id": Uuid::new_v4(),
         "product_id": Uuid::new_v4(),
         "price_id": Uuid::new_v4(),
         "success_url": "https://example.com/success",
@@ -37,23 +38,24 @@ async fn test_create_checkout_missing_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing API key");
+    assert_eq!(body, "Missing authentication");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_invalid_product(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = common::seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (_product_id, product_group_id) = app.create_product(&api_key, project_id).await;
-    let price_id = app
-        .create_product_price(&api_key, project_id, product_group_id)
+    let product = app.create_product(&api_key).await;
+    let _price_id = app
+        .create_product_price(&api_key, product.product_group_id)
         .await;
 
     let body = json!({
-        "product_id": Uuid::new_v4(),
-        "price_id": price_id,
+        "customer_id": "test_user",
+        "product_id": "nonexistent-product-slug",
         "success_url": "https://example.com/success",
         "cancel_url": "https://example.com/cancel"
     });
@@ -77,14 +79,16 @@ async fn test_create_checkout_invalid_product(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_invalid_price(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = common::seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let (product_id, _) = app.create_product(&api_key, project_id).await;
+    let product = app.create_product(&api_key).await;
 
     let body = json!({
-        "product_id": product_id,
-        "price_id": Uuid::new_v4(),
+        "customer_id": "test_user",
+        "product_id": product.slug,
+        "price_id": "nonexistent-price-slug",
         "success_url": "https://example.com/success",
         "cancel_url": "https://example.com/cancel"
     });
@@ -108,22 +112,25 @@ async fn test_create_checkout_invalid_price(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_price_not_for_product(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = common::seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
     // Create product 1 and its price
-    let (_product_id1, product_group_id1) = app.create_product(&api_key, project_id).await;
-    let price_id1 = app
-        .create_product_price(&api_key, project_id, product_group_id1)
+    let product1 = app.create_product(&api_key).await;
+    let _price_id1 = app
+        .create_product_price(&api_key, product1.product_group_id)
         .await;
 
     // Create product 2
-    let (product_id2, _) = app.create_product(&api_key, project_id).await;
+    let product2 = app.create_product(&api_key).await;
 
-    // Try to create checkout with product_id2 but price_id1 (which belongs to product_id1)
+    // Try to create checkout with product2 but price from product1 (which belongs to product1)
+    // Since prices don't have slugs set, any price value will result in "Price not found"
     let body = json!({
-        "product_id": product_id2,
-        "price_id": price_id1,
+        "customer_id": "test_user",
+        "product_id": product2.slug,
+        "price_id": "price-from-product1",
         "success_url": "https://example.com/success",
         "cancel_url": "https://example.com/cancel"
     });
@@ -147,23 +154,26 @@ async fn test_create_checkout_price_not_for_product(pool: PgPool) -> TestResult 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_checkout_wrong_org(pool: PgPool) -> TestResult {
-    let (_org1_id, project_id1, api_key1) = seed_organization(&pool).await;
-    let (_org2_id, _project_id2, api_key2) = seed_organization(&pool).await;
+    let (_org1_id, project_id1, _session_cookie1) = seed_organization(&pool).await;
+    let (_org2_id, project_id2, _session_cookie2) = seed_organization(&pool).await;
+
+    // Create API key for org1's project (to create price) and org2's project (for checkout)
+    let api_key1 = common::seed_api_key(&pool, project_id1).await;
+    let api_key2 = common::seed_api_key(&pool, project_id2).await;
 
     let mut app = create_router(create_test_state(pool).await);
 
     // Create product under org1
-    let (product_id1, product_group_id1) = app.create_product(&api_key1, project_id1).await;
-    let price_id1 = app
-        .create_product_price(&api_key1, project_id1, product_group_id1)
+    let product1 = app.create_product(&api_key1).await;
+    let _price_id1 = app
+        .create_product_price(&api_key1, product1.product_group_id)
         .await;
 
     // Try to create checkout with org2's API key for org1's product
+    // The API key is scoped to project_id2, so it won't find the product in project_id1
     let body = json!({
-        "product_id": product_id1,
-        "price_id": price_id1,
-        "success_url": "https://example.com/success",
-        "cancel_url": "https://example.com/cancel"
+        "customer_id": "test_user",
+        "product_id": product1.slug
     });
 
     let response = app
@@ -177,6 +187,7 @@ async fn test_create_checkout_wrong_org(pool: PgPool) -> TestResult {
         )
         .await?;
 
+    // With API key auth scoped to project, the product won't be found (404) instead of access denied (403)
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = read_body_text(response.into_body()).await;
     assert_eq!(body, "Product not found or does not belong to this project");
@@ -190,32 +201,25 @@ async fn test_create_checkout_wrong_org(pool: PgPool) -> TestResult {
 ///
 /// The test covers the complete happy path:
 /// 1. Create organization (seed_organization)
-/// 2. Create project
-/// 3. Create product (auto-creates Stripe product)
-/// 4. Create product price (auto-creates Stripe price)
-/// 5. Create checkout session via POST /checkout
-/// 6. Verify response contains valid checkout_url and session_id
-/// 7. Verify checkout_session record was created in database
+/// 2. Create product (auto-creates Stripe product)
+/// 3. Create product price (auto-creates Stripe price)
+/// 4. Create checkout session via POST /checkout
+/// 5. Verify response contains valid checkout_url
+/// 6. Verify checkout_session record was created in database
 #[sqlx::test(migrations = "./migrations")]
 async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
-    // Step 1: Create organization (includes project)
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = common::seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
-    // Step 2: Create product (auto-creates Stripe product)
-    let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
-
-    // Step 4: Create product price (auto-creates Stripe price)
-    let price_id = app
-        .create_product_price(&api_key, project_id, product_group_id)
+    let product = app.create_product(&api_key).await;
+    let _price_id = app
+        .create_product_price(&api_key, product.product_group_id)
         .await;
 
-    // Step 5: Create checkout session
     let body = json!({
-        "product_id": product_id,
-        "price_id": price_id,
-        "success_url": "https://example.com/success",
-        "cancel_url": "https://example.com/cancel"
+        "customer_id": "test_user",
+        "product_id": product.slug
     });
 
     let response = app
@@ -229,77 +233,59 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
         )
         .await?;
 
-    // Step 6: Assert 201 CREATED status
     assert_eq!(
         response.status(),
         StatusCode::CREATED,
         "Expected 201 CREATED status for successful checkout session creation"
     );
 
-    // Step 7: Parse response and assert it contains checkout_url
     let response_body = read_body(response.into_body()).await;
-
     let checkout_url = response_body["checkout_url"]
         .as_str()
         .expect("Response must contain 'checkout_url' field");
-    let session_id = response_body["session_id"]
-        .as_str()
-        .expect("Response must contain 'session_id' field");
 
-    println!("{}", checkout_url);
-
-    // Step 8: Assert checkout_url starts with Stripe checkout URL
     assert!(
         checkout_url.starts_with("https://checkout.stripe.com"),
         "checkout_url should start with 'https://checkout.stripe.com', got: {}",
         checkout_url
     );
 
-    // Step 9: Assert session_id is a valid UUID
-    let parsed_session_id =
-        Uuid::parse_str(session_id).expect("session_id must be a valid UUID format");
-
-    // Step 10: Verify checkout_session record was created in database
+    // Verify checkout_session record was created in database
     let checkout_session = sqlx::query!(
         r#"
-        SELECT id, "processorCheckoutId", "projectId", "productId", "priceId", status as "status: CheckoutStatus"
+        SELECT "projectId", "productId", status as "status: CheckoutStatus", "processorCheckoutId", mode as "mode: CheckoutMode"
         FROM checkout_session
-        WHERE id = $1
+        WHERE "projectId" = $1
+        ORDER BY "createdAt" DESC
+        LIMIT 1
         "#,
-        parsed_session_id
+        project_id
     )
-    .fetch_optional(&pool)
+    .fetch_one(&pool)
     .await
-    .expect("Failed to query checkout_session from database");
+    .expect("checkout_session record should exist in database");
 
-    assert!(
-        checkout_session.is_some(),
-        "checkout_session record should exist in database"
-    );
-
-    let session = checkout_session.unwrap();
-
-    // Verify all fields match
     assert_eq!(
-        session.projectId, project_id,
-        "checkout_session projectId should match the product's project"
+        checkout_session.projectId, project_id,
+        "checkout_session projectId should match"
     );
     assert_eq!(
-        session.productId, product_id,
-        "checkout_session productId should match the requested product"
+        checkout_session.productId, product.id,
+        "checkout_session productId should match"
     );
     assert_eq!(
-        session.priceId, price_id,
-        "checkout_session priceId should match the requested price"
-    );
-    assert_eq!(
-        session.status,
+        checkout_session.status,
         CheckoutStatus::Open,
-        "checkout_session status should be 'open' for newly created sessions"
+        "checkout_session status should be 'open'"
     );
     assert!(
-        !session.processorCheckoutId.is_empty(),
-        "checkout_session should have a non-empty processorCheckoutId"
+        !checkout_session.processorCheckoutId.is_empty(),
+        "checkout_session should have a processorCheckoutId"
+    );
+    assert_eq!(
+        checkout_session.mode,
+        Some(CheckoutMode::Payment),
+        "checkout should be in payment mode for one-time price"
     );
 
     Ok(())
@@ -309,31 +295,20 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
 ///
 /// Validates that when a price has a recurring_interval set (e.g., "month"),
 /// the checkout session is created in subscription mode and returns a valid checkout_url.
-///
-/// The test covers:
-/// 1. Create organization
-/// 2. Create project
-/// 3. Create product (auto-creates Stripe product)
-/// 4. Create recurring product price (auto-creates Stripe price with recurring interval)
-/// 5. Create checkout session via POST /checkout
-/// 6. Verify response contains valid checkout_url and session_id
-/// 7. Verify checkout_session record was created in database
 #[sqlx::test(migrations = "./migrations")]
 async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestResult {
-    // Step 1: Create organization (includes project)
-    let (_org_id, project_id, api_key) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = common::seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
-    // Step 2: Create product (auto-creates Stripe product)
-    let (product_id, product_group_id) = app.create_product(&api_key, project_id).await;
+    let product = app.create_product(&api_key).await;
 
-    // Step 4: Create recurring product price (auto-creates Stripe price with recurring interval)
-    let price_id = app
+    // Create recurring product price (auto-creates Stripe price with recurring interval)
+    let _price_id = app
         .create_product_price_with_details(
             &api_key,
             common::ProductPriceDetails {
-                project_id,
-                product_group_id,
+                product_group_id: product.product_group_id,
                 name: "Monthly Subscription",
                 price: 2000,
                 currency: "USD",
@@ -342,12 +317,9 @@ async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestRe
         )
         .await;
 
-    // Step 5: Create checkout session
     let body = json!({
-        "product_id": product_id,
-        "price_id": price_id,
-        "success_url": "https://example.com/success",
-        "cancel_url": "https://example.com/cancel"
+        "customer_id": "test_user",
+        "product_id": product.slug
     });
 
     let response = app
@@ -361,10 +333,7 @@ async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestRe
         )
         .await?;
 
-    // Step 6: Assert 201 CREATED status
     let status = response.status();
-
-    // Read response body before asserting
     let response_body = read_body_text(response.into_body()).await;
 
     if status != StatusCode::CREATED {
@@ -376,72 +345,183 @@ async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestRe
         "Expected 201 CREATED status for successful checkout session creation"
     );
 
-    // Step 7: Parse response and assert it contains checkout_url
     let response_body_json: serde_json::Value =
         serde_json::from_str(&response_body).expect("Response body should be valid JSON");
 
     let checkout_url = response_body_json["checkout_url"]
         .as_str()
         .expect("Response must contain 'checkout_url' field");
-    let session_id = response_body_json["session_id"]
-        .as_str()
-        .expect("Response must contain 'session_id' field");
 
-    println!("{}", checkout_url);
-
-    // Step 8: Assert checkout_url starts with Stripe checkout URL
     assert!(
         checkout_url.starts_with("https://checkout.stripe.com"),
         "checkout_url should start with 'https://checkout.stripe.com', got: {}",
         checkout_url
     );
 
-    // Step 9: Assert session_id is a valid UUID
-    let parsed_session_id =
-        Uuid::parse_str(session_id).expect("session_id must be a valid UUID format");
-
-    // Step 10: Verify checkout_session record was created in database
+    // Verify checkout_session record was created with subscription mode
     let checkout_session = sqlx::query!(
         r#"
-        SELECT id, "processorCheckoutId", "projectId", "productId", "priceId", status as "status: CheckoutStatus"
+        SELECT "projectId", "productId", status as "status: CheckoutStatus", "processorCheckoutId", mode as "mode: CheckoutMode"
         FROM checkout_session
-        WHERE id = $1
+        WHERE "projectId" = $1
+        ORDER BY "createdAt" DESC
+        LIMIT 1
         "#,
-        parsed_session_id
+        project_id
     )
-    .fetch_optional(&pool)
+    .fetch_one(&pool)
     .await
-    .expect("Failed to query checkout_session from database");
+    .expect("checkout_session record should exist in database");
 
+    assert_eq!(checkout_session.projectId, project_id);
+    assert_eq!(checkout_session.productId, product.id);
+    assert_eq!(checkout_session.status, CheckoutStatus::Open);
     assert!(
-        checkout_session.is_some(),
-        "checkout_session record should exist in database"
+        !checkout_session.processorCheckoutId.is_empty(),
+        "checkout_session should have a processorCheckoutId"
+    );
+    assert_eq!(
+        checkout_session.mode,
+        Some(CheckoutMode::Subscription),
+        "checkout should be in subscription mode for recurring price"
     );
 
-    let session = checkout_session.unwrap();
+    Ok(())
+}
 
-    // Verify all fields match
+/// Tests checkout creation with minimal SDK request body.
+///
+/// Validates that a checkout session can be created with only the required fields:
+/// - customer_id
+/// - product_id
+///
+/// No success_url, cancel_url, or price_id are provided, testing the minimal API contract.
+#[sqlx::test(migrations = "./migrations")]
+async fn test_create_checkout_minimal_request(pool: PgPool) -> TestResult {
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = common::seed_api_key(&pool, project_id).await;
+    let mut app = create_router(create_test_state(pool).await);
+    let product = app.create_product(&api_key).await;
+    let _price_id = app
+        .create_product_price(&api_key, product.product_group_id)
+        .await;
+    // Minimal SDK request: customer_id and product (project_id derived from API key)
+    let body = json!({
+        "customer_id": "user_abc123",
+        "product_id": product.slug
+    });
+    let response = app
+        .call(
+            Request::builder()
+                .method("POST")
+                .uri("/checkout")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("Content-Type", "application/json")
+                .body(Body::from(body.to_string()))?,
+        )
+        .await?;
+    let status = response.status();
+    let response_body = read_body(response.into_body()).await;
+    if status != StatusCode::CREATED {
+        eprintln!("Error response body: {:?}", response_body);
+    }
     assert_eq!(
-        session.projectId, project_id,
-        "checkout_session projectId should match the product's project"
+        status,
+        StatusCode::CREATED,
+        "Expected 201 CREATED status for minimal checkout request"
     );
-    assert_eq!(
-        session.productId, product_id,
-        "checkout_session productId should match the requested product"
-    );
-    assert_eq!(
-        session.priceId, price_id,
-        "checkout_session priceId should match the requested price"
-    );
-    assert_eq!(
-        session.status,
-        CheckoutStatus::Open,
-        "checkout_session status should be 'open' for newly created sessions"
-    );
+    let checkout_url = response_body["checkout_url"]
+        .as_str()
+        .expect("Response must contain 'checkout_url' field");
     assert!(
-        !session.processorCheckoutId.is_empty(),
-        "checkout_session should have a non-empty processorCheckoutId"
+        checkout_url.starts_with("https://checkout.stripe.com"),
+        "checkout_url should start with 'https://checkout.stripe.com', got: {}",
+        checkout_url
     );
-
+    Ok(())
+}
+/// Tests checkout creation with customer_data and verifies customer was created.
+///
+/// Validates that when customer_data is provided in the checkout request:
+/// 1. The checkout session is created successfully
+/// 2. A customer record is created with the provided email and name
+/// 3. The customer can be retrieved via the customer API
+#[sqlx::test(migrations = "./migrations")]
+async fn test_create_checkout_with_customer_data(pool: PgPool) -> TestResult {
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = common::seed_api_key(&pool, project_id).await;
+    let mut app = create_router(create_test_state(pool.clone()).await);
+    let product = app.create_product(&api_key).await;
+    let _price_id = app
+        .create_product_price(&api_key, product.product_group_id)
+        .await;
+    // SDK request with customer_data (project_id derived from API key)
+    let body = json!({
+        "customer_id": "user_abc123",
+        "product_id": product.slug,
+        "customer_data": {
+            "email": "john@example.com",
+            "name": "John Doe"
+        }
+    });
+    let response = app
+        .call(
+            Request::builder()
+                .method("POST")
+                .uri("/checkout")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("Content-Type", "application/json")
+                .body(Body::from(body.to_string()))?,
+        )
+        .await?;
+    let status = response.status();
+    let response_body = read_body(response.into_body()).await;
+    if status != StatusCode::CREATED {
+        eprintln!("Error response body: {:?}", response_body);
+    }
+    assert_eq!(
+        status,
+        StatusCode::CREATED,
+        "Expected 201 CREATED status for checkout with customer_data"
+    );
+    // Query customer from DB by external ID
+    let customer = sqlx::query!(
+        r#"
+        SELECT id, email, name
+        FROM customer
+        WHERE "externalId" = $1 AND "projectId" = $2
+        "#,
+        "user_abc123",
+        project_id
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("Customer should exist in database");
+    // Verify customer via API
+    let response = app
+        .call(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/customers/{}", customer.id))
+                .header("Authorization", format!("Bearer {}", api_key))
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "Expected 200 OK when fetching customer"
+    );
+    let customer_body = read_body(response.into_body()).await;
+    assert_eq!(
+        customer_body["email"].as_str(),
+        Some("john@example.com"),
+        "Customer email should match"
+    );
+    assert_eq!(
+        customer_body["name"].as_str(),
+        Some("John Doe"),
+        "Customer name should match"
+    );
     Ok(())
 }

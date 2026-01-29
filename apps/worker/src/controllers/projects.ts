@@ -118,6 +118,29 @@ function resolveEntryPath(currentDir: string, entry: unknown): string {
   return name ? posix.join(stripTrailingSlash(currentDir), name) : currentDir
 }
 
+function sanitizeScriptName(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63)
+}
+
+function validateProcessName(name: string): void {
+  if (!/^[a-zA-Z0-9._-]{1,64}$/.test(name)) {
+    throw new Error(`Invalid process name: must match ^[a-zA-Z0-9._-]{1,64}$`)
+  }
+}
+
+function validateDevScript(command: string): void {
+  // Allow: bun run <script>, npm run <script>, pnpm run <script>, yarn <script>, bunx <cmd>
+  const safe = /^(bun(x)?|npm|pnpm|yarn)\s+(run\s+)?[a-zA-Z0-9_:.-]+(\s+--[a-zA-Z0-9_=-]*)*$/
+  if (!safe.test(command.trim())) {
+    throw new Error(`Invalid dev script: only package manager run commands allowed`)
+  }
+}
+
 async function getProjectEnvVars(projectId: string, environment: string) {
   const rows = await ProjectService.getEnvVarsByProjectId(projectId, environment)
   return Object.fromEntries(
@@ -197,6 +220,22 @@ async function ensureOpencodeConfigRepo(sandbox: Sandbox, repoUrl: string, dir: 
   if (clone.code !== 0) throw new Error(`Failed to clone opencode config repo: ${clone.output}`)
 }
 
+async function execPm2Start(
+  sandbox: Sandbox,
+  cwd: string,
+  name: string,
+  command: string,
+  env?: Record<string, string>,
+) {
+  const quotedName = shellQuote(name)
+  const quotedCommand = shellQuote(command)
+  await sandbox.exec(`pm2 delete ${quotedName} 2>/dev/null; pm2 start ${quotedCommand} --name ${quotedName}`, {
+    timeout: 300_000,
+    cwd,
+    env,
+  })
+}
+
 async function ensurePm2Process(
   sandbox: Sandbox,
   cwd: string,
@@ -204,22 +243,15 @@ async function ensurePm2Process(
   command: string,
   env?: Record<string, string>,
 ) {
-  await sandbox.exec(`pm2 delete ${name} 2>/dev/null; pm2 start "${command}" --name ${name}`, {
-    timeout: 300_000,
-    cwd,
-    env,
-  })
+  validateProcessName(name)
+  validateDevScript(command)
+  await execPm2Start(sandbox, cwd, name, command, env)
 }
 
 async function startOpencodeServer(sandbox: Sandbox, cwd: string, env?: Record<string, string>) {
   console.log('[opencode] starting server...', { sandboxId: sandbox.id, cwd })
-  await ensurePm2Process(
-    sandbox,
-    cwd,
-    'opencode-server',
-    'opencode serve --hostname 0.0.0.0 --port 4096',
-    env,
-  )
+  // Trusted internal command - bypass validation
+  await execPm2Start(sandbox, cwd, 'opencode-server', 'opencode serve --hostname 0.0.0.0 --port 4096', env)
   console.log('[opencode] server started on port 4096')
 }
 
@@ -484,6 +516,18 @@ export async function initializeProject(
     throw new Error('Failed to attach API key to project')
   }
 
+  await db
+    .insertInto('env_var')
+    .values({
+      projectId,
+      environment: 'development',
+      key: 'SURGENT_API_KEY',
+      value: apiKeyResult.key,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .execute()
+
   console.log('[init] creating sandbox...')
   if (!config.surgent.baseUrl || !config.opencode.baseUrl) {
     throw new Error('SURGENT_BASE_URL and OPENCODE_BASE_URL are not set')
@@ -628,18 +672,19 @@ export async function downloadProject(
   const workingDir = metadata?.workingDirectory || workspacePath(projectId)
   const archivePath = `/tmp/${projectId}-download.tar.gz`
 
-  try {
-    const tarCmd = [
-      'tar -czf',
-      shellQuote(archivePath),
-      '--exclude=node_modules',
-      '--exclude=.git',
-      '--exclude=.next',
-      '--exclude=dist',
-      '--exclude=.turbo',
-      '--exclude=*.log',
-      '.',
-    ].join(' ')
+  // Use tar (always available) with excludes for large/irrelevant directories and secrets
+  const tarCmd = [
+    'tar -czf',
+    shellQuote(archivePath),
+    '--exclude=node_modules',
+    '--exclude=.git',
+    '--exclude=.next',
+    '--exclude=dist',
+    '--exclude=.turbo',
+    '--exclude=*.log',
+    '--exclude=.env*',
+    '.',
+  ].join(' ')
 
     const result = await sandbox.exec(tarCmd, { cwd: workingDir, timeout: 180_000 })
     if (result.code !== 0) {

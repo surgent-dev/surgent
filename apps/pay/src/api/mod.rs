@@ -1,4 +1,5 @@
 pub mod account;
+pub mod check;
 pub mod checkout;
 pub mod customer;
 pub mod openapi;

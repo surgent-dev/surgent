@@ -12,8 +12,9 @@ use utoipa_swagger_ui::SwaggerUi;
 use crate::AppState;
 use crate::api::account::{
     connect_callback, connect_refresh, create_connect_account, disconnect, get_account,
-    list_accounts, oauth_callback,
+    list_accounts, oauth_callback, update_account,
 };
+use crate::api::check::check;
 use crate::api::checkout::{checkout_cancel, checkout_success, create_checkout_session};
 use crate::api::customer::{get_customer, list_customers};
 use crate::api::openapi::ApiDoc;
@@ -25,15 +26,10 @@ use crate::api::transaction::list_transactions;
 use crate::api::webhook::webhook_handler;
 
 pub fn create_router(state: AppState) -> Router {
-    let project_routes = Router::new()
-        .route("/{project_id}/customers", get(list_customers))
-        .route("/{project_id}/customer/{id}", get(get_customer))
-        .route("/{project_id}/transactions", get(list_transactions))
-        .route("/{project_id}/subscriptions", get(list_subscriptions))
-        .route(
-            "/{project_id}/product/prices",
-            get(list_products_with_prices),
-        );
+    let project_routes = Router::new().route("/{project_id}/transactions", get(list_transactions));
+    let customer_routes = Router::new()
+        .route("/", get(list_customers))
+        .route("/{id}", get(get_customer));
     let product_routes = Router::new()
         .route("/", post(create_product))
         .route("/{id}", put(update_product))
@@ -49,7 +45,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/connect/callback", get(connect_callback))
         .route("/connect/refresh", get(connect_refresh))
         .route("/connect/oauth/callback", get(oauth_callback))
-        .route("/{id}", get(get_account).delete(disconnect))
+        .route(
+            "/{id}",
+            get(get_account).patch(update_account).delete(disconnect),
+        )
         .route("/", get(list_accounts));
 
     let origins: Vec<_> = state
@@ -64,6 +63,7 @@ pub fn create_router(state: AppState) -> Router {
             Method::GET,
             Method::POST,
             Method::PUT,
+            Method::PATCH,
             Method::DELETE,
             Method::OPTIONS,
         ])
@@ -73,8 +73,12 @@ pub fn create_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health_check))
         .route("/projects", get(list_projects))
+        .route("/products", get(list_products_with_prices))
+        .route("/subscriptions", get(list_subscriptions))
+        .route("/check", post(check))
         .nest("/webhooks", webhook_routes)
         .nest("/project", project_routes)
+        .nest("/customers", customer_routes)
         .nest("/product", product_routes)
         .nest("/checkout", checkout_routes)
         .nest("/accounts", account_routes)

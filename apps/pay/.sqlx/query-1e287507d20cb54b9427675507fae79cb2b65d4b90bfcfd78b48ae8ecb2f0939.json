@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, \"processorPriceId\", \"priceAmount\", \"recurringInterval\" as \"recurring_interval: Option<RecurringInterval>\"\n        FROM product_price\n        WHERE \"productId\" = $1\n          AND ($2::text IS NULL OR id = $3 OR slug = $2)\n        ORDER BY\n            (id = $3)::int DESC,\n            (slug = $2)::int DESC,\n            \"createdAt\" ASC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "processorPriceId",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "priceAmount",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "recurring_interval: Option<RecurringInterval>",
+        "type_info": {
+          "Custom": {
+            "name": "recurring_interval",
+            "kind": {
+              "Enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "1e287507d20cb54b9427675507fae79cb2b65d4b90bfcfd78b48ae8ecb2f0939"
+}

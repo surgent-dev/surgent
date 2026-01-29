@@ -77,6 +77,9 @@ export const config = {
   surgent: {
     baseUrl: env.SURGENT_BASE_URL,
   },
+  surpay: {
+    baseUrl: env.SURPAY_BASE_URL,
+  },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
     baseUrl: env.OPENCODE_BASE_URL,

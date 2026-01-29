@@ -17,6 +17,11 @@ class DaytonaSandboxImpl implements Sandbox {
     return this.sbx.fs.downloadFile(path)
   }
 
+  async write(path: string, content: string | Buffer) {
+    const buffer = typeof content === 'string' ? Buffer.from(content) : content
+    await this.sbx.fs.uploadFile(buffer, path)
+  }
+
   async list(path: string): Promise<FileInfo[]> {
     const entries = await this.sbx.fs.listFiles(path)
     return entries.map((f: { name: string; path?: string; isDir?: boolean; type?: string }) => ({
@@ -71,7 +76,7 @@ export class DaytonaProvider implements SandboxProvider {
     const sbx = await this.getClient().create({
       snapshot: this.snapshot,
       envVars: env ?? {},
-      public: true,
+      public: false,
       autoStopInterval: 15,
       ...(name && { name }),
     })

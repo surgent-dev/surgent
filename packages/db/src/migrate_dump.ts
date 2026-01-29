@@ -6,7 +6,9 @@ const OUTPUT_PATH = path.resolve(__dirname, '../../../apps/pay/migrations/0001_s
 
 async function run() {
   const url = process.env.DATABASE_URL
-  if (!url) throw new Error('DATABASE_URL not set')
+  if (!url) {
+    throw new Error('DATABASE_URL not set')
+  }
 
   const client = createClient(url, process.env.POSTGRES_TYPE)
 
@@ -33,10 +35,32 @@ async function run() {
   console.log('🎉 Migrations completed')
 
   console.log('📦 Dumping schema...')
-  const proc = Bun.spawn(['pg_dump', '--schema-only', url], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
+  // Parse URL to avoid exposing credentials in process arguments (visible via `ps`)
+  const dbUrl = new URL(url)
+  const pgEnv = {
+    ...process.env,
+    PGHOST: dbUrl.hostname,
+    PGPORT: dbUrl.port || '5432',
+    PGUSER: decodeURIComponent(dbUrl.username),
+    PGPASSWORD: decodeURIComponent(dbUrl.password),
+    PGDATABASE: decodeURIComponent(dbUrl.pathname.slice(1)),
+  }
+
+  const proc = Bun.spawn(
+    [
+      'pg_dump',
+      '--schema-only',
+      '--no-owner',
+      '--no-privileges',
+      '--exclude-schema=_sqlx_test',
+      '--exclude-table=_sqlx_migrations',
+    ],
+    {
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: pgEnv,
+    },
+  )
 
   const [stdout, stderr, code] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -50,7 +74,16 @@ async function run() {
     process.exit(1)
   }
 
-  await Bun.write(OUTPUT_PATH, stdout)
+  // Filter out lines that break sqlx test compatibility:
+  // - psql meta-commands (backslash commands)
+  // - search_path reset (breaks sqlx's internal _sqlx_migrations table lookup)
+  const filtered = stdout
+    .split('\n')
+    .filter((line) => !line.startsWith('\\'))
+    .filter((line) => !line.includes("set_config('search_path'"))
+    .join('\n')
+
+  await Bun.write(OUTPUT_PATH, filtered)
   console.log(`✅ Schema dumped to ${OUTPUT_PATH}`)
 }
 

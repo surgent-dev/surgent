@@ -2,7 +2,11 @@
 
 use async_trait::async_trait;
 use axum::{Router, body::Body, http::Request};
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{
+    Engine,
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+};
+use hmac::{Hmac, Mac};
 use http_body_util::BodyExt;
 use rand::Rng;
 use serde_json::{Value, json};
@@ -35,9 +39,11 @@ pub async fn seed_user(pool: &PgPool) -> Uuid {
             id,
             name,
             email,
-            "emailVerified"
+            "emailVerified",
+            "createdAt",
+            "updatedAt"
         )
-        VALUES ($1, $2, $3, true)
+        VALUES ($1, $2, $3, true, now(), now())
         "#,
         user_id,
         name,
@@ -210,14 +216,21 @@ fn generate_api_key() -> String {
         .collect()
 }
 
-pub async fn seed_api_key(pool: &PgPool) -> String {
-    let api_key_id = Uuid::new_v4();
-    let name = "Test Master Key";
-    let user_id = seed_user(pool).await;
+/// Seeds an API key for a project and returns the raw API key string.
+/// The key is associated with the project's organization and a new user.
+pub async fn seed_api_key(pool: &PgPool, project_id: Uuid) -> String {
+    let row = sqlx::query!(
+        r#"SELECT "organizationId", "userId" FROM project WHERE id = $1"#,
+        project_id
+    )
+    .fetch_one(pool)
+    .await
+    .expect("Project must exist");
 
+    let api_key_id = Uuid::new_v4();
     let api_key = generate_api_key();
     let hash = hash_api_key(&api_key);
-    let start = &api_key[..8];
+    let prefix = &api_key[..8];
 
     sqlx::query!(
         r#"
@@ -227,16 +240,20 @@ pub async fn seed_api_key(pool: &PgPool) -> String {
             "key",
             prefix,
             "userId",
+            "organizationId",
+            "projectId",
             "createdAt",
             "updatedAt"
         )
-        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
         "#,
         api_key_id,
-        name,
+        "Test API Key",
         hash,
-        start,
-        user_id
+        prefix,
+        row.userId,
+        row.organizationId,
+        project_id
     )
     .execute(pool)
     .await
@@ -245,7 +262,8 @@ pub async fn seed_api_key(pool: &PgPool) -> String {
     api_key
 }
 
-/// Seeds an organization with a project and returns (org_id, project_id, api_key)
+/// Seeds an organization with a project and returns (org_id, project_id, session_cookie)
+/// The session_cookie can be used for authenticated requests via Cookie header.
 pub async fn seed_organization(pool: &PgPool) -> (Uuid, Uuid, String) {
     let org_id = Uuid::new_v4();
     let project_id = Uuid::new_v4();
@@ -253,9 +271,6 @@ pub async fn seed_organization(pool: &PgPool) -> (Uuid, Uuid, String) {
     let name = "Test Organization";
     let slug = format!("test-org-{}", &org_id.to_string()[..8]);
     let project_slug = format!("test-project-{}", &project_id.to_string()[..8]);
-
-    let api_key = generate_api_key();
-    let start = &api_key[..8];
 
     sqlx::query!(
         r#"
@@ -276,67 +291,77 @@ pub async fn seed_organization(pool: &PgPool) -> (Uuid, Uuid, String) {
 
     sqlx::query!(
         r#"
+        INSERT INTO member (
+            "userId",
+            "organizationId",
+            role
+        )
+        VALUES ($1, $2, 'owner')
+        "#,
+        user_id,
+        org_id
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to seed member");
+
+    sqlx::query!(
+        r#"
         INSERT INTO project (
             id,
             name,
             slug,
-            "organizationId"
+            "organizationId",
+            "userId"
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3, $4, $5)
         "#,
         project_id,
         "Test Project",
         project_slug,
-        org_id
+        org_id,
+        user_id
     )
     .execute(pool)
     .await
     .expect("Failed to seed project");
 
-    let apikey_id = Uuid::new_v4();
-    let hash = hash_api_key(&api_key);
+    // Create session for the user
+    let session_id = Uuid::new_v4();
+    let token = Uuid::new_v4().to_string();
 
     sqlx::query!(
         r#"
-        INSERT INTO apikey (
-            id,
-            name,
-            "key",
-            prefix,
-            "userId",
-            "organizationId",
-            "projectId",
-            "createdAt",
-            "updatedAt"
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+        INSERT INTO session (id, "userId", token, "expiresAt", "activeOrganizationId", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, NOW() + INTERVAL '1 day', $4, NOW(), NOW())
         "#,
-        apikey_id,
-        format!("{} API Key", name),
-        hash,
-        start,
+        session_id,
         user_id,
-        org_id,
-        project_id
+        token,
+        org_id
     )
     .execute(pool)
     .await
-    .expect("Failed to seed API key");
+    .expect("Failed to seed session");
 
-    (org_id, project_id, api_key)
+    let signature = sign_session_token(&token, "test-secret");
+    let session_cookie = format!("{}.{}", token, signature);
+
+    (org_id, project_id, session_cookie)
 }
 
 /// Seeds a project for an existing organization and returns the project ID
-pub async fn seed_project(pool: &PgPool, org_id: Uuid) -> Uuid {
+pub async fn seed_project(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> Uuid {
     let project_id = Uuid::new_v4();
     let slug = format!("test-project-{}", &project_id.to_string()[..8]);
 
     sqlx::query!(
-        r#"INSERT INTO project (id, name, slug, "organizationId") VALUES ($1, $2, $3, $4)"#,
+        r#"INSERT INTO project (id, name, slug, "organizationId", "userId") VALUES ($1, $2, $3, $4, $5)"#,
         project_id,
         "Test Project",
         slug,
-        org_id
+        org_id,
+        user_id
     )
     .execute(pool)
     .await
@@ -353,14 +378,16 @@ pub async fn seed_customer(
     name: Option<&str>,
 ) -> Uuid {
     let customer_id = Uuid::new_v4();
+    let external_id = format!("test-{}", &customer_id.to_string()[..8]);
 
     sqlx::query!(
         r#"
-        INSERT INTO customer (id, "projectId", email, name)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO customer (id, "projectId", "externalId", email, name)
+        VALUES ($1, $2, $3, $4, $5)
         "#,
         customer_id,
         project_id,
+        external_id,
         email,
         name
     )
@@ -369,6 +396,57 @@ pub async fn seed_customer(
     .expect("Failed to seed customer");
 
     customer_id
+}
+
+type HmacSha256 = Hmac<Sha256>;
+
+/// Signs a session token using HMAC-SHA256 with base64 STANDARD encoding
+pub fn sign_session_token(token: &str, secret: &str) -> String {
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+    mac.update(token.as_bytes());
+    STANDARD.encode(mac.finalize().into_bytes())
+}
+
+/// Seeds a session for testing authenticated handlers.
+/// Creates a user, adds them as a member of the org, and creates a session.
+/// Returns (user_id, cookie_value) where cookie_value is "token.signature"
+pub async fn seed_session(pool: &PgPool, org_id: Uuid) -> (Uuid, String) {
+    let user_id = seed_user(pool).await;
+    let session_id = Uuid::new_v4();
+    let token = Uuid::new_v4().to_string();
+
+    // Add user as member of org
+    sqlx::query!(
+        r#"
+        INSERT INTO member ("userId", "organizationId", role)
+        VALUES ($1, $2, 'member')
+        "#,
+        user_id,
+        org_id
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to seed member");
+
+    // Create session with future expiry
+    sqlx::query!(
+        r#"
+        INSERT INTO session (id, "userId", token, "expiresAt", "activeOrganizationId", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, NOW() + INTERVAL '1 day', $4, NOW(), NOW())
+        "#,
+        session_id,
+        user_id,
+        token,
+        org_id
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to seed session");
+
+    let signature = sign_session_token(&token, "test-secret");
+    let cookie_value = format!("{}.{}", token, signature);
+
+    (user_id, cookie_value)
 }
 
 pub async fn read_body(body: Body) -> Value {
@@ -494,7 +572,6 @@ pub async fn create_test_state_real_stripe(pool: PgPool) -> AppState {
 }
 
 pub struct ProductPriceDetails<'a> {
-    pub project_id: Uuid,
     pub product_group_id: Uuid,
     pub name: &'a str,
     pub price: i32,
@@ -502,26 +579,33 @@ pub struct ProductPriceDetails<'a> {
     pub recurring_interval: Option<&'a str>,
 }
 
+/// Result of creating a product, containing both UUID and slug
+pub struct CreatedProduct {
+    pub id: Uuid,
+    pub slug: String,
+    pub product_group_id: Uuid,
+}
+
 pub trait TestAppExt {
-    fn create_project(&mut self, api_key: &str) -> impl std::future::Future<Output = Uuid> + Send;
+    fn create_project(
+        &mut self,
+        session_cookie: &str,
+    ) -> impl std::future::Future<Output = Uuid> + Send;
 
     fn create_product(
         &mut self,
         api_key: &str,
-        project_id: Uuid,
-    ) -> impl std::future::Future<Output = (Uuid, Uuid)> + Send;
+    ) -> impl std::future::Future<Output = CreatedProduct> + Send;
 
     fn create_product_with_group(
         &mut self,
         api_key: &str,
-        project_id: Uuid,
         product_group_id: Uuid,
-    ) -> impl std::future::Future<Output = Uuid> + Send;
+    ) -> impl std::future::Future<Output = (Uuid, String)> + Send;
 
     fn create_product_price(
         &mut self,
         api_key: &str,
-        project_id: Uuid,
         product_group_id: Uuid,
     ) -> impl std::future::Future<Output = Uuid> + Send;
 
@@ -533,14 +617,17 @@ pub trait TestAppExt {
 }
 
 impl TestAppExt for Router {
-    async fn create_project(&mut self, api_key: &str) -> Uuid {
+    async fn create_project(&mut self, session_cookie: &str) -> Uuid {
         let slug = format!("test-project-{}", &Uuid::new_v4().to_string()[..8]);
         let response = self
             .call(
                 Request::builder()
                     .method("POST")
                     .uri("/project")
-                    .header("Authorization", format!("Bearer {}", api_key))
+                    .header(
+                        "Cookie",
+                        format!("better-auth.session_token={}", session_cookie),
+                    )
                     .header("Content-Type", "application/json")
                     .body(Body::from(
                         json!({
@@ -558,7 +645,7 @@ impl TestAppExt for Router {
         Uuid::parse_str(body["id"].as_str().unwrap()).unwrap()
     }
 
-    async fn create_product(&mut self, api_key: &str, project_id: Uuid) -> (Uuid, Uuid) {
+    async fn create_product(&mut self, api_key: &str) -> CreatedProduct {
         let product_group_id = Uuid::new_v4();
         let slug = format!("test-product-{}", &Uuid::new_v4().to_string()[..8]);
         let response = self
@@ -570,7 +657,6 @@ impl TestAppExt for Router {
                     .header("Content-Type", "application/json")
                     .body(Body::from(
                         json!({
-                            "project_id": project_id,
                             "product_group_id": product_group_id,
                             "name": "Test Product",
                             "slug": slug
@@ -583,16 +669,19 @@ impl TestAppExt for Router {
             .unwrap();
 
         let body = read_body(response.into_body()).await;
-        let product_id = Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap();
-        (product_id, product_group_id)
+        let id = Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap();
+        CreatedProduct {
+            id,
+            slug,
+            product_group_id,
+        }
     }
 
     async fn create_product_with_group(
         &mut self,
         api_key: &str,
-        project_id: Uuid,
         product_group_id: Uuid,
-    ) -> Uuid {
+    ) -> (Uuid, String) {
         let slug = format!("test-product-{}", &Uuid::new_v4().to_string()[..8]);
         let response = self
             .call(
@@ -603,7 +692,6 @@ impl TestAppExt for Router {
                     .header("Content-Type", "application/json")
                     .body(Body::from(
                         json!({
-                            "project_id": project_id,
                             "product_group_id": product_group_id,
                             "name": "Test Product",
                             "slug": slug
@@ -616,19 +704,14 @@ impl TestAppExt for Router {
             .unwrap();
 
         let body = read_body(response.into_body()).await;
-        Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap()
+        let id = Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap();
+        (id, slug)
     }
 
-    async fn create_product_price(
-        &mut self,
-        api_key: &str,
-        project_id: Uuid,
-        product_group_id: Uuid,
-    ) -> Uuid {
+    async fn create_product_price(&mut self, api_key: &str, product_group_id: Uuid) -> Uuid {
         self.create_product_price_with_details(
             api_key,
             ProductPriceDetails {
-                project_id,
                 product_group_id,
                 name: "Test Price",
                 price: 1000,
@@ -645,7 +728,6 @@ impl TestAppExt for Router {
         details: ProductPriceDetails<'_>,
     ) -> Uuid {
         let mut payload = json!({
-            "project_id": details.project_id,
             "product_group_id": details.product_group_id,
             "name": details.name,
             "price": details.price,
