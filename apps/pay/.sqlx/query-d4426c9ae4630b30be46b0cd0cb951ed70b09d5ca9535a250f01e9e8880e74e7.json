@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT \"projectId\" FROM product WHERE id = $1",
+  "query": "\n        SELECT \"projectId\"\n        FROM connect_account\n        WHERE id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "87c5844d92afb2612c7bd42ef87ffb9166a23ae122e4913e4f87c98656d63126"
+  "hash": "d4426c9ae4630b30be46b0cd0cb951ed70b09d5ca9535a250f01e9e8880e74e7"
 }
