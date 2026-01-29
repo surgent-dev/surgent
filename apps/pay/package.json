@@ -9,8 +9,8 @@
     "check-types": "cargo check --all-targets --all-features",
     "fmt": "cargo fmt --all --check",
     "fmt:fix": "cargo fmt --all",
-    "prepare": "cargo prepare",
-    "prepare:check": "cargo prepare-check",
+    "sqlx:prepare": "cargo prepare",
+    "sqlx:check": "cargo prepare-check",
     "postinstall": "command -v sqlx >/dev/null || cargo install sqlx-cli cargo-watch cargo-nextest --locked"
   }
 }

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO product (\n            id,\n            \"productGroup\",\n            \"projectId\",\n            name,\n            description,\n            slug,\n            version,\n            \"isDefault\",\n            \"processorProductId\"\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "96adda2431589d08101efcdb09e178ced0b0b6aa21cd5989362913df053ace4f"
+}
