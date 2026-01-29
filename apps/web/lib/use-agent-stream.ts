@@ -3,6 +3,7 @@
 import { useEffect, useReducer, useRef, useCallback } from 'react'
 import type { Session, Message, Part, Permission, AssistantMessage } from '@opencode-ai/sdk'
 import { backendBaseUrl, http } from '@/lib/http'
+import type { QuestionRequest } from './question'
 
 type AgentError = AssistantMessage['error']
 
@@ -16,6 +17,7 @@ type State = {
   messages: Message[]
   parts: Record<string, Part[]>
   permissions: Permission[]
+  questions: QuestionRequest[]
   session?: Session
   status?: SessionStatus
   error?: AgentError
@@ -31,6 +33,7 @@ const initialState: State = {
   messages: [],
   parts: {},
   permissions: [],
+  questions: [],
   lastAt: 0,
   connected: false,
   loading: false,
@@ -83,6 +86,7 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
           messages: [],
           parts: {},
           permissions: [],
+          questions: [],
           lastAt: now,
           loading: true,
           error: undefined,
@@ -139,6 +143,7 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
         messages: [],
         parts: {},
         permissions: [],
+        questions: [],
         lastAt: now,
         error: undefined,
       }
@@ -151,7 +156,7 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
 
     case 'session.compacted': {
       if (props.sessionID !== currentSessionId) return state
-      return { ...state, messages: [], parts: {}, lastAt: now, loading: true, compacting: true }
+      return { ...state, messages: [], parts: {}, questions: [], lastAt: now, loading: true, compacting: true }
     }
 
     // Session status events (matching backend SessionStatus.Info types)
@@ -232,6 +237,24 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
         permissions: state.permissions.filter((p) => p.id !== props.permissionID),
         lastAt: now,
       }
+    }
+
+    // Question events
+    case 'question.asked': {
+      if (!props.questions?.length) return state
+      const req: QuestionRequest = {
+        id: props.id || `q_${now}`,
+        sessionID: props.sessionID || currentSessionId || '',
+        questions: props.questions,
+        tool: props.tool,
+      }
+      return { ...state, questions: [...state.questions, req], lastAt: now }
+    }
+
+    case 'question.replied':
+    case 'question.rejected': {
+      const id = props.id || props.requestID
+      return { ...state, questions: state.questions.filter((q) => q.id !== id), lastAt: now }
     }
 
     default:
@@ -377,3 +400,4 @@ export default function useAgentStream({ projectId, sessionId }: { projectId?: s
 
 // Export types for use in components
 export type { SessionStatus, SessionStatusRetry, AgentError }
+export type { QuestionRequest, QuestionInfo, QuestionOption, QuestionAnswer } from './question'

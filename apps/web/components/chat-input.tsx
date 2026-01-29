@@ -1,10 +1,11 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import { ArrowUp, Paperclip, X, Loader2, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { fileToDataUrl, uploadFile, attachmentsToParts, type UploadingAttachment, type FilePart } from '@/lib/upload'
 import ModelSelectorDropdown, { type ProviderModel } from './model-selector-dropdown'
+import type { Agent } from '@opencode-ai/sdk'
 
 export type { FilePart, ProviderModel }
 
@@ -23,6 +24,7 @@ type Props = {
   models?: ProviderModel[]
   selectedModel?: { modelId: string; providerId: string }
   onModelChange?: (modelId: string, providerId: string) => void
+  subagents?: Agent[]
 }
 
 // Fallback models when no providers are connected
@@ -51,13 +53,19 @@ export default function ChatInput({
   models = FALLBACK_MODELS,
   selectedModel,
   onModelChange,
+  subagents = [],
 }: Props) {
   const [internalValue, setInternalValue] = useState('')
   const value = controlledValue ?? internalValue
   const setValue = onValueChange ?? setInternalValue
   const [attachments, setAttachments] = useState<UploadingAttachment[]>([])
   const [isDragging, setIsDragging] = useState(false)
+  const [selectedSubagent, setSelectedSubagent] = useState<string | undefined>()
+  const [showSubagentDropdown, setShowSubagentDropdown] = useState(false)
+  const [subagentFilter, setSubagentFilter] = useState('')
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dragCounter = useRef(0)
 
   // Find current selected model
@@ -71,6 +79,37 @@ export default function ChatInput({
   const handleModelSelect = (modelId: string, providerId: string) => {
     onModelChange?.(modelId, providerId)
   }
+
+  // Filter subagents based on @ mention
+  const filteredSubagents = useMemo(() => {
+    return subagents.filter((a) => a.name.toLowerCase().includes(subagentFilter.toLowerCase()))
+  }, [subagents, subagentFilter])
+
+  // Detect @ mention in input
+  useEffect(() => {
+    const atMatch = value.match(/(?:^|\s)@(\w*)$/)
+    if (atMatch && subagents.length > 0) {
+      setSubagentFilter(atMatch[1] || '')
+      setShowSubagentDropdown(true)
+      setHighlightedIndex(0)
+    } else {
+      setShowSubagentDropdown(false)
+      setSubagentFilter('')
+    }
+  }, [value, subagents.length])
+
+  const handleSubagentSelect = useCallback(
+    (agent: Agent) => {
+      // Replace @query with nothing and set the subagent
+      const newValue = value.replace(/(?:^|\s)@\w*$/, '').trim()
+      setValue(newValue)
+      setSelectedSubagent(agent.name)
+      setShowSubagentDropdown(false)
+      setSubagentFilter('')
+      textareaRef.current?.focus()
+    },
+    [value, setValue],
+  )
 
   const addFiles = async (files: File[]) => {
     const valid = files.filter((f) => f.size <= MAX_FILE_SIZE).slice(0, MAX_FILES - attachments.length)
@@ -139,13 +178,55 @@ export default function ChatInput({
     if ((!value.trim() && !attachments.length) || disabled || hasUploading) return
 
     const fileParts = attachmentsToParts(attachments)
-    const text = value.trim()
+    // Prepend @mention to text if subagent is selected
+    const text = selectedSubagent ? `@${selectedSubagent} ${value.trim()}` : value.trim()
 
     setValue('')
     setAttachments([])
+    setSelectedSubagent(undefined)
     const model = currentModel ?? models[0] ?? FALLBACK_MODELS[0]
     if (!model) return
     onSubmit(text, fileParts.length ? fileParts : undefined, model.id, model.providerId)
+  }
+
+  // Handle keyboard navigation in subagent dropdown
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Backspace at start of input clears selected subagent
+    if (e.key === 'Backspace' && selectedSubagent && value === '') {
+      e.preventDefault()
+      setSelectedSubagent(undefined)
+      return
+    }
+
+    if (showSubagentDropdown && filteredSubagents.length > 0) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setHighlightedIndex((i) => Math.min(i + 1, filteredSubagents.length - 1))
+          return
+        case 'ArrowUp':
+          e.preventDefault()
+          setHighlightedIndex((i) => Math.max(i - 1, 0))
+          return
+        case 'Tab':
+        case 'Enter':
+          if (filteredSubagents[highlightedIndex]) {
+            e.preventDefault()
+            handleSubagentSelect(filteredSubagents[highlightedIndex])
+            return
+          }
+          break
+        case 'Escape':
+          e.preventDefault()
+          setShowSubagentDropdown(false)
+          return
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      isWorking ? onStop?.() : handleSubmit()
+    }
   }
 
   const hasUploading = attachments.some((a) => a.status === 'uploading')
@@ -208,19 +289,54 @@ export default function ChatInput({
           </div>
         )}
 
-        <textarea
-          className="w-full p-3 sm:p-4 resize-none outline-none text-sm min-h-[44px] sm:min-h-[48px] max-h-48 sm:max-h-72 bg-transparent text-foreground placeholder:text-muted-foreground"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onPaste={handlePaste}
-          onKeyDown={(e) => {
-            if (e.key !== 'Enter' || e.shiftKey) return
-            e.preventDefault()
-            isWorking ? onStop?.() : handleSubmit()
-          }}
-          placeholder={placeholder}
-          rows={1}
-        />
+        {/* Subagent dropdown */}
+        {showSubagentDropdown && filteredSubagents.length > 0 && (
+          <div className="absolute bottom-full left-3 mb-1.5 w-56 max-h-44 overflow-y-auto rounded-md border border-border/60 bg-popover/95 backdrop-blur-sm shadow-md z-50">
+            <div className="py-1">
+              {filteredSubagents.map((agent, index) => (
+                <button
+                  key={agent.name}
+                  type="button"
+                  onClick={() => handleSubagentSelect(agent)}
+                  className={cn(
+                    'w-full flex items-baseline gap-1.5 px-3 py-1.5 text-left transition-colors',
+                    index === highlightedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
+                  )}
+                >
+                  <span className="text-[13px] font-medium text-brand">@{agent.name}</span>
+                  {agent.description && (
+                    <span className="text-xs text-muted-foreground truncate">{agent.description}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Input area with inline mention */}
+        <div className="flex items-start p-3 sm:p-4 gap-1">
+          {/* Selected subagent as glowing inline text */}
+          {selectedSubagent && (
+            <span
+              className="text-sm text-brand font-medium shrink-0"
+              style={{
+                textShadow: '0 0 8px hsl(var(--brand) / 0.5), 0 0 16px hsl(var(--brand) / 0.3)',
+              }}
+            >
+              @{selectedSubagent}
+            </span>
+          )}
+          <textarea
+            ref={textareaRef}
+            className="flex-1 resize-none outline-none text-sm min-h-[20px] sm:min-h-[24px] max-h-48 sm:max-h-72 bg-transparent text-foreground placeholder:text-muted-foreground"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onPaste={handlePaste}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            rows={1}
+          />
+        </div>
         <div className="flex items-center justify-between gap-2 px-2 py-2">
           <div className="flex items-center gap-1 sm:gap-2 flex-wrap min-w-0">
             {/* File attach button */}

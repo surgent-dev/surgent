@@ -1,3 +1,4 @@
+import type { FileDiff } from '@opencode-ai/sdk'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
@@ -9,6 +10,9 @@ type SandboxState = {
   setActiveSession: (projectId: string, sessionId: string) => void
   pulsePaymentsTab: boolean
   setPulsePaymentsTab: (pulse: boolean) => void
+  // Callback to open changes tab (set by SplitView)
+  openChangesTab?: (messageId?: string, sessionId?: string, diffs?: FileDiff[]) => void
+  setOpenChangesTab: (fn: ((messageId?: string, sessionId?: string, diffs?: FileDiff[]) => void) | undefined) => void
 }
 
 export const useSandbox = create<SandboxState>()(
@@ -21,6 +25,8 @@ export const useSandbox = create<SandboxState>()(
         set((s) => ({ activeSessionId: { ...s.activeSessionId, [projectId]: sessionId } })),
       pulsePaymentsTab: false,
       setPulsePaymentsTab: (pulse) => set({ pulsePaymentsTab: pulse }),
+      openChangesTab: undefined,
+      setOpenChangesTab: (fn) => set({ openChangesTab: fn }),
     }),
     { name: 'sandbox-store', partialize: (s) => ({ activeSessionId: s.activeSessionId }) },
   ),

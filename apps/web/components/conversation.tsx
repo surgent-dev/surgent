@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type ElementType } from 'react'
+import { useEffect, useMemo, useRef, useState, type ElementType } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
@@ -19,13 +19,26 @@ import {
   AlertCircle,
   X,
   RefreshCw,
+  Redo2,
+  GitCompare,
 } from 'lucide-react'
 import ChatInput, { type FilePart, type ProviderModel } from './chat-input'
 import TerminalWidget from './terminal/terminal-widget'
 import { useSandbox } from '@/hooks/use-sandbox'
 import useAgentStream, { type SessionStatusRetry } from '@/lib/use-agent-stream'
 import { AgentThread } from '@/components/agent/agent-thread'
-import { useSessionsQuery, useCreateSession, useSendMessage, useAbortSession } from '@/queries/chats'
+import QuestionPrompt from '@/components/agent/question-prompt'
+import {
+  useSessionsQuery,
+  useCreateSession,
+  useSendMessage,
+  useAbortSession,
+  useRevertSession,
+  useUnrevertSession,
+  useReplyQuestion,
+  useRejectQuestion,
+  useSubagents,
+} from '@/queries/chats'
 import ProviderDialog from '@/components/provider-dialog'
 
 export interface ConversationProps {
@@ -154,17 +167,24 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const sandboxId = useSandbox((s) => s.sandboxId || undefined)
   const storedSessionId = useSandbox((s) => (projectId ? s.activeSessionId[projectId] : undefined))
   const setActiveSession = useSandbox((s) => s.setActiveSession)
+  const openChangesTab = useSandbox((s) => s.openChangesTab)
 
   const { data: sessions = [] } = useSessionsQuery(projectId)
+  const { data: subagents = [] } = useSubagents(projectId)
   const create = useCreateSession(projectId)
   const send = useSendMessage(projectId)
   const abort = useAbortSession()
+  const revert = useRevertSession(projectId)
+  const unrevert = useUnrevertSession(projectId)
+  const replyQuestion = useReplyQuestion(projectId)
+  const rejectQuestion = useRejectQuestion(projectId)
 
   const activeId = storedSessionId && sessions.some((s) => s.id === storedSessionId) ? storedSessionId : sessions[0]?.id
   const {
     messages,
     parts,
     permissions,
+    questions,
     session,
     connected,
     status,
@@ -176,6 +196,12 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     retryInfo,
   } = useAgentStream({ projectId, sessionId: activeId })
   const working = status?.type !== undefined && status.type !== 'idle'
+
+  useEffect(() => {
+    if (!projectId || !activeId) return
+    if (storedSessionId === activeId) return
+    setActiveSession(projectId, activeId)
+  }, [activeId, projectId, setActiveSession, storedSessionId])
 
   // Auto-scroll setup
   useEffect(() => {
@@ -193,7 +219,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     if (stickRef.current && viewportRef.current) {
       viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight, behavior: 'smooth' })
     }
-  }, [messages.length, permissions.length])
+  }, [messages.length, permissions.length, questions.length])
 
   // Prefill initial prompt into the input (don't auto-send)
   useEffect(() => {
@@ -229,12 +255,29 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     }
   }
 
+  const handleRevert = (messageId: string) => {
+    if (!activeId) return
+    revert.mutate({ sessionId: activeId, messageId })
+  }
+
+  const handleUnrevert = () => {
+    if (!activeId) return
+    unrevert.mutate({ sessionId: activeId })
+  }
+
+  // Filter out reverted messages (>= revert point)
+  const revertMessageId = session?.revert?.messageID
+  const visibleMessages = useMemo(
+    () => (revertMessageId ? messages.filter((m) => m.id < revertMessageId) : messages),
+    [messages, revertMessageId],
+  )
+
   const handleCreate = () => create.mutateAsync().then((s) => s?.id && projectId && setActiveSession(projectId, s.id))
 
   const activeSession = sessions.find((s) => s.id === activeId)
   const sessionName = formatTitle(session?.title || activeSession?.title || 'Untitled')
 
-  const assistantMessages = messages.filter((m) => m.role === 'assistant')
+  const assistantMessages = visibleMessages.filter((m) => m.role === 'assistant')
 
   const isContextLengthExceeded = (err: any) => {
     if (!err) return false
@@ -440,6 +483,14 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                   ) : null}
                   <span className="text-muted-foreground">·</span>
                   <span className="font-medium">{Math.round(shownCost * 100)} credits</span>
+                  <span className="text-muted-foreground">·</span>
+                  <button
+                    onClick={() => openChangesTab?.(undefined, activeId)}
+                    className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <GitCompare className="size-3" />
+                    <span>Changes</span>
+                  </button>
                 </>
               )}
             </>
@@ -481,14 +532,15 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                   <div className="flex items-center justify-center min-h-[300px]">
                     <Loader2 className="size-6 animate-spin text-muted-foreground" />
                   </div>
-                ) : messages.length ? (
+                ) : visibleMessages.length ? (
                   <AgentThread
                     projectId={projectId}
                     sessionId={activeId!}
-                    messages={messages}
+                    messages={visibleMessages}
                     partsMap={parts}
                     permissions={permissions}
                     isWorking={working}
+                    onRevert={handleRevert}
                   />
                 ) : (
                   <EmptyState />
@@ -500,6 +552,24 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
           {/* Input */}
           <div className="px-2 py-2 shrink-0 relative @md/conversation:px-4 @md/conversation:py-4">
             <div className="max-w-3xl mx-auto">
+              {/* Revert banner */}
+              {revertMessageId && (
+                <div className="mb-2 px-3 py-2 rounded-lg border border-warning/20 bg-warning/10 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 text-warning font-medium">
+                      Changes reverted. File modifications have been undone.
+                    </span>
+                    <button
+                      onClick={handleUnrevert}
+                      disabled={unrevert.isPending}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-warning/20 hover:bg-warning/30 text-warning font-medium transition-colors disabled:opacity-50"
+                    >
+                      {unrevert.isPending ? <Loader2 className="size-3 animate-spin" /> : <Redo2 className="size-3" />}
+                      <span>Restore</span>
+                    </button>
+                  </div>
+                </div>
+              )}
               {lastAssistantError && (
                 <div
                   className={cn(
@@ -523,6 +593,24 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                   </div>
                 </div>
               )}
+              {questions.length > 0 && (
+                <div className="mb-3 space-y-2">
+                  {questions.map((q) => {
+                    const pending =
+                      (replyQuestion.isPending && replyQuestion.variables?.id === q.id) ||
+                      (rejectQuestion.isPending && rejectQuestion.variables === q.id)
+                    return (
+                      <QuestionPrompt
+                        key={q.id}
+                        request={q}
+                        onReply={(answers) => replyQuestion.mutate({ id: q.id, answers })}
+                        onReject={() => rejectQuestion.mutate(q.id)}
+                        pending={pending}
+                      />
+                    )
+                  })}
+                </div>
+              )}
               <ChatInput
                 onSubmit={handleSend}
                 disabled={working}
@@ -537,6 +625,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                 models={availableModels}
                 selectedModel={selectedModel}
                 onModelChange={handleModelChange}
+                subagents={subagents}
               />
             </div>
           </div>

@@ -3,7 +3,7 @@ import type { AppContext } from '@/types/application'
 import { requireAuth } from '../middleware/auth'
 import { storage } from '@/lib/storage'
 
-const MAX_FILE_SIZE = 30 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 30 * 1024 * 1024 // 30MB
 
 const upload = new Hono<AppContext>()
 

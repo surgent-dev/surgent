@@ -26,6 +26,7 @@ import {
 } from '@/queries/projects'
 
 import { useSurpayAccounts, useSurpayConnect, useSurpayDisconnect } from '@/queries/surpay'
+import { useSessionDiff } from '@/queries/chats'
 import { useSandbox } from '@/hooks/use-sandbox'
 
 import DiffView from '@/components/diff/diff-view'
@@ -52,6 +53,7 @@ export interface PreviewTab {
   title: string
   diffs?: FileDiff[]
   messageId?: string
+  sessionId?: string
   convexPath?: string
 }
 
@@ -452,6 +454,13 @@ export default function PreviewPanel({
   const type = tab?.type ?? 'preview'
   const pulsePaymentsTab = useSandbox((s) => s.pulsePaymentsTab)
   const setPulsePaymentsTab = useSandbox((s) => s.setPulsePaymentsTab)
+  const activeSessionId = useSandbox((s) => (projectId ? s.activeSessionId[projectId] : undefined))
+
+  // Fetch diffs for changes tab
+  const shouldFetchDiffs = type === 'changes' && !tab?.diffs && !tab?.messageId
+  const diffSessionId = shouldFetchDiffs ? tab?.sessionId || activeSessionId : undefined
+  const diffMessageId = shouldFetchDiffs && tab?.messageId ? tab.messageId : undefined
+  const { data: messageDiffs, isLoading: diffsLoading } = useSessionDiff(projectId, diffSessionId, diffMessageId)
 
   const hasConvex = Boolean((project?.metadata as any)?.convex)
   const hasMcp = tabs.some((tab) => tab.type === 'mcp')
@@ -534,8 +543,19 @@ export default function PreviewPanel({
       }
       case 'convex':
         return <ConvexContent credentials={convexCredentials} isLoading={convexLoading} path={tab?.convexPath} />
-      case 'changes':
-        return tab?.diffs?.length ? <ChangesContent diffs={tab.diffs} /> : null
+      case 'changes': {
+        const diffs = tab?.diffs ?? messageDiffs
+        if (diffsLoading) return <LoadingState icon={GitCompare} message="Loading changes..." />
+        if (!diffs) {
+          if (tab?.messageId) return <LoadingState icon={GitCompare} message="Preparing changes..." />
+          return <EmptyState title="No changes" description="No file changes in this session" icon={GitCompare} />
+        }
+        return diffs.length ? (
+          <ChangesContent diffs={diffs} />
+        ) : (
+          <EmptyState title="No changes" description="No file changes" icon={GitCompare} />
+        )
+      }
       case 'mcp':
         return <McpContent entries={mcpEntries} isLoading={mcpLoading} />
       case 'logs':

@@ -1,7 +1,17 @@
-"use client"
+'use client'
 
-import React, { useState, useMemo } from "react"
-import type { Message, Part, Permission, TextPart, ToolPart, ReasoningPart, FilePart } from "@opencode-ai/sdk"
+import React, { useState, useMemo } from 'react'
+import type {
+  Message,
+  Part,
+  Permission,
+  TextPart,
+  ToolPart,
+  ReasoningPart,
+  FilePart,
+  PatchPart,
+  FileDiff,
+} from '@opencode-ai/sdk'
 import {
   AlertCircle,
   Bot,
@@ -16,80 +26,103 @@ import {
   Search,
   Terminal,
   Trash2,
-} from "lucide-react"
-import { ShimmeringText } from "@/components/ui/shimmer-text"
-import { Markdown } from "@/components/ui/markdown"
-import { useRespondPermission } from "@/queries/chats"
-import useAgentStream from "@/lib/use-agent-stream"
+  Undo2,
+} from 'lucide-react'
+import { ShimmeringText } from '@/components/ui/shimmer-text'
+import { Markdown } from '@/components/ui/markdown'
+import { useRespondPermission } from '@/queries/chats'
+import useAgentStream from '@/lib/use-agent-stream'
+import MessageDiffBadge from './message-diff-badge'
 
-type PermissionResponse = "once" | "always" | "reject"
+type PermissionResponse = 'once' | 'always' | 'reject'
 
 const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: string }> = {
-  read: { icon: Eye, done: "Read", doing: "Reading..." },
-  write: { icon: FileText, done: "Created", doing: "Creating..." },
-  edit: { icon: FilePenLine, done: "Edited", doing: "Editing..." },
-  delete: { icon: Trash2, done: "Deleted", doing: "Deleting..." },
-  bash: { icon: Terminal, done: "Ran", doing: "Running..." },
-  grep: { icon: Search, done: "Searched", doing: "Searching..." },
-  glob: { icon: Search, done: "Searched", doing: "Searching..." },
-  list: { icon: Search, done: "Listed", doing: "Listing..." },
-  webfetch: { icon: Globe, done: "Fetched", doing: "Fetching..." },
-  todowrite: { icon: ListTodo, done: "Todos", doing: "Updating..." },
-  todoread: { icon: ListTodo, done: "Todos", doing: "Loading..." },
-  task: { icon: Bot, done: "Subagent", doing: "Subagent..." },
-  dev: { icon: Play, done: "Started", doing: "Starting..." },
-  devLogs: { icon: Terminal, done: "Logs", doing: "Loading..." },
+  read: { icon: Eye, done: 'Read', doing: 'Reading...' },
+  write: { icon: FileText, done: 'Created', doing: 'Creating...' },
+  edit: { icon: FilePenLine, done: 'Edited', doing: 'Editing...' },
+  delete: { icon: Trash2, done: 'Deleted', doing: 'Deleting...' },
+  bash: { icon: Terminal, done: 'Ran', doing: 'Running...' },
+  grep: { icon: Search, done: 'Searched', doing: 'Searching...' },
+  glob: { icon: Search, done: 'Searched', doing: 'Searching...' },
+  list: { icon: Search, done: 'Listed', doing: 'Listing...' },
+  webfetch: { icon: Globe, done: 'Fetched', doing: 'Fetching...' },
+  todowrite: { icon: ListTodo, done: 'Todos', doing: 'Updating...' },
+  todoread: { icon: ListTodo, done: 'Todos', doing: 'Loading...' },
+  task: { icon: Bot, done: 'Subagent', doing: 'Subagent...' },
+  dev: { icon: Play, done: 'Started', doing: 'Starting...' },
+  devLogs: { icon: Terminal, done: 'Logs', doing: 'Loading...' },
 }
 
 function getTarget(part: ToolPart): string | undefined {
-  if (part.state.status === "pending") return
+  if (part.state.status === 'pending') return
   const input = part.state.input as Record<string, unknown>
-  if (["read", "write", "edit"].includes(part.tool))
-    return String(input.filePath || "")
+  if (['read', 'write', 'edit'].includes(part.tool))
+    return String(input.filePath || '')
       .split(/[/\\]/)
       .pop()
-  if (["bash", "dev"].includes(part.tool)) return String(input.command || "")
-  if (part.tool === "task") return String(input.description || input.subagent_type || "")
-  if (part.tool === "grep") return String(input.pattern || "")
-  if (part.tool === "glob") return String(input.pattern || "")
-  if (part.tool === "list") return String(input.path || "/")
-  if (part.tool === "webfetch") {
-    const url = String(input.url || "")
-    if (typeof URL.canParse === "function" && URL.canParse(url)) return new URL(url).hostname
+  if (['bash', 'dev'].includes(part.tool)) return String(input.command || '')
+  if (part.tool === 'task') return String(input.description || input.subagent_type || '')
+  if (part.tool === 'grep') return String(input.pattern || '')
+  if (part.tool === 'glob') return String(input.pattern || '')
+  if (part.tool === 'list') return String(input.path || '/')
+  if (part.tool === 'webfetch') {
+    const url = String(input.url || '')
+    if (typeof URL.canParse === 'function' && URL.canParse(url)) return new URL(url).hostname
     return url
   }
 }
 
 function formatValue(val: unknown): string {
-  if (val === undefined || val === null) return ""
-  if (typeof val === "string") return val
+  if (val === undefined || val === null) return ''
+  if (typeof val === 'string') return val
   return JSON.stringify(val, null, 2)
 }
 
 type Turn = { user: Message; assistants: Message[] }
 
+const FILE_MODIFYING_TOOLS = new Set(['edit', 'write', 'delete'])
+
 function groupTurns(messages: Message[]): Turn[] {
   const turns: Turn[] = []
   let current: Turn | undefined
   messages.forEach((m) => {
-    if (m.role === "user") {
+    if (m.role === 'user') {
       current = { user: m, assistants: [] }
       turns.push(current)
       return
     }
-    if (m.role === "assistant" && current) current.assistants.push(m)
+    if (m.role === 'assistant' && current) current.assistants.push(m)
   })
   return turns
+}
+
+function countFileModifications(timeline: Part[]): number {
+  const modifiedFiles = new Set<string>()
+  for (const p of timeline) {
+    if (p.type === 'patch') {
+      const patch = p as PatchPart
+      for (const file of patch.files) modifiedFiles.add(file)
+      continue
+    }
+    if (p.type !== 'tool') continue
+    const toolPart = p as ToolPart
+    if (!FILE_MODIFYING_TOOLS.has(toolPart.tool)) continue
+    if (toolPart.state.status !== 'completed') continue
+    const input = toolPart.state.input as Record<string, unknown>
+    const filePath = String(input.filePath || input.file_path || '')
+    if (filePath) modifiedFiles.add(filePath)
+  }
+  return modifiedFiles.size
 }
 
 type TodoItem = { id?: string; content?: string; status?: string }
 
 function getTodosFromToolPart(part: ToolPart): TodoItem[] {
-  const input = part.state.status !== "pending" ? (part.state.input as Record<string, unknown>) : {}
+  const input = part.state.status !== 'pending' ? (part.state.input as Record<string, unknown>) : {}
   if (Array.isArray(input?.todos)) return input.todos as TodoItem[]
-  if (part.state.status !== "completed") return []
+  if (part.state.status !== 'completed') return []
   try {
-    const val = typeof part.state.output === "string" ? JSON.parse(part.state.output) : part.state.output
+    const val = typeof part.state.output === 'string' ? JSON.parse(part.state.output) : part.state.output
     return Array.isArray(val) ? (val as TodoItem[]) : []
   } catch {
     return []
@@ -118,7 +151,7 @@ function PermissionPrompt({
       </div>
       <div className="flex items-stretch h-8 border-t bg-muted/40">
         <button
-          onClick={() => onRespond("once")}
+          onClick={() => onRespond('once')}
           disabled={responding}
           className="flex-1 flex items-center justify-center gap-1 text-xs text-primary font-medium bg-background hover:bg-muted disabled:opacity-50 transition-colors"
         >
@@ -126,7 +159,7 @@ function PermissionPrompt({
           Allow
         </button>
         <button
-          onClick={() => onRespond("always")}
+          onClick={() => onRespond('always')}
           disabled={responding}
           className="flex-1 flex items-center justify-center gap-1.5 text-xs border-l bg-background hover:bg-muted disabled:opacity-50 transition-colors"
         >
@@ -134,7 +167,7 @@ function PermissionPrompt({
           Always Allow
         </button>
         <button
-          onClick={() => onRespond("reject")}
+          onClick={() => onRespond('reject')}
           disabled={responding}
           className="flex-1 flex items-center justify-center text-xs text-muted-foreground border-l hover:bg-muted/50 disabled:opacity-50 transition-colors"
         >
@@ -162,12 +195,12 @@ function Tool({
   respondError?: string
 }) {
   const [expanded, setExpanded] = useState(false)
-  const cfg = TOOLS[part.tool] || { icon: FileText, done: part.tool, doing: "Working..." }
+  const cfg = TOOLS[part.tool] || { icon: FileText, done: part.tool, doing: 'Working...' }
   const Icon = cfg.icon
   const target = getTarget(part)
-  const running = part.state.status === "running" || part.state.status === "pending"
-  const meta = part.state.status === "pending" ? undefined : part.state.metadata
-  const subSessionId = part.tool === "task" && typeof meta?.sessionId === "string" ? meta.sessionId : undefined
+  const running = part.state.status === 'running' || part.state.status === 'pending'
+  const meta = part.state.status === 'pending' ? undefined : part.state.metadata
+  const subSessionId = part.tool === 'task' && typeof meta?.sessionId === 'string' ? meta.sessionId : undefined
 
   const header = (() => {
     if (running) {
@@ -183,7 +216,7 @@ function Tool({
       )
     }
 
-    if (part.state.status === "error") {
+    if (part.state.status === 'error') {
       return (
         <div className="flex items-center gap-1 py-0.5 text-[11px] sm:text-xs text-muted-foreground/60">
           <Icon className="size-2.5 sm:size-3 shrink-0" />
@@ -194,7 +227,7 @@ function Tool({
 
     return (
       <div className="group flex items-center gap-1 py-0.5 sm:py-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
-        <Icon className={`size-2.5 sm:size-3.5 shrink-0 ${expanded ? "text-foreground" : ""}`} />
+        <Icon className={`size-2.5 sm:size-3.5 shrink-0 ${expanded ? 'text-foreground' : ''}`} />
         <span>{cfg.done}</span>
         {target && (
           <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">
@@ -202,16 +235,16 @@ function Tool({
           </code>
         )}
         <span
-          className={`text-[10px] transition-opacity ${expanded ? "opacity-60" : "opacity-0 group-hover:opacity-60"}`}
+          className={`text-[10px] transition-opacity ${expanded ? 'opacity-60' : 'opacity-0 group-hover:opacity-60'}`}
         >
-          {expanded ? "▾" : "▸"}
+          {expanded ? '▾' : '▸'}
         </span>
       </div>
     )
   })()
 
   return (
-    <div className={permission ? "space-y-2" : undefined}>
+    <div className={permission ? 'space-y-2' : undefined}>
       <button
         onClick={() => setExpanded((s) => !s)}
         className="w-full text-left hover:text-foreground cursor-pointer transition-colors"
@@ -221,11 +254,11 @@ function Tool({
 
       {expanded && (
         <div className="ml-3 sm:ml-4 pl-2 sm:pl-3 border-l-2 border-muted space-y-2 text-[11px] sm:text-xs">
-          {part.tool === "task" && projectId && subSessionId && (
+          {part.tool === 'task' && projectId && subSessionId && (
             <SubagentStream projectId={projectId} sessionId={subSessionId} />
           )}
 
-          {part.tool !== "task" && part.state.status !== "pending" && (
+          {part.tool !== 'task' && part.state.status !== 'pending' && (
             <div>
               <div className="text-muted-foreground/70 font-medium mb-1">Input</div>
               <pre className="p-2 rounded bg-muted/50 whitespace-pre-wrap break-normal [overflow-wrap:break-word]">
@@ -233,7 +266,7 @@ function Tool({
               </pre>
             </div>
           )}
-          {part.tool !== "task" && part.state.status === "completed" && (
+          {part.tool !== 'task' && part.state.status === 'completed' && (
             <div>
               <div className="text-muted-foreground/70 font-medium mb-1">Output</div>
               <pre className="p-2 rounded bg-muted/50 whitespace-pre-wrap break-normal [overflow-wrap:break-word]">
@@ -241,7 +274,7 @@ function Tool({
               </pre>
             </div>
           )}
-          {part.tool !== "task" && part.state.status === "error" && (
+          {part.tool !== 'task' && part.state.status === 'error' && (
             <div>
               <div className="text-destructive/70 font-medium mb-1">Error</div>
               <pre className="p-2 rounded bg-destructive/10 whitespace-pre-wrap break-normal [overflow-wrap:break-word] text-destructive">
@@ -270,7 +303,7 @@ function SubagentStream({ projectId, sessionId }: { projectId: string; sessionId
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span className={`size-1.5 rounded-full ${connected ? "bg-success" : "bg-muted-foreground/40"}`} />
+        <span className={`size-1.5 rounded-full ${connected ? 'bg-success' : 'bg-muted-foreground/40'}`} />
         <code className="text-[10px]">session:{sessionId.slice(0, 8)}</code>
         {loading && <Loader2 className="size-3 animate-spin" />}
       </div>
@@ -286,10 +319,10 @@ function SubagentStream({ projectId, sessionId }: { projectId: string; sessionId
 }
 
 function Todos({ part }: { part: ToolPart }) {
-  const loading = part.state.status === "running" || part.state.status === "pending"
+  const loading = part.state.status === 'running' || part.state.status === 'pending'
   const todos = useMemo(() => getTodosFromToolPart(part), [part.state])
 
-  const done = todos.filter((t) => t.status === "completed").length
+  const done = todos.filter((t) => t.status === 'completed').length
 
   return (
     <div className="my-1.5 sm:my-2 p-2 sm:p-3 rounded-xl bg-muted/50 border w-full min-w-0">
@@ -303,19 +336,19 @@ function Todos({ part }: { part: ToolPart }) {
       {todos.length > 0 ? (
         <div className="space-y-1 sm:space-y-1.5">
           {todos.map((t, i) => {
-            const isDone = t.status === "completed"
+            const isDone = t.status === 'completed'
             return (
               <div
                 key={t.id || i}
-                className={`flex items-start gap-1 sm:gap-2 text-[11px] sm:text-sm ${isDone ? "opacity-50" : ""}`}
+                className={`flex items-start gap-1 sm:gap-2 text-[11px] sm:text-sm ${isDone ? 'opacity-50' : ''}`}
               >
                 <div
-                  className={`size-3 sm:size-4 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 ${isDone ? "bg-primary border-primary" : "border-muted-foreground/30"}`}
+                  className={`size-3 sm:size-4 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 ${isDone ? 'bg-primary border-primary' : 'border-muted-foreground/30'}`}
                 >
                   {isDone && <CheckCircle2 className="size-1.5 sm:size-2.5 text-primary-foreground" />}
                 </div>
                 <span
-                  className={`break-normal [overflow-wrap:break-word] min-w-0 ${isDone ? "line-through text-muted-foreground" : ""}`}
+                  className={`break-normal [overflow-wrap:break-word] min-w-0 ${isDone ? 'line-through text-muted-foreground' : ''}`}
                 >
                   {t.content}
                 </span>
@@ -347,8 +380,8 @@ function Thinking({
         onClick={toggle}
         className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
-        <span className={`font-medium ${open ? "text-foreground" : ""}`}>{streaming ? "Thinking..." : "Thoughts"}</span>
-        {!streaming && <span className="text-[10px] opacity-60">{open ? "▾" : "▸"}</span>}
+        <span className={`font-medium ${open ? 'text-foreground' : ''}`}>{streaming ? 'Thinking...' : 'Thoughts'}</span>
+        {!streaming && <span className="text-[10px] opacity-60">{open ? '▾' : '▸'}</span>}
       </button>
       {open && (
         <div className="pl-2 sm:pl-5 pt-1 sm:pt-1.5 text-[11px] sm:text-sm text-muted-foreground border-l-2 border-muted ml-1 sm:ml-1.5 min-w-0">
@@ -364,7 +397,7 @@ function Thinking({
 }
 
 function FileThumb({ file }: { file: FilePart }) {
-  const isImage = file.mime?.startsWith("image/")
+  const isImage = file.mime?.startsWith('image/')
   return (
     <a
       href={file.url}
@@ -374,7 +407,7 @@ function FileThumb({ file }: { file: FilePart }) {
       className="block size-8 sm:size-10 rounded-lg overflow-hidden bg-muted hover:opacity-80 transition-opacity shrink-0"
     >
       {isImage ? (
-        <img src={file.url} alt={file.filename || "file"} className="size-full object-cover" />
+        <img src={file.url} alt={file.filename || 'file'} className="size-full object-cover" />
       ) : (
         <div className="size-full flex items-center justify-center">
           <FileText className="size-3 sm:size-4 text-muted-foreground" />
@@ -390,16 +423,16 @@ function ApiError({
   error: { code?: string; data?: { code?: string; message?: string }; message?: string; name?: string }
 }) {
   const code = error?.code || error?.data?.code
-  const msg = error?.data?.message || error?.message || error?.name || "Request failed"
-  const isContext = code === "context_length_exceeded" || msg.includes("context")
+  const msg = error?.data?.message || error?.message || error?.name || 'Request failed'
+  const isContext = code === 'context_length_exceeded' || msg.includes('context')
 
   return (
     <div
-      className={`flex items-start gap-2 py-2 px-3 rounded-lg border text-xs sm:text-sm ${isContext ? "bg-warning/10 border-warning/20 text-warning" : "bg-muted/50 text-muted-foreground"}`}
+      className={`flex items-start gap-2 py-2 px-3 rounded-lg border text-xs sm:text-sm ${isContext ? 'bg-warning/10 border-warning/20 text-warning' : 'bg-muted/50 text-muted-foreground'}`}
     >
       <AlertCircle className="size-3.5 shrink-0 mt-0.5" />
       <p className="min-w-0 break-normal [overflow-wrap:break-word]">
-        {isContext ? "Context limit reached. Start a new session." : msg}
+        {isContext ? 'Context limit reached. Start a new session.' : msg}
       </p>
     </div>
   )
@@ -412,6 +445,7 @@ export function AgentThread({
   partsMap,
   permissions,
   isWorking,
+  onRevert,
 }: {
   projectId?: string
   sessionId: string
@@ -419,6 +453,7 @@ export function AgentThread({
   partsMap: Record<string, Part[]>
   permissions?: Permission[]
   isWorking?: boolean
+  onRevert?: (messageId: string) => void
 }) {
   const [openThoughts, setOpenThoughts] = useState<Record<string, boolean>>({})
   const [permissionErrors, setPermissionErrors] = useState<Record<string, string>>({})
@@ -438,9 +473,9 @@ export function AgentThread({
     const ids = new Set<string>()
     messages.forEach((m) => {
       ;(partsMap[m.id] ?? []).forEach((p) => {
-        if (p.type !== "tool") return
+        if (p.type !== 'tool') return
         const toolPart = p as ToolPart
-        if (toolPart.tool === "todoread") return
+        if (toolPart.tool === 'todoread') return
         if (toolPart.callID) ids.add(toolPart.callID)
       })
     })
@@ -474,38 +509,38 @@ export function AgentThread({
 
   const getText = (m: Message) => {
     const fromParts = (partsMap[m.id] ?? [])
-      .filter((p): p is TextPart => p.type === "text")
+      .filter((p): p is TextPart => p.type === 'text')
       .filter((p) => !p.synthetic && !p.ignored)
       .map((p) => p.text)
-      .join("\n")
+      .join('\n')
     const summary = m.summary
-    const fromSummary = summary && typeof summary === "object" ? summary.body || summary.title || "" : ""
+    const fromSummary = summary && typeof summary === 'object' ? summary.body || summary.title || '' : ''
     const text = fromParts || fromSummary
-    if (m.role === "user") {
-      return text.replace(/!\[[^\]]*\]\([^)]+\)\n*/g, "").trim()
+    if (m.role === 'user') {
+      return text.replace(/!\[[^\]]*\]\([^)]+\)\n*/g, '').trim()
     }
     return text
   }
 
-  const getFiles = (m: Message) => partsMap[m.id]?.filter((p): p is FilePart => p.type === "file") ?? []
+  const getFiles = (m: Message) => partsMap[m.id]?.filter((p): p is FilePart => p.type === 'file') ?? []
 
   const renderPart = (p: Part) => {
-    if (p.type === "subtask") {
-      const description = p.description ? ` — ${p.description}` : ""
+    if (p.type === 'subtask') {
+      const description = p.description ? ` — ${p.description}` : ''
       return (
         <div
           key={p.id}
           className="my-1.5 sm:my-2 px-3 py-2 rounded-lg border bg-muted/30 text-[11px] sm:text-xs text-muted-foreground"
         >
-          <span className="font-medium text-foreground">Subagent requested</span>{" "}
+          <span className="font-medium text-foreground">Subagent requested</span>{' '}
           <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs">@{p.agent}</code>
           {description}
         </div>
       )
     }
 
-    if (p.type === "reasoning") {
-      const text = (p as ReasoningPart).text?.replace("[REDACTED]", "").trim() || ""
+    if (p.type === 'reasoning') {
+      const text = (p as ReasoningPart).text?.replace('[REDACTED]', '').trim() || ''
       const streaming = !(p as ReasoningPart).time?.end
       if (!text && !streaming) return null
       return (
@@ -519,11 +554,11 @@ export function AgentThread({
       )
     }
 
-    if (p.type === "tool") {
+    if (p.type === 'tool') {
       const toolPart = p as ToolPart
       const permission = toolPart.callID ? permissionByCallId.get(toolPart.callID) : undefined
-      if (toolPart.tool === "todoread") return null
-      if (toolPart.tool === "todowrite") {
+      if (toolPart.tool === 'todoread') return null
+      if (toolPart.tool === 'todowrite') {
         if (!permission) return <Todos key={p.id} part={toolPart} />
         return (
           <div key={p.id} className="space-y-2">
@@ -550,7 +585,7 @@ export function AgentThread({
       )
     }
 
-    if (p.type === "file")
+    if (p.type === 'file')
       return (
         <div key={p.id} className="flex gap-1 py-1">
           <FileThumb file={p as FilePart} />
@@ -558,11 +593,11 @@ export function AgentThread({
       )
 
     // Hide step markers - these are internal and noisy
-    if (p.type === "step-start" || p.type === "step-finish" || p.type === "patch") {
+    if (p.type === 'step-start' || p.type === 'step-finish' || p.type === 'patch') {
       return null
     }
 
-    if (p.type === "text") {
+    if (p.type === 'text') {
       const content = (p as TextPart).text?.trim()
       if (!content) return null
       return (
@@ -579,17 +614,25 @@ export function AgentThread({
     <div className="space-y-4 sm:space-y-6">
       {turns.map((turn, idx) => {
         const timeline = turn.assistants.flatMap((m) => partsMap[m.id] || [])
+        const messageDiffs = (turn.user.summary as { diffs?: FileDiff[] })?.diffs
+        const fileModCount = messageDiffs?.length ?? countFileModifications(timeline)
+        const lastAssistantId = turn.assistants[turn.assistants.length - 1]?.id
+        const toolWorking = timeline.some((p) => {
+          if (p.type !== 'tool') return false
+          const toolPart = p as ToolPart
+          return toolPart.state.status === 'running' || toolPart.state.status === 'pending'
+        })
 
         const text = getText(turn.user)
         const userFiles = getFiles(turn.user)
         const userParts = partsMap[turn.user.id] ?? []
-        const isSyntheticUser = userParts.some((p) => p.type === "text" && (p as TextPart).synthetic)
+        const isSyntheticUser = userParts.some((p) => p.type === 'text' && (p as TextPart).synthetic)
         const isLast = idx === turns.length - 1
         const lastAssistant = turn.assistants[turn.assistants.length - 1]
         const working = isLast
-          ? (isWorking ?? !!(lastAssistant && lastAssistant.role === "assistant" && !lastAssistant.time.completed))
+          ? (isWorking ?? !!(lastAssistant && lastAssistant.role === 'assistant' && !lastAssistant.time.completed))
           : false
-        const showPlanning = isLast && !!working
+        const showPlanning = isLast && !!working && !toolWorking
         const showSending = isLast && userParts.length === 0 && !text && userFiles.length === 0
         const showUser = !isSyntheticUser && (userFiles.length > 0 || !!text || showSending)
 
@@ -633,8 +676,8 @@ export function AgentThread({
                     }
                   ).info?.error
                 if (!err) return null
-                const msg = err.data?.message || err.message || err.name || "Request failed"
-                if (msg.toLowerCase().includes("abort")) return null
+                const msg = err.data?.message || err.message || err.name || 'Request failed'
+                if (msg.toLowerCase().includes('abort')) return null
                 return <ApiError key={m.id} error={err} />
               })}
 
@@ -659,6 +702,30 @@ export function AgentThread({
                   duration={0.4}
                   className="text-xs sm:text-sm text-muted-foreground py-1"
                 />
+              )}
+
+              {/* Actions row: diff badge + undo */}
+              {!working && (fileModCount > 0 || onRevert) && lastAssistantId && (
+                <div className="flex items-center gap-2 pt-2">
+                  {fileModCount > 0 && (
+                    <MessageDiffBadge
+                      messageId={turn.user.id}
+                      sessionId={turn.user.sessionID}
+                      diffs={messageDiffs}
+                      fileCount={fileModCount}
+                    />
+                  )}
+                  {onRevert && (
+                    <button
+                      onClick={() => onRevert(turn.user.id)}
+                      className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                      title="Undo this message and revert file changes"
+                    >
+                      <Undo2 className="size-3" />
+                      <span>Undo</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>

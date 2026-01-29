@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import type { FileDiff } from '@opencode-ai/sdk'
 import Conversation from './conversation'
 import PreviewPanel, { type PreviewTab } from './preview-panel'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
@@ -20,6 +21,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   const { mutate: activateProject } = useActivateProject()
   const { data: project } = useProjectQuery(projectId)
   const setSandboxId = useSandbox((state: any) => state.setSandboxId)
+  const activeSessionId = useSandbox((s) => (projectId ? s.activeSessionId[projectId] : undefined))
   const lastActivatedId = useRef<string | undefined>(undefined)
   const isMobile = useIsMobile()
 
@@ -59,6 +61,32 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
       return [...prev, { id, type, title }]
     })
   }, [])
+
+  const handleOpenChangesTab = useCallback(
+    (messageId?: string, sessionId?: string, diffs?: FileDiff[]) => {
+      const id = messageId ? `changes-${messageId}` : 'changes-session'
+      const sid = sessionId || activeSessionId
+      const title = messageId ? 'Changes' : 'Session Changes'
+      setTabs((prev) => {
+        const existing = prev.findIndex((t) => t.id === id)
+        if (existing !== -1) {
+          if (!diffs) return prev
+          const next = [...prev]
+          next[existing] = { ...prev[existing]!, diffs, sessionId: sid }
+          return next
+        }
+        return [...prev, { id, type: 'changes' as const, title, messageId, sessionId: sid, diffs }]
+      })
+      setActiveTabId(id)
+    },
+    [activeSessionId],
+  )
+
+  const setOpenChangesTab = useSandbox((s) => s.setOpenChangesTab)
+  useEffect(() => {
+    setOpenChangesTab(handleOpenChangesTab)
+    return () => setOpenChangesTab(undefined)
+  }, [handleOpenChangesTab, setOpenChangesTab])
 
   // Activate project sandbox on mount
   useEffect(() => {
