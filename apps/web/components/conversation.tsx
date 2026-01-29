@@ -1,11 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ElementType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ElementType } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { http } from '@/lib/http'
 import {
@@ -21,6 +26,7 @@ import {
   RefreshCw,
   Redo2,
   GitCompare,
+  ArrowDown,
 } from 'lucide-react'
 import ChatInput, { type FilePart, type ProviderModel } from './chat-input'
 import TerminalWidget from './terminal/terminal-widget'
@@ -56,7 +62,15 @@ const formatTitle = (title: string) => {
   }
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
   return (
     <button
       onClick={onClick}
@@ -94,7 +108,9 @@ function ActionButton({
 }
 
 function RetryCountdown({ retryInfo }: { retryInfo: SessionStatusRetry }) {
-  const [remaining, setRemaining] = useState(() => Math.max(0, Math.ceil((retryInfo.next - Date.now()) / 1000)))
+  const [remaining, setRemaining] = useState(() =>
+    Math.max(0, Math.ceil((retryInfo.next - Date.now()) / 1000)),
+  )
 
   useEffect(() => {
     const updateRemaining = () => {
@@ -149,13 +165,17 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   } | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLElement | null>(null)
-  const stickRef = useRef(true)
+  const shouldStickRef = useRef(true)
+  const rafRef = useRef(0)
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const prefilledRef = useRef(false)
+  const [showScrollButton, setShowScrollButton] = useState(false)
 
   const showTerminal = searchParams?.get('terminal') === 'true'
   const [tab, setTab] = useState<'chat' | 'terminal'>('chat')
-  const [mode, setMode] = useState<'plan' | 'build'>('build')
+  const [mode, setMode] = useState<'plan' | 'orchestrator'>('orchestrator')
   const [providerOpen, setProviderOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const [selectedModel, setSelectedModel] = useState<{ modelId: string; providerId: string }>({
@@ -179,7 +199,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const replyQuestion = useReplyQuestion(projectId)
   const rejectQuestion = useRejectQuestion(projectId)
 
-  const activeId = storedSessionId && sessions.some((s) => s.id === storedSessionId) ? storedSessionId : sessions[0]?.id
+  const activeId =
+    storedSessionId && sessions.some((s) => s.id === storedSessionId)
+      ? storedSessionId
+      : sessions[0]?.id
   const {
     messages,
     parts,
@@ -203,23 +226,71 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     setActiveSession(projectId, activeId)
   }, [activeId, projectId, setActiveSession, storedSessionId])
 
-  // Auto-scroll setup
-  useEffect(() => {
-    const viewport = scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]')
+  // Debounced scroll-to-bottom function
+  const scrollToBottom = useCallback((force = false) => {
+    const viewport = viewportRef.current
     if (!viewport) return
-    viewportRef.current = viewport
-    const onScroll = () => {
-      stickRef.current = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 100
-    }
-    viewport.addEventListener('scroll', onScroll, { passive: true })
-    return () => viewport.removeEventListener('scroll', onScroll)
+
+    // Debounce rapid calls during streaming
+    clearTimeout(scrollTimeoutRef.current)
+    scrollTimeoutRef.current = setTimeout(() => {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = requestAnimationFrame(() => {
+        if (force || shouldStickRef.current) {
+          viewport.scrollTo({ top: viewport.scrollHeight, behavior: force ? 'smooth' : 'instant' })
+          shouldStickRef.current = true
+          setShowScrollButton(false)
+        }
+      })
+    }, 16) // ~1 frame debounce
   }, [])
 
+  // Auto-scroll: observe content size changes for reliable streaming updates
   useEffect(() => {
-    if (stickRef.current && viewportRef.current) {
-      viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight, behavior: 'smooth' })
+    const container = scrollRef.current
+    const content = contentRef.current
+    if (!container || !content) return
+
+    const viewport = container.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]')
+    if (!viewport) return
+    viewportRef.current = viewport
+
+    const triggerScroll = () => scrollToBottom()
+
+    const handleScroll = () => {
+      const { scrollHeight, scrollTop, clientHeight } = viewport
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+      const isNearBottom = distanceFromBottom < 80
+
+      shouldStickRef.current = isNearBottom
+      setShowScrollButton(!isNearBottom && scrollHeight > clientHeight)
     }
-  }, [messages.length, permissions.length, questions.length])
+
+    // ResizeObserver triggers on any content size change (including streaming)
+    const resizeObserver = new ResizeObserver(triggerScroll)
+    resizeObserver.observe(content)
+
+    // MutationObserver as fallback for DOM changes ResizeObserver might miss
+    const mutationObserver = new MutationObserver(triggerScroll)
+    mutationObserver.observe(content, { childList: true, subtree: true, characterData: true })
+
+    viewport.addEventListener('scroll', handleScroll, { passive: true })
+
+    // Initial scroll to bottom after mount
+    requestAnimationFrame(() => {
+      viewport.scrollTop = viewport.scrollHeight
+      shouldStickRef.current = true
+      setShowScrollButton(false)
+    })
+
+    return () => {
+      clearTimeout(scrollTimeoutRef.current)
+      cancelAnimationFrame(rafRef.current)
+      resizeObserver.disconnect()
+      mutationObserver.disconnect()
+      viewport.removeEventListener('scroll', handleScroll)
+    }
+  }, [activeId, scrollToBottom])
 
   // Prefill initial prompt into the input (don't auto-send)
   useEffect(() => {
@@ -272,7 +343,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     [messages, revertMessageId],
   )
 
-  const handleCreate = () => create.mutateAsync().then((s) => s?.id && projectId && setActiveSession(projectId, s.id))
+  const handleCreate = () =>
+    create.mutateAsync().then((s) => s?.id && projectId && setActiveSession(projectId, s.id))
 
   const activeSession = sessions.find((s) => s.id === activeId)
   const sessionName = formatTitle(session?.title || activeSession?.title || 'Untitled')
@@ -302,7 +374,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     const msg = err.data?.message || err.message || err.name
     return (
       typeof msg === 'string' &&
-      (msg.toLowerCase().includes('context_length_exceeded') || msg.toLowerCase().includes('context window'))
+      (msg.toLowerCase().includes('context_length_exceeded') ||
+        msg.toLowerCase().includes('context window'))
     )
   }
 
@@ -313,7 +386,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     const code = err.code || err.data?.code
     const msg = err.data?.message || err.message || err.name
     if (msg?.toLowerCase().includes('abort')) return undefined
-    const isContext = isContextLengthExceeded(err) || code === 'context_length_exceeded' || msg?.includes('context')
+    const isContext =
+      isContextLengthExceeded(err) || code === 'context_length_exceeded' || msg?.includes('context')
     return { message: isContext ? 'Context limit reached. Start a new session.' : msg, isContext }
   })()
 
@@ -353,9 +427,11 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     setSelectedModel({ modelId, providerId })
   }
 
-  // Reset usage cache on session change
+  // Reset state on session change
   useEffect(() => {
     usageRef.current = null
+    shouldStickRef.current = true
+    setShowScrollButton(false)
   }, [activeId])
 
   // Track context tokens from the last COMPLETED assistant message
@@ -368,10 +444,16 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     const currentCost = assistantMessages.reduce((sum, m) => sum + ('cost' in m ? m.cost : 0), 0)
 
     const tokens = 'tokens' in last ? last.tokens.input + last.tokens.cache.read : 0
-    const contextExceeded = Boolean(lastAssistantError?.isContext) || isContextLengthExceeded(sessionError)
+    const contextExceeded =
+      Boolean(lastAssistantError?.isContext) || isContextLengthExceeded(sessionError)
 
     if (contextExceeded) {
-      usageRef.current = { ctxTokens: undefined, contextPct: undefined, costSpent: currentCost, contextExceeded: true }
+      usageRef.current = {
+        ctxTokens: undefined,
+        contextPct: undefined,
+        costSpent: currentCost,
+        contextExceeded: true,
+      }
       return
     }
 
@@ -420,7 +502,11 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
           <div className="flex-1" />
 
           <ActionButton onClick={handleCreate} disabled={create.isPending}>
-            {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+            {create.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
             <span className="hidden @md/conversation:inline">New session</span>
           </ActionButton>
 
@@ -450,7 +536,9 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
             className={`size-2 rounded-full ${!connected ? 'bg-muted-foreground/40' : isRetrying ? 'bg-warning' : 'bg-success'}`}
             title={connected ? (isRetrying ? 'Retrying...' : 'Agent connected') : undefined}
           />
-          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">{sessionName}</span>
+          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">
+            {sessionName}
+          </span>
           {connected && (
             <>
               {isRetrying && retryInfo ? (
@@ -502,7 +590,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
           const err = sessionError as any
           const msg = err.data?.message || err.message || err.name || String(sessionError)
           if (msg.toLowerCase().includes('abort')) return null
-          const isContext = (err.code || err.data?.code) === 'context_length_exceeded' || msg.includes('context')
+          const isContext =
+            (err.code || err.data?.code) === 'context_length_exceeded' || msg.includes('context')
           return (
             <div
               className={cn(
@@ -514,7 +603,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
               <p className="flex-1 min-w-0 font-medium truncate">
                 {isContext ? 'Context limit reached. Start a new session.' : msg}
               </p>
-              <button onClick={dismissError} className="p-0.5 rounded transition-colors hover:bg-muted">
+              <button
+                onClick={dismissError}
+                className="p-0.5 rounded transition-colors hover:bg-muted"
+              >
                 <X className="size-3" />
               </button>
             </div>
@@ -525,9 +617,12 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       {/* Chat */}
       {tab === 'chat' && (
         <div className="flex flex-col flex-1 min-h-0">
-          <div ref={scrollRef} className="flex-1 min-h-0">
+          <div ref={scrollRef} className="flex-1 min-h-0 relative">
             <ScrollArea className="h-full">
-              <div className="max-w-3xl mx-auto px-2 py-4 @md/conversation:px-4 @md/conversation:py-6 overflow-hidden">
+              <div
+                ref={contentRef}
+                className="max-w-3xl mx-auto px-2 py-4 @md/conversation:px-4 @md/conversation:py-6 overflow-hidden"
+              >
                 {loading ? (
                   <div className="flex items-center justify-center min-h-[300px]">
                     <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -547,6 +642,22 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                 )}
               </div>
             </ScrollArea>
+            {/* Scroll to bottom button */}
+            {showScrollButton && (
+              <button
+                onClick={() => scrollToBottom(true)}
+                className={cn(
+                  'absolute bottom-4 right-4 z-10',
+                  'flex items-center justify-center size-9 rounded-full',
+                  'bg-primary text-primary-foreground shadow-lg',
+                  'hover:bg-primary/90 transition-all',
+                  'animate-in fade-in slide-in-from-bottom-2 duration-200',
+                )}
+                aria-label="Scroll to bottom"
+              >
+                <ArrowDown className="size-4" />
+              </button>
+            )}
           </div>
 
           {/* Input */}
@@ -564,7 +675,11 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                       disabled={unrevert.isPending}
                       className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-warning/20 hover:bg-warning/30 text-warning font-medium transition-colors disabled:opacity-50"
                     >
-                      {unrevert.isPending ? <Loader2 className="size-3 animate-spin" /> : <Redo2 className="size-3" />}
+                      {unrevert.isPending ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <Redo2 className="size-3" />
+                      )}
                       <span>Restore</span>
                     </button>
                   </div>
@@ -581,13 +696,19 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                 >
                   <div className="flex items-center gap-2">
                     <AlertCircle className="size-3.5 shrink-0" />
-                    <p className="flex-1 min-w-0 wrap-break-word line-clamp-2">{lastAssistantError.message}</p>
+                    <p className="flex-1 min-w-0 wrap-break-word line-clamp-2">
+                      {lastAssistantError.message}
+                    </p>
                     <button
                       onClick={handleCreate}
                       disabled={create.isPending}
                       className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors shrink-0 hover:bg-muted"
                     >
-                      {create.isPending ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
+                      {create.isPending ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <Plus className="size-3" />
+                      )}
                       <span>New session</span>
                     </button>
                   </div>
@@ -616,7 +737,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                 disabled={working}
                 placeholder={working ? 'Working...' : 'Ask anything...'}
                 mode={mode}
-                onToggleMode={() => setMode((m) => (m === 'plan' ? 'build' : 'plan'))}
+                onToggleMode={() => setMode((m) => (m === 'plan' ? 'orchestrator' : 'plan'))}
                 isWorking={working}
                 onStop={handleAbort}
                 isStopping={abort.isPending}
