@@ -4,7 +4,7 @@
 
 
 -- Dumped from database version 18.1 (Debian 18.1-1.pgdg13+2)
--- Dumped by pg_dump version 18.1
+-- Dumped by pg_dump version 18.1 (Homebrew)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
