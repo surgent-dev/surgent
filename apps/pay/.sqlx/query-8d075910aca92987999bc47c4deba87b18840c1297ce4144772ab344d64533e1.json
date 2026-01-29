@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"user\" (\n            id,\n            name,\n            email,\n            \"emailVerified\",\n            \"createdAt\",\n            \"updatedAt\"\n        )\n        VALUES ($1, $2, $3, true, now(), now())\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d075910aca92987999bc47c4deba87b18840c1297ce4144772ab344d64533e1"
+}

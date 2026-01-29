@@ -301,8 +301,15 @@ pub async fn update_product(
 
     let existing = existing.ok_or((StatusCode::NOT_FOUND, "Product not found".to_string()))?;
 
-    // Verify access via product's project
-    verify_project_access(&state.pool, auth.user_id, existing.project_id).await?;
+    // API key auth: verify the product belongs to the API key's project
+    if let Some(api_key_project_id) = auth.project_id {
+        if existing.project_id != api_key_project_id {
+            return Err((StatusCode::FORBIDDEN, "Access denied".to_string()));
+        }
+    } else {
+        // Session auth: verify user membership in the project's organization
+        verify_project_access(&state.pool, auth.user_id, existing.project_id).await?;
+    }
 
     let max_version = sqlx::query_scalar!(
         r#"

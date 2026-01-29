@@ -1,12 +1,13 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO product_price (\n            id,\n            \"productId\",\n            name,\n            description,\n            \"priceAmount\",\n            \"priceCurrency\",\n            \"recurringInterval\",\n            \"isDefault\",\n            \"processorPriceId\"\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n        ",
+  "query": "\n        INSERT INTO product_price (\n            id,\n            \"productId\",\n            name,\n            description,\n            slug,\n            \"priceAmount\",\n            \"priceCurrency\",\n            \"recurringInterval\",\n            \"isDefault\",\n            \"processorPriceId\"\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n        ",
   "describe": {
     "columns": [],
     "parameters": {
       "Left": [
         "Uuid",
         "Uuid",
+        "Text",
         "Text",
         "Text",
         "Int4",
@@ -30,5 +31,5 @@
     },
     "nullable": []
   },
-  "hash": "7c1575af571ac323eb3e2e9bedf7a316266125ca31b8ba68a4fe24ddb685a675"
+  "hash": "a80a77403e794860782e2c46407d5cc5c32909f3ee0d6ecd262fbd505ab5f3ee"
 }

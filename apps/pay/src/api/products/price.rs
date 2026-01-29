@@ -19,6 +19,7 @@ pub struct CreateProductPriceRequest {
     pub product_group: String,
     pub name: Option<String>,
     pub description: Option<String>,
+    pub slug: Option<String>,
     pub is_default: Option<bool>,
     pub price: i32,
     pub price_currency: String,
@@ -41,6 +42,7 @@ pub struct CreateProductPriceResponse {
         (status = 401, description = "Unauthorized - invalid or missing API key"),
         (status = 403, description = "Forbidden - product not owned by organization"),
         (status = 400, description = "Bad request - invalid product or other error"),
+        (status = 409, description = "Conflict - price with this slug already exists for product"),
         (status = 500, description = "Internal server error")
     ),
     security(
@@ -161,18 +163,20 @@ pub async fn create_product_price(
             "productId",
             name,
             description,
+            slug,
             "priceAmount",
             "priceCurrency",
             "recurringInterval",
             "isDefault",
             "processorPriceId"
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         "#,
         product_price_id,
         product.id,
         req.name,
         req.description,
+        req.slug,
         req.price,
         &req.price_currency,
         recurring_interval as Option<RecurringInterval>,
@@ -182,6 +186,14 @@ pub async fn create_product_price(
     .execute(pool)
     .await
     .map_err(|e| {
+        if let sqlx::Error::Database(db_err) = &e
+            && db_err.constraint() == Some("ix_product_price_product_id_slug")
+        {
+            return (
+                StatusCode::CONFLICT,
+                "Price with this slug already exists for product".to_string(),
+            );
+        }
         tracing::error!(
             product_price_id = %product_price_id,
             error = %e,
