@@ -1,6 +1,15 @@
 import { config } from '@/lib/config'
 
-async function convexApi(path: string, init?: RequestInit) {
+async function safeJsonParse<T>(res: Response): Promise<T> {
+  const text = await res.text()
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new Error(text || `Invalid JSON response`)
+  }
+}
+
+async function convexApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (!config.convex.teamToken || !config.convex.teamId) {
     throw new Error('Missing CONVEX_TEAM_TOKEN or CONVEX_TEAM_ID')
   }
@@ -20,7 +29,7 @@ async function convexApi(path: string, init?: RequestInit) {
     throw new Error(text || `Convex API ${res.status}`)
   }
 
-  return res.json()
+  return safeJsonParse<T>(res)
 }
 
 export interface ConvexProject {
@@ -30,11 +39,22 @@ export interface ConvexProject {
   deploymentUrl: string
 }
 
+interface CreateProjectResponse {
+  projectId: string
+  projectSlug: string
+  deploymentName: string
+  deploymentUrl: string
+}
+
+interface CreateDeployKeyResponse {
+  deployKey: string
+}
+
 export async function createProjectOnTeam(args: {
   name: string
   deploymentType?: 'dev' | 'prod'
 }): Promise<ConvexProject> {
-  const body: any = await convexApi(`/teams/${config.convex.teamId}/create_project`, {
+  const body = await convexApi<CreateProjectResponse>(`/teams/${config.convex.teamId}/create_project`, {
     method: 'POST',
     body: JSON.stringify({
       projectName: args.name,
@@ -100,7 +120,7 @@ export async function listDeploymentEnvVars(
     throw new Error(text || `List env vars failed: ${res.status}`)
   }
 
-  const body: any = await res.json()
+  const body = await safeJsonParse<ListEnvVarsResponse>(res)
   return body.environmentVariables || {}
 }
 
@@ -157,6 +177,36 @@ export interface ConvexFunctionError {
 }
 
 export type ConvexFunctionResult = ConvexFunctionSuccess | ConvexFunctionError
+
+interface ConvexFunctionResponse {
+  value?: ConvexValue
+  message?: string
+  errorMessage?: string
+  errorData?: ConvexValue
+}
+
+async function safeConvexFunctionParse(res: Response, operation: string): Promise<ConvexFunctionResult> {
+  const text = await res.text()
+  let body: ConvexFunctionResponse
+  try {
+    body = JSON.parse(text) as ConvexFunctionResponse
+  } catch {
+    return {
+      status: 'error',
+      errorMessage: text || `${operation} failed: ${res.status} (non-JSON response)`,
+    }
+  }
+
+  if (!res.ok) {
+    return {
+      status: 'error',
+      errorMessage: body.message || body.errorMessage || `${operation} failed: ${res.status}`,
+      errorData: body.errorData,
+    }
+  }
+
+  return { status: 'success', value: body.value ?? null }
+}
 
 /**
  * Call a Convex query function

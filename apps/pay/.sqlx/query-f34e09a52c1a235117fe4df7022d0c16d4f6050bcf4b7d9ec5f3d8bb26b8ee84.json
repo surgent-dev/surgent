@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE payout\n                SET status = 'paid'::payout_status,\n                    \"paidAt\" = NOW()\n                WHERE \"processorPayoutId\" = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f34e09a52c1a235117fe4df7022d0c16d4f6050bcf4b7d9ec5f3d8bb26b8ee84"
+}

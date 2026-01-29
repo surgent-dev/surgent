@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT p.id, p.\"projectId\"\n        FROM product p\n        WHERE p.slug = $1 AND p.\"projectId\" = $2\n        ",
+  "query": "SELECT id, \"productId\" FROM product_price WHERE \"processorPriceId\" = $1",
   "describe": {
     "columns": [
       {
@@ -10,14 +10,13 @@
       },
       {
         "ordinal": 1,
-        "name": "projectId",
+        "name": "productId",
         "type_info": "Uuid"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -25,5 +24,5 @@
       false
     ]
   },
-  "hash": "c6d576e85373c0a71c2e67bbb4ebb4341a2fb27c55a25e0dd79c5f6abfd9167c"
+  "hash": "bc8feb774df8014a27d41139187bdcbbf834a107827bc185090f01053f4e2c8c"
 }

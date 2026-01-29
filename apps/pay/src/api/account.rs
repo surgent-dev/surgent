@@ -13,7 +13,9 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
-use crate::core::auth::{AuthenticatedUser, verify_project_access};
+use crate::core::auth::{
+    AuthenticatedUser, ProjectIdQuery, resolve_project_id, verify_project_access,
+};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -34,15 +36,28 @@ struct OAuthStatePayload {
     user_id: Uuid,
 }
 
-fn sign_oauth_state(payload: &OAuthStatePayload, secret: &str) -> String {
-    let json = serde_json::to_string(payload).expect("serialize oauth state");
+fn sign_oauth_state(
+    payload: &OAuthStatePayload,
+    secret: &str,
+) -> Result<String, (StatusCode, String)> {
+    let json = serde_json::to_string(payload).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to serialize oauth state: {}", e),
+        )
+    })?;
     let payload_b64 = URL_SAFE_NO_PAD.encode(json.as_bytes());
 
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("hmac key");
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create HMAC: {}", e),
+        )
+    })?;
     mac.update(payload_b64.as_bytes());
     let sig_b64 = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
 
-    format!("{}:{}", payload_b64, sig_b64)
+    Ok(format!("{}:{}", payload_b64, sig_b64))
 }
 
 fn verify_oauth_state(state: &str, secret: &str) -> Option<OAuthStatePayload> {
@@ -62,10 +77,14 @@ fn verify_oauth_state(state: &str, secret: &str) -> Option<OAuthStatePayload> {
     let json_bytes = URL_SAFE_NO_PAD.decode(payload_b64).ok()?;
     let payload: OAuthStatePayload = serde_json::from_slice(&json_bytes).ok()?;
 
-    // Check expiry
+    // Check expiry (reject future timestamps with small leeway for clock skew)
     let now = chrono::Utc::now().timestamp();
+    const CLOCK_SKEW_LEEWAY_SECS: i64 = 60;
+    if payload.ts > now + CLOCK_SKEW_LEEWAY_SECS {
+        return None; // Future timestamp not allowed
+    }
     if now - payload.ts > OAUTH_STATE_MAX_AGE_SECS {
-        return None;
+        return None; // Expired
     }
 
     Some(payload)
@@ -91,7 +110,6 @@ pub struct Account {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ConnectAccountRequest {
-    pub project_id: Uuid,
     pub processor: String,
     pub account_type: Option<String>,
     pub country: Option<String>,
@@ -163,14 +181,15 @@ pub struct ConnectedAccountResponse {
 pub async fn create_connect_account(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
+    Query(query): Query<ProjectIdQuery>,
     Json(req): Json<ConnectAccountRequest>,
 ) -> Result<Json<OAuthInitResponse>, (StatusCode, String)> {
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
     tracing::debug!(
-        "create_connect_account called for project: {}",
-        req.project_id
+        project_id = %project_id,
+        processor = %req.processor,
+        "create_connect_account request"
     );
-    verify_project_access(&state.pool, auth.user_id, req.project_id).await?;
-    tracing::debug!("project access verified");
 
     let processor = state
         .registry
@@ -189,7 +208,7 @@ pub async fn create_connect_account(
         FROM connect_account
         WHERE "projectId" = $1 AND processor = $2
         "#,
-        req.project_id,
+        project_id,
         &req.processor
     )
     .fetch_optional(&state.pool)
@@ -218,7 +237,7 @@ pub async fn create_connect_account(
 
     // Create signed state containing all info needed for callback
     let payload = OAuthStatePayload {
-        project_id: req.project_id,
+        project_id,
         processor: req.processor.clone(),
         country: country.clone(),
         business_type: req.business_type.clone(),
@@ -226,7 +245,7 @@ pub async fn create_connect_account(
         nonce: Uuid::new_v4().to_string(),
         user_id: auth.user_id,
     };
-    let signed_state = sign_oauth_state(&payload, &state.config.better_auth_secret);
+    let signed_state = sign_oauth_state(&payload, &state.config.better_auth_secret)?;
 
     // Generate OAuth URL
     let base = state.config.surpay_base_url.trim_end_matches('/');
@@ -636,9 +655,9 @@ pub async fn get_account(
     }))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ListAccountsQuery {
-    pub project_id: Uuid,
+    pub project_id: Option<Uuid>,
 }
 
 /// List all accounts
@@ -646,9 +665,13 @@ pub struct ListAccountsQuery {
     get,
     path = "/accounts",
     tag = "account",
+    params(
+        ("project_id" = Option<Uuid>, Query, description = "Project ID (required for session auth)")
+    ),
     responses(
         (status = 200, description = "List of accounts", body = Vec<ConnectedAccountResponse>),
         (status = 401, description = "Unauthorized - invalid or missing API key"),
+        (status = 403, description = "Forbidden - access denied"),
         (status = 500, description = "Internal server error")
     ),
     security(
@@ -660,7 +683,8 @@ pub async fn list_accounts(
     auth: AuthenticatedUser,
     Query(query): Query<ListAccountsQuery>,
 ) -> Result<Json<Vec<ConnectedAccountResponse>>, (StatusCode, String)> {
-    verify_project_access(&state.pool, auth.user_id, query.project_id).await?;
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
+    tracing::debug!(project_id = %project_id, "list_accounts request");
 
     let accounts = sqlx::query!(
         r#"
@@ -679,7 +703,7 @@ pub async fn list_accounts(
         WHERE "projectId" = $1
         ORDER BY "createdAt" DESC
         "#,
-        query.project_id
+        project_id
     )
     .fetch_all(&state.pool)
     .await

@@ -14,7 +14,25 @@ import {
 } from '@/apis/convex'
 import { workspacePath, defaultProviderName } from '@/lib/sandbox'
 
-// Context passed to MCP tools - contains project credentials and optional sandbox info
+// Surpay template for billing integration
+const SURPAY_TEMPLATE = `import { Surpay } from "@surgent-dev/surpay-convex";
+
+const surpay = new Surpay({
+  apiKey: process.env.SURGENT_API_KEY!,
+  identify: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+    return {
+      customerId: identity.subject,
+      customerData: { name: identity.name, email: identity.email },
+    };
+  },
+});
+
+export const { createCheckout, check } = surpay.api();
+`
+
+// Context passed to MCP tools - contains project credentials
 export interface McpContext {
   deploymentUrl: string
   deployKey: string
@@ -122,7 +140,7 @@ export function createConvexMcpServer(): McpServer {
     'create_project',
     {
       title: 'Create Convex Project',
-      description: `Create a new Convex project and deployment under the team account.
+      description: `Create a new Convex project and deployment under the team account with billing/payments setup included.
 
 Use this when starting a new backend - it provisions a fresh Convex database instance.
 
@@ -130,10 +148,17 @@ Returns:
 - project: Object with projectId, deploymentName, deploymentUrl, deployKey
 - envVars: Ready-to-use environment variables object (CONVEX_DEPLOYMENT, CONVEX_URL, CONVEX_DEPLOY_KEY, VITE_CONVEX_URL)
 - envFileContent: Complete .env file content as a string - write this directly to .env file
+- surpayTemplate: Template content for billing integration (write to surpayFilePath)
+- surpayFilePath: Where to write the surpay template (convex/surpay.ts)
+- dependencies: Packages to install for billing functionality
 
 To set up the sandbox after creation:
-1. Write envFileContent to .env file in the project root
-2. Run 'npx convex dev' to start the development server
+1. Write envFileContent to .env file in the project root (for Convex CLI auth)
+2. Install dependencies (includes @surgent-dev/surpay-convex for billing)
+3. Write surpayTemplate to surpayFilePath for billing integration
+4. Run 'npx convex dev' to start the development server
+
+Billing is ready to use once the user connects Stripe (SURGENT_API_KEY is set automatically on the Convex deployment).
 
 IMPORTANT: Save deploymentUrl and deployKey - you'll need them in _meta.context for subsequent operations (queries, mutations, env vars).
 

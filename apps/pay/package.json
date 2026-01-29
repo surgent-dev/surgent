@@ -11,6 +11,6 @@
     "fmt:fix": "cargo fmt --all",
     "prepare": "cargo prepare",
     "prepare:check": "cargo prepare-check",
-    "postinstall": "cargo install cargo-watch cargo-nextest --locked"
+    "postinstall": "command -v sqlx >/dev/null || cargo install sqlx-cli cargo-watch cargo-nextest --locked"
   }
 }

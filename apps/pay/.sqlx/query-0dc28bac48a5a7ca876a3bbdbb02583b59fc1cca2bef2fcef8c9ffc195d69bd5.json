@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            c.id,\n            c.\"projectId\",\n            c.email,\n            c.name,\n            c.\"processorCustomerId\"\n        FROM customer c\n        WHERE c.id = $1\n        ",
+  "query": "\n        SELECT\n            c.id,\n            c.\"projectId\",\n            c.email,\n            c.name,\n            c.\"processorCustomerId\"\n        FROM customer c\n        WHERE c.id = $1 AND c.\"projectId\" = $2\n        ",
   "describe": {
     "columns": [
       {
@@ -31,6 +31,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -42,5 +43,5 @@
       true
     ]
   },
-  "hash": "a523ad5e10c695bb4286620ecd161b7826aca666f5ca55295562702420638e17"
+  "hash": "0dc28bac48a5a7ca876a3bbdbb02583b59fc1cca2bef2fcef8c9ffc195d69bd5"
 }

@@ -31,7 +31,8 @@ async function fetchSurpayAccount(projectId: string, accountId: string): Promise
 async function connectSurpay(projectId: string): Promise<SurpayConnectResponse> {
   return payHttp
     .post('accounts/connect', {
-      json: { project_id: projectId, processor: 'stripe', country: 'us' },
+      searchParams: { project_id: projectId },
+      json: { processor: 'stripe', country: 'us' },
     })
     .json()
 }

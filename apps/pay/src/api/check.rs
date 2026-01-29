@@ -1,17 +1,20 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::{Query, State},
+    http::StatusCode,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use utoipa::ToSchema;
-
 use uuid::Uuid;
 
-use crate::core::auth::{AuthenticatedUser, verify_project_access};
+use crate::core::auth::{AuthenticatedUser, ProjectIdQuery, resolve_project_id};
 use crate::types::SubscriptionStatus;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CheckRequest {
-    pub project_id: Uuid,
     pub customer_id: String,
+    /// Product identifier - can be UUID or slug
     pub product_id: String,
 }
 
@@ -39,10 +42,12 @@ pub struct CheckResponse {
 pub async fn check(
     State(pool): State<PgPool>,
     auth: AuthenticatedUser,
+    Query(query): Query<ProjectIdQuery>,
     Json(req): Json<CheckRequest>,
 ) -> Result<Json<CheckResponse>, (StatusCode, String)> {
-    // Verify user has access to the project
-    verify_project_access(&pool, auth.user_id, req.project_id).await?;
+    tracing::debug!(?req, "Received check request");
+
+    let project_id = resolve_project_id(&pool, &auth, query.project_id).await?;
 
     // Look up customer by (project_id, external_id)
     let customer = sqlx::query!(
@@ -51,7 +56,7 @@ pub async fn check(
         FROM customer
         WHERE "projectId" = $1 AND "externalId" = $2
         "#,
-        req.project_id,
+        project_id,
         req.customer_id
     )
     .fetch_optional(&pool)
@@ -69,15 +74,20 @@ pub async fn check(
         None => return Ok(Json(CheckResponse { allowed: false })),
     };
 
-    // Look up product by slug + project_id
+    // Look up product by priority: UUID match > slug match
+    let product_uuid = Uuid::parse_str(&req.product_id).ok();
     let product = sqlx::query!(
         r#"
         SELECT id
         FROM product
-        WHERE slug = $1 AND "projectId" = $2
+        WHERE "projectId" = $1
+          AND (id = $2 OR slug = $3)
+        ORDER BY (id = $2)::int DESC
+        LIMIT 1
         "#,
-        req.product_id,
-        req.project_id
+        project_id,
+        product_uuid,
+        req.product_id
     )
     .fetch_optional(&pool)
     .await
@@ -117,7 +127,10 @@ pub async fn check(
         )
     })?;
 
-    Ok(Json(CheckResponse {
+    let response = CheckResponse {
         allowed: subscription.is_some(),
-    }))
+    };
+    tracing::debug!(?response, "Returning check response");
+
+    Ok(Json(response))
 }

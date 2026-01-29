@@ -39,6 +39,8 @@
 
             # System utilities
             unzip
+            pkg-config
+            openssl
 
             # Database
             postgresql_18

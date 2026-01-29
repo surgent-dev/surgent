@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT p.id, p.\"projectId\"\n        FROM product p\n        WHERE p.\"projectId\" = $1\n          AND (p.id = $2 OR p.slug = $3)\n        ORDER BY (p.id = $2)::int DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "projectId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ba777120e75bce7f5afb3d2d3dda2e7bb4528fbefab1784d4567bf382b67a9fc"
+}

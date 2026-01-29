@@ -26,15 +26,10 @@ use crate::api::transaction::list_transactions;
 use crate::api::webhook::webhook_handler;
 
 pub fn create_router(state: AppState) -> Router {
-    let project_routes = Router::new()
-        .route("/{project_id}/customers", get(list_customers))
-        .route("/{project_id}/customer/{id}", get(get_customer))
-        .route("/{project_id}/transactions", get(list_transactions))
-        .route("/{project_id}/subscriptions", get(list_subscriptions))
-        .route(
-            "/{project_id}/product/prices",
-            get(list_products_with_prices),
-        );
+    let project_routes = Router::new().route("/{project_id}/transactions", get(list_transactions));
+    let customer_routes = Router::new()
+        .route("/", get(list_customers))
+        .route("/{id}", get(get_customer));
     let product_routes = Router::new()
         .route("/", post(create_product))
         .route("/{id}", put(update_product))
@@ -78,9 +73,12 @@ pub fn create_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health_check))
         .route("/projects", get(list_projects))
+        .route("/products", get(list_products_with_prices))
+        .route("/subscriptions", get(list_subscriptions))
         .route("/check", post(check))
         .nest("/webhooks", webhook_routes)
         .nest("/project", project_routes)
+        .nest("/customers", customer_routes)
         .nest("/product", product_routes)
         .nest("/checkout", checkout_routes)
         .nest("/accounts", account_routes)

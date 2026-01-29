@@ -6,7 +6,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use std::time::Duration;
 use tokio::time::sleep;
 use uuid::Uuid;
@@ -472,7 +472,7 @@ async fn handle_normalized_event(
             charges_enabled,
             payouts_enabled,
         } => {
-            let result = sqlx::query(
+            let result = sqlx::query!(
                 r#"
                 UPDATE connect_account
                 SET "chargesEnabled" = $1,
@@ -484,13 +484,13 @@ async fn handle_normalized_event(
                     END
                 WHERE "processorAccountId" = $6
                 "#,
+                charges_enabled,
+                details_submitted,
+                payouts_enabled,
+                capabilities.card_payments,
+                capabilities.transfers,
+                account_id
             )
-            .bind(charges_enabled)
-            .bind(details_submitted)
-            .bind(payouts_enabled)
-            .bind(capabilities.card_payments)
-            .bind(capabilities.transfers)
-            .bind(account_id)
             .execute(pool)
             .await
             .map_err(|e| format!("Failed to update account: {}", e))?;
@@ -529,16 +529,15 @@ async fn handle_normalized_event(
             payout_id,
             account_id: _,
         } => {
-            let result = sqlx::query(
+            let result = sqlx::query!(
                 r#"
                 UPDATE payout
-                SET status = $1::payout_status,
+                SET status = 'paid'::payout_status,
                     "paidAt" = NOW()
-                WHERE "processorPayoutId" = $2
+                WHERE "processorPayoutId" = $1
                 "#,
+                payout_id
             )
-            .bind("paid")
-            .bind(payout_id)
             .execute(pool)
             .await
             .map_err(|e| format!("Failed to update payout: {}", e))?;
@@ -551,15 +550,14 @@ async fn handle_normalized_event(
             Ok(())
         }
         NormalizedEvent::PayoutFailed { payout_id, error } => {
-            let result = sqlx::query(
+            let result = sqlx::query!(
                 r#"
                 UPDATE payout
-                SET status = $1::payout_status
-                WHERE "processorPayoutId" = $2 AND status != 'paid'
+                SET status = 'failed'::payout_status
+                WHERE "processorPayoutId" = $1 AND status != 'paid'
                 "#,
+                payout_id
             )
-            .bind("failed")
-            .bind(payout_id)
             .execute(pool)
             .await
             .map_err(|e| format!("Failed to update payout: {}", e))?;
@@ -576,14 +574,14 @@ async fn handle_normalized_event(
             Ok(())
         }
         NormalizedEvent::TransferPaid { transfer_id } => {
-            let result = sqlx::query(
+            let result = sqlx::query!(
                 r#"
                 UPDATE transfer
                 SET status = 'paid'
                 WHERE "processorTransferId" = $1 AND status != 'reversed'
                 "#,
+                transfer_id
             )
-            .bind(transfer_id)
             .execute(pool)
             .await
             .map_err(|e| format!("Failed to update transfer: {}", e))?;
@@ -599,7 +597,7 @@ async fn handle_normalized_event(
             transfer_id,
             reversal_id,
         } => {
-            let result = sqlx::query(
+            let result = sqlx::query!(
                 r#"
                 UPDATE transfer
                 SET status = 'reversed',
@@ -607,9 +605,9 @@ async fn handle_normalized_event(
                     "reversedAt" = NOW()
                 WHERE "processorTransferId" = $2
                 "#,
+                reversal_id,
+                transfer_id
             )
-            .bind(reversal_id)
-            .bind(transfer_id)
             .execute(pool)
             .await
             .map_err(|e| format!("Failed to update transfer: {}", e))?;
@@ -921,41 +919,6 @@ fn parse_checkout_data(payload: &Value) -> Result<CheckoutData<'_>, String> {
     })
 }
 
-async fn find_or_create_customer(
-    pool: &PgPool,
-    project_id: Uuid,
-    email: &str,
-    name: Option<&str>,
-    processor_customer_id: Option<&str>,
-) -> Result<Uuid, String> {
-    let external_id =
-        processor_customer_id.ok_or("processor_customer_id required for customer lookup")?;
-    let new_customer_id = Uuid::new_v4();
-    let result = sqlx::query!(
-        r#"
-        INSERT INTO customer (id, "projectId", "externalId", email, name, "processorCustomerId")
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT ("projectId", "externalId") DO UPDATE
-        SET "processorCustomerId" = COALESCE(EXCLUDED."processorCustomerId", customer."processorCustomerId"),
-            name = COALESCE(EXCLUDED.name, customer.name),
-            email = COALESCE(EXCLUDED.email, customer.email),
-            "updatedAt" = NOW()
-        RETURNING id
-        "#,
-        new_customer_id,
-        project_id,
-        external_id,
-        email,
-        name,
-        processor_customer_id
-    )
-    .fetch_one(pool)
-    .await
-    .map_err(|e| format!("Failed to find or create customer: {}", e))?;
-
-    Ok(result.id)
-}
-
 async fn create_payment_transaction(
     pool: &PgPool,
     params: PaymentTransactionParams<'_>,
@@ -1023,15 +986,20 @@ async fn handle_checkout_completed(
     let data = parse_checkout_data(payload)?;
 
     let checkout_row = sqlx::query!(
-        r#"SELECT id, "projectId", "productId", "priceId" FROM checkout_session WHERE "processorCheckoutId" = $1"#,
+        r#"SELECT id, "projectId", "productId", "priceId", "customerId" FROM checkout_session WHERE "processorCheckoutId" = $1"#,
         data.processor_checkout_id
     )
     .fetch_optional(pool)
     .await
     .map_err(|e| format!("Failed to fetch checkout session: {}", e))?;
 
-    let (checkout_id, project_id, product_id, price_id) = match checkout_row {
-        Some(row) => (row.id, row.projectId, row.productId, row.priceId),
+    let (checkout_id, project_id, product_id, price_id, customer_id) = match checkout_row {
+        Some(row) => {
+            let cid = row
+                .customerId
+                .ok_or("Checkout session missing customerId")?;
+            (row.id, row.projectId, row.productId, row.priceId, cid)
+        }
         None => {
             tracing::warn!(
                 "Checkout session {} not found, skipping",
@@ -1041,15 +1009,24 @@ async fn handle_checkout_completed(
         }
     };
 
-    let customer_email = data.customer_email.ok_or("Missing customer_email")?;
-    let customer_id = find_or_create_customer(
-        pool,
-        project_id,
-        customer_email,
-        data.customer_name,
+    // Update existing customer with processor info from Stripe (only set fields if not already set)
+    sqlx::query!(
+        r#"
+        UPDATE customer
+        SET "processorCustomerId" = COALESCE("processorCustomerId", $1),
+            email = COALESCE(email, $2),
+            name = COALESCE(name, $3),
+            "updatedAt" = NOW()
+        WHERE id = $4
+        "#,
         data.processor_customer_id,
+        data.customer_email,
+        data.customer_name,
+        customer_id
     )
-    .await?;
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to update customer: {}", e))?;
 
     sqlx::query!(
         r#"
@@ -1143,28 +1120,20 @@ pub async fn sync_stripe_customer_data(
         stripe_customer_id
     );
 
-    let customer_row = sqlx::query(
+    let customer_row = sqlx::query!(
         r#"
         SELECT id, "projectId"
         FROM customer
         WHERE "processorCustomerId" = $1
         "#,
+        stripe_customer_id
     )
-    .bind(stripe_customer_id)
     .fetch_optional(pool)
     .await
     .map_err(|e| format!("Failed to fetch customer from database: {}", e))?;
 
     let (customer_id, project_id) = match customer_row {
-        Some(row) => {
-            let id: Uuid = row
-                .try_get("id")
-                .map_err(|e| format!("Failed to get customer_id: {}", e))?;
-            let pid: Uuid = row
-                .try_get("projectId")
-                .map_err(|e| format!("Failed to get project_id: {}", e))?;
-            (id, pid)
-        }
+        Some(row) => (row.id, row.projectId),
         None => {
             tracing::warn!(
                 "Customer with stripe_customer_id {} not found in database",
@@ -1204,24 +1173,16 @@ pub async fn sync_stripe_customer_data(
 
         let (product_id, product_price_id): (Option<Uuid>, Option<Uuid>) =
             if let Some(ref stripe_price) = stripe_price_id {
-                let price_row = sqlx::query(
+                let price_row = sqlx::query!(
                     r#"SELECT id, "productId" FROM product_price WHERE "processorPriceId" = $1"#,
+                    stripe_price
                 )
-                .bind(stripe_price)
                 .fetch_optional(pool)
                 .await
                 .map_err(|e| format!("Failed to fetch product_price: {}", e))?;
 
                 match price_row {
-                    Some(row) => {
-                        let price_id: Uuid = row
-                            .try_get("id")
-                            .map_err(|e| format!("Failed to get price id: {}", e))?;
-                        let prod_id: Option<Uuid> = row
-                            .try_get("productId")
-                            .map_err(|e| format!("Failed to get product_id: {}", e))?;
-                        (prod_id, Some(price_id))
-                    }
+                    Some(row) => (Some(row.productId), Some(row.id)),
                     None => {
                         tracing::warn!(
                             "No product_price found for processor_price_id {}",
@@ -1268,7 +1229,7 @@ pub async fn sync_stripe_customer_data(
         let current_period_end = DateTime::from_timestamp(current_period_end_ts, 0)
             .ok_or_else(|| format!("Invalid current_period_end: {}", current_period_end_ts))?;
 
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO subscription (
                 id, "projectId", "productId", "productPriceId", "customerId",
@@ -1291,19 +1252,19 @@ pub async fn sync_stripe_customer_data(
                 "productId" = EXCLUDED."productId",
                 "productPriceId" = EXCLUDED."productPriceId"
             "#,
+            project_id,
+            product_id,
+            product_price_id,
+            customer_id,
+            &subscription.id,
+            stripe_customer_id,
+            current_period_start,
+            current_period_end,
+            subscription.cancel_at_period_end,
+            payment_method_brand.as_deref(),
+            payment_method_last4.as_deref(),
+            status as SubscriptionStatus
         )
-        .bind(project_id)
-        .bind(product_id)
-        .bind(product_price_id)
-        .bind(customer_id)
-        .bind(&subscription.id)
-        .bind(stripe_customer_id)
-        .bind(current_period_start)
-        .bind(current_period_end)
-        .bind(subscription.cancel_at_period_end)
-        .bind(payment_method_brand.as_deref())
-        .bind(payment_method_last4.as_deref())
-        .bind(status)
         .execute(pool)
         .await
         .map_err(|e| format!("Failed to upsert subscription: {}", e))?;

@@ -572,7 +572,6 @@ pub async fn create_test_state_real_stripe(pool: PgPool) -> AppState {
 }
 
 pub struct ProductPriceDetails<'a> {
-    pub project_id: Uuid,
     pub product_group_id: Uuid,
     pub name: &'a str,
     pub price: i32,
@@ -595,27 +594,24 @@ pub trait TestAppExt {
 
     fn create_product(
         &mut self,
-        session_cookie: &str,
-        project_id: Uuid,
+        api_key: &str,
     ) -> impl std::future::Future<Output = CreatedProduct> + Send;
 
     fn create_product_with_group(
         &mut self,
-        session_cookie: &str,
-        project_id: Uuid,
+        api_key: &str,
         product_group_id: Uuid,
     ) -> impl std::future::Future<Output = (Uuid, String)> + Send;
 
     fn create_product_price(
         &mut self,
-        session_cookie: &str,
-        project_id: Uuid,
+        api_key: &str,
         product_group_id: Uuid,
     ) -> impl std::future::Future<Output = Uuid> + Send;
 
     fn create_product_price_with_details(
         &mut self,
-        session_cookie: &str,
+        api_key: &str,
         details: ProductPriceDetails<'_>,
     ) -> impl std::future::Future<Output = Uuid> + Send;
 }
@@ -649,7 +645,7 @@ impl TestAppExt for Router {
         Uuid::parse_str(body["id"].as_str().unwrap()).unwrap()
     }
 
-    async fn create_product(&mut self, session_cookie: &str, project_id: Uuid) -> CreatedProduct {
+    async fn create_product(&mut self, api_key: &str) -> CreatedProduct {
         let product_group_id = Uuid::new_v4();
         let slug = format!("test-product-{}", &Uuid::new_v4().to_string()[..8]);
         let response = self
@@ -657,14 +653,10 @@ impl TestAppExt for Router {
                 Request::builder()
                     .method("POST")
                     .uri("/product")
-                    .header(
-                        "Cookie",
-                        format!("better-auth.session_token={}", session_cookie),
-                    )
+                    .header("Authorization", format!("Bearer {}", api_key))
                     .header("Content-Type", "application/json")
                     .body(Body::from(
                         json!({
-                            "project_id": project_id,
                             "product_group_id": product_group_id,
                             "name": "Test Product",
                             "slug": slug
@@ -687,8 +679,7 @@ impl TestAppExt for Router {
 
     async fn create_product_with_group(
         &mut self,
-        session_cookie: &str,
-        project_id: Uuid,
+        api_key: &str,
         product_group_id: Uuid,
     ) -> (Uuid, String) {
         let slug = format!("test-product-{}", &Uuid::new_v4().to_string()[..8]);
@@ -697,14 +688,10 @@ impl TestAppExt for Router {
                 Request::builder()
                     .method("POST")
                     .uri("/product")
-                    .header(
-                        "Cookie",
-                        format!("better-auth.session_token={}", session_cookie),
-                    )
+                    .header("Authorization", format!("Bearer {}", api_key))
                     .header("Content-Type", "application/json")
                     .body(Body::from(
                         json!({
-                            "project_id": project_id,
                             "product_group_id": product_group_id,
                             "name": "Test Product",
                             "slug": slug
@@ -721,16 +708,10 @@ impl TestAppExt for Router {
         (id, slug)
     }
 
-    async fn create_product_price(
-        &mut self,
-        session_cookie: &str,
-        project_id: Uuid,
-        product_group_id: Uuid,
-    ) -> Uuid {
+    async fn create_product_price(&mut self, api_key: &str, product_group_id: Uuid) -> Uuid {
         self.create_product_price_with_details(
-            session_cookie,
+            api_key,
             ProductPriceDetails {
-                project_id,
                 product_group_id,
                 name: "Test Price",
                 price: 1000,
@@ -743,11 +724,10 @@ impl TestAppExt for Router {
 
     async fn create_product_price_with_details(
         &mut self,
-        session_cookie: &str,
+        api_key: &str,
         details: ProductPriceDetails<'_>,
     ) -> Uuid {
         let mut payload = json!({
-            "project_id": details.project_id,
             "product_group_id": details.product_group_id,
             "name": details.name,
             "price": details.price,
@@ -763,10 +743,7 @@ impl TestAppExt for Router {
                 Request::builder()
                     .method("POST")
                     .uri("/product/price")
-                    .header(
-                        "Cookie",
-                        format!("better-auth.session_token={}", session_cookie),
-                    )
+                    .header("Authorization", format!("Bearer {}", api_key))
                     .header("Content-Type", "application/json")
                     .body(Body::from(payload.to_string()))
                     .unwrap(),

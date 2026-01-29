@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, \"projectId\", \"productId\", \"priceId\" FROM checkout_session WHERE \"processorCheckoutId\" = $1",
+  "query": "SELECT id, \"projectId\", \"productId\", \"priceId\", \"customerId\" FROM checkout_session WHERE \"processorCheckoutId\" = $1",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,11 @@
         "ordinal": 3,
         "name": "priceId",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "customerId",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
@@ -33,8 +38,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "93444787c7fec5389b44dc138425d700bcd47da5257b59ffdfd2b7c88f7bf954"
+  "hash": "5a10f4e50744376987907a9e340e060472babe3c3378e5f2d809102600a8229e"
 }

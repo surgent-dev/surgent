@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,9 @@ use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::core::auth::{AuthenticatedUser, verify_project_access};
+use crate::core::auth::{
+    AuthenticatedUser, ProjectIdQuery, resolve_project_id, verify_project_access,
+};
 use crate::integrations::types::ProcessorProductRequest;
 use crate::types::RecurringInterval;
 
@@ -36,7 +38,6 @@ pub struct Product {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateProductRequest {
-    pub project_id: Uuid,
     pub product_group_id: Uuid,
     pub name: String,
     pub description: Option<String>,
@@ -70,9 +71,18 @@ pub struct CreateProductResponse {
 pub async fn create_product(
     State(state): State<crate::AppState>,
     auth: AuthenticatedUser,
+    Query(query): Query<ProjectIdQuery>,
     Json(req): Json<CreateProductRequest>,
 ) -> Result<(StatusCode, Json<CreateProductResponse>), (StatusCode, String)> {
-    verify_project_access(&state.pool, auth.user_id, req.project_id).await?;
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
+
+    tracing::debug!(
+        %project_id,
+        product_group_id = %req.product_group_id,
+        name = %req.name,
+        slug = %req.slug,
+        "Creating product"
+    );
 
     let pool = &state.pool;
 
@@ -125,8 +135,8 @@ pub async fn create_product(
 
     let processor_product = processor.create_product(processor_req).await.map_err(|e| {
         tracing::error!(
-            project_id = %req.project_id,
-            product_id = %product_id,
+            %project_id,
+            %product_id,
             product_group_id = %req.product_group_id,
             product_name = %req.name,
             error = %e,
@@ -152,7 +162,7 @@ pub async fn create_product(
         "#,
         product_id,
         req.product_group_id,
-        req.project_id,
+        project_id,
         req.name,
         req.description,
         req.slug,
@@ -268,15 +278,17 @@ pub async fn update_product(
     Path(product_id): Path<Uuid>,
     Json(req): Json<UpdateProductRequest>,
 ) -> Result<(StatusCode, Json<UpdateProductResponse>), (StatusCode, String)> {
-    let existing = sqlx::query_as::<_, Product>(
+    let existing = sqlx::query_as!(
+        Product,
         r#"
-        SELECT p.id, p."productGroupId", p.name, p.description,
-               p."projectId", p.slug, p.version, p."isArchived", p."isDefault", p."processorProductId"
+        SELECT p.id, p."productGroupId" AS product_group_id, p.name, p.description,
+               p."projectId" AS project_id, p.slug, p.version, p."isArchived" AS is_archived,
+               p."isDefault" AS is_default, p."processorProductId" AS processor_product_id
         FROM product p
         WHERE p.id = $1
         "#,
+        product_id
     )
-    .bind(product_id)
     .fetch_optional(&state.pool)
     .await
     .map_err(|e| {
@@ -353,23 +365,14 @@ pub async fn update_product(
     ))
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ListProductsWithPricesQuery {
-    pub project_id: Uuid,
-}
-
 /// List products with prices for a project
 #[utoipa::path(
     get,
-    path = "/project/{project_id}/product/prices",
+    path = "/products",
     tag = "product",
-    params(
-        ("project_id" = Uuid, Path, description = "Project ID")
-    ),
     responses(
         (status = 200, description = "List of products with prices", body = Vec<ProductWithPricesResponse>),
         (status = 401, description = "Unauthorized - invalid or missing API key"),
-        (status = 403, description = "Forbidden - project not owned by organization"),
         (status = 500, description = "Internal server error")
     ),
     security(
@@ -379,22 +382,26 @@ pub struct ListProductsWithPricesQuery {
 pub async fn list_products_with_prices(
     State(state): State<crate::AppState>,
     auth: AuthenticatedUser,
-    Path(project_id): Path<Uuid>,
+    Query(query): Query<ProjectIdQuery>,
 ) -> Result<Json<Vec<ProductWithPricesResponse>>, (StatusCode, String)> {
-    verify_project_access(&state.pool, auth.user_id, project_id).await?;
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
+
+    tracing::debug!(%project_id, "Listing products with prices");
 
     // DISTINCT ON gets the latest version per product_group (sorted by version DESC)
-    let products = sqlx::query_as::<_, Product>(
+    let products = sqlx::query_as!(
+        Product,
         r#"
         SELECT DISTINCT ON (p."productGroupId")
-            p.id, p."productGroupId", p.name, p.description,
-            p."projectId", p.slug, p.version, p."isArchived", p."isDefault", p."processorProductId"
+            p.id, p."productGroupId" AS product_group_id, p.name, p.description,
+            p."projectId" AS project_id, p.slug, p.version, p."isArchived" AS is_archived,
+            p."isDefault" AS is_default, p."processorProductId" AS processor_product_id
         FROM product p
         WHERE p."projectId" = $1
         ORDER BY p."productGroupId", p.version DESC NULLS LAST
         "#,
+        project_id
     )
-    .bind(project_id)
     .fetch_all(&state.pool)
     .await
     .map_err(|e| {
@@ -410,15 +417,17 @@ pub async fn list_products_with_prices(
 
     let product_ids: Vec<Uuid> = products.iter().map(|p| p.id).collect();
 
-    let prices = sqlx::query_as::<_, ProductPriceRow>(
+    let prices = sqlx::query_as!(
+        ProductPriceRow,
         r#"
-        SELECT id, "productId", name, description, "priceAmount",
-               "priceCurrency", "recurringInterval", "isDefault"
+        SELECT id, "productId" AS product_id, name, description, "priceAmount" AS price_amount,
+               "priceCurrency" AS price_currency, "recurringInterval" AS "recurring_interval: RecurringInterval",
+               "isDefault" AS is_default
         FROM product_price
         WHERE "productId" = ANY($1)
         "#,
+        &product_ids
     )
-    .bind(&product_ids)
     .fetch_all(&state.pool)
     .await
     .map_err(|e| {
@@ -451,6 +460,8 @@ pub async fn list_products_with_prices(
             product: p,
         })
         .collect();
+
+    tracing::debug!(count = response.len(), "Returning products with prices");
 
     Ok(Json(response))
 }

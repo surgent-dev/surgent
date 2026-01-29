@@ -1,18 +1,15 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Query, State},
     http::StatusCode,
 };
-use chrono;
-use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
-use utoipa::ToSchema;
+use tracing::debug;
 use uuid::Uuid;
 
-use crate::core::auth::{AuthenticatedUser, verify_project_access};
+use crate::core::auth::{AuthenticatedUser, ProjectIdQuery, resolve_project_id};
 use crate::types::SubscriptionStatus;
 
-#[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Subscription {
     pub id: Uuid,
@@ -43,19 +40,11 @@ pub struct Subscription {
     pub status: SubscriptionStatus,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ListSubscriptionsQuery {
-    pub project_id: Uuid,
-}
-
 /// List subscriptions for a project
 #[utoipa::path(
     get,
-    path = "/project/{project_id}/subscriptions",
+    path = "/subscriptions",
     tag = "subscription",
-    params(
-        ("project_id" = Uuid, Path, description = "Project ID")
-    ),
     responses(
         (status = 200, description = "List of subscriptions", body = Vec<Subscription>),
         (status = 401, description = "Unauthorized - invalid or missing API key"),
@@ -68,22 +57,30 @@ pub struct ListSubscriptionsQuery {
 pub async fn list_subscriptions(
     State(state): State<crate::AppState>,
     auth: AuthenticatedUser,
-    Path(project_id): Path<Uuid>,
+    Query(query): Query<ProjectIdQuery>,
 ) -> Result<Json<Vec<Subscription>>, (StatusCode, String)> {
-    verify_project_access(&state.pool, auth.user_id, project_id).await?;
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
 
-    let subscriptions = sqlx::query_as::<_, Subscription>(
+    debug!("Listing subscriptions for project_id={}", project_id);
+
+    let subscriptions = sqlx::query_as!(
+        Subscription,
         r#"
-        SELECT id, "projectId", "productId", "productPriceId", "customerId",
-               "processorSubscriptionId", "processorCustomerId",
-               "createdAt", "deletedAt", "currentPeriodStart", "currentPeriodEnd",
-               "canceledAt", "endedAt", status as "status: SubscriptionStatus"
+        SELECT id, "projectId" as project_id, "productId" as product_id,
+               "productPriceId" as product_price_id, "customerId" as customer_id,
+               "processorSubscriptionId" as processor_subscription_id,
+               "processorCustomerId" as processor_customer_id,
+               "createdAt" as created_at, "deletedAt" as deleted_at,
+               "currentPeriodStart" as current_period_start,
+               "currentPeriodEnd" as current_period_end,
+               "canceledAt" as canceled_at, "endedAt" as ended_at,
+               status as "status: SubscriptionStatus"
         FROM subscription
         WHERE "projectId" = $1
         ORDER BY "createdAt" DESC
         "#,
+        project_id
     )
-    .bind(project_id)
     .fetch_all(&state.pool)
     .await
     .map_err(|e| {

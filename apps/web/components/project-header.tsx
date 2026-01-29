@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
@@ -123,6 +124,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       const newQuery = params.toString()
       router.replace(newQuery ? `${pathname}?${newQuery}` : pathname)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, pathname, router])
 
   // Stripe conflict handling

@@ -9,20 +9,22 @@ use sqlx::PgPool;
 use tower::Service;
 use uuid::Uuid;
 
-use common::{TestAppExt, create_test_state, read_body, read_body_text, seed_organization};
+use common::{
+    TestAppExt, create_test_state, read_body, read_body_text, seed_api_key, seed_organization,
+};
 use surpay::api::create_router;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_success(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let product = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&api_key).await;
 
     let body = json!({
-        "project_id": project_id,
         "product_group_id": product.product_group_id,
         "name": "Monthly Plan",
         "description": "Monthly subscription",
@@ -37,10 +39,7 @@ async fn test_create_product_price_success(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("POST")
                 .uri("/product/price")
-                .header(
-                    "Cookie",
-                    format!("better-auth.session_token={}", session_cookie),
-                )
+                .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json")
                 .body(Body::from(body.to_string()))?,
         )
@@ -55,13 +54,13 @@ async fn test_create_product_price_success(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_minimal(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let product = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&api_key).await;
 
     let body = json!({
-        "project_id": project_id,
         "product_group_id": product.product_group_id,
         "price": 999,
         "price_currency": "USD"
@@ -72,10 +71,7 @@ async fn test_create_product_price_minimal(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("POST")
                 .uri("/product/price")
-                .header(
-                    "Cookie",
-                    format!("better-auth.session_token={}", session_cookie),
-                )
+                .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json")
                 .body(Body::from(body.to_string()))?,
         )
@@ -90,11 +86,11 @@ async fn test_create_product_price_minimal(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_invalid_product(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
     let body = json!({
-        "project_id": project_id,
         "product_group_id": Uuid::new_v4(),
         "price": 999,
         "price_currency": "USD"
@@ -105,10 +101,7 @@ async fn test_create_product_price_invalid_product(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("POST")
                 .uri("/product/price")
-                .header(
-                    "Cookie",
-                    format!("better-auth.session_token={}", session_cookie),
-                )
+                .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json")
                 .body(Body::from(body.to_string()))?,
         )
@@ -122,13 +115,17 @@ async fn test_create_product_price_invalid_product(pool: PgPool) -> TestResult {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_wrong_project(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let (_org_id2, project_id2, _session_cookie2) = seed_organization(&pool).await;
+    let api_key1 = seed_api_key(&pool, project_id).await;
+    let api_key2 = seed_api_key(&pool, project_id2).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let product = app.create_product(&session_cookie, project_id).await;
+    // Create product in project 1
+    let product = app.create_product(&api_key1).await;
 
+    // Try to create price using API key from project 2
     let body = json!({
-        "project_id": Uuid::new_v4(),
         "product_group_id": product.product_group_id,
         "price": 999,
         "price_currency": "USD"
@@ -139,10 +136,7 @@ async fn test_create_product_price_wrong_project(pool: PgPool) -> TestResult {
             Request::builder()
                 .method("POST")
                 .uri("/product/price")
-                .header(
-                    "Cookie",
-                    format!("better-auth.session_token={}", session_cookie),
-                )
+                .header("Authorization", format!("Bearer {}", api_key2))
                 .header("Content-Type", "application/json")
                 .body(Body::from(body.to_string()))?,
         )
@@ -150,21 +144,23 @@ async fn test_create_product_price_wrong_project(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Access denied");
+    assert_eq!(body, "Invalid product");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_cross_org_access(pool: PgPool) -> TestResult {
-    let (_org1_id, project_id, session_cookie1) = seed_organization(&pool).await;
-    let (_org2_id, _project_id2, session_cookie2) = seed_organization(&pool).await;
+    let (_org1_id, project_id, _session_cookie1) = seed_organization(&pool).await;
+    let (_org2_id, project_id2, _session_cookie2) = seed_organization(&pool).await;
+    let api_key1 = seed_api_key(&pool, project_id).await;
+    let api_key2 = seed_api_key(&pool, project_id2).await;
 
     let mut app = create_router(create_test_state(pool).await);
 
-    let product = app.create_product(&session_cookie1, project_id).await;
+    let product = app.create_product(&api_key1).await;
 
+    // Try to create price using API key from org 2
     let body = json!({
-        "project_id": project_id,
         "product_group_id": product.product_group_id,
         "price": 999,
         "price_currency": "USD"
@@ -175,10 +171,7 @@ async fn test_create_product_price_cross_org_access(pool: PgPool) -> TestResult 
             Request::builder()
                 .method("POST")
                 .uri("/product/price")
-                .header(
-                    "Cookie",
-                    format!("better-auth.session_token={}", session_cookie2),
-                )
+                .header("Authorization", format!("Bearer {}", api_key2))
                 .header("Content-Type", "application/json")
                 .body(Body::from(body.to_string()))?,
         )
@@ -186,7 +179,7 @@ async fn test_create_product_price_cross_org_access(pool: PgPool) -> TestResult 
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Access denied");
+    assert_eq!(body, "Invalid product");
     Ok(())
 }
 
@@ -194,7 +187,6 @@ async fn test_create_product_price_cross_org_access(pool: PgPool) -> TestResult 
 async fn test_create_product_price_missing_auth(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool).await);
     let body = json!({
-        "project_id": Uuid::new_v4(),
         "product_group_id": Uuid::new_v4(),
         "price": 999,
         "price_currency": "USD"
@@ -212,19 +204,19 @@ async fn test_create_product_price_missing_auth(pool: PgPool) -> TestResult {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = read_body_text(response.into_body()).await;
-    assert_eq!(body, "Missing session");
+    assert_eq!(body, "Missing authentication");
     Ok(())
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_missing_required_fields(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let product = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&api_key).await;
 
     let body = json!({
-        "project_id": project_id,
         "product_group_id": product.product_group_id
     });
 
@@ -233,10 +225,7 @@ async fn test_create_product_price_missing_required_fields(pool: PgPool) -> Test
             Request::builder()
                 .method("POST")
                 .uri("/product/price")
-                .header(
-                    "Cookie",
-                    format!("better-auth.session_token={}", session_cookie),
-                )
+                .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json")
                 .body(Body::from(body.to_string()))?,
         )
@@ -254,13 +243,13 @@ async fn test_create_product_price_missing_required_fields(pool: PgPool) -> Test
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_stripe_integration(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool.clone()).await);
 
-    let product = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&api_key).await;
 
     let body = json!({
-        "project_id": project_id,
         "product_group_id": product.product_group_id,
         "name": "Monthly Plan",
         "description": "Monthly subscription",
@@ -275,10 +264,7 @@ async fn test_create_product_price_stripe_integration(pool: PgPool) -> TestResul
             Request::builder()
                 .method("POST")
                 .uri("/product/price")
-                .header(
-                    "Cookie",
-                    format!("better-auth.session_token={}", session_cookie),
-                )
+                .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json")
                 .body(Body::from(body.to_string()))?,
         )
@@ -317,14 +303,14 @@ async fn test_create_product_price_stripe_integration(pool: PgPool) -> TestResul
 
 #[sqlx::test(migrations = "./migrations")]
 async fn test_create_product_price_same_amount_different_intervals(pool: PgPool) -> TestResult {
-    let (_org_id, project_id, session_cookie) = seed_organization(&pool).await;
+    let (_org_id, project_id, _session_cookie) = seed_organization(&pool).await;
+    let api_key = seed_api_key(&pool, project_id).await;
     let mut app = create_router(create_test_state(pool).await);
 
-    let product = app.create_product(&session_cookie, project_id).await;
+    let product = app.create_product(&api_key).await;
 
     // Create a recurring monthly price at $10
     let monthly_body = json!({
-        "project_id": project_id,
         "product_group_id": product.product_group_id,
         "name": "Monthly",
         "price": 1000,
@@ -337,10 +323,7 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
             Request::builder()
                 .method("POST")
                 .uri("/product/price")
-                .header(
-                    "Cookie",
-                    format!("better-auth.session_token={}", session_cookie),
-                )
+                .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json")
                 .body(Body::from(monthly_body.to_string()))?,
         )
@@ -353,7 +336,6 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
 
     // Create a one-time price at $10 (same amount, no interval)
     let onetime_body = json!({
-        "project_id": project_id,
         "product_group_id": product.product_group_id,
         "name": "One-time",
         "price": 1000,
@@ -365,10 +347,7 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
             Request::builder()
                 .method("POST")
                 .uri("/product/price")
-                .header(
-                    "Cookie",
-                    format!("better-auth.session_token={}", session_cookie),
-                )
+                .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json")
                 .body(Body::from(onetime_body.to_string()))?,
         )

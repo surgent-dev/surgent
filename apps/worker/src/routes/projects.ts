@@ -741,6 +741,24 @@ projects.get('/:id/convex/dashboard', zValidator('param', idParam), async (c) =>
   return c.json(credentials)
 })
 
+function isOriginTrusted(origin: string, trustedOrigins: string[]): boolean {
+  try {
+    const originUrl = new URL(origin)
+    const originHost = `${originUrl.protocol}//${originUrl.host}`.toLowerCase()
+    return trustedOrigins.some((trusted) => {
+      try {
+        const trustedUrl = new URL(trusted)
+        const trustedHost = `${trustedUrl.protocol}//${trustedUrl.host}`.toLowerCase()
+        return originHost === trustedHost
+      } catch {
+        return false
+      }
+    })
+  } catch {
+    return false
+  }
+}
+
 // ============================================
 // GitHub Integration Endpoints
 // ============================================
