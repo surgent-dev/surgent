@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs-master.url = "github:NixOS/nixpkgs/master";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
@@ -14,6 +15,7 @@
     {
       self,
       nixpkgs,
+      nixpkgs-master,
       flake-utils,
       fenix,
     }:
@@ -23,6 +25,9 @@
         pkgs = import nixpkgs {
           inherit system;
         };
+        pkgs-master = import nixpkgs-master {
+          inherit system;
+        };
         fenixLib = fenix.packages.${system};
         rustToolchain = fenixLib.stable.toolchain;
       in
@@ -30,7 +35,7 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             # Primary runtimes
-            bun
+            pkgs-master.bun # pinned to master for latest version
             nodejs_25
             typescript
 
