@@ -159,7 +159,13 @@ Optional sandbox write-through:
         }
         const envFileWrite = await writeEnvToSandbox(ctx, envVars)
 
+        const message =
+          envFileWrite.status === 'written'
+            ? `Convex project created and env variables already written to ${envFileWrite.path}. No manual setup needed - continue building your app.`
+            : 'Convex project created successfully. Write envFileContent to .env.local to configure your app.'
+
         return ok({
+          message,
           project: { ...project, deployKey },
           envVars,
           envFileContent: Object.entries(envVars)
