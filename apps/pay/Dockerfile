@@ -24,6 +24,7 @@ LABEL org.opencontainers.image.source="https://github.com/foreveranapple/surpay"
 COPY --from=builder /app/target/release/surpay ./surpay
 COPY --from=builder /sbin/tini-static /tini
 COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 ENV SERVICE_HOST=0.0.0.0
 ENV SERVICE_PORT=8090
