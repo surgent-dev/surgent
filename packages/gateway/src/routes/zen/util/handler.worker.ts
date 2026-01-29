@@ -254,7 +254,7 @@ export async function handleZenRequest(
 
                 if (providerInfo.format !== opts.format) {
                   part = streamConverter(part)
-                  controller.enqueue(encoder.encode(part + '\\n\\n'))
+                  controller.enqueue(encoder.encode(part + '\n\n'))
                 }
               }
 

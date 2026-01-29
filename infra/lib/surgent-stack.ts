@@ -43,6 +43,12 @@ const SECRET_NAMES = [
   'XAI_API_KEY',
   'OPENCODE_BASE_URL',
   'SURGENT_BASE_URL',
+  'S3_TOKEN_VALUE',
+  'S3_ACCESS_KEY_ID',
+  'S3_SECRET_ACCESS_KEY',
+  'S3_BUCKET',
+  'S3_ENDPOINT',
+  'S3_REGION',
 ] as const
 
 export class SurgentStack extends cdk.Stack {
