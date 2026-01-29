@@ -10,6 +10,7 @@ COPY apps/pay/package.json ./apps/pay/
 COPY packages/db/package.json ./packages/db/
 COPY packages/util/package.json ./packages/util/
 COPY packages/gateway/package.json ./packages/gateway/
+# --ignore-scripts: pay package has a postinstall requiring cargo (Rust) which isn't available
 RUN HUSKY=0 bun install --frozen-lockfile --ignore-scripts
 
 FROM oven/bun:1-slim AS production
