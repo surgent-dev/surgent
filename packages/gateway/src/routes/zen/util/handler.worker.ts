@@ -70,10 +70,12 @@ export async function handleZenRequest(
   const db = getDb(c.env)
 
   try {
+    logger.debug('[HANDLER] Request received: ' + c.req.url)
     const url = c.req.url
     const body = await c.req.json()
     const model = opts.parseModel(url, body)
     const isStream = opts.parseIsStream(url, body)
+    logger.debug('[HANDLER] Parsed model=' + model + ', isStream=' + isStream)
     const ip = c.req.header('x-real-ip') ?? ''
     const sessionId = c.req.header('x-opencode-session') ?? ''
     const requestId = c.req.header('x-opencode-request') ?? ''
@@ -87,7 +89,9 @@ export async function handleZenRequest(
     })
 
     const zenData = loadZenData(c.env)
+    logger.debug('[HANDLER] ZenData loaded, validating model...')
     const modelInfo = validateModel(zenData, model)
+    logger.debug('[HANDLER] Model validated: ' + modelInfo.id)
     const dataDumper = createDataDumper(c.env, c.executionCtx, sessionId, requestId, projectId)
     const trialLimiter = createTrialLimiter(db, modelInfo.trial, ip, ocClient)
     const isTrial = await trialLimiter?.isTrial()
@@ -112,6 +116,9 @@ export async function handleZenRequest(
       validateModelSettings(authInfo)
       updateProviderKey(authInfo, providerInfo)
       logger.metric({ provider: providerInfo.id })
+      logger.debug(
+        '[HANDLER] Provider selected: ' + providerInfo.id + ', format: ' + providerInfo.format,
+      )
 
       const startTimestamp = Date.now()
       const reqUrl = providerInfo.modifyUrl(providerInfo.api, isStream)
@@ -123,6 +130,7 @@ export async function handleZenRequest(
       )
       logger.debug('REQUEST URL: ' + reqUrl)
       logger.debug('REQUEST: ' + reqBody.substring(0, 300) + '...')
+      logger.debug('[HANDLER] Sending fetch to provider...')
       const res = await fetch(reqUrl, {
         method: 'POST',
         headers: (() => {
@@ -142,6 +150,7 @@ export async function handleZenRequest(
         })(),
         body: reqBody,
       })
+      logger.debug('[HANDLER] Fetch completed, status=' + res.status)
 
       if (
         res.status != 200 &&
@@ -195,12 +204,19 @@ export async function handleZenRequest(
       })
     }
 
+    logger.debug(
+      '[HANDLER] Starting stream processing, providerFormat=' +
+        providerInfo.format +
+        ', clientFormat=' +
+        opts.format,
+    )
     const streamConverter = createStreamPartConverter(providerInfo.format, opts.format)
     const usageParser = providerInfo.createUsageParser()
     const binaryDecoder = providerInfo.createBinaryStreamDecoder()
     const stream = new ReadableStream({
       start(controller) {
         const reader = res.body?.getReader()
+        logger.debug('[HANDLER] Stream reader created, hasReader=' + !!reader)
         const decoder = new TextDecoder()
         const encoder = new TextEncoder()
 
@@ -211,6 +227,7 @@ export async function handleZenRequest(
           return (
             reader?.read().then(async ({ done, value: rawValue }) => {
               if (done) {
+                logger.debug('[HANDLER] Stream done, closing controller')
                 logger.metric({
                   response_length: responseLength,
                   'timestamp.last_byte': Date.now(),
@@ -277,6 +294,7 @@ export async function handleZenRequest(
       headers: resHeaders,
     })
   } catch (error: any) {
+    logger.debug('[HANDLER] Error caught: ' + error.constructor.name + ' - ' + error.message)
     logger.metric({
       'error.type': error.constructor.name,
       'error.message': error.message,

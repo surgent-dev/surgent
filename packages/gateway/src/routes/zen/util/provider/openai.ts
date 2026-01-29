@@ -348,7 +348,7 @@ export function toOpenaiRequest(body: CommonRequest) {
     metadata: (body as any).metadata,
     store: (body as any).store,
     user: (body as any).user,
-    text: { verbosity: body.model === 'gpt-5-codex' ? 'medium' : 'low' },
+    text: { verbosity: body.model.includes('-codex') ? 'medium' : 'low' },
     reasoning: { effort: 'medium' },
   }
 }
@@ -526,6 +526,31 @@ export function fromOpenaiChunk(chunk: string): CommonChunk | string {
   }
 
   const e = ev.replace('event: ', '').trim()
+
+  // Skip lifecycle events that have no streaming content
+  if (
+    e === 'response.created' ||
+    e === 'response.in_progress' ||
+    e === 'response.queued' ||
+    e === 'response.output_item.done' ||
+    e === 'response.content_part.added' ||
+    e === 'response.content_part.done' ||
+    e === 'response.output_text.done' ||
+    e === 'response.function_call_arguments.done'
+  ) {
+    return ''
+  }
+
+  // Handle error/failure events
+  if (e === 'response.failed' || e === 'response.incomplete' || e === 'error') {
+    return {
+      id: respObj.id ?? json.id ?? '',
+      object: 'chat.completion.chunk',
+      created: Math.floor(Date.now() / 1000),
+      model: respObj.model ?? json.model ?? '',
+      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+    }
+  }
 
   if (e === 'response.output_text.delta') {
     const d = (json as any).delta ?? (json as any).text ?? (json as any).output_text_delta
