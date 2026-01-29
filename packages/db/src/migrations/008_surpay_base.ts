@@ -501,7 +501,11 @@ export async function up(db: Kysely<any>): Promise<void> {
   // Unique constraints via raw SQL (complex constraints not easily expressed in Kysely)
   await sql`ALTER TABLE project ADD CONSTRAINT project_slug_key UNIQUE (slug)`.execute(db)
   await sql`ALTER TABLE customer ADD CONSTRAINT customer_project_id_email_key UNIQUE ("projectId", email)`.execute(
-  await sql`ALTER TABLE product ADD CONSTRAINT product_project_id_slug_key UNIQUE ("projectId", slug)`.execute(db)
+    db,
+  )
+  await sql`ALTER TABLE product ADD CONSTRAINT product_project_id_slug_key UNIQUE ("projectId", slug)`.execute(
+    db,
+  )
   await sql`ALTER TABLE customer ADD CONSTRAINT customer_project_id_external_id_key UNIQUE ("projectId", "externalId")`.execute(
     db,
   )
@@ -896,7 +900,9 @@ export async function down(db: Kysely<any>): Promise<void> {
   // Drop unique constraints before dropping columns
   await sql`ALTER TABLE project DROP CONSTRAINT IF EXISTS project_slug_key`.execute(db)
   await sql`ALTER TABLE product DROP CONSTRAINT IF EXISTS product_project_id_slug_key`.execute(db)
-  await sql`ALTER TABLE customer DROP CONSTRAINT IF EXISTS customer_project_id_external_id_key`.execute(db)
+  await sql`ALTER TABLE customer DROP CONSTRAINT IF EXISTS customer_project_id_external_id_key`.execute(
+    db,
+  )
 
   // Drop columns from existing tables
   await db.schema.alterTable('project').dropColumn('slug').execute()

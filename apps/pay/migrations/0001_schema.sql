@@ -473,6 +473,22 @@ CREATE TABLE public.github_installations (
 
 
 --
+-- Name: github_oauth_tokens; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.github_oauth_tokens (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "userId" uuid NOT NULL,
+    "accessToken" text,
+    "accessTokenExpiresAt" timestamp without time zone,
+    "refreshToken" text,
+    "refreshTokenExpiresAt" timestamp without time zone,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: held_balance; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1136,6 +1152,14 @@ ALTER TABLE ONLY public.customer_product
 
 
 --
+-- Name: customer customer_project_id_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.customer
+    ADD CONSTRAINT customer_project_id_email_key UNIQUE ("projectId", email);
+
+
+--
 -- Name: customer customer_project_id_external_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1221,6 +1245,22 @@ ALTER TABLE ONLY public.github_installations
 
 ALTER TABLE ONLY public.github_installations
     ADD CONSTRAINT github_installations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: github_oauth_tokens github_oauth_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.github_oauth_tokens
+    ADD CONSTRAINT github_oauth_tokens_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: github_oauth_tokens github_oauth_tokens_userId_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.github_oauth_tokens
+    ADD CONSTRAINT "github_oauth_tokens_userId_key" UNIQUE ("userId");
 
 
 --
@@ -1984,6 +2024,13 @@ CREATE INDEX "worker_projectId_idx" ON public.worker USING btree ("projectId");
 
 
 --
+-- Name: worker_scriptName_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "worker_scriptName_unique" ON public.worker USING btree ("scriptName");
+
+
+--
 -- Name: account account_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2221,6 +2268,14 @@ ALTER TABLE ONLY public.feature
 
 ALTER TABLE ONLY public.github_installations
     ADD CONSTRAINT "github_installations_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
+
+
+--
+-- Name: github_oauth_tokens github_oauth_tokens_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.github_oauth_tokens
+    ADD CONSTRAINT "github_oauth_tokens_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
 
 
 --

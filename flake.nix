@@ -72,6 +72,7 @@
           ];
 
           env.RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
+          env.LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.openssl ];
 
           shellHook = ''
             echo "Surgent development environment"
