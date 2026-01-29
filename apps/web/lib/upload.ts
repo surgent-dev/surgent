@@ -1,5 +1,5 @@
 export type FilePart = {
-  type: "file"
+  type: 'file'
   mime: string
   filename: string
   url: string
@@ -15,7 +15,7 @@ export type UploadingAttachment = {
   id: string
   file: File
   preview?: string
-  status: "uploading" | "done" | "error"
+  status: 'uploading' | 'done' | 'error'
   url?: string
   size?: number
 }
@@ -62,9 +62,9 @@ export function formatSize(bytes: number): string {
 /** Convert uploaded attachments to FileParts for sending */
 export function attachmentsToParts(attachments: UploadingAttachment[]): FilePart[] {
   return attachments
-    .filter((a) => a.status === "done" && a.url)
+    .filter((a) => a.status === 'done' && a.url)
     .map((a) => ({
-      type: "file" as const,
+      type: 'file' as const,
       mime: a.file.type,
       filename: a.file.name,
       url: a.url!,

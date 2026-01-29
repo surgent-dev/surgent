@@ -16,22 +16,27 @@ A marketplace where buyers pay the platform and sellers receive payouts via Whop
 ## Flow
 
 ### 1. Merchant Onboarding
+
 ```
 POST /api/marketplace/merchant/onboard
 ```
+
 - Creates merchant record linked to user
 - Optionally creates Whop sub-company under platform
 
 ### 2. Product & Pricing
+
 ```
 POST /api/marketplace/products        → Create product with price
 POST /api/marketplace/products/:id/prices → Add price tier
 ```
 
 ### 3. Checkout
+
 ```
 POST /api/marketplace/checkout { productId, priceId }
 ```
+
 - Creates order (status: `pending`)
 - Creates Whop checkout session on **platform company**
 - Returns `purchaseUrl` for buyer
@@ -99,11 +104,11 @@ We accept and store all events below; only `payment_succeeded` and `payment_fail
 
 ## Idempotency (3 Layers)
 
-| Layer | Mechanism |
-|-------|-----------|
-| Webhook ingestion | `webhookId` UNIQUE + `ON CONFLICT DO NOTHING` |
-| Transfer record | `idempotencyKey = transfer_{paymentId}` UNIQUE |
-| Whop API | `idempotence_key` passed to `transfers.create()` |
+| Layer             | Mechanism                                        |
+| ----------------- | ------------------------------------------------ |
+| Webhook ingestion | `webhookId` UNIQUE + `ON CONFLICT DO NOTHING`    |
+| Transfer record   | `idempotencyKey = transfer_{paymentId}` UNIQUE   |
+| Whop API          | `idempotence_key` passed to `transfers.create()` |
 
 ## Database Schema
 
@@ -138,11 +143,12 @@ whop_webhook_events
 ## Platform Fee
 
 ```ts
-fee = max(amount * bps / 10000, fixed)
+fee = max((amount * bps) / 10000, fixed)
 payout = amount - fee
 ```
 
 Configured via env:
+
 - `PLATFORM_FEE_BPS` (default 1000 = 10%)
 - `PLATFORM_FEE_FIXED` (default 0)
 
@@ -163,13 +169,13 @@ Configured via env:
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `WHOP_API_KEY` | Platform company API key |
-| `PLATFORM_COMPANY_ID` | Platform's `biz_...` ID |
-| `WHOP_WEBHOOK_SECRET` | Webhook signing secret |
-| `PLATFORM_FEE_BPS` | Basis points (1000 = 10%) |
-| `PLATFORM_FEE_FIXED` | Fixed fee floor |
+| Variable              | Description               |
+| --------------------- | ------------------------- |
+| `WHOP_API_KEY`        | Platform company API key  |
+| `PLATFORM_COMPANY_ID` | Platform's `biz_...` ID   |
+| `WHOP_WEBHOOK_SECRET` | Webhook signing secret    |
+| `PLATFORM_FEE_BPS`    | Basis points (1000 = 10%) |
+| `PLATFORM_FEE_FIXED`  | Fixed fee floor           |
 
 ## Files
 

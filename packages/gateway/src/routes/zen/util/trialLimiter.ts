@@ -3,7 +3,12 @@ import type { Database } from '@repo/db'
 import type { UsageInfo } from './provider/provider'
 import type { ZenData } from './zenData'
 
-export function createTrialLimiter(db: Kysely<Database>, trial: ZenData.Trial | undefined, ip: string, client: string) {
+export function createTrialLimiter(
+  db: Kysely<Database>,
+  trial: ZenData.Trial | undefined,
+  ip: string,
+  client: string,
+) {
   if (!trial) return
   if (!ip) return
 
@@ -33,7 +38,9 @@ export function createTrialLimiter(db: Kysely<Database>, trial: ZenData.Trial | 
       await db
         .insertInto('ip')
         .values({ ip, usage })
-        .onConflict((oc) => oc.column('ip').doUpdateSet({ usage: sql`${sql.ref('ip.usage')} + ${usage}` }))
+        .onConflict((oc) =>
+          oc.column('ip').doUpdateSet({ usage: sql`${sql.ref('ip.usage')} + ${usage}` }),
+        )
         .execute()
     },
   }

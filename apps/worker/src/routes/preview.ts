@@ -28,7 +28,7 @@ function createSandboxApi() {
     new Configuration({
       basePath,
       baseOptions: { headers: { Authorization: `Bearer ${apiKey}` } },
-    })
+    }),
   )
 }
 
@@ -37,7 +37,7 @@ async function proxyRequest(
   sandboxId: string,
   port: number,
   req: Request,
-  url: URL
+  url: URL,
 ): Promise<Response> {
   const { data } = await api.getPortPreviewUrl(sandboxId, port)
 
@@ -60,7 +60,7 @@ async function proxyRequest(
       method: req.method,
       headers,
       body: req.body,
-    })
+    }),
   )
 
   // Disable caching for dev preview

@@ -1,46 +1,49 @@
 #!/usr/bin/env node
 
-import { Daytona, Image } from '@daytonaio/sdk';
-import * as dotenv from 'dotenv';
-import { resolve } from 'path';
+import { Daytona, Image } from '@daytonaio/sdk'
+import * as dotenv from 'dotenv'
+import { resolve } from 'path'
 
-const SNAPSHOT_NAME = "default-env:1.0.3";
+const SNAPSHOT_NAME = 'default-env:1.0.3'
 
 async function createSnapshot(): Promise<void> {
   try {
     // Load environment variables
-    dotenv.config({ path: resolve(__dirname, '../.env.local') });
-    
-    const apiKey = process.env.DAYTONA_API_KEY;
+    dotenv.config({ path: resolve(__dirname, '../.env.local') })
+
+    const apiKey = process.env.DAYTONA_API_KEY
     if (!apiKey) {
-      console.error('DAYTONA_API_KEY not found in environment');
-      process.exit(1);
+      console.error('DAYTONA_API_KEY not found in environment')
+      process.exit(1)
     }
 
-    console.log('Initializing Daytona client...');
-    const daytona = new Daytona({ apiKey });
+    console.log('Initializing Daytona client...')
+    const daytona = new Daytona({ apiKey })
 
-    console.log(`Creating snapshot from Dockerfile...`);
-    const dockerfilePath = resolve(__dirname, './Dockerfile');
-    const image = Image.fromDockerfile(dockerfilePath);
+    console.log(`Creating snapshot from Dockerfile...`)
+    const dockerfilePath = resolve(__dirname, './Dockerfile')
+    const image = Image.fromDockerfile(dockerfilePath)
 
-    await daytona.snapshot.create({
-      name: SNAPSHOT_NAME,
-      resources: {
-        cpu: 2,
-        memory: 4,
-        disk: 5,
+    await daytona.snapshot.create(
+      {
+        name: SNAPSHOT_NAME,
+        resources: {
+          cpu: 2,
+          memory: 4,
+          disk: 5,
+        },
+        image,
       },
-      image,
-    }, {
-      onLogs: (chunk: string) => process.stdout.write(chunk),
-    });
+      {
+        onLogs: (chunk: string) => process.stdout.write(chunk),
+      },
+    )
 
-    console.log(`\n✅ Snapshot "${SNAPSHOT_NAME}" created successfully!`);
+    console.log(`\n✅ Snapshot "${SNAPSHOT_NAME}" created successfully!`)
   } catch (error) {
-    console.error('\n❌ Failed to create snapshot:', error);
-    process.exit(1);
+    console.error('\n❌ Failed to create snapshot:', error)
+    process.exit(1)
   }
 }
 
-createSnapshot();
+createSnapshot()

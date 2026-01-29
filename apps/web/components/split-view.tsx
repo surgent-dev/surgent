@@ -28,7 +28,9 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   const hasConvex = Boolean((project?.metadata as any)?.convex)
   const convexTabAdded = useRef(false)
 
-  const [tabs, setTabs] = useState<PreviewTab[]>([{ id: 'preview', type: 'preview', title: 'Preview' }])
+  const [tabs, setTabs] = useState<PreviewTab[]>([
+    { id: 'preview', type: 'preview', title: 'Preview' },
+  ])
   const [activeTabId, setActiveTabId] = useState('preview')
   const tabCounter = useRef(0)
 
@@ -111,10 +113,16 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
             <Tabs defaultValue="chat" className="h-full min-h-0 flex flex-col">
               <div className="px-2 pt-2 pb-1.5">
                 <TabsList className="w-full max-w-sm mx-auto h-9 p-0.5!">
-                  <TabsTrigger value="chat" className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm">
+                  <TabsTrigger
+                    value="chat"
+                    className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm"
+                  >
                     Conversation
                   </TabsTrigger>
-                  <TabsTrigger value="preview" className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm">
+                  <TabsTrigger
+                    value="preview"
+                    className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm"
+                  >
                     Preview
                   </TabsTrigger>
                 </TabsList>

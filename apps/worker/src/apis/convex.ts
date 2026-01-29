@@ -51,17 +51,20 @@ export async function createProjectOnTeam(args: {
 }
 
 export async function createDeployKey(deploymentName: string): Promise<string> {
-  const body: any = await convexApi(`/deployments/${encodeURIComponent(deploymentName)}/create_deploy_key`, {
-    method: 'POST',
-    body: JSON.stringify({ name: 'surgent' }),
-  })
+  const body: any = await convexApi(
+    `/deployments/${encodeURIComponent(deploymentName)}/create_deploy_key`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ name: 'surgent' }),
+    },
+  )
   return body.deployKey
 }
 
 export async function setDeploymentEnvVars(
   deploymentUrl: string,
   deployKey: string,
-  vars: Record<string, string>
+  vars: Record<string, string>,
 ): Promise<void> {
   const changes = Object.entries(vars).map(([name, value]) => ({ name, value }))
   if (!changes.length) return
@@ -83,7 +86,7 @@ export async function setDeploymentEnvVars(
 
 export async function listDeploymentEnvVars(
   deploymentUrl: string,
-  deployKey: string
+  deployKey: string,
 ): Promise<Record<string, string>> {
   const res = await fetch(`${deploymentUrl}/api/v1/list_environment_variables`, {
     method: 'GET',
@@ -166,7 +169,7 @@ export async function callQuery(
   deploymentUrl: string,
   deployKey: string,
   path: string,
-  args: Record<string, ConvexValue> = {}
+  args: Record<string, ConvexValue> = {},
 ): Promise<ConvexFunctionResult> {
   const res = await fetch(`${deploymentUrl}/api/query`, {
     method: 'POST',
@@ -177,7 +180,12 @@ export async function callQuery(
     body: JSON.stringify({ path, args, format: 'json' }),
   })
 
-  const body: { value?: ConvexValue; message?: string; errorMessage?: string; errorData?: ConvexValue } = await res.json()
+  const body: {
+    value?: ConvexValue
+    message?: string
+    errorMessage?: string
+    errorData?: ConvexValue
+  } = await res.json()
 
   if (!res.ok) {
     return {
@@ -201,7 +209,7 @@ export async function callMutation(
   deploymentUrl: string,
   deployKey: string,
   path: string,
-  args: Record<string, ConvexValue> = {}
+  args: Record<string, ConvexValue> = {},
 ): Promise<ConvexFunctionResult> {
   const res = await fetch(`${deploymentUrl}/api/mutation`, {
     method: 'POST',
@@ -212,7 +220,12 @@ export async function callMutation(
     body: JSON.stringify({ path, args, format: 'json' }),
   })
 
-  const body: { value?: ConvexValue; message?: string; errorMessage?: string; errorData?: ConvexValue } = await res.json()
+  const body: {
+    value?: ConvexValue
+    message?: string
+    errorMessage?: string
+    errorData?: ConvexValue
+  } = await res.json()
 
   if (!res.ok) {
     return {

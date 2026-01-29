@@ -3,7 +3,16 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Loader2, ExternalLink, Key, ChevronLeft, ChevronRight, AlertCircle, X, Info } from 'lucide-react'
+import {
+  Loader2,
+  ExternalLink,
+  Key,
+  ChevronLeft,
+  ChevronRight,
+  AlertCircle,
+  X,
+  Info,
+} from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -76,7 +85,13 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
   })
 
   const authorizeMutation = useMutation({
-    mutationFn: async ({ providerId, methodIndex }: { providerId: string; methodIndex: number }) => {
+    mutationFn: async ({
+      providerId,
+      methodIndex,
+    }: {
+      providerId: string
+      methodIndex: number
+    }) => {
       const resp = await http
         .post(`api/agent/${projectId}/provider/${providerId}/oauth/authorize`, {
           json: { method: methodIndex },
@@ -317,7 +332,9 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
                   <div>
                     {deviceCode ? (
                       <div className="text-center">
-                        <p className="text-xs text-muted-foreground mb-3">Enter this code in your browser:</p>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          Enter this code in your browser:
+                        </p>
                         <button
                           className="inline-block text-2xl font-mono font-bold tracking-[0.3em] py-4 px-6 bg-muted rounded-lg select-all cursor-pointer hover:bg-muted/80 transition-colors border border-dashed"
                           onClick={() => navigator.clipboard.writeText(deviceCode)}
@@ -348,7 +365,9 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
                       }
                       className="w-full h-10 mt-4"
                     >
-                      {callbackMutation.isPending && <Loader2 className="size-4 mr-2 animate-spin" />}
+                      {callbackMutation.isPending && (
+                        <Loader2 className="size-4 mr-2 animate-spin" />
+                      )}
                       Done
                     </Button>
                     {oauthState.method !== 'code' && (

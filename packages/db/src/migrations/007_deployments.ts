@@ -8,7 +8,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     .createTable('worker')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id').onDelete('cascade'))
+    .addColumn('projectId', 'uuid', (col) =>
+      col.notNull().references('project.id').onDelete('cascade'),
+    )
     .addColumn('accountId', 'text', (col) => col.notNull())
     .addColumn('scriptName', 'text', (col) => col.notNull())
     .addColumn('dispatchNamespace', 'text')
@@ -18,14 +20,21 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
 
-  await db.schema.createIndex('worker_projectId_idx').ifNotExists().on('worker').column('projectId').execute()
+  await db.schema
+    .createIndex('worker_projectId_idx')
+    .ifNotExists()
+    .on('worker')
+    .column('projectId')
+    .execute()
 
   // sandboxes - dev runtime state
   await db.schema
     .createTable('sandbox')
     .ifNotExists()
     .addColumn('id', 'text', (col) => col.primaryKey())
-    .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id').onDelete('cascade'))
+    .addColumn('projectId', 'uuid', (col) =>
+      col.notNull().references('project.id').onDelete('cascade'),
+    )
     .addColumn('provider', 'text', (col) => col.notNull())
     .addColumn('status', 'text', (col) => col.notNull())
     .addColumn('host', 'text')
@@ -33,14 +42,21 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
 
-  await db.schema.createIndex('sandbox_projectId_idx').ifNotExists().on('sandbox').column('projectId').execute()
+  await db.schema
+    .createIndex('sandbox_projectId_idx')
+    .ifNotExists()
+    .on('sandbox')
+    .column('projectId')
+    .execute()
 
   // integrations - connected services (Convex, Supabase, etc.)
   await db.schema
     .createTable('integration')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id').onDelete('cascade'))
+    .addColumn('projectId', 'uuid', (col) =>
+      col.notNull().references('project.id').onDelete('cascade'),
+    )
     .addColumn('provider', 'text', (col) => col.notNull())
     .addColumn('config', 'jsonb')
     .addColumn('status', 'text', (col) => col.notNull().defaultTo(sql`'connected'`))
@@ -60,11 +76,15 @@ export async function up(db: Kysely<any>): Promise<void> {
     .createTable('env_var')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id').onDelete('cascade'))
+    .addColumn('projectId', 'uuid', (col) =>
+      col.notNull().references('project.id').onDelete('cascade'),
+    )
     .addColumn('environment', 'text', (col) => col.notNull())
     .addColumn('key', 'text', (col) => col.notNull())
     .addColumn('value', 'text')
-    .addColumn('integrationId', 'uuid', (col) => col.references('integration.id').onDelete('set null'))
+    .addColumn('integrationId', 'uuid', (col) =>
+      col.references('integration.id').onDelete('set null'),
+    )
     .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
@@ -82,7 +102,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     .createTable('deployment')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id').onDelete('cascade'))
+    .addColumn('projectId', 'uuid', (col) =>
+      col.notNull().references('project.id').onDelete('cascade'),
+    )
     .addColumn('scriptName', 'text', (col) => col.notNull())
     .addColumn('status', 'text', (col) => col.notNull())
     .addColumn('error', 'text')
@@ -95,7 +117,12 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
 
-  await db.schema.createIndex('deployment_projectId_idx').ifNotExists().on('deployment').column('projectId').execute()
+  await db.schema
+    .createIndex('deployment_projectId_idx')
+    .ifNotExists()
+    .on('deployment')
+    .column('projectId')
+    .execute()
 
   // drop old table
   await db.schema.dropTable('deployment_history').execute()
@@ -115,7 +142,9 @@ export async function down(db: Kysely<any>): Promise<void> {
     .createTable('deployment_history')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id').onDelete('cascade'))
+    .addColumn('projectId', 'uuid', (col) =>
+      col.notNull().references('project.id').onDelete('cascade'),
+    )
     .addColumn('name', 'text', (col) => col.notNull())
     .addColumn('previewUrl', 'text', (col) => col.notNull())
     .addColumn('status', 'text', (col) => col.notNull())

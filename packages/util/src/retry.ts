@@ -7,14 +7,14 @@ export interface RetryOptions {
 }
 
 const TRANSIENT_MESSAGES = [
-  "load failed",
-  "network connection was lost",
-  "network request failed",
-  "failed to fetch",
-  "econnreset",
-  "econnrefused",
-  "etimedout",
-  "socket hang up",
+  'load failed',
+  'network connection was lost',
+  'network request failed',
+  'failed to fetch',
+  'econnreset',
+  'econnrefused',
+  'etimedout',
+  'socket hang up',
 ]
 
 function isTransientError(error: unknown): boolean {
@@ -24,7 +24,13 @@ function isTransientError(error: unknown): boolean {
 }
 
 export async function retry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
-  const { attempts = 3, delay = 500, factor = 2, maxDelay = 10000, retryIf = isTransientError } = options
+  const {
+    attempts = 3,
+    delay = 500,
+    factor = 2,
+    maxDelay = 10000,
+    retryIf = isTransientError,
+  } = options
 
   let lastError: unknown
   for (let attempt = 0; attempt < attempts; attempt++) {

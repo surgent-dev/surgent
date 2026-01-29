@@ -2,7 +2,12 @@
 
 import Image from 'next/image'
 import { Check, ChevronDown } from 'lucide-react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 export type ProviderModel = {
@@ -55,7 +60,9 @@ const MODEL_INFO: Record<string, ModelInfo> = {
 
 export default function ModelSelectorDropdown({ models, selectedModel, onSelect }: Props) {
   const currentModel = selectedModel
-    ? models.find((m) => m.id === selectedModel.modelId && m.providerId === selectedModel.providerId)
+    ? models.find(
+        (m) => m.id === selectedModel.modelId && m.providerId === selectedModel.providerId,
+      )
     : models[0]
 
   const currentInfo = currentModel ? MODEL_INFO[currentModel.id] : null
@@ -77,7 +84,8 @@ export default function ModelSelectorDropdown({ models, selectedModel, onSelect 
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[220px] p-1">
         {models.map((model) => {
-          const isSelected = selectedModel?.modelId === model.id && selectedModel?.providerId === model.providerId
+          const isSelected =
+            selectedModel?.modelId === model.id && selectedModel?.providerId === model.providerId
           const info = MODEL_INFO[model.id]
 
           return (
@@ -92,9 +100,16 @@ export default function ModelSelectorDropdown({ models, selectedModel, onSelect 
               {info && <Image src={info.icon} alt="" width={16} height={16} className="shrink-0" />}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm truncate">{info?.name || model.name || model.id}</span>
+                  <span className="font-medium text-sm truncate">
+                    {info?.name || model.name || model.id}
+                  </span>
                   {info?.badge && (
-                    <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded', info.badgeColor)}>
+                    <span
+                      className={cn(
+                        'text-[10px] font-medium px-1.5 py-0.5 rounded',
+                        info.badgeColor,
+                      )}
+                    >
                       {info.badge}
                     </span>
                   )}

@@ -1,15 +1,15 @@
-'use client';
+'use client'
 
-import PreviewPanel from '@/components/preview-panel';
-import { cn } from '@/lib/utils';
-import { ReactNode } from 'react';
+import PreviewPanel from '@/components/preview-panel'
+import { cn } from '@/lib/utils'
+import { ReactNode } from 'react'
 
 type Props = {
-  header: ReactNode;
-  projectId?: string;
-  onPreviewUrl?: (url: string | null) => void;
-  className?: string;
-};
+  header: ReactNode
+  projectId?: string
+  onPreviewUrl?: (url: string | null) => void
+  className?: string
+}
 
 export default function PreviewSection({ header, projectId, onPreviewUrl, className }: Props) {
   return (
@@ -21,7 +21,5 @@ export default function PreviewSection({ header, projectId, onPreviewUrl, classN
         </div>
       </div>
     </div>
-  );
+  )
 }
-
-

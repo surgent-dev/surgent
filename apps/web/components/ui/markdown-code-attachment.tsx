@@ -82,7 +82,10 @@ export function MarkdownCodeAttachment({ className, children, node, ...props }: 
   const pos = node?.position
   if (pos?.start?.line === pos?.end?.line) {
     return (
-      <code className={cn('rounded bg-muted px-1.5 py-0.5 font-mono text-sm', className)} {...props}>
+      <code
+        className={cn('rounded bg-muted px-1.5 py-0.5 font-mono text-sm', className)}
+        {...props}
+      >
         {children}
       </code>
     )
@@ -135,7 +138,10 @@ export function MarkdownCodeAttachment({ className, children, node, ...props }: 
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent showCloseButton={false} className="max-w-3xl rounded-md p-0 gap-0 overflow-hidden">
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-3xl rounded-md p-0 gap-0 overflow-hidden"
+        >
           <div className="flex h-10 items-center justify-between border-b bg-muted/30 px-3">
             <span className="font-mono text-sm">{filename}</span>
             <div className="flex items-center gap-1">

@@ -3,13 +3,22 @@ import type { Database } from '@repo/db'
 import { RateLimitError } from './error'
 import { createLogger } from './logger'
 
-export function createRateLimiter(db: Kysely<Database>, limit: number | undefined, rawIp: string, stage?: string) {
+export function createRateLimiter(
+  db: Kysely<Database>,
+  limit: number | undefined,
+  rawIp: string,
+  stage?: string,
+) {
   if (!limit) return
 
   const logger = createLogger(stage)
   const ip = !rawIp.length ? 'unknown' : rawIp
   const now = Date.now()
-  const intervals = [buildYYYYMMDDHH(now), buildYYYYMMDDHH(now - 3_600_000), buildYYYYMMDDHH(now - 7_200_000)]
+  const intervals = [
+    buildYYYYMMDDHH(now),
+    buildYYYYMMDDHH(now - 3_600_000),
+    buildYYYYMMDDHH(now - 7_200_000),
+  ]
 
   return {
     track: async () => {
@@ -17,7 +26,9 @@ export function createRateLimiter(db: Kysely<Database>, limit: number | undefine
         .insertInto('ip_rate_limit')
         .values({ ip, interval: intervals[0], count: 1 })
         .onConflict((oc) =>
-          oc.columns(['ip', 'interval']).doUpdateSet({ count: sql`${sql.ref('ip_rate_limit.count')} + 1` }),
+          oc
+            .columns(['ip', 'interval'])
+            .doUpdateSet({ count: sql`${sql.ref('ip_rate_limit.count')} + 1` }),
         )
         .execute()
     },

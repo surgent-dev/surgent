@@ -26,7 +26,9 @@ const TUNNELS: TunnelConfig[] = [
   {
     name: 'gateway',
     port: 8080,
-    envInjections: [{ key: 'OPENCODE_BASE_URL', file: 'apps/worker/.env.local', suffix: '/zen/v1' }],
+    envInjections: [
+      { key: 'OPENCODE_BASE_URL', file: 'apps/worker/.env.local', suffix: '/zen/v1' },
+    ],
   },
 ]
 
@@ -36,7 +38,9 @@ async function checkCloudflared(): Promise<boolean> {
   return proc.exitCode === 0
 }
 
-async function startTunnel(config: TunnelConfig): Promise<{ url: string; proc: ReturnType<typeof Bun.spawn> } | null> {
+async function startTunnel(
+  config: TunnelConfig,
+): Promise<{ url: string; proc: ReturnType<typeof Bun.spawn> } | null> {
   console.log(`🚇 Starting tunnel for ${config.name} on port ${config.port}...`)
 
   const proc = Bun.spawn(['cloudflared', 'tunnel', '--url', `http://localhost:${config.port}`], {
@@ -122,13 +126,16 @@ async function main() {
   const selectedTunnels = args.length > 0 ? TUNNELS.filter((t) => args.includes(t.name)) : TUNNELS
 
   if (selectedTunnels.length === 0) {
-    console.error(`❌ No matching tunnels found. Available: ${TUNNELS.map((t) => t.name).join(', ')}`)
+    console.error(
+      `❌ No matching tunnels found. Available: ${TUNNELS.map((t) => t.name).join(', ')}`,
+    )
     process.exit(1)
   }
 
   console.log(`Starting tunnels: ${selectedTunnels.map((t) => t.name).join(', ')}\n`)
 
-  const results: Array<{ config: TunnelConfig; url: string; proc: ReturnType<typeof Bun.spawn> }> = []
+  const results: Array<{ config: TunnelConfig; url: string; proc: ReturnType<typeof Bun.spawn> }> =
+    []
 
   // Start tunnels in parallel
   const tunnelPromises = selectedTunnels.map(async (config) => {

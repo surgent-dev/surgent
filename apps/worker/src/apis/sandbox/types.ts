@@ -2,7 +2,10 @@ export type FileInfo = { name: string; path?: string; isDir: boolean }
 
 export interface Sandbox {
   id: string
-  exec(cmd: string, opts?: { timeout?: number; cwd?: string; env?: Record<string, string> }): Promise<{ code: number; output: string }>
+  exec(
+    cmd: string,
+    opts?: { timeout?: number; cwd?: string; env?: Record<string, string> },
+  ): Promise<{ code: number; output: string }>
   read(path: string): Promise<Buffer>
   list(path: string): Promise<FileInfo[]>
   stat(path: string): Promise<FileInfo>

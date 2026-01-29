@@ -1,6 +1,11 @@
 'use client'
 
-import { WebPreview, WebPreviewNavButtons, WebPreviewUrl, WebPreviewBody } from '@/components/agent/web-preview'
+import {
+  WebPreview,
+  WebPreviewNavButtons,
+  WebPreviewUrl,
+  WebPreviewBody,
+} from '@/components/agent/web-preview'
 import { useEffect, useMemo, useState, type ElementType } from 'react'
 import {
   X,
@@ -31,7 +36,12 @@ import { useSandbox } from '@/hooks/use-sandbox'
 
 import DiffView from '@/components/diff/diff-view'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -63,7 +73,15 @@ type McpStatusValue = { status?: string } | string
 
 type McpStatus = Record<string, McpStatusValue>
 
-function EmptyState({ title, description, icon: Icon }: { title: string; description: string; icon: ElementType }) {
+function EmptyState({
+  title,
+  description,
+  icon: Icon,
+}: {
+  title: string
+  description: string
+  icon: ElementType
+}) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[300px] text-center px-4">
       <div className="rounded-full bg-muted p-4 mb-4">
@@ -79,17 +97,21 @@ const formatStatus = (status: string) => status.replace(/[_-]/g, ' ')
 
 const getStatusTone = (status: string) => {
   const value = status.toLowerCase()
-  if (['ready', 'running', 'connected', 'online', 'ok', 'healthy'].includes(value)) return 'text-success'
+  if (['ready', 'running', 'connected', 'online', 'ok', 'healthy'].includes(value))
+    return 'text-success'
   if (['warning', 'degraded'].includes(value)) return 'text-warning'
-  if (['error', 'failed', 'offline', 'disconnected', 'down'].includes(value)) return 'text-destructive'
+  if (['error', 'failed', 'offline', 'disconnected', 'down'].includes(value))
+    return 'text-destructive'
   return 'text-muted-foreground'
 }
 
 const getStatusDot = (status: string) => {
   const value = status.toLowerCase()
-  if (['ready', 'running', 'connected', 'online', 'ok', 'healthy'].includes(value)) return 'bg-success'
+  if (['ready', 'running', 'connected', 'online', 'ok', 'healthy'].includes(value))
+    return 'bg-success'
   if (['warning', 'degraded'].includes(value)) return 'bg-warning'
-  if (['error', 'failed', 'offline', 'disconnected', 'down'].includes(value)) return 'bg-destructive'
+  if (['error', 'failed', 'offline', 'disconnected', 'down'].includes(value))
+    return 'bg-destructive'
   return 'bg-muted-foreground/40'
 }
 
@@ -135,7 +157,9 @@ function ConvexContent({
   if (!credentials) {
     return (
       <div className="w-full h-full flex items-center justify-center">
-        <span className="text-sm text-muted-foreground">Convex not configured for this project</span>
+        <span className="text-sm text-muted-foreground">
+          Convex not configured for this project
+        </span>
       </div>
     )
   }
@@ -148,7 +172,14 @@ function ChangesContent({ diffs }: { diffs: FileDiff[] }) {
     <ScrollArea className="h-full">
       <div className="p-4 space-y-4">
         {diffs.map((d, i) => (
-          <DiffView key={i} before={d.before} after={d.after} path={d.file} collapseUnchanged contextLines={3} />
+          <DiffView
+            key={i}
+            before={d.before}
+            after={d.after}
+            path={d.file}
+            collapseUnchanged
+            contextLines={3}
+          />
         ))}
       </div>
     </ScrollArea>
@@ -169,11 +200,23 @@ function LogSection({ title, content }: { title: string; content: string }) {
   )
 }
 
-function LogsContent({ app, opencode, isLoading }: { app?: string; opencode?: string; isLoading: boolean }) {
+function LogsContent({
+  app,
+  opencode,
+  isLoading,
+}: {
+  app?: string
+  opencode?: string
+  isLoading: boolean
+}) {
   if (isLoading) return <LoadingState icon={ScrollText} message="Loading logs..." />
   if (!app && !opencode)
     return (
-      <EmptyState title="No logs yet" description="Logs will appear when processes are running" icon={ScrollText} />
+      <EmptyState
+        title="No logs yet"
+        description="Logs will appear when processes are running"
+        icon={ScrollText}
+      />
     )
 
   return (
@@ -186,13 +229,25 @@ function LogsContent({ app, opencode, isLoading }: { app?: string; opencode?: st
   )
 }
 
-function McpContent({ entries, isLoading }: { entries: Array<{ name: string; status: string }>; isLoading: boolean }) {
+function McpContent({
+  entries,
+  isLoading,
+}: {
+  entries: Array<{ name: string; status: string }>
+  isLoading: boolean
+}) {
   if (isLoading) {
     return <LoadingState icon={Terminal} message="Loading MCP status..." />
   }
 
   if (!entries.length) {
-    return <EmptyState title="No MCP servers" description="Connect an MCP server to see status" icon={Terminal} />
+    return (
+      <EmptyState
+        title="No MCP servers"
+        description="Connect an MCP server to see status"
+        icon={Terminal}
+      />
+    )
   }
 
   return (
@@ -245,7 +300,9 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
           </div>
           <div className="space-y-1">
             <p className="font-medium">Connect Payments</p>
-            <p className="text-sm text-muted-foreground">Connect your Stripe account to accept payments</p>
+            <p className="text-sm text-muted-foreground">
+              Connect your Stripe account to accept payments
+            </p>
           </div>
           <Button onClick={handleConnect} disabled={connect.isPending}>
             {connect.isPending ? 'Connecting...' : 'Connect Stripe'}
@@ -279,7 +336,9 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
               </Button>
             ) : (
               <div className="flex items-center gap-3">
-                <span className={cn('text-xs font-medium capitalize', getStatusTone(account.status))}>
+                <span
+                  className={cn('text-xs font-medium capitalize', getStatusTone(account.status))}
+                >
                   {formatStatus(account.status)}
                 </span>
                 <Dialog
@@ -303,8 +362,8 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
                     <DialogHeader>
                       <DialogTitle>Disconnect Stripe Account</DialogTitle>
                       <DialogDescription>
-                        Are you sure you want to disconnect your Stripe account? This will disable payment processing
-                        for this project.
+                        Are you sure you want to disconnect your Stripe account? This will disable
+                        payment processing for this project.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -335,7 +394,13 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
   )
 }
 
-function SandboxPausedContent({ onActivate, isActivating }: { onActivate: () => void; isActivating: boolean }) {
+function SandboxPausedContent({
+  onActivate,
+  isActivating,
+}: {
+  onActivate: () => void
+  isActivating: boolean
+}) {
   return (
     <div className="w-full h-full flex items-center justify-center">
       <div className="flex flex-col items-center gap-4 text-center max-w-sm">
@@ -460,7 +525,11 @@ export default function PreviewPanel({
   const shouldFetchDiffs = type === 'changes' && !tab?.diffs && !tab?.messageId
   const diffSessionId = shouldFetchDiffs ? tab?.sessionId || activeSessionId : undefined
   const diffMessageId = shouldFetchDiffs && tab?.messageId ? tab.messageId : undefined
-  const { data: messageDiffs, isLoading: diffsLoading } = useSessionDiff(projectId, diffSessionId, diffMessageId)
+  const { data: messageDiffs, isLoading: diffsLoading } = useSessionDiff(
+    projectId,
+    diffSessionId,
+    diffMessageId,
+  )
 
   const hasConvex = Boolean((project?.metadata as any)?.convex)
   const hasMcp = tabs.some((tab) => tab.type === 'mcp')
@@ -477,7 +546,10 @@ export default function PreviewPanel({
     queryFn: async () => (await http.get('mcp').json()) as McpStatus,
   })
 
-  const { data: sandboxLogs, isLoading: logsLoading } = useSandboxLogsQuery(projectId, type === 'logs')
+  const { data: sandboxLogs, isLoading: logsLoading } = useSandboxLogsQuery(
+    projectId,
+    type === 'logs',
+  )
 
   const mcpEntries = useMemo(() => {
     if (!mcpStatus) return []
@@ -542,13 +614,26 @@ export default function PreviewPanel({
         return <LoadingState message="Starting sandbox..." />
       }
       case 'convex':
-        return <ConvexContent credentials={convexCredentials} isLoading={convexLoading} path={tab?.convexPath} />
+        return (
+          <ConvexContent
+            credentials={convexCredentials}
+            isLoading={convexLoading}
+            path={tab?.convexPath}
+          />
+        )
       case 'changes': {
         const diffs = tab?.diffs ?? messageDiffs
         if (diffsLoading) return <LoadingState icon={GitCompare} message="Loading changes..." />
         if (!diffs) {
-          if (tab?.messageId) return <LoadingState icon={GitCompare} message="Preparing changes..." />
-          return <EmptyState title="No changes" description="No file changes in this session" icon={GitCompare} />
+          if (tab?.messageId)
+            return <LoadingState icon={GitCompare} message="Preparing changes..." />
+          return (
+            <EmptyState
+              title="No changes"
+              description="No file changes in this session"
+              icon={GitCompare}
+            />
+          )
         }
         return diffs.length ? (
           <ChangesContent diffs={diffs} />
@@ -559,7 +644,13 @@ export default function PreviewPanel({
       case 'mcp':
         return <McpContent entries={mcpEntries} isLoading={mcpLoading} />
       case 'logs':
-        return <LogsContent app={sandboxLogs?.app} opencode={sandboxLogs?.opencode} isLoading={logsLoading} />
+        return (
+          <LogsContent
+            app={sandboxLogs?.app}
+            opencode={sandboxLogs?.opencode}
+            isLoading={logsLoading}
+          />
+        )
       case 'payments':
         return <PaymentsContent projectId={projectId} />
     }
@@ -601,7 +692,12 @@ export default function PreviewPanel({
   // Always wrap in WebPreview when we have a preview URL - keeps context stable
   if (url) {
     return (
-      <WebPreview key={url} defaultUrl={url} onUrlChange={handleUrlChange} className="h-full border-0">
+      <WebPreview
+        key={url}
+        defaultUrl={url}
+        onUrlChange={handleUrlChange}
+        className="h-full border-0"
+      >
         {content}
       </WebPreview>
     )

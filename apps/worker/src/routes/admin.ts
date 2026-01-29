@@ -105,7 +105,9 @@ admin.get('/overview', requireAdmin, async (c) => {
 
   const projectsInRange = await (
     deployed
-      ? projectsCountQuery.leftJoin('worker', 'worker.projectId', 'project.id').where('worker.status', '=', 'active')
+      ? projectsCountQuery
+          .leftJoin('worker', 'worker.projectId', 'project.id')
+          .where('worker.status', '=', 'active')
       : projectsCountQuery
   ).executeTakeFirst()
 
@@ -145,7 +147,9 @@ admin.get('/overview', requireAdmin, async (c) => {
     .where('project.createdAt', '>=', start)
     .where('project.deletedAt', 'is', null)
 
-  const allProjects = await (deployed ? projectsQuery.where('worker.status', '=', 'active') : projectsQuery)
+  const allProjects = await (
+    deployed ? projectsQuery.where('worker.status', '=', 'active') : projectsQuery
+  )
     .orderBy('project.createdAt', sort)
     .limit(perPage)
     .offset(offset)
@@ -153,11 +157,16 @@ admin.get('/overview', requireAdmin, async (c) => {
 
   const projectsWithWorker = allProjects.map((row: any) => ({
     ...row,
-    worker: row.workerName ? { name: row.workerName, status: row.workerStatus, hostname: row.workerHostname } : null,
+    worker: row.workerName
+      ? { name: row.workerName, status: row.workerStatus, hostname: row.workerHostname }
+      : null,
   }))
 
   const monthly = useMonthlyBuckets(range)
-  let charts: { users: { date: string; count: string }[]; projects: { date: string; count: string }[] }
+  let charts: {
+    users: { date: string; count: string }[]
+    projects: { date: string; count: string }[]
+  }
 
   if (monthly) {
     const buckets = generateMonthsBetween(start, now)

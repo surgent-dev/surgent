@@ -7,7 +7,9 @@ export const config = {
     port: env.PORT || '4000',
     host: env.HOST || 'localhost',
     clientOrigin: env.CLIENT_ORIGIN || 'http://localhost:3000',
-    trustedOrigins: (env.TRUSTED_ORIGINS || env.CLIENT_ORIGIN || 'http://localhost:3000').split(','),
+    trustedOrigins: (env.TRUSTED_ORIGINS || env.CLIENT_ORIGIN || 'http://localhost:3000').split(
+      ',',
+    ),
   },
   database: {
     url: env.DATABASE_URL,
@@ -78,7 +80,8 @@ export const config = {
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
     baseUrl: env.OPENCODE_BASE_URL,
-    configRepoUrl: env.OPENCODE_CONFIG_REPO_URL || 'https://github.com/surgent-dev/opencode-config.git',
+    configRepoUrl:
+      env.OPENCODE_CONFIG_REPO_URL || 'https://github.com/surgent-dev/opencode-config.git',
     configDir: env.OPENCODE_CONFIG_DIR || '/home/user/opencode-config',
   },
 } as const

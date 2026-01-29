@@ -29,7 +29,12 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('metadata', 'jsonb')
     .execute()
 
-  await db.schema.createIndex('apikey_projectId_idx').ifNotExists().on('apikey').column('projectId').execute()
+  await db.schema
+    .createIndex('apikey_projectId_idx')
+    .ifNotExists()
+    .on('apikey')
+    .column('projectId')
+    .execute()
 }
 
 export async function down(db: Kysely<any>): Promise<void> {

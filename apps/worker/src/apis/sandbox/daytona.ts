@@ -1,5 +1,5 @@
-import { Daytona, Sandbox as DaytonaSandbox } from "@daytonaio/sdk"
-import type { Sandbox, SandboxProvider, FileInfo } from "./types"
+import { Daytona, Sandbox as DaytonaSandbox } from '@daytonaio/sdk'
+import type { Sandbox, SandboxProvider, FileInfo } from './types'
 
 class DaytonaSandboxImpl implements Sandbox {
   readonly id: string
@@ -22,13 +22,18 @@ class DaytonaSandboxImpl implements Sandbox {
     return entries.map((f: { name: string; path?: string; isDir?: boolean; type?: string }) => ({
       name: f.name,
       path: f.path,
-      isDir: f.isDir === true || f.type === "directory",
+      isDir: f.isDir === true || f.type === 'directory',
     }))
   }
 
   async stat(path: string): Promise<FileInfo> {
-    const f = await this.sbx.fs.getFileDetails(path) as { name: string; path?: string; isDir?: boolean; type?: string }
-    return { name: f.name, path: f.path, isDir: f.isDir === true || f.type === "directory" }
+    const f = (await this.sbx.fs.getFileDetails(path)) as {
+      name: string
+      path?: string
+      isDir?: boolean
+      type?: string
+    }
+    return { name: f.name, path: f.path, isDir: f.isDir === true || f.type === 'directory' }
   }
 
   clone(url: string, dir: string) {
@@ -75,8 +80,8 @@ export class DaytonaProvider implements SandboxProvider {
 
   async resume(id: string) {
     const sbx = await this.getClient().get(id)
-    const state = String(sbx.state || "").toUpperCase()
-    if (state === "STOPPED" || state === "ARCHIVED") await sbx.start()
+    const state = String(sbx.state || '').toUpperCase()
+    if (state === 'STOPPED' || state === 'ARCHIVED') await sbx.start()
     return new DaytonaSandboxImpl(sbx)
   }
 

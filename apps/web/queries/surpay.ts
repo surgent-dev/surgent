@@ -31,7 +31,9 @@ async function fetchSurpayAccount(projectId: string, accountId: string): Promise
 
 async function connectSurpay(projectId: string): Promise<SurpayConnectResponse> {
   return payHttp
-    .post('accounts/connect', { json: { project_id: projectId, processor: 'stripe', country: 'us' } })
+    .post('accounts/connect', {
+      json: { project_id: projectId, processor: 'stripe', country: 'us' },
+    })
     .json()
 }
 
@@ -49,7 +51,11 @@ export function useSurpayAccounts(projectId?: string) {
   })
 }
 
-export function useSurpayAccount(projectId?: string, accountId?: string, options?: { enabled?: boolean }) {
+export function useSurpayAccount(
+  projectId?: string,
+  accountId?: string,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: ['surpay-account', projectId, accountId],
     queryFn: () => fetchSurpayAccount(projectId!, accountId!),
@@ -71,7 +77,8 @@ export function useSurpayConnect() {
 export function useSurpayDisconnect() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ accountId }: { projectId: string; accountId: string }) => disconnectSurpay(accountId),
+    mutationFn: ({ accountId }: { projectId: string; accountId: string }) =>
+      disconnectSurpay(accountId),
     onSuccess: (_res, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['surpay-accounts', projectId] })
     },

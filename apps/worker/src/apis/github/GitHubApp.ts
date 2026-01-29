@@ -3,6 +3,7 @@
  */
 
 import { createAppAuth } from '@octokit/auth-app'
+import { refreshToken } from '@octokit/oauth-methods'
 import { Octokit } from '@octokit/rest'
 import { createPrivateKey } from 'node:crypto'
 import { config } from '@/lib/config'
@@ -60,7 +61,9 @@ export class GitHubApp {
   /**
    * Get an installation access token
    */
-  async getInstallationToken(installationId: number): Promise<{ token: string; expiresAt: string }> {
+  async getInstallationToken(
+    installationId: number,
+  ): Promise<{ token: string; expiresAt: string }> {
     const auth = await this.appAuth({
       type: 'installation',
       installationId,
@@ -190,6 +193,33 @@ export class GitHubApp {
       redirectUrl,
       state,
     })
+  }
+
+  /**
+   * Refresh an expired user access token using a refresh token
+   */
+  async refreshUserAccessToken(token: string) {
+    if (!this.config.clientId || !this.config.clientSecret) {
+      throw new Error('GitHub App OAuth not configured')
+    }
+
+    const { data } = await refreshToken({
+      clientType: 'github-app',
+      clientId: this.config.clientId,
+      clientSecret: this.config.clientSecret,
+      refreshToken: token,
+    })
+
+    return {
+      token: data.access_token,
+      expiresAt: data.expires_in
+        ? new Date(Date.now() + data.expires_in * 1000).toISOString()
+        : null,
+      refreshToken: data.refresh_token,
+      refreshTokenExpiresAt: data.refresh_token_expires_in
+        ? new Date(Date.now() + data.refresh_token_expires_in * 1000).toISOString()
+        : null,
+    }
   }
 }
 

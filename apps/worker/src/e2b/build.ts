@@ -1,8 +1,8 @@
-import "dotenv/config"
-import { Template, defaultBuildLogger } from "e2b"
-import { template, templateName } from "./template"
+import 'dotenv/config'
+import { Template, defaultBuildLogger } from 'e2b'
+import { template, templateName } from './template'
 
-const isProd = process.env.NODE_ENV === "production"
+const isProd = process.env.NODE_ENV === 'production'
 
 await Template.build(template, {
   alias: templateName,
@@ -10,4 +10,3 @@ await Template.build(template, {
   memoryMB: isProd ? 1024 * 4 : 1024 * 4,
   onBuildLogs: defaultBuildLogger(),
 })
-

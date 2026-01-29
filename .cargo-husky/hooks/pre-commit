@@ -1,0 +1,13 @@
+#!/bin/sh
+# Pre-commit hook for Rust projects
+# Runs cargo fmt check and clippy
+
+set -e
+
+echo "Running cargo fmt check..."
+cargo fmt --all -- --check
+
+echo "Running cargo clippy..."
+cargo clippy --all-targets --all-features -- -D warnings
+
+echo "Pre-commit checks passed!"

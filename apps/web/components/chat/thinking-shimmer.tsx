@@ -1,4 +1,4 @@
-'use client';
+'use client'
 
 export function ThinkingShimmer() {
   return (
@@ -10,6 +10,5 @@ export function ThinkingShimmer() {
       </div>
       <span className="text-xs text-foreground/60">Thinking…</span>
     </div>
-  );
+  )
 }
-

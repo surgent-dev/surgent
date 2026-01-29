@@ -69,12 +69,24 @@ async function sendMessage(
   model?: string,
   providerID?: string,
 ): Promise<Message> {
-  const parts: Array<{ type: string; text?: string; mime?: string; filename?: string; url?: string; size?: number }> =
-    []
+  const parts: Array<{
+    type: string
+    text?: string
+    mime?: string
+    filename?: string
+    url?: string
+    size?: number
+  }> = []
 
   if (files?.length) {
     for (const file of files) {
-      parts.push({ type: 'file', mime: file.mime, filename: file.filename, url: file.url, size: file.size })
+      parts.push({
+        type: 'file',
+        mime: file.mime,
+        filename: file.filename,
+        url: file.url,
+        size: file.size,
+      })
     }
   }
 
@@ -92,7 +104,9 @@ async function sendMessage(
     body.model = { providerID, modelID: model }
   }
 
-  const data = await http.post(`api/agent/${projectId}/session/${sessionId}/message`, { json: body }).json()
+  const data = await http
+    .post(`api/agent/${projectId}/session/${sessionId}/message`, { json: body })
+    .json()
   return data as Message
 }
 
@@ -182,15 +196,22 @@ export function useDeleteSession(projectId?: string) {
 
 // --- Update session (title) ---
 
-async function updateSession(projectId: string, sessionId: string, updates: { title?: string }): Promise<Session> {
-  const data = await http.patch(`api/agent/${projectId}/session/${sessionId}`, { json: updates }).json()
+async function updateSession(
+  projectId: string,
+  sessionId: string,
+  updates: { title?: string },
+): Promise<Session> {
+  const data = await http
+    .patch(`api/agent/${projectId}/session/${sessionId}`, { json: updates })
+    .json()
   return data as Session
 }
 
 export function useUpdateSession(projectId?: string) {
   const queryClient = useQueryClient()
   return useMutation<Session, unknown, { sessionId: string; title?: string }>({
-    mutationFn: ({ sessionId, ...updates }) => updateSession(projectId as string, sessionId, updates),
+    mutationFn: ({ sessionId, ...updates }) =>
+      updateSession(projectId as string, sessionId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sessions', projectId] })
     },
@@ -199,7 +220,11 @@ export function useUpdateSession(projectId?: string) {
 
 // --- Fork session ---
 
-async function forkSession(projectId: string, sessionId: string, messageId?: string): Promise<Session> {
+async function forkSession(
+  projectId: string,
+  sessionId: string,
+  messageId?: string,
+): Promise<Session> {
   const data = await http
     .post(`api/agent/${projectId}/session/${sessionId}/fork`, {
       json: messageId ? { messageID: messageId } : {},
@@ -211,7 +236,8 @@ async function forkSession(projectId: string, sessionId: string, messageId?: str
 export function useForkSession(projectId?: string) {
   const queryClient = useQueryClient()
   return useMutation<Session, unknown, { sessionId: string; messageId?: string }>({
-    mutationFn: ({ sessionId, messageId }) => forkSession(projectId as string, sessionId, messageId),
+    mutationFn: ({ sessionId, messageId }) =>
+      forkSession(projectId as string, sessionId, messageId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sessions', projectId] })
     },
@@ -220,7 +246,11 @@ export function useForkSession(projectId?: string) {
 
 // --- Session diff ---
 
-async function fetchSessionDiff(projectId: string, sessionId: string, messageId?: string): Promise<FileDiff[]> {
+async function fetchSessionDiff(
+  projectId: string,
+  sessionId: string,
+  messageId?: string,
+): Promise<FileDiff[]> {
   const url = messageId
     ? `api/agent/${projectId}/session/${sessionId}/diff?messageID=${messageId}`
     : `api/agent/${projectId}/session/${sessionId}/diff`
@@ -256,7 +286,11 @@ async function respondPermission(
 }
 
 export function useRespondPermission(projectId?: string, sessionId?: string) {
-  return useMutation<boolean, unknown, { permissionId: string; response: PermissionResponse; remember?: boolean }>({
+  return useMutation<
+    boolean,
+    unknown,
+    { permissionId: string; response: PermissionResponse; remember?: boolean }
+  >({
     mutationFn: ({ permissionId, response, remember }) =>
       respondPermission(projectId as string, sessionId as string, permissionId, response, remember),
   })
@@ -264,7 +298,11 @@ export function useRespondPermission(projectId?: string, sessionId?: string) {
 
 // --- Revert session ---
 
-async function revertSession(projectId: string, sessionId: string, messageId: string): Promise<Session> {
+async function revertSession(
+  projectId: string,
+  sessionId: string,
+  messageId: string,
+): Promise<Session> {
   const data = await http
     .post(`api/agent/${projectId}/session/${sessionId}/revert`, {
       json: { messageID: messageId },
@@ -274,14 +312,17 @@ async function revertSession(projectId: string, sessionId: string, messageId: st
 }
 
 async function unrevertSession(projectId: string, sessionId: string): Promise<Session> {
-  const data = await http.post(`api/agent/${projectId}/session/${sessionId}/unrevert`, { json: {} }).json()
+  const data = await http
+    .post(`api/agent/${projectId}/session/${sessionId}/unrevert`, { json: {} })
+    .json()
   return data as Session
 }
 
 export function useRevertSession(projectId?: string) {
   const queryClient = useQueryClient()
   return useMutation<Session, unknown, { sessionId: string; messageId: string }>({
-    mutationFn: ({ sessionId, messageId }) => revertSession(projectId as string, sessionId, messageId),
+    mutationFn: ({ sessionId, messageId }) =>
+      revertSession(projectId as string, sessionId, messageId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sessions', projectId] })
     },

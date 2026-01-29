@@ -20,7 +20,9 @@ async function getProjectForUser(id: string, userId: string) {
   const row = await db
     .selectFrom('project')
     .leftJoin('member', (join) =>
-      join.onRef('member.organizationId', '=', 'project.organizationId').on('member.userId', '=', userId),
+      join
+        .onRef('member.organizationId', '=', 'project.organizationId')
+        .on('member.userId', '=', userId),
     )
     .selectAll('project')
     .select('member.id as memberId')
@@ -53,35 +55,40 @@ providers.get('/:id', zValidator('param', idParam), async (c) => {
 })
 
 // POST /providers/:id - Create/update BYOK provider credentials
-providers.post('/:id', zValidator('param', idParam), zValidator('json', providerSchema), async (c) => {
-  const { id } = c.req.valid('param')
-  const { provider, credentials } = c.req.valid('json')
-  const result = await getProjectForUser(id, c.get('user')!.id)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
+providers.post(
+  '/:id',
+  zValidator('param', idParam),
+  zValidator('json', providerSchema),
+  async (c) => {
+    const { id } = c.req.valid('param')
+    const { provider, credentials } = c.req.valid('json')
+    const result = await getProjectForUser(id, c.get('user')!.id)
+    if ('error' in result) return c.json({ error: result.error }, result.status)
 
-  const now = new Date()
-  await db
-    .insertInto('provider')
-    .values({
-      id: crypto.randomUUID(),
-      projectId: id,
-      provider,
-      credentials,
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-    })
-    .onConflict((oc) =>
-      oc.columns(['projectId', 'provider']).doUpdateSet({
+    const now = new Date()
+    await db
+      .insertInto('provider')
+      .values({
+        id: crypto.randomUUID(),
+        projectId: id,
+        provider,
         credentials,
-        deletedAt: null,
+        createdAt: now,
         updatedAt: now,
-      }),
-    )
-    .execute()
+        deletedAt: null,
+      })
+      .onConflict((oc) =>
+        oc.columns(['projectId', 'provider']).doUpdateSet({
+          credentials,
+          deletedAt: null,
+          updatedAt: now,
+        }),
+      )
+      .execute()
 
-  return c.json({ updated: true })
-})
+    return c.json({ updated: true })
+  },
+)
 
 // DELETE /providers/:id/:provider - Remove BYOK provider credentials
 providers.delete('/:id/:provider', zValidator('param', providerParam), async (c) => {
@@ -89,7 +96,11 @@ providers.delete('/:id/:provider', zValidator('param', providerParam), async (c)
   const result = await getProjectForUser(id, c.get('user')!.id)
   if ('error' in result) return c.json({ error: result.error }, result.status)
 
-  await db.deleteFrom('provider').where('projectId', '=', id).where('provider', '=', provider).execute()
+  await db
+    .deleteFrom('provider')
+    .where('projectId', '=', id)
+    .where('provider', '=', provider)
+    .execute()
   return c.json({ deleted: true })
 })
 

@@ -2,7 +2,17 @@
 
 import { useState } from 'react'
 import { toast } from 'react-hot-toast'
-import { GitCommit, GitBranch, ArrowUp, ArrowDown, Loader2, RefreshCw, Check, Circle, AlertCircle } from 'lucide-react'
+import {
+  GitCommit,
+  GitBranch,
+  ArrowUp,
+  ArrowDown,
+  Loader2,
+  RefreshCw,
+  Check,
+  Circle,
+  AlertCircle,
+} from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -97,7 +107,13 @@ export default function GitPanel({ projectId }: Props) {
             <GitCommit className="size-4" />
             <span className="text-sm font-medium">Git</span>
           </div>
-          <Button variant="ghost" size="icon" className="size-6" onClick={() => refetch()} disabled={isFetching}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
             <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
           </Button>
         </div>
@@ -156,13 +172,18 @@ export default function GitPanel({ projectId }: Props) {
           <ScrollArea className="h-52">
             <div className="p-1.5 space-y-0.5">
               {commits.map((c) => (
-                <div key={c.hash} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/30 text-xs">
+                <div
+                  key={c.hash}
+                  className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/30 text-xs"
+                >
                   {c.pushed ? (
                     <Check className="size-3 text-emerald-500 shrink-0" />
                   ) : (
                     <Circle className="size-3 text-amber-500 shrink-0" />
                   )}
-                  <span className="font-mono text-muted-foreground w-12 shrink-0">{c.shortHash}</span>
+                  <span className="font-mono text-muted-foreground w-12 shrink-0">
+                    {c.shortHash}
+                  </span>
                   <span className="truncate flex-1">{c.message}</span>
                   <span className="text-muted-foreground shrink-0">{timeAgo(c.date)}</span>
                 </div>
@@ -181,7 +202,11 @@ export default function GitPanel({ projectId }: Props) {
               onClick={handlePush}
               disabled={push.isPending || ahead === 0}
             >
-              {push.isPending ? <Loader2 className="size-3 animate-spin mr-1" /> : <ArrowUp className="size-3 mr-1" />}
+              {push.isPending ? (
+                <Loader2 className="size-3 animate-spin mr-1" />
+              ) : (
+                <ArrowUp className="size-3 mr-1" />
+              )}
               Push{ahead > 0 && ` (${ahead})`}
             </Button>
             <Button
@@ -202,7 +227,9 @@ export default function GitPanel({ projectId }: Props) {
         )}
 
         {log?.initialized && !connected && (
-          <div className="p-2 border-t text-center text-xs text-muted-foreground">Connect GitHub to sync</div>
+          <div className="p-2 border-t text-center text-xs text-muted-foreground">
+            Connect GitHub to sync
+          </div>
         )}
       </PopoverContent>
     </Popover>

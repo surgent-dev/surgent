@@ -89,7 +89,9 @@ export default function QuestionPrompt({ request, onReply, onReject, pending }: 
                 )}
               >
                 {o.label}
-                {o.description && <span className="text-muted-foreground ml-2 text-xs">{o.description}</span>}
+                {o.description && (
+                  <span className="text-muted-foreground ml-2 text-xs">{o.description}</span>
+                )}
               </button>
             ))}
 
@@ -118,7 +120,11 @@ export default function QuestionPrompt({ request, onReply, onReject, pending }: 
         >
           {pending ? 'Sending...' : 'Send'}
         </button>
-        <button onClick={onReject} disabled={pending} className="px-3 h-8 text-sm rounded border hover:bg-muted">
+        <button
+          onClick={onReject}
+          disabled={pending}
+          className="px-3 h-8 text-sm rounded border hover:bg-muted"
+        >
           Skip
         </button>
       </div>

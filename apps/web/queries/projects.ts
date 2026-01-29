@@ -74,7 +74,9 @@ async function deployProjectReq({ id, deployName }: { id: string; deployName?: s
 }
 
 async function confirmHostnameReq({ id, name }: { id: string; name: string }) {
-  const data = await http.post(`api/projects/${id}/deployment/confirm-hostname`, { json: { name } }).json()
+  const data = await http
+    .post(`api/projects/${id}/deployment/confirm-hostname`, { json: { name } })
+    .json()
   return data as { confirmed: boolean; name: string; previewUrl: string }
 }
 
@@ -121,7 +123,9 @@ export function useConfirmHostname() {
 async function checkHostnameAvailability(name: string, projectId?: string) {
   const params = new URLSearchParams({ name })
   if (projectId) params.set('projectId', projectId)
-  const data: { available: boolean } = await http.get(`api/projects/check-hostname?${params}`).json()
+  const data: { available: boolean } = await http
+    .get(`api/projects/check-hostname?${params}`)
+    .json()
   return data
 }
 
@@ -299,7 +303,9 @@ export function useCloudflareDeploymentsQuery(projectId: string) {
 }
 
 async function redeployVersionReq({ id, versionId }: { id: string; versionId: string }) {
-  const data = await http.post(`api/projects/${id}/cloudflare-redeploy`, { json: { versionId } }).json()
+  const data = await http
+    .post(`api/projects/${id}/cloudflare-redeploy`, { json: { versionId } })
+    .json()
   return ScheduledSchema.parse(data)
 }
 

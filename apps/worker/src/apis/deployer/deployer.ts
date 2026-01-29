@@ -53,14 +53,15 @@ export class WorkerDeployer {
 
     // 1. Start asset upload session
     logger.info('📤 Starting asset upload session...')
-    const uploadSession = await this.client.workersForPlatforms.dispatch.namespaces.scripts.assetUpload.create(
-      dispatchNamespace,
-      scriptName,
-      {
-        account_id: this.accountId,
-        manifest: assetsManifest,
-      },
-    )
+    const uploadSession =
+      await this.client.workersForPlatforms.dispatch.namespaces.scripts.assetUpload.create(
+        dispatchNamespace,
+        scriptName,
+        {
+          account_id: this.accountId,
+          manifest: assetsManifest,
+        },
+      )
 
     const { buckets, jwt: uploadJwt } = uploadSession
     if (!uploadJwt) {
@@ -80,26 +81,32 @@ export class WorkerDeployer {
     logger.info('🚀 Deploying worker script...')
     const scriptFilename = 'index.js'
 
-    await this.client.workersForPlatforms.dispatch.namespaces.scripts.update(dispatchNamespace, scriptName, {
-      account_id: this.accountId,
-      metadata: {
-        main_module: scriptFilename,
-        compatibility_date: compatibilityDate,
-        compatibility_flags: compatibilityFlags,
-        bindings: this.buildBindings(bindings, vars, assetsConfig),
-        observability,
-        assets: {
-          jwt: completionJwt,
-          config: assetsConfig
-            ? {
-                not_found_handling: assetsConfig.not_found_handling || 'single-page-application',
-                run_worker_first: assetsConfig.run_worker_first,
-              }
-            : undefined,
+    await this.client.workersForPlatforms.dispatch.namespaces.scripts.update(
+      dispatchNamespace,
+      scriptName,
+      {
+        account_id: this.accountId,
+        metadata: {
+          main_module: scriptFilename,
+          compatibility_date: compatibilityDate,
+          compatibility_flags: compatibilityFlags,
+          bindings: this.buildBindings(bindings, vars, assetsConfig),
+          observability,
+          assets: {
+            jwt: completionJwt,
+            config: assetsConfig
+              ? {
+                  not_found_handling: assetsConfig.not_found_handling || 'single-page-application',
+                  run_worker_first: assetsConfig.run_worker_first,
+                }
+              : undefined,
+          },
         },
+        files: [
+          new File([workerContent], scriptFilename, { type: 'application/javascript+module' }),
+        ],
       },
-      files: [new File([workerContent], scriptFilename, { type: 'application/javascript+module' })],
-    })
+    )
 
     logger.info('✅ Deployment completed successfully')
   }
@@ -125,17 +132,23 @@ export class WorkerDeployer {
 
     const scriptFilename = 'index.js'
 
-    await this.client.workersForPlatforms.dispatch.namespaces.scripts.update(dispatchNamespace, scriptName, {
-      account_id: this.accountId,
-      metadata: {
-        main_module: scriptFilename,
-        compatibility_date: compatibilityDate,
-        compatibility_flags: compatibilityFlags,
-        bindings: this.buildBindings(bindings, vars),
-        observability,
+    await this.client.workersForPlatforms.dispatch.namespaces.scripts.update(
+      dispatchNamespace,
+      scriptName,
+      {
+        account_id: this.accountId,
+        metadata: {
+          main_module: scriptFilename,
+          compatibility_date: compatibilityDate,
+          compatibility_flags: compatibilityFlags,
+          bindings: this.buildBindings(bindings, vars),
+          observability,
+        },
+        files: [
+          new File([workerContent], scriptFilename, { type: 'application/javascript+module' }),
+        ],
       },
-      files: [new File([workerContent], scriptFilename, { type: 'application/javascript+module' })],
-    })
+    )
 
     logger.info('✅ Simple deployment completed')
   }
@@ -151,10 +164,14 @@ export class WorkerDeployer {
     logger.info(`🗑️ Deleting worker: ${scriptName}`)
 
     try {
-      await this.client.workersForPlatforms.dispatch.namespaces.scripts.delete(dispatchNamespace, scriptName, {
-        account_id: this.accountId,
-        force: true,
-      })
+      await this.client.workersForPlatforms.dispatch.namespaces.scripts.delete(
+        dispatchNamespace,
+        scriptName,
+        {
+          account_id: this.accountId,
+          force: true,
+        },
+      )
       logger.info(`✅ Worker deleted: ${scriptName}`)
     } catch (err: any) {
       // 404 means already deleted - that's fine
@@ -169,7 +186,11 @@ export class WorkerDeployer {
   /**
    * Upload asset buckets and return completion JWT
    */
-  private async uploadAssetBuckets(buckets: string[][], assetFiles: AssetFile[], uploadJwt: string): Promise<string> {
+  private async uploadAssetBuckets(
+    buckets: string[][],
+    assetFiles: AssetFile[],
+    uploadJwt: string,
+  ): Promise<string> {
     let completionJwt = uploadJwt
 
     for (let i = 0; i < buckets.length; i++) {

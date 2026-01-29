@@ -5,17 +5,25 @@ import { db } from '@/lib/db'
 
 export type ProviderName = 'e2b' | 'daytona'
 
-export const defaultProviderName: ProviderName = config.sandbox.provider === 'daytona' ? 'daytona' : 'e2b'
+export const defaultProviderName: ProviderName =
+  config.sandbox.provider === 'daytona' ? 'daytona' : 'e2b'
 
 export function getProvider(providerName?: ProviderName | string | null): SandboxProvider {
   const name = providerName || config.sandbox.provider
   if (name === 'daytona') {
-    return new DaytonaProvider(config.daytona.apiKey, config.daytona.serverUrl, config.daytona.snapshot)
+    return new DaytonaProvider(
+      config.daytona.apiKey,
+      config.daytona.serverUrl,
+      config.daytona.snapshot,
+    )
   }
   return new E2BProvider(config.e2b.template)
 }
 
-export async function resumeSandbox(sandboxId: string, providerName?: ProviderName | string | null): Promise<Sandbox> {
+export async function resumeSandbox(
+  sandboxId: string,
+  providerName?: ProviderName | string | null,
+): Promise<Sandbox> {
   return getProvider(providerName).resume(sandboxId)
 }
 

@@ -9,7 +9,11 @@ import { parse as parseDotEnv } from 'dotenv'
 import path from 'path'
 import stripJsonComments from 'strip-json-comments'
 import * as ProjectService from '@/services/projects'
-import { buildDeploymentConfig, parseWranglerConfig, deployToDispatch } from '@/apis/deployer/deploy'
+import {
+  buildDeploymentConfig,
+  parseWranglerConfig,
+  deployToDispatch,
+} from '@/apis/deployer/deploy'
 import { auth } from '@/lib/auth'
 import { WorkerDeployer } from '@/apis/deployer/deployer'
 import Cloudflare from 'cloudflare'
@@ -116,7 +120,9 @@ function resolveEntryPath(currentDir: string, entry: unknown): string {
 
 async function getProjectEnvVars(projectId: string, environment: string) {
   const rows = await ProjectService.getEnvVarsByProjectId(projectId, environment)
-  return Object.fromEntries(rows.filter((row) => row.value).map((row) => [row.key, row.value as string]))
+  return Object.fromEntries(
+    rows.filter((row) => row.value).map((row) => [row.key, row.value as string]),
+  )
 }
 
 async function directoryExists(sandbox: Sandbox, dir: string): Promise<boolean> {
@@ -174,15 +180,20 @@ async function ensureOpencodeConfigRepo(sandbox: Sandbox, repoUrl: string, dir: 
       throw new Error(`OPENCODE_CONFIG_DIR exists but is not a git repo: ${repoDir}`)
     }
 
-    const pull = await sandbox.exec(`git -C ${shellQuote(repoDir)} pull --ff-only`, { timeout: 120_000 })
+    const pull = await sandbox.exec(`git -C ${shellQuote(repoDir)} pull --ff-only`, {
+      timeout: 120_000,
+    })
     if (pull.code !== 0) throw new Error(`Failed to update opencode config repo: ${pull.output}`)
     return
   }
 
   await sandbox.exec(`mkdir -p ${shellQuote(posix.dirname(repoDir))}`, { timeout: 60_000 })
-  const clone = await sandbox.exec(`git clone --depth 1 ${shellQuote(repoUrl)} ${shellQuote(repoDir)}`, {
-    timeout: 120_000,
-  })
+  const clone = await sandbox.exec(
+    `git clone --depth 1 ${shellQuote(repoUrl)} ${shellQuote(repoDir)}`,
+    {
+      timeout: 120_000,
+    },
+  )
   if (clone.code !== 0) throw new Error(`Failed to clone opencode config repo: ${clone.output}`)
 }
 
@@ -202,7 +213,13 @@ async function ensurePm2Process(
 
 async function startOpencodeServer(sandbox: Sandbox, cwd: string, env?: Record<string, string>) {
   console.log('[opencode] starting server...', { sandboxId: sandbox.id, cwd })
-  await ensurePm2Process(sandbox, cwd, 'opencode-server', 'opencode serve --hostname 0.0.0.0 --port 4096', env)
+  await ensurePm2Process(
+    sandbox,
+    cwd,
+    'opencode-server',
+    'opencode serve --hostname 0.0.0.0 --port 4096',
+    env,
+  )
   console.log('[opencode] server started on port 4096')
 }
 
@@ -329,7 +346,9 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     })
 
     if (prevName && prevName !== scriptName) {
-      await new WorkerDeployer().deleteWorker(prevName, config.cloudflare.dispatchNamespace!).catch(() => {})
+      await new WorkerDeployer()
+        .deleteWorker(prevName, config.cloudflare.dispatchNamespace!)
+        .catch(() => {})
     }
 
     console.log('[deploy] success', { projectId, scriptName, cfDeploymentId: cfDeployment?.id })
@@ -349,7 +368,9 @@ async function fetchLatestCloudflareDeployment(accountId: string, scriptName: st
   try {
     if (config.cloudflare.dispatchNamespace) return null
     const client = new Cloudflare({ apiToken: config.cloudflare.apiToken })
-    const result: any = await client.workers.scripts.deployments.list(scriptName, { account_id: accountId })
+    const result: any = await client.workers.scripts.deployments.list(scriptName, {
+      account_id: accountId,
+    })
     const deployments = Array.isArray(result) ? result : result.result || []
     const latest = deployments[0]
     if (!latest) return null
@@ -382,7 +403,10 @@ export async function undeployProject(args: UndeployProjectArgs): Promise<void> 
     const deployer = new WorkerDeployer()
     await deployer.deleteWorker(scriptName, config.cloudflare.dispatchNamespace!)
 
-    await ProjectService.updateDeployment(deployment.id, { status: 'undeployed', finishedAt: new Date() })
+    await ProjectService.updateDeployment(deployment.id, {
+      status: 'undeployed',
+      finishedAt: new Date(),
+    })
     await ProjectService.upsertWorker({
       projectId,
       accountId: config.cloudflare.accountId!,
@@ -413,7 +437,10 @@ async function findAssetsDir(sandbox: Sandbox, workingDir: string): Promise<stri
   return null
 }
 
-async function readEnvFile(sandbox: Sandbox, path: string): Promise<Record<string, string> | undefined> {
+async function readEnvFile(
+  sandbox: Sandbox,
+  path: string,
+): Promise<Record<string, string> | undefined> {
   try {
     return parseDotEnv(await downloadFileSafe(sandbox, path))
   } catch {
@@ -428,7 +455,10 @@ export async function initializeProject(
   const projectCount = await ProjectService.countProjectsByOrganizationId(args.organizationId)
   console.log('[init] project count:', projectCount)
   if (projectCount >= MAX_PROJECTS_PER_ORG) {
-    throw new HttpError(400, `Project limit reached. Maximum ${MAX_PROJECTS_PER_ORG} projects per organization.`)
+    throw new HttpError(
+      400,
+      `Project limit reached. Maximum ${MAX_PROJECTS_PER_ORG} projects per organization.`,
+    )
   }
 
   const created = await ProjectService.createProject({
@@ -445,7 +475,11 @@ export async function initializeProject(
     headers: args.headers,
   })
 
-  const attached = await ProjectService.attachApiKeyToProject(apiKeyResult.id, projectId, args.organizationId)
+  const attached = await ProjectService.attachApiKeyToProject(
+    apiKeyResult.id,
+    projectId,
+    args.organizationId,
+  )
   if (!attached) {
     throw new Error('Failed to attach API key to project')
   }
@@ -472,9 +506,12 @@ export async function initializeProject(
   if (args.githubUrl) {
     console.log('[init] cloning template...')
     await sandbox.clone(args.githubUrl, workingDirectory)
-    const reset = await sandbox.exec(buildBashCommand(workingDirectory, 'rm -rf .git && git init -b main'), {
-      timeout: 60_000,
-    })
+    const reset = await sandbox.exec(
+      buildBashCommand(workingDirectory, 'rm -rf .git && git init -b main'),
+      {
+        timeout: 60_000,
+      },
+    )
     if (reset.code !== 0) {
       throw new Error(`Failed to reset git after clone: ${reset.output}`)
     }
@@ -497,7 +534,8 @@ export async function initializeProject(
     console.log('[init] no surgent.json or parse error:', err)
   }
 
-  if (initScript) await sandbox.exec(buildBashCommand(workingDirectory, initScript), { timeout: 600_000 })
+  if (initScript)
+    await sandbox.exec(buildBashCommand(workingDirectory, initScript), { timeout: 600_000 })
   if (devScript) await ensurePm2Process(sandbox, workingDirectory, processName, devScript, devEnv)
   const opencodeConfigDir = config.opencode.configDir
   await ensureOpencodeConfigRepo(sandbox, config.opencode.configRepoUrl, opencodeConfigDir)
@@ -517,7 +555,9 @@ export async function initializeProject(
   return { projectId, sandboxId: sandbox.id, previewUrl }
 }
 
-export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxId: string; previewUrl: string }> {
+export async function resumeProject(
+  args: ResumeProjectArgs,
+): Promise<{ sandboxId: string; previewUrl: string }> {
   const workingDirectory = workspacePath(args.projectId)
   const devEnv = await getProjectEnvVars(args.projectId, 'development')
 
@@ -532,7 +572,13 @@ export async function resumeProject(args: ResumeProjectArgs): Promise<{ sandboxI
     const project = await ProjectService.getProjectById(args.projectId)
     const metadata = project?.metadata as ProjectMetadata | null
     if (metadata?.startCommand && metadata?.processName) {
-      await ensurePm2Process(sandbox, workingDirectory, metadata.processName, metadata.startCommand, devEnv)
+      await ensurePm2Process(
+        sandbox,
+        workingDirectory,
+        metadata.processName,
+        metadata.startCommand,
+        devEnv,
+      )
     }
 
     const opencodeConfigDir = config.opencode.configDir
@@ -567,7 +613,9 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
   if (res.code !== 0) throw new Error(`convex deploy failed: ${res.output}`)
 }
 
-export async function downloadProject(args: DownloadProjectArgs): Promise<{ buffer: Buffer; filename: string }> {
+export async function downloadProject(
+  args: DownloadProjectArgs,
+): Promise<{ buffer: Buffer; filename: string }> {
   const { projectId } = args
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new HttpError(404, 'Project not found')
@@ -625,7 +673,9 @@ export async function deleteSandbox(args: DeleteProjectArgs): Promise<void> {
   }
 }
 
-export async function getSandboxLogs(args: GetSandboxLogsArgs): Promise<{ app: string; opencode: string }> {
+export async function getSandboxLogs(
+  args: GetSandboxLogsArgs,
+): Promise<{ app: string; opencode: string }> {
   const { projectId, lines = 100 } = args
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new HttpError(404, 'Project not found')
@@ -638,13 +688,19 @@ export async function getSandboxLogs(args: GetSandboxLogsArgs): Promise<{ app: s
 
   const [app, opencode] = await Promise.all([
     metadata?.processName
-      ? sandbox.exec(`pm2 logs ${metadata.processName} --nostream --lines ${lines} 2>&1 || echo "No app logs"`, {
-          timeout: 10_000,
-        })
+      ? sandbox.exec(
+          `pm2 logs ${metadata.processName} --nostream --lines ${lines} 2>&1 || echo "No app logs"`,
+          {
+            timeout: 10_000,
+          },
+        )
       : Promise.resolve({ code: 0, output: 'No app process configured' }),
-    sandbox.exec(`pm2 logs opencode-server --nostream --lines ${lines} 2>&1 || echo "No opencode logs"`, {
-      timeout: 10_000,
-    }),
+    sandbox.exec(
+      `pm2 logs opencode-server --nostream --lines ${lines} 2>&1 || echo "No opencode logs"`,
+      {
+        timeout: 10_000,
+      },
+    ),
   ])
 
   return { app: app.output, opencode: opencode.output }

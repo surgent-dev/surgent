@@ -22,8 +22,10 @@ export interface GitStatusResult {
   initialized: boolean
   branch?: string
   clean?: boolean
-  modified?: string[]
+  staged?: string[]
+  unstaged?: string[]
   untracked?: string[]
+  modified?: string[] // backwards compat: staged + unstaged
 }
 
 interface GitOpResult {
@@ -32,20 +34,23 @@ interface GitOpResult {
   error?: string
 }
 
-export function useGitLog(projectId?: string, opts?: { enabled?: boolean }) {
+export function useGitLog(projectId?: string, opts?: { enabled?: boolean; fetch?: boolean }) {
+  const fetch = opts?.fetch ?? false
   return useQuery({
-    queryKey: ['git-log', projectId],
-    queryFn: (): Promise<GitLogResult> => http.get(`api/projects/${projectId}/git/log`).json(),
+    queryKey: ['git-log', projectId, fetch],
+    queryFn: (): Promise<GitLogResult> =>
+      http.get(`api/projects/${projectId}/git/log${fetch ? '?fetch=true' : ''}`).json(),
     enabled: Boolean(projectId) && (opts?.enabled ?? true),
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    staleTime: fetch ? 30_000 : 15_000,
+    refetchInterval: fetch ? 60_000 : 30_000,
   })
 }
 
 export function useGitStatus(projectId?: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['git-status', projectId],
-    queryFn: (): Promise<GitStatusResult> => http.get(`api/projects/${projectId}/git/status`).json(),
+    queryFn: (): Promise<GitStatusResult> =>
+      http.get(`api/projects/${projectId}/git/status`).json(),
     enabled: Boolean(projectId) && (opts?.enabled ?? true),
     staleTime: 10_000,
   })
@@ -54,7 +59,8 @@ export function useGitStatus(projectId?: string, opts?: { enabled?: boolean }) {
 export function useGitPush() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (projectId: string): Promise<GitOpResult> => http.post(`api/projects/${projectId}/git/push`).json(),
+    mutationFn: (projectId: string): Promise<GitOpResult> =>
+      http.post(`api/projects/${projectId}/git/push`).json(),
     onSuccess: (_, projectId) => {
       qc.invalidateQueries({ queryKey: ['git-log', projectId] })
       qc.invalidateQueries({ queryKey: ['git-status', projectId] })
@@ -66,7 +72,8 @@ export function useGitPush() {
 export function useGitPull() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (projectId: string): Promise<GitOpResult> => http.post(`api/projects/${projectId}/git/pull`).json(),
+    mutationFn: (projectId: string): Promise<GitOpResult> =>
+      http.post(`api/projects/${projectId}/git/pull`).json(),
     onSuccess: (_, projectId) => {
       qc.invalidateQueries({ queryKey: ['git-log', projectId] })
       qc.invalidateQueries({ queryKey: ['git-status', projectId] })
@@ -78,7 +85,13 @@ export function useGitPull() {
 export function useGitCommit() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ projectId, message }: { projectId: string; message: string }): Promise<GitOpResult> =>
+    mutationFn: ({
+      projectId,
+      message,
+    }: {
+      projectId: string
+      message: string
+    }): Promise<GitOpResult> =>
       http.post(`api/projects/${projectId}/git/commit`, { json: { message } }).json(),
     onSuccess: (_, { projectId }) => {
       qc.invalidateQueries({ queryKey: ['git-log', projectId] })

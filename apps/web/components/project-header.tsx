@@ -29,7 +29,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import UsageDialog from '@/components/usage-dialog'
 import { authClient } from '@/lib/auth-client'
 import {
@@ -144,7 +149,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
     if (prev && !TERMINAL_STATUSES.includes(prev) && TERMINAL_STATUSES.includes(curr)) {
       if (curr === 'deployed') {
-        toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, { position: 'top-right' })
+        toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, {
+          position: 'top-right',
+        })
       } else {
         toast.error(`Deployment failed`, { position: 'top-right' })
       }
@@ -158,7 +165,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const workerStatus = worker?.status ?? ''
   const isDeployed = workerStatus === 'active'
   const isFailed = workerStatus === 'error'
-  const isDeploymentInProgress = latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status)
+  const isDeploymentInProgress =
+    latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status)
 
   // Hostname availability check
   const sanitizedHostname = sanitizeHostname(hostnameInput)
@@ -208,7 +216,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         {
           onSuccess: () => setIsDeploying(false),
           onError: (err) => {
-            toast.error(err instanceof Error ? err.message : 'Failed to deploy', { position: 'top-right' })
+            toast.error(err instanceof Error ? err.message : 'Failed to deploy', {
+              position: 'top-right',
+            })
             setIsDeploying(false)
           },
         },
@@ -224,7 +234,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       const response = await http.get(`api/projects/${projectId}/download`, { timeout: 120000 })
       const blob = await response.blob()
       const disposition = response.headers.get('Content-Disposition')
-      const filename = disposition?.match(/filename="(.+)"/)?.[1] || `${project?.name || 'project'}.tar.gz`
+      const filename =
+        disposition?.match(/filename="(.+)"/)?.[1] || `${project?.name || 'project'}.tar.gz`
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -281,7 +292,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           <div className="flex items-center gap-3 text-sm">
             <Warning className="size-4 text-warning shrink-0" weight="fill" />
             <span>
-              <span className="font-medium">Heads up!</span> Projects may be deleted after inactivity.
+              <span className="font-medium">Heads up!</span> Projects may be deleted after
+              inactivity.
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -299,7 +311,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               )}
               Download
             </Button>
-            <button onClick={() => setBannerDismissed(true)} className="p-1 rounded hover:bg-warning/20 text-warning">
+            <button
+              onClick={() => setBannerDismissed(true)}
+              className="p-1 rounded hover:bg-warning/20 text-warning"
+            >
               <X className="size-4" weight="bold" />
             </button>
           </div>
@@ -346,19 +361,29 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         {/* Status indicator */}
         {(isDeployed || isFailed) && (
           <button onClick={() => setIsDeploymentStatusOpen(true)} className={headerBtn}>
-            <span className={`size-2 rounded-full ${isDeployed ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <span
+              className={`size-2 rounded-full ${isDeployed ? 'bg-emerald-500' : 'bg-red-500'}`}
+            />
             {isDeployed ? 'Live' : 'Failed'}
           </button>
         )}
 
         {/* Download */}
         <button onClick={handleDownload} disabled={downloading || !projectId} className={headerBtn}>
-          {downloading ? <Loader2 className="size-4 animate-spin" /> : <DownloadSimple className="size-4" />}
+          {downloading ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <DownloadSimple className="size-4" />
+          )}
           Download
         </button>
 
         {/* GitHub */}
-        <button onClick={() => setIsGitHubDialogOpen(true)} disabled={!projectId} className={headerBtn}>
+        <button
+          onClick={() => setIsGitHubDialogOpen(true)}
+          disabled={!projectId}
+          className={headerBtn}
+        >
           <GithubLogo className="size-4" weight="bold" />
           GitHub
         </button>
@@ -388,7 +413,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             {latestDeployment && !['deployed'].includes(latestDeployment.status) && (
               <div
                 className={`px-3 py-2 border-b text-sm ${
-                  TERMINAL_STATUSES.includes(latestDeployment.status) ? 'bg-destructive/10' : 'bg-brand/5'
+                  TERMINAL_STATUSES.includes(latestDeployment.status)
+                    ? 'bg-destructive/10'
+                    : 'bg-brand/5'
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -399,15 +426,21 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   )}
                   <span
                     className={
-                      TERMINAL_STATUSES.includes(latestDeployment.status) ? 'text-destructive' : 'text-foreground'
+                      TERMINAL_STATUSES.includes(latestDeployment.status)
+                        ? 'text-destructive'
+                        : 'text-foreground'
                     }
                   >
                     {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
                   </span>
-                  <span className="text-xs text-muted-foreground font-mono">{latestDeployment.id.slice(0, 8)}</span>
+                  <span className="text-xs text-muted-foreground font-mono">
+                    {latestDeployment.id.slice(0, 8)}
+                  </span>
                 </div>
                 {latestDeployment.error && (
-                  <div className="mt-1 text-xs text-destructive/80 truncate">{latestDeployment.error}</div>
+                  <div className="mt-1 text-xs text-destructive/80 truncate">
+                    {latestDeployment.error}
+                  </div>
                 )}
               </div>
             )}
@@ -441,7 +474,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                         value={hostnameInput}
                         onChange={(e) => setHostnameInput(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter' && hostnameInput.trim() && !hostnameTaken) submitHostname()
+                          if (e.key === 'Enter' && hostnameInput.trim() && !hostnameTaken)
+                            submitHostname()
                           if (e.key === 'Escape' && workerName) cancelEditHostname()
                         }}
                         placeholder="my-app"
@@ -503,7 +537,11 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                       : 'Republish'}
                 </Button>
                 {workerName && (
-                  <Button variant="outline" className="h-8 px-3" onClick={() => setIsDeploymentStatusOpen(true)}>
+                  <Button
+                    variant="outline"
+                    className="h-8 px-3"
+                    onClick={() => setIsDeploymentStatusOpen(true)}
+                  >
                     <Clock className="size-3.5" />
                   </Button>
                 )}
@@ -545,7 +583,11 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       </header>
 
       {/* Dialogs */}
-      <GitHubDialog open={isGitHubDialogOpen} onOpenChange={setIsGitHubDialogOpen} projectId={projectId} />
+      <GitHubDialog
+        open={isGitHubDialogOpen}
+        onOpenChange={setIsGitHubDialogOpen}
+        projectId={projectId}
+      />
       <UsageDialog open={isUsageOpen} onOpenChange={setIsUsageOpen} />
       <DeploymentStatusDialog
         open={isDeploymentStatusOpen}
@@ -567,7 +609,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         <DialogContent overlayClassName="backdrop-blur-sm">
           <DialogHeader>
             <DialogTitle>Stripe Connected Successfully!</DialogTitle>
-            <DialogDescription>You can now head to the Payments tab to configure pricing and more.</DialogDescription>
+            <DialogDescription>
+              You can now head to the Payments tab to configure pricing and more.
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button

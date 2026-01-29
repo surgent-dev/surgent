@@ -31,7 +31,8 @@ interface CreateRepoResult {
 export function useGitHubStatus(projectId?: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['github-status', projectId],
-    queryFn: (): Promise<GitHubStatus> => http.get(`api/projects/${projectId}/github/status`).json(),
+    queryFn: (): Promise<GitHubStatus> =>
+      http.get(`api/projects/${projectId}/github/status`).json(),
     enabled: Boolean(projectId) && (opts?.enabled ?? true),
     staleTime: 30_000,
   })
@@ -40,7 +41,8 @@ export function useGitHubStatus(projectId?: string, opts?: { enabled?: boolean }
 export function useGitHubInstallUrl(projectId?: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['github-install-url', projectId],
-    queryFn: (): Promise<{ url: string }> => http.get(`api/projects/${projectId}/github/install-url`).json(),
+    queryFn: (): Promise<{ url: string }> =>
+      http.get(`api/projects/${projectId}/github/install-url`).json(),
     enabled: Boolean(projectId) && (opts?.enabled ?? true),
     staleTime: 60_000,
   })
@@ -49,7 +51,8 @@ export function useGitHubInstallUrl(projectId?: string, opts?: { enabled?: boole
 export function useGitHubDisconnect() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (projectId: string) => http.post(`api/projects/${projectId}/github/disconnect`).json(),
+    mutationFn: (projectId: string) =>
+      http.post(`api/projects/${projectId}/github/disconnect`).json(),
     onSuccess: (_, projectId) => {
       qc.invalidateQueries({ queryKey: ['github-status', projectId] })
       qc.invalidateQueries({ queryKey: ['project', projectId] })

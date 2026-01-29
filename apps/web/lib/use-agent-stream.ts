@@ -156,7 +156,15 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
 
     case 'session.compacted': {
       if (props.sessionID !== currentSessionId) return state
-      return { ...state, messages: [], parts: {}, questions: [], lastAt: now, loading: true, compacting: true }
+      return {
+        ...state,
+        messages: [],
+        parts: {},
+        questions: [],
+        lastAt: now,
+        loading: true,
+        compacting: true,
+      }
     }
 
     // Session status events (matching backend SessionStatus.Info types)
@@ -262,7 +270,13 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
   }
 }
 
-export default function useAgentStream({ projectId, sessionId }: { projectId?: string; sessionId?: string }) {
+export default function useAgentStream({
+  projectId,
+  sessionId,
+}: {
+  projectId?: string
+  sessionId?: string
+}) {
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
 
@@ -286,7 +300,9 @@ export default function useAgentStream({ projectId, sessionId }: { projectId?: s
         retry: { limit: 5, statusCodes: [502, 503, 504], delay: () => 1000 },
       })
       .json<Array<{ info: Message; parts: Part[] }>>()
-      .then((items) => dispatch({ type: 'batch.load', properties: { messages: items ?? [] } } as any))
+      .then((items) =>
+        dispatch({ type: 'batch.load', properties: { messages: items ?? [] } } as any),
+      )
       .catch(() => dispatch({ type: 'batch.load', properties: { messages: [] } } as any))
 
     // Fetch status
@@ -295,7 +311,8 @@ export default function useAgentStream({ projectId, sessionId }: { projectId?: s
       .json<Record<string, SessionStatus>>()
       .then((items) => {
         const status = items?.[sid]
-        if (status) dispatch({ type: 'session.status', properties: { sessionID: sid, status } } as any)
+        if (status)
+          dispatch({ type: 'session.status', properties: { sessionID: sid, status } } as any)
         else dispatch({ type: 'session.idle', properties: { sessionID: sid } } as any)
       })
       .catch(() => {})
@@ -316,7 +333,9 @@ export default function useAgentStream({ projectId, sessionId }: { projectId?: s
     if (!projectId) return
     closedRef.current = false
     attemptRef.current = 0
-    const url = backendBaseUrl ? `${backendBaseUrl}/api/agent/${projectId}/event` : `/api/agent/${projectId}/event`
+    const url = backendBaseUrl
+      ? `${backendBaseUrl}/api/agent/${projectId}/event`
+      : `/api/agent/${projectId}/event`
 
     const connect = () => {
       if (closedRef.current) return

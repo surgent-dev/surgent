@@ -59,58 +59,63 @@ function isSSE(headers: Headers, path: string) {
 
 const agent = new Hono<AppContext>()
 
-agent.all('/:id/*', zValidator('param', z.object({ id: z.string().uuid() })), requireAuth, async (c) => {
-  const { id: projectId } = c.req.valid('param')
+agent.all(
+  '/:id/*',
+  zValidator('param', z.object({ id: z.string().uuid() })),
+  requireAuth,
+  async (c) => {
+    const { id: projectId } = c.req.valid('param')
 
-  const project = await db
-    .selectFrom('project')
-    .select(['organizationId'])
-    .where('id', '=', projectId)
-    .where('deletedAt', 'is', null)
-    .executeTakeFirst()
+    const project = await db
+      .selectFrom('project')
+      .select(['organizationId'])
+      .where('id', '=', projectId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst()
 
-  if (!project) return c.json({ error: 'Project not found' }, 404)
-  const membership = await db
-    .selectFrom('member')
-    .select('id')
-    .where('organizationId', '=', project.organizationId)
-    .where('userId', '=', c.get('user')!.id)
-    .executeTakeFirst()
-  if (!membership) return c.json({ error: 'Forbidden' }, 403)
+    if (!project) return c.json({ error: 'Project not found' }, 404)
+    const membership = await db
+      .selectFrom('member')
+      .select('id')
+      .where('organizationId', '=', project.organizationId)
+      .where('userId', '=', c.get('user')!.id)
+      .executeTakeFirst()
+    if (!membership) return c.json({ error: 'Forbidden' }, 403)
 
-  const sandboxRow = await db
-    .selectFrom('sandbox')
-    .select(['id', 'provider'])
-    .where('projectId', '=', projectId)
-    .executeTakeFirst()
-  if (!sandboxRow?.id) return c.json({ error: 'Sandbox not found' }, 400)
+    const sandboxRow = await db
+      .selectFrom('sandbox')
+      .select(['id', 'provider'])
+      .where('projectId', '=', projectId)
+      .executeTakeFirst()
+    if (!sandboxRow?.id) return c.json({ error: 'Sandbox not found' }, 400)
 
-  try {
-    const provider = sandboxRow.provider || config.sandbox.provider
-    const preview = await getPreview(provider, sandboxRow.id, 4096)
+    try {
+      const provider = sandboxRow.provider || config.sandbox.provider
+      const preview = await getPreview(provider, sandboxRow.id, 4096)
 
-    const reqUrl = new URL(c.req.url)
-    const targetUrl = buildTargetUrl(preview.url, reqUrl, projectId)
-    const headers = buildHeaders(c.req.raw.headers, preview.headers)
+      const reqUrl = new URL(c.req.url)
+      const targetUrl = buildTargetUrl(preview.url, reqUrl, projectId)
+      const headers = buildHeaders(c.req.raw.headers, preview.headers)
 
-    const resp = await fetch(
-      new Request(targetUrl.toString(), {
-        method: c.req.method,
-        headers,
-        body: c.req.raw.body,
-        signal: c.req.raw.signal,
-      }),
-    )
+      const resp = await fetch(
+        new Request(targetUrl.toString(), {
+          method: c.req.method,
+          headers,
+          body: c.req.raw.body,
+          signal: c.req.raw.signal,
+        }),
+      )
 
-    const path = reqUrl.pathname.replace(`/api/agent/${projectId}`, '')
-    if (!isSSE(headers, path)) return resp
+      const path = reqUrl.pathname.replace(`/api/agent/${projectId}`, '')
+      if (!isSSE(headers, path)) return resp
 
-    const outHeaders = new Headers(resp.headers)
-    outHeaders.set('cache-control', 'no-cache, no-transform')
-    return new Response(resp.body, { status: resp.status, headers: outHeaders })
-  } catch {
-    return c.text('Upstream unavailable', 502)
-  }
-})
+      const outHeaders = new Headers(resp.headers)
+      outHeaders.set('cache-control', 'no-cache, no-transform')
+      return new Response(resp.body, { status: resp.status, headers: outHeaders })
+    } catch {
+      return c.text('Upstream unavailable', 502)
+    }
+  },
+)
 
 export default agent

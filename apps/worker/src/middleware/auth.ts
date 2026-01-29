@@ -5,10 +5,7 @@ import type { AppContext } from '@/types/application'
  * Middleware to require authentication on a route
  * Returns 401 if user is not authenticated
  */
-export async function requireAuth(
-  c: Context<AppContext>,
-  next: Next
-) {
+export async function requireAuth(c: Context<AppContext>, next: Next) {
   const user = c.get('user')
   const session = c.get('session')
 

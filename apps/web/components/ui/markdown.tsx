@@ -1,12 +1,12 @@
-"use client"
+'use client'
 
-import { cn } from "@/lib/utils"
-import { Streamdown } from "streamdown"
-import { memo } from "react"
-import type { BundledTheme } from "shiki"
-import { MarkdownCodeAttachment } from "@/components/ui/markdown-code-attachment"
+import { cn } from '@/lib/utils'
+import { Streamdown } from 'streamdown'
+import { memo } from 'react'
+import type { BundledTheme } from 'shiki'
+import { MarkdownCodeAttachment } from '@/components/ui/markdown-code-attachment'
 
-const shikiTheme: [BundledTheme, BundledTheme] = ["github-light", "github-dark"]
+const shikiTheme: [BundledTheme, BundledTheme] = ['github-light', 'github-dark']
 
 export type MarkdownProps = {
   children: string
@@ -18,7 +18,7 @@ function MarkdownComponent({ children, className, isAnimating }: MarkdownProps) 
   return (
     <Streamdown
       className={cn(
-        "prose prose-sm dark:prose-invert max-w-none break-normal [overflow-wrap:break-word] [&_pre]:overflow-x-auto",
+        'prose prose-sm dark:prose-invert max-w-none break-normal [overflow-wrap:break-word] [&_pre]:overflow-x-auto',
         className,
       )}
       isAnimating={isAnimating}
@@ -33,6 +33,6 @@ function MarkdownComponent({ children, className, isAnimating }: MarkdownProps) 
 }
 
 const Markdown = memo(MarkdownComponent)
-Markdown.displayName = "Markdown"
+Markdown.displayName = 'Markdown'
 
 export { Markdown }

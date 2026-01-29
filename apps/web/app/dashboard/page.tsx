@@ -17,7 +17,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Plus, MoreVertical, Code2, Clock, Activity, Pencil, Trash2, Play } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useProjectsQuery, useRenameProject, useDeleteProject } from '@/queries/projects'
 import type { Project } from '@/types/project'
@@ -112,7 +118,10 @@ export default function DashboardPage() {
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-3xl border border-border/50 bg-muted/30 p-6 space-y-4">
+              <div
+                key={i}
+                className="rounded-3xl border border-border/50 bg-muted/30 p-6 space-y-4"
+              >
                 <div className="space-y-2">
                   <Skeleton className="h-6 w-32 rounded-xl" />
                   <Skeleton className="h-4 w-24 rounded-xl" />
@@ -144,7 +153,9 @@ export default function DashboardPage() {
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                   <Avatar className="h-10 w-10">
                     <AvatarImage src={user?.image} alt={user?.name || user?.email} />
-                    <AvatarFallback>{user?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                    <AvatarFallback>
+                      {user?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
+                    </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
@@ -166,15 +177,22 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-3xl font-light mb-3">Welcome back{user?.name ? `, ${user.name}` : ''}</h2>
-          <p className="text-muted-foreground text-sm">Create and manage your Claude-powered projects</p>
+          <h2 className="text-3xl font-light mb-3">
+            Welcome back{user?.name ? `, ${user.name}` : ''}
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            Create and manage your Claude-powered projects
+          </p>
         </div>
 
         {/* Projects Section */}
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-medium">Your Projects</h3>
-            <Button onClick={() => router.push('/')} className="flex items-center gap-2 rounded-full">
+            <Button
+              onClick={() => router.push('/')}
+              className="flex items-center gap-2 rounded-full"
+            >
               <Plus className="h-4 w-4" />
               New Project
             </Button>
@@ -187,8 +205,13 @@ export default function DashboardPage() {
               <div className="flex flex-col items-center justify-center text-center">
                 <Code2 className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-medium mb-2">No projects yet</h3>
-                <p className="text-muted-foreground text-sm mb-6">Create your first project to get started</p>
-                <Button onClick={() => router.push('/')} className="flex items-center gap-2 rounded-full">
+                <p className="text-muted-foreground text-sm mb-6">
+                  Create your first project to get started
+                </p>
+                <Button
+                  onClick={() => router.push('/')}
+                  className="flex items-center gap-2 rounded-full"
+                >
                   <Plus className="h-4 w-4" />
                   Create Project
                 </Button>
@@ -207,7 +230,9 @@ export default function DashboardPage() {
                       <h4 className="text-base font-medium group-hover:text-foreground transition-colors">
                         {project.name}
                       </h4>
-                      <p className="text-sm text-muted-foreground">Created {formatDate(project.createdAt)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Created {formatDate(project.createdAt)}
+                      </p>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -312,8 +337,9 @@ export default function DashboardPage() {
             <DialogTitle>Delete Project</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete <span className="font-medium text-foreground">{projectToDelete?.name}</span>
-            ? This action cannot be undone.
+            Are you sure you want to delete{' '}
+            <span className="font-medium text-foreground">{projectToDelete?.name}</span>? This
+            action cannot be undone.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setProjectToDelete(null)}>

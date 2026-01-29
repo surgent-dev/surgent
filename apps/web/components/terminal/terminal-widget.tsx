@@ -1,9 +1,9 @@
- 'use client';
+'use client'
 
-import { useEffect, useRef, useState } from 'react';
-import type { Terminal as XTermType } from '@xterm/xterm';
-import '@xterm/xterm/css/xterm.css';
-import { cn } from '@/lib/utils';
+import { useEffect, useRef, useState } from 'react'
+import type { Terminal as XTermType } from '@xterm/xterm'
+import '@xterm/xterm/css/xterm.css'
+import { cn } from '@/lib/utils'
 
 type TerminalWidgetProps = {
   sandboxId?: string
@@ -27,9 +27,9 @@ export default function TerminalWidget({ sandboxId, className }: TerminalWidgetP
     let cancelled = false
 
     Promise.all([
-      import('@xterm/xterm').then(m => m.Terminal),
-      import('@xterm/addon-fit').then(m => m.FitAddon),
-      import('@xterm/addon-web-links').then(m => m.WebLinksAddon),
+      import('@xterm/xterm').then((m) => m.Terminal),
+      import('@xterm/addon-fit').then((m) => m.FitAddon),
+      import('@xterm/addon-web-links').then((m) => m.WebLinksAddon),
     ]).then(([Terminal, FitAddon, WebLinksAddon]) => {
       if (cancelled || !containerRef.current) return
 
@@ -72,7 +72,9 @@ export default function TerminalWidget({ sandboxId, className }: TerminalWidgetP
       const cols = terminal.cols || 80
       const rows = terminal.rows || 24
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-      const base = (process.env.NEXT_PUBLIC_SERVER_WS_URL || `${protocol}://${window.location.host}`).replace(/\/$/, '')
+      const base = (
+        process.env.NEXT_PUBLIC_SERVER_WS_URL || `${protocol}://${window.location.host}`
+      ).replace(/\/$/, '')
       const wsUrl = `${base}/ws/pty?cols=${cols}&rows=${rows}&sandboxId=${sandboxId}`
 
       socket = new WebSocket(wsUrl)
@@ -88,7 +90,8 @@ export default function TerminalWidget({ sandboxId, className }: TerminalWidgetP
         if (typeof event.data === 'string') {
           try {
             const msg = JSON.parse(event.data)
-            if (msg?.type === 'exit') terminal?.write(`\r\nProcess exited with code ${msg.exitCode}\r\n`)
+            if (msg?.type === 'exit')
+              terminal?.write(`\r\nProcess exited with code ${msg.exitCode}\r\n`)
             else if (msg?.type === 'error') terminal?.write(`\r\n[error] ${msg.message}\r\n`)
           } catch {
             terminal?.write(event.data)

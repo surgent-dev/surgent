@@ -2,14 +2,25 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'react-hot-toast'
-import { Github, ExternalLink, Loader2, Check, Plus, X, Circle } from 'lucide-react'
+import { Github, ExternalLink, Loader2, Check, Plus, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { useGitHubStatus, useGitHubInstallUrl, useGitHubDisconnect, useGitHubCreateRepo } from '@/queries/github'
+import {
+  useGitHubStatus,
+  useGitHubInstallUrl,
+  useGitHubDisconnect,
+  useGitHubCreateRepo,
+} from '@/queries/github'
 import { useGitLog, useGitPush, useGitPull, useGitStatus, useGitCommit } from '@/queries/git'
 import { cn } from '@/lib/utils'
 
@@ -49,9 +60,13 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
     data: gitLog,
     isLoading: loadingLog,
     refetch: refetchLog,
-    isFetching: fetchingLog,
-  } = useGitLog(projectId, { enabled: open && status?.connected })
-  const { data: gitStatus, refetch: refetchStatus } = useGitStatus(projectId, { enabled: open && status?.connected })
+  } = useGitLog(projectId, {
+    enabled: open && status?.connected,
+    fetch: true,
+  })
+  const { data: gitStatus, refetch: refetchStatus } = useGitStatus(projectId, {
+    enabled: open && status?.connected,
+  })
 
   // Mutations
   const create = useGitHubCreateRepo()
@@ -69,9 +84,11 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
   const branch = gitLog?.branch || 'main'
   const unpushed = commits.filter((c) => !c.pushed).length
   const behind = gitLog?.behind ?? 0
-  const modified = gitStatus?.modified ?? []
-  const untracked = gitStatus?.untracked ?? []
-  const hasChanges = modified.length > 0 || untracked.length > 0
+  const staged = gitStatus?.staged?.length ?? 0
+  const unstaged = gitStatus?.unstaged?.length ?? 0
+  const untracked = gitStatus?.untracked?.length ?? 0
+  const changeCount = staged + unstaged + untracked
+  const hasChanges = changeCount > 0
 
   // Reset on close
   useEffect(() => {
@@ -235,7 +252,11 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
 
             <div className="space-y-1.5">
               <Label className="text-xs">Repository name</Label>
-              <Input placeholder="my-project" value={repoName} onChange={(e) => setRepoName(e.target.value)} />
+              <Input
+                placeholder="my-project"
+                value={repoName}
+                onChange={(e) => setRepoName(e.target.value)}
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -272,7 +293,10 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
               </p>
             )}
 
-            <button onClick={goToInstall} className="w-full text-xs text-muted-foreground hover:text-foreground">
+            <button
+              onClick={goToInstall}
+              className="w-full text-xs text-muted-foreground hover:text-foreground"
+            >
               <Plus className="size-3 inline mr-1" />
               Add account
             </button>
@@ -315,7 +339,10 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
                     commits.slice(0, 10).map((c) => (
                       <div key={c.hash} className="px-4 py-1.5 flex items-center gap-2.5 text-sm">
                         <span
-                          className={cn('size-1.5 rounded-full shrink-0', c.pushed ? 'bg-emerald-500' : 'bg-amber-500')}
+                          className={cn(
+                            'size-1.5 rounded-full shrink-0',
+                            c.pushed ? 'bg-emerald-500' : 'bg-amber-500',
+                          )}
                         />
                         <span className="truncate flex-1">{c.message}</span>
                         <span className="text-[11px] text-muted-foreground">{timeAgo(c.date)}</span>
@@ -332,7 +359,9 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
                 <div className="p-4 pt-3 border-t space-y-3">
                   {hasChanges ? (
                     <div className="space-y-2">
-                      <p className="text-xs text-amber-600">{modified.length + untracked.length} unsaved changes</p>
+                      <p className="text-xs text-amber-600">
+                        {changeCount} unsaved {changeCount === 1 ? 'change' : 'changes'}
+                      </p>
                       <div className="flex gap-2">
                         <Input
                           value={commitMessage}
@@ -359,8 +388,12 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
                         </span>
                       ) : (
                         <>
-                          {unpushed > 0 && <span className="text-amber-600">{unpushed} to push</span>}
-                          {unpushed > 0 && behind > 0 && <span className="text-muted-foreground mx-1">·</span>}
+                          {unpushed > 0 && (
+                            <span className="text-amber-600">{unpushed} to push</span>
+                          )}
+                          {unpushed > 0 && behind > 0 && (
+                            <span className="text-muted-foreground mx-1">·</span>
+                          )}
                           {behind > 0 && <span className="text-blue-600">{behind} to pull</span>}
                         </>
                       )}

@@ -1,7 +1,12 @@
 'use client'
 
 import { Check, ChevronDown, Bot, Sparkles } from 'lucide-react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import type { Agent } from '@opencode-ai/sdk'
 
@@ -37,7 +42,9 @@ export default function AgentSelectorDropdown({ agents, selectedAgent, onSelect 
           <Icon className="size-3.5 opacity-80" />
           <span className="font-medium capitalize">{currentAgent?.name ?? 'Agent'}</span>
           {badge && (
-            <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded', badge.color)}>{badge.label}</span>
+            <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded', badge.color)}>
+              {badge.label}
+            </span>
           )}
           <ChevronDown className="size-3 opacity-40" />
         </button>
@@ -62,12 +69,19 @@ export default function AgentSelectorDropdown({ agents, selectedAgent, onSelect 
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm capitalize truncate">{agent.name}</span>
                   {agentBadge && (
-                    <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded', agentBadge.color)}>
+                    <span
+                      className={cn(
+                        'text-[10px] font-medium px-1.5 py-0.5 rounded',
+                        agentBadge.color,
+                      )}
+                    >
                       {agentBadge.label}
                     </span>
                   )}
                 </div>
-                {agent.description && <p className="text-[11px] text-muted-foreground truncate">{agent.description}</p>}
+                {agent.description && (
+                  <p className="text-[11px] text-muted-foreground truncate">{agent.description}</p>
+                )}
               </div>
               {isSelected && <Check className="size-4 shrink-0 text-primary" />}
             </DropdownMenuItem>

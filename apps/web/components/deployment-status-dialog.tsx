@@ -84,7 +84,8 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
       { id: projectId, deployName: n },
       {
         onSuccess: () => setEditing(false),
-        onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to start deployment'),
+        onError: (err) =>
+          toast.error(err instanceof Error ? err.message : 'Failed to start deployment'),
       },
     )
   }
@@ -111,7 +112,9 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
             <span
               className={`size-2 rounded-full ${isLive ? 'bg-emerald-500' : busy ? 'bg-amber-500 animate-pulse' : 'bg-muted-foreground/30'}`}
             />
-            <span className="text-sm font-medium">{isLive ? 'Live' : busy ? 'Deploying' : 'Offline'}</span>
+            <span className="text-sm font-medium">
+              {isLive ? 'Live' : busy ? 'Deploying' : 'Offline'}
+            </span>
           </div>
           <button
             type="button"
@@ -132,11 +135,19 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
             ) : (
               <Loader2 className="size-3 animate-spin text-brand" />
             )}
-            <span className={TERMINAL.includes(latest.status) ? 'text-destructive' : 'text-muted-foreground'}>
+            <span
+              className={
+                TERMINAL.includes(latest.status) ? 'text-destructive' : 'text-muted-foreground'
+              }
+            >
               {STATUS[latest.status] || latest.status}
             </span>
-            <span className="text-xs text-muted-foreground/60 font-mono">{latest.id.slice(0, 8)}</span>
-            {latest.error && <span className="text-xs text-destructive/70 truncate flex-1">{latest.error}</span>}
+            <span className="text-xs text-muted-foreground/60 font-mono">
+              {latest.id.slice(0, 8)}
+            </span>
+            {latest.error && (
+              <span className="text-xs text-destructive/70 truncate flex-1">{latest.error}</span>
+            )}
           </div>
         )}
 
@@ -157,7 +168,11 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                     autoFocus
                   />
                   <span className="text-muted-foreground/60 shrink-0">.surgent.site</span>
-                  <button type="button" onClick={() => setEditing(false)} className="ml-2 p-0.5 hover:bg-muted rounded">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(false)}
+                    className="ml-2 p-0.5 hover:bg-muted rounded"
+                  >
                     <X className="size-3.5 text-muted-foreground" />
                   </button>
                 </>
@@ -247,7 +262,9 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                         >
                           {STATUS[d.status] || d.status}
                         </span>
-                        <span className="text-xs text-muted-foreground/60 font-mono">{d.scriptName || '—'}</span>
+                        <span className="text-xs text-muted-foreground/60 font-mono">
+                          {d.scriptName || '—'}
+                        </span>
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {timeAgo(d.createdAt)} · {duration(d.startedAt, d.deployedAt)}
@@ -261,7 +278,11 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                         disabled={rollId === d.cloudflareVersionId}
                         className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 shrink-0"
                       >
-                        {rollId === d.cloudflareVersionId ? <Loader2 className="size-3 animate-spin" /> : 'Rollback'}
+                        {rollId === d.cloudflareVersionId ? (
+                          <Loader2 className="size-3 animate-spin" />
+                        ) : (
+                          'Rollback'
+                        )}
                       </button>
                     )}
                   </div>

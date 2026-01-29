@@ -1,7 +1,3 @@
-/**
- * GitHub Routes - OAuth callback and webhooks
- */
-
 import { Hono } from 'hono'
 import { Webhooks } from '@octokit/webhooks'
 import { db } from '@/lib/db'
@@ -12,8 +8,7 @@ import { config } from '@/lib/config'
 const github = new Hono<AppContext>()
 
 /**
- * GET /api/github/callback
- * Called by GitHub after user installs the app
+ * GitHub OAuth callback - handles app installation and token exchange
  */
 github.get('/callback', async (c) => {
   const installationIdStr = c.req.query('installation_id')
@@ -33,19 +28,16 @@ github.get('/callback', async (c) => {
   try {
     let userId = payload?.userId
     const projectId = payload?.projectId
-    let installationId: number | null = null
+    const installationId = installationIdStr ? parseInt(installationIdStr, 10) : null
 
-    if (installationIdStr) {
-      installationId = parseInt(installationIdStr, 10)
-
-      if (!userId) {
-        const existing = await db
-          .selectFrom('github_installations')
-          .select('userId')
-          .where('installationId', '=', installationId)
-          .executeTakeFirst()
-        userId = existing?.userId
-      }
+    // Lookup userId from existing installation if not in state
+    if (installationId && !userId) {
+      const existing = await db
+        .selectFrom('github_installations')
+        .select('userId')
+        .where('installationId', '=', installationId)
+        .executeTakeFirst()
+      userId = existing?.userId
     }
 
     if (!userId) {
@@ -55,77 +47,66 @@ github.get('/callback', async (c) => {
     // Exchange code for OAuth token
     const redirectBase = config.auth.baseUrl || new URL(c.req.url).origin
     const redirectUrl = new URL('/api/github/callback', redirectBase).toString()
+    const oauthResult = code
+      ? await githubApp.exchangeUserAccessToken(code, redirectUrl, state ?? undefined)
+      : null
 
-    const oauthAuth = code ? await githubApp.exchangeUserAccessToken(code, redirectUrl, state ?? undefined) : null
-
-    // Save installation (no tokens here - tokens are per-user, not per-installation)
+    // Save installation (upsert by userId + accountLogin to handle re-installs)
     if (installationId) {
-      const installation = await githubApp.getInstallation(installationId)
+      const { account } = await githubApp.getInstallation(installationId)
 
-      const existing = await db
-        .selectFrom('github_installations')
-        .select('id')
-        .where('installationId', '=', installationId)
-        .executeTakeFirst()
-
-      if (existing) {
-        await db
-          .updateTable('github_installations')
-          .set({
-            userId,
-            accountLogin: installation.account.login,
-            accountType: installation.account.type,
-            updatedAt: new Date(),
-          })
-          .where('id', '=', existing.id)
-          .execute()
-      } else {
-        await db
-          .insertInto('github_installations')
-          .values({
-            userId,
+      await db
+        .insertInto('github_installations')
+        .values({
+          userId,
+          installationId,
+          accountLogin: account.login,
+          accountType: account.type,
+        })
+        .onConflict((oc) =>
+          oc.columns(['userId', 'accountLogin']).doUpdateSet({
             installationId,
-            accountLogin: installation.account.login,
-            accountType: installation.account.type,
-          })
-          .execute()
-      }
+            accountType: account.type,
+            updatedAt: new Date(),
+          }),
+        )
+        .execute()
 
-      console.log('[github] Installation saved', {
-        installationId,
-        userId,
-        account: installation.account.login,
-      })
+      console.log('[github] Installation saved', { installationId, account: account.login })
     }
 
-    // Save OAuth token (per-user, in separate table)
-    if (oauthAuth) {
-      const tokenData = {
-        accessToken: oauthAuth.token,
-        accessTokenExpiresAt:
-          'expiresAt' in oauthAuth && oauthAuth.expiresAt ? new Date(oauthAuth.expiresAt as string) : null,
-        refreshToken: 'refreshToken' in oauthAuth ? (oauthAuth.refreshToken as string) : null,
-        refreshTokenExpiresAt:
-          'refreshTokenExpiresAt' in oauthAuth && oauthAuth.refreshTokenExpiresAt
-            ? new Date(oauthAuth.refreshTokenExpiresAt as string)
+    // Save OAuth token (upsert by userId)
+    if (oauthResult) {
+      const auth = oauthResult as {
+        token: string
+        expiresAt?: string
+        refreshToken?: string
+        refreshTokenExpiresAt?: string
+      }
+
+      await db
+        .insertInto('github_oauth_tokens')
+        .values({
+          userId,
+          accessToken: auth.token,
+          accessTokenExpiresAt: auth.expiresAt ? new Date(auth.expiresAt) : null,
+          refreshToken: auth.refreshToken ?? null,
+          refreshTokenExpiresAt: auth.refreshTokenExpiresAt
+            ? new Date(auth.refreshTokenExpiresAt)
             : null,
-        updatedAt: new Date(),
-      }
-
-      const existingToken = await db
-        .selectFrom('github_oauth_tokens')
-        .select('id')
-        .where('userId', '=', userId)
-        .executeTakeFirst()
-
-      if (existingToken) {
-        await db.updateTable('github_oauth_tokens').set(tokenData).where('id', '=', existingToken.id).execute()
-      } else {
-        await db
-          .insertInto('github_oauth_tokens')
-          .values({ userId, ...tokenData })
-          .execute()
-      }
+        })
+        .onConflict((oc) =>
+          oc.column('userId').doUpdateSet({
+            accessToken: auth.token,
+            accessTokenExpiresAt: auth.expiresAt ? new Date(auth.expiresAt) : null,
+            refreshToken: auth.refreshToken ?? null,
+            refreshTokenExpiresAt: auth.refreshTokenExpiresAt
+              ? new Date(auth.refreshTokenExpiresAt)
+              : null,
+            updatedAt: new Date(),
+          }),
+        )
+        .execute()
 
       console.log('[github] OAuth token saved', { userId })
     }
@@ -143,8 +124,7 @@ github.get('/callback', async (c) => {
 })
 
 /**
- * POST /api/github/webhook
- * Receives GitHub webhook events
+ * GitHub webhook handler
  */
 github.post('/webhook', async (c) => {
   const secret = config.github.webhookSecret
@@ -154,14 +134,12 @@ github.post('/webhook', async (c) => {
 
   const signature = c.req.header('X-Hub-Signature-256')
   const event = c.req.header('X-GitHub-Event')
-
   if (!signature || !event) {
     return c.text('Missing signature or event header', 400)
   }
 
   const body = await c.req.text()
   const webhooks = new Webhooks({ secret })
-
   if (!(await webhooks.verify(body, signature))) {
     return c.text('Invalid signature', 401)
   }
@@ -172,9 +150,10 @@ github.post('/webhook', async (c) => {
   try {
     if (event === 'installation' && payload.action === 'deleted') {
       const installationId = payload.installation.id
-
-      await db.deleteFrom('github_installations').where('installationId', '=', installationId).execute()
-
+      await db
+        .deleteFrom('github_installations')
+        .where('installationId', '=', installationId)
+        .execute()
       console.log('[github] Installation deleted', { installationId })
     }
 

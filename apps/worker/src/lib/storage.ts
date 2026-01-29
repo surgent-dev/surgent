@@ -12,7 +12,10 @@ const RETRY_ATTEMPTS = 3
 const RETRY_DELAY_MS = 1000
 
 const isConfigured =
-  config.uploads.accessKeyId && config.uploads.secretAccessKey && config.uploads.bucket && config.uploads.endpoint
+  config.uploads.accessKeyId &&
+  config.uploads.secretAccessKey &&
+  config.uploads.bucket &&
+  config.uploads.endpoint
 
 const client = isConfigured
   ? new S3Client({
@@ -67,7 +70,9 @@ export const storage = {
   async download(key: string): Promise<{ body: ReadableStream; contentType: string } | null> {
     if (!client) throw new Error('Storage not configured')
     try {
-      const res = await withRetry(() => client.send(new GetObjectCommand({ Bucket: bucket, Key: key })))
+      const res = await withRetry(() =>
+        client.send(new GetObjectCommand({ Bucket: bucket, Key: key })),
+      )
       if (!res.Body) return null
       return {
         body: res.Body as ReadableStream,

@@ -28,7 +28,9 @@ export default function SubagentMention({
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Filter subagents based on input after @
-  const filteredSubagents = subagents.filter((a) => a.name.toLowerCase().includes(filter.toLowerCase()))
+  const filteredSubagents = subagents.filter((a) =>
+    a.name.toLowerCase().includes(filter.toLowerCase()),
+  )
 
   // Detect @ at start of input or after space
   useEffect(() => {
@@ -156,7 +158,9 @@ export default function SubagentMention({
                 <div className="flex-1 min-w-0">
                   <span className="text-sm font-medium">@{agent.name}</span>
                   {agent.description && (
-                    <p className="text-[11px] text-muted-foreground truncate">{agent.description}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {agent.description}
+                    </p>
                   )}
                 </div>
               </button>

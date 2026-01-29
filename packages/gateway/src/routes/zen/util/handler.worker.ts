@@ -14,7 +14,11 @@ import {
   ModelError,
   RateLimitError,
 } from './error'
-import { createBodyConverter, createStreamPartConverter, createResponseConverter } from './provider/provider'
+import {
+  createBodyConverter,
+  createStreamPartConverter,
+  createResponseConverter,
+} from './provider/provider'
 import type { UsageInfo } from './provider/provider'
 import { anthropicHelper } from './provider/anthropic'
 import { googleHelper } from './provider/google'
@@ -92,7 +96,9 @@ export async function handleZenRequest(
     const stickyTracker = createStickyTracker(modelInfo.stickyProvider, sessionId, c.env.GATEWAY_KV)
     const stickyProvider = (await stickyTracker?.get()) ?? undefined
     const authInfo = await authenticate(modelInfo)
-    const retriableRequest = async (retry: RetryOptions = { excludeProviders: [], retryCount: 0 }) => {
+    const retriableRequest = async (
+      retry: RetryOptions = { excludeProviders: [], retryCount: 0 },
+    ) => {
       const providerInfo = selectProvider(
         model,
         zenData,
@@ -326,7 +332,8 @@ export async function handleZenRequest(
       ? zenData.models[modelId].find((item) => opts.format === item.formatFilter)
       : zenData.models[modelId]
 
-    if (!modelData) throw new ModelError(`Model ${reqModel} not supported for format ${opts.format}`)
+    if (!modelData)
+      throw new ModelError(`Model ${reqModel} not supported for format ${opts.format}`)
 
     logger.metric({ model: modelId })
 
@@ -408,10 +415,16 @@ export async function handleZenRequest(
       .selectFrom('apikey as k')
       .innerJoin('project as pr', 'pr.id', 'k.projectId')
       .leftJoin('provider as p', (join) =>
-        join.onRef('p.projectId', '=', 'k.projectId').on('p.provider', '=', byokProvider).on('p.deletedAt', 'is', null),
+        join
+          .onRef('p.projectId', '=', 'k.projectId')
+          .on('p.provider', '=', byokProvider)
+          .on('p.deletedAt', 'is', null),
       )
       .leftJoin('model as m', (join) =>
-        join.onRef('m.projectId', '=', 'k.projectId').on('m.model', '=', modelInfo.id).on('m.deletedAt', 'is', null),
+        join
+          .onRef('m.projectId', '=', 'k.projectId')
+          .on('m.model', '=', modelInfo.id)
+          .on('m.deletedAt', 'is', null),
       )
       .select(({ ref }) => [
         ref('k.id').as('apiKeyId'),
@@ -426,7 +439,8 @@ export async function handleZenRequest(
       .where('k.id', '=', verify.key.id)
       .executeTakeFirst()
 
-    if (!row || !row.enabled || !row.projectId || !row.organizationId) throw new AuthError('Invalid API key.')
+    if (!row || !row.enabled || !row.projectId || !row.organizationId)
+      throw new AuthError('Invalid API key.')
     if (row.expiresAt && row.expiresAt <= new Date()) throw new AuthError('API key expired.')
 
     const provider =
@@ -467,8 +481,14 @@ export async function handleZenRequest(
     providerInfo: ProviderSelection,
     usageInfo: UsageInfo,
   ) {
-    const { inputTokens, outputTokens, reasoningTokens, cacheReadTokens, cacheWrite5mTokens, cacheWrite1hTokens } =
-      usageInfo
+    const {
+      inputTokens,
+      outputTokens,
+      reasoningTokens,
+      cacheReadTokens,
+      cacheWrite5mTokens,
+      cacheWrite1hTokens,
+    } = usageInfo
     const calcCost = (rate: number | undefined, tokens: number | undefined) => {
       if (!rate || !tokens) return undefined
       return rate * tokens * 100
@@ -476,7 +496,8 @@ export async function handleZenRequest(
 
     const modelCost =
       modelInfo.cost200K &&
-      inputTokens + (cacheReadTokens ?? 0) + (cacheWrite5mTokens ?? 0) + (cacheWrite1hTokens ?? 0) > 200_000
+      inputTokens + (cacheReadTokens ?? 0) + (cacheWrite5mTokens ?? 0) + (cacheWrite1hTokens ?? 0) >
+        200_000
         ? modelInfo.cost200K
         : modelInfo.cost
 

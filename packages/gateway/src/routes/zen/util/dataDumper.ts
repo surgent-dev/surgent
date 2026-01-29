@@ -47,7 +47,10 @@ export function createDataDumper(
       )
 
       executionCtx.waitUntil(
-        bucket.put(`meta/${data.modelName}/${sessionId}/${requestId}.json`, JSON.stringify({ timestamp, ...metadata })),
+        bucket.put(
+          `meta/${data.modelName}/${sessionId}/${requestId}.json`,
+          JSON.stringify({ timestamp, ...metadata }),
+        ),
       )
     },
   }

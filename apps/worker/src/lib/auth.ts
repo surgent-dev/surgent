@@ -29,7 +29,11 @@ async function ensureActiveOrganization(userId: string): Promise<string> {
 
   if (membership?.organizationId) return membership.organizationId
 
-  const user = await db.selectFrom('user').select('name').where('id', '=', userId).executeTakeFirst()
+  const user = await db
+    .selectFrom('user')
+    .select('name')
+    .where('id', '=', userId)
+    .executeTakeFirst()
 
   const organizationId = userId
   const now = new Date()

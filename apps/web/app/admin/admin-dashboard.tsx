@@ -3,14 +3,35 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AdminRangeSelect } from '@/components/admin/admin-range-select'
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { Users, FolderKanban, UserPlus, Layers, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Users,
+  FolderKanban,
+  UserPlus,
+  Layers,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react'
 
 interface AdminOverview {
   range: string
@@ -98,7 +119,13 @@ function StatCard({
   )
 }
 
-function SignupsChart({ data, total }: { data: Array<{ date: string; count: string }>; total: string }) {
+function SignupsChart({
+  data,
+  total,
+}: {
+  data: Array<{ date: string; count: string }>
+  total: string
+}) {
   const chartData = data.map((d) => ({ date: d.date, count: Number(d.count) }))
 
   return (
@@ -108,7 +135,10 @@ function SignupsChart({ data, total }: { data: Array<{ date: string; count: stri
         <span className="text-xs text-muted-foreground">{total} in range</span>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={{ count: { label: 'Signups', color: 'hsl(var(--chart-1))' } }} className="h-[250px]">
+        <ChartContainer
+          config={{ count: { label: 'Signups', color: 'hsl(var(--chart-1))' } }}
+          className="h-[250px]"
+        >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
               <defs>
@@ -141,7 +171,13 @@ function SignupsChart({ data, total }: { data: Array<{ date: string; count: stri
   )
 }
 
-function ProjectsChart({ data, total }: { data: Array<{ date: string; count: string }>; total: string }) {
+function ProjectsChart({
+  data,
+  total,
+}: {
+  data: Array<{ date: string; count: string }>
+  total: string
+}) {
   const chartData = data.map((d) => ({ date: d.date, count: Number(d.count) }))
 
   return (
@@ -151,7 +187,10 @@ function ProjectsChart({ data, total }: { data: Array<{ date: string; count: str
         <span className="text-xs text-muted-foreground">{total} in range</span>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={{ count: { label: 'Projects', color: 'hsl(var(--chart-2))' } }} className="h-[250px]">
+        <ChartContainer
+          config={{ count: { label: 'Projects', color: 'hsl(var(--chart-2))' } }}
+          className="h-[250px]"
+        >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
               <defs>
@@ -221,7 +260,9 @@ function Last10UsersTable({
                     {user.emailVerified ? 'Yes' : 'No'}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-muted-foreground">{formatDate(user.createdAt)}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatDate(user.createdAt)}
+                </TableCell>
               </TableRow>
             ))}
             {users.length === 0 && (
@@ -276,7 +317,12 @@ function Pagination({
         <span className="text-sm text-muted-foreground">
           Page {page} of {totalPages}
         </span>
-        <Button variant="outline" size="sm" onClick={() => goTo(page + 1)} disabled={page >= totalPages}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => goTo(page + 1)}
+          disabled={page >= totalPages}
+        >
           Next
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -321,7 +367,9 @@ function AllUsersTable({
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-muted-foreground">{pagination.totalUsers} users in selected range</p>
+        <p className="text-sm text-muted-foreground">
+          {pagination.totalUsers} users in selected range
+        </p>
         <SortToggle currentSort={pagination.sort} />
       </div>
       <Table>
@@ -355,7 +403,12 @@ function AllUsersTable({
           )}
         </TableBody>
       </Table>
-      <Pagination page={pagination.page} perPage={pagination.perPage} total={pagination.totalUsers} type="users" />
+      <Pagination
+        page={pagination.page}
+        perPage={pagination.perPage}
+        total={pagination.totalUsers}
+        type="users"
+      />
     </div>
   )
 }
@@ -431,7 +484,9 @@ function AllProjectsTable({
                       {project.worker.status ?? 'inactive'}
                     </Badge>
                     <span className="text-xs text-muted-foreground">{project.worker.name}</span>
-                    <span className="text-xs text-muted-foreground">by {project.userName || project.userEmail}</span>
+                    <span className="text-xs text-muted-foreground">
+                      by {project.userName || project.userEmail}
+                    </span>
                     {project.worker.hostname ? (
                       <a
                         className="text-xs text-muted-foreground underline underline-offset-2"
@@ -447,7 +502,9 @@ function AllProjectsTable({
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
-              <TableCell className="text-muted-foreground">{formatDate(project.createdAt)}</TableCell>
+              <TableCell className="text-muted-foreground">
+                {formatDate(project.createdAt)}
+              </TableCell>
             </TableRow>
           ))}
           {projects.length === 0 && (
@@ -511,7 +568,9 @@ export function AdminDashboard({ data }: { data: AdminOverview }) {
             <Tabs value={tab} onValueChange={onTabChange}>
               <TabsList>
                 <TabsTrigger value="users">Users ({data.pagination.totalUsers})</TabsTrigger>
-                <TabsTrigger value="projects">Projects ({data.pagination.totalProjects})</TabsTrigger>
+                <TabsTrigger value="projects">
+                  Projects ({data.pagination.totalProjects})
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="users" className="mt-4">
                 <AllUsersTable users={data.allUsers} pagination={data.pagination} />

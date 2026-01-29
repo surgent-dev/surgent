@@ -5,7 +5,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     .createTable('deployment_history')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('projectId', 'uuid', (col) => col.notNull().references('project.id').onDelete('cascade'))
+    .addColumn('projectId', 'uuid', (col) =>
+      col.notNull().references('project.id').onDelete('cascade'),
+    )
     .addColumn('name', 'text', (col) => col.notNull())
     .addColumn('previewUrl', 'text', (col) => col.notNull())
     .addColumn('status', 'text', (col) => col.notNull())

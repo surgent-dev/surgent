@@ -4,7 +4,9 @@ export async function getProjectWithAuth(id: string, userId: string) {
   const row = await db
     .selectFrom('project')
     .leftJoin('member', (join) =>
-      join.onRef('member.organizationId', '=', 'project.organizationId').on('member.userId', '=', userId),
+      join
+        .onRef('member.organizationId', '=', 'project.organizationId')
+        .on('member.userId', '=', userId),
     )
     .selectAll('project')
     .select('member.id as memberId')
@@ -33,7 +35,12 @@ export async function attachApiKeyToProject(
 }
 
 export function getProjectById(id: string) {
-  return db.selectFrom('project').selectAll().where('id', '=', id).where('deletedAt', 'is', null).executeTakeFirst()
+  return db
+    .selectFrom('project')
+    .selectAll()
+    .where('id', '=', id)
+    .where('deletedAt', 'is', null)
+    .executeTakeFirst()
 }
 
 export function getSandboxByProjectId(projectId: string) {
@@ -232,7 +239,10 @@ export async function updateDeployment(
     .execute()
 }
 
-export async function isHostnameAvailable(scriptName: string, excludeProjectId?: string): Promise<boolean> {
+export async function isHostnameAvailable(
+  scriptName: string,
+  excludeProjectId?: string,
+): Promise<boolean> {
   let query = db.selectFrom('worker').select('id').where('scriptName', '=', scriptName)
 
   if (excludeProjectId) {
@@ -253,7 +263,10 @@ export async function getLatestDeploymentScriptName(projectId: string): Promise<
   return row?.scriptName ?? null
 }
 
-export async function getDeploymentByVersionId(projectId: string, versionId: string): Promise<{ id: string } | null> {
+export async function getDeploymentByVersionId(
+  projectId: string,
+  versionId: string,
+): Promise<{ id: string } | null> {
   const row = await db
     .selectFrom('deployment')
     .select(['id'])

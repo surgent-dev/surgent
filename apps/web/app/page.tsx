@@ -60,7 +60,8 @@ const templates = [
   {
     id: 'landing-page',
     title: 'Landing Page',
-    description: 'Beautiful, responsive landing page with modern design. Great for product launches.',
+    description:
+      'Beautiful, responsive landing page with modern design. Great for product launches.',
     image: '/landing-template.png',
     gitRepo: 'https://github.com/bahodirr/web-landing-starter',
     initConvex: false,
@@ -68,7 +69,8 @@ const templates = [
   {
     id: 'portfolio',
     title: 'Personal Website',
-    description: 'Showcase your work with a clean, professional portfolio site. Perfect for creatives.',
+    description:
+      'Showcase your work with a clean, professional portfolio site. Perfect for creatives.',
     image: '/personal-website.png',
     gitRepo: 'https://github.com/bahodirr/surgent-template-portfolio',
     initConvex: false,
@@ -76,7 +78,8 @@ const templates = [
   {
     id: '3d-apps',
     title: '3D Interactive App',
-    description: 'Modern 3D application with interactive elements. Perfect for immersive experiences.',
+    description:
+      'Modern 3D application with interactive elements. Perfect for immersive experiences.',
     image: '/3d-apps.png',
     gitRepo: 'https://github.com/bahodirr/surgent-template-3d',
     initConvex: false,
@@ -139,7 +142,11 @@ export default function Index() {
       githubUrl: 'https://github.com/bahodirr/worker-vite-react-template',
       initConvex: true,
     },
-    landing: { name: 'Landing', githubUrl: 'https://github.com/bahodirr/web-landing-starter', initConvex: false },
+    landing: {
+      name: 'Landing',
+      githubUrl: 'https://github.com/bahodirr/web-landing-starter',
+      initConvex: false,
+    },
     simple: {
       name: 'Utility',
       githubUrl: 'https://github.com/bahodirr/worker-vite-react-simple-template',
@@ -169,7 +176,9 @@ export default function Index() {
             router.push(`/project/${id}?${q}`)
           },
           onError: (error) =>
-            toast.error(error instanceof Error ? error.message : String(error), { id: 'create-project' }),
+            toast.error(error instanceof Error ? error.message : String(error), {
+              id: 'create-project',
+            }),
         },
       )
     } else {
@@ -259,14 +268,31 @@ export default function Index() {
         >
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <Image src="/surgent-logo.svg" alt="Surgent" width={119} height={32} className="h-8 w-auto" priority />
+              <Image
+                src="/surgent-logo.svg"
+                alt="Surgent"
+                width={119}
+                height={32}
+                className="h-8 w-auto"
+                priority
+              />
             </Link>
             {isLoggedIn ? (
-              <Button asChild variant="outline" size="sm" className="rounded-full shrink-0 cursor-pointer">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="rounded-full shrink-0 cursor-pointer"
+              >
                 <Link href="/dashboard">Go to dashboard</Link>
               </Button>
             ) : (
-              <Button asChild variant="outline" size="sm" className="rounded-full shrink-0 cursor-pointer">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="rounded-full shrink-0 cursor-pointer"
+              >
                 <Link href="/signup">Sign up</Link>
               </Button>
             )}

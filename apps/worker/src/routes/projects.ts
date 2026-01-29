@@ -21,8 +21,12 @@ import {
   redeployVersion,
 } from '@/controllers/projects'
 import { HttpError } from '@/lib/errors'
-import { listDeploymentEnvVars, setDeploymentEnvVars, buildDashboardCredentials } from '@/apis/convex'
-import { createGitHubApp, GitHubService } from '@/apis/github'
+import {
+  listDeploymentEnvVars,
+  setDeploymentEnvVars,
+  buildDashboardCredentials,
+} from '@/apis/convex'
+import { createGitHubApp, GitHubService, getValidUserToken } from '@/apis/github'
 import { isHostnameAvailable, getProjectWithAuth } from '@/services/projects'
 import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
 
@@ -38,7 +42,10 @@ projects.use('*', async (c, next) => {
 // GET /projects/check-hostname - Check if a hostname is available
 projects.get(
   '/check-hostname',
-  zValidator('query', z.object({ name: z.string().min(1).max(63), projectId: z.string().uuid().optional() })),
+  zValidator(
+    'query',
+    z.object({ name: z.string().min(1).max(63), projectId: z.string().uuid().optional() }),
+  ),
   async (c) => {
     const { name, projectId } = c.req.valid('query')
     const sanitized = sanitizeHostname(name)
@@ -92,7 +99,9 @@ projects.get('/', requireAuth, async (c) => {
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       sandbox: r.sandboxId ? { id: r.sandboxId, status: r.sandboxStatus, url: r.sandboxUrl } : null,
-      worker: r.workerName ? { name: r.workerName, status: r.workerStatus, hostname: r.workerHostname } : null,
+      worker: r.workerName
+        ? { name: r.workerName, status: r.workerStatus, hostname: r.workerHostname }
+        : null,
     })),
   )
 })
@@ -163,13 +172,18 @@ projects.get('/usage', requireAuth, async (c) => {
       sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
     ])
     .groupBy(['usage.model', 'usage.provider'])
-    .orderBy(sql`COALESCE(SUM("usage"."inputTokens"), 0) + COALESCE(SUM("usage"."outputTokens"), 0)`, 'desc')
+    .orderBy(
+      sql`COALESCE(SUM("usage"."inputTokens"), 0) + COALESCE(SUM("usage"."outputTokens"), 0)`,
+      'desc',
+    )
     .limit(20)
     .execute()
 
   const daily = await base
     .select([
-      sql<string>`to_char(date_trunc('day', "usage"."createdAt" AT TIME ZONE 'UTC'), 'YYYY-MM-DD')`.as('date'),
+      sql<string>`to_char(date_trunc('day', "usage"."createdAt" AT TIME ZONE 'UTC'), 'YYYY-MM-DD')`.as(
+        'date',
+      ),
       sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
       sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
       sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
@@ -232,8 +246,12 @@ projects.get('/:id', zValidator('param', idParam), async (c) => {
 
   return c.json({
     ...result.project,
-    sandbox: row?.sandboxId ? { id: row.sandboxId, status: row.sandboxStatus, url: row.sandboxUrl } : null,
-    worker: row?.workerName ? { name: row.workerName, status: row.workerStatus, hostname: row.workerHostname } : null,
+    sandbox: row?.sandboxId
+      ? { id: row.sandboxId, status: row.sandboxStatus, url: row.sandboxUrl }
+      : null,
+    worker: row?.workerName
+      ? { name: row.workerName, status: row.workerStatus, hostname: row.workerHostname }
+      : null,
   })
 })
 
@@ -251,7 +269,11 @@ projects.patch(
       return c.json({ error: result.error }, result.status)
     }
 
-    await db.updateTable('project').set({ name, updatedAt: new Date() }).where('id', '=', id).execute()
+    await db
+      .updateTable('project')
+      .set({ name, updatedAt: new Date() })
+      .where('id', '=', id)
+      .execute()
 
     return c.json({ updated: true })
   },
@@ -269,10 +291,18 @@ projects.delete('/:id', zValidator('param', idParam), async (c) => {
   // Delete sandbox before soft deleting project
   await deleteSandbox({ projectId: id })
 
-  await db.updateTable('apikey').set({ enabled: false, updatedAt: new Date() }).where('projectId', '=', id).execute()
+  await db
+    .updateTable('apikey')
+    .set({ enabled: false, updatedAt: new Date() })
+    .where('projectId', '=', id)
+    .execute()
 
   // Soft delete: set deletedAt instead of hard delete
-  await db.updateTable('project').set({ deletedAt: new Date(), updatedAt: new Date() }).where('id', '=', id).execute()
+  await db
+    .updateTable('project')
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where('id', '=', id)
+    .execute()
 
   return c.json({ deleted: true })
 })
@@ -350,19 +380,24 @@ projects.post(
       if (name) {
         const available = await isHostnameAvailable(name, id)
         if (!available) {
-          return c.json({ error: `Hostname "${name}" is already taken. Please choose a different name.` }, 409)
+          return c.json(
+            { error: `Hostname "${name}" is already taken. Please choose a different name.` },
+            409,
+          )
         }
       }
 
       const deployment = await createDeploymentRecord(id, name)
 
-      deployProject({ projectId: id, deployName: name, deploymentId: deployment.id }).catch((err) => {
-        console.error('[deploy] background failed', {
-          projectId: id,
-          deploymentId: deployment.id,
-          error: err?.stack ?? err?.message ?? String(err),
-        })
-      })
+      deployProject({ projectId: id, deployName: name, deploymentId: deployment.id }).catch(
+        (err) => {
+          console.error('[deploy] background failed', {
+            projectId: id,
+            deploymentId: deployment.id,
+            error: err?.stack ?? err?.message ?? String(err),
+          })
+        },
+      )
 
       console.log('[deploy] scheduled', { projectId: id, deploymentId: deployment.id })
       return c.json({ deploymentId: deployment.id, status: 'queued' })
@@ -498,7 +533,10 @@ projects.post(
 
       const available = await isHostnameAvailable(sanitized, id)
       if (!available) {
-        return c.json({ error: `Hostname "${sanitized}" is already taken. Please choose a different name.` }, 409)
+        return c.json(
+          { error: `Hostname "${sanitized}" is already taken. Please choose a different name.` },
+          409,
+        )
       }
 
       const previewUrl = `https://${sanitized}.${config.cloudflare.deployDomain}`
@@ -551,7 +589,11 @@ projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
   if ('error' in result) return c.json({ error: result.error }, result.status)
   const row = result.project
 
-  const sandboxRow = await db.selectFrom('sandbox').select(['id']).where('projectId', '=', id).executeTakeFirst()
+  const sandboxRow = await db
+    .selectFrom('sandbox')
+    .select(['id'])
+    .where('projectId', '=', id)
+    .executeTakeFirst()
   const sandboxId = sandboxRow?.id
   if (!sandboxId) return c.json({ error: 'Sandbox not found' }, 400)
 
@@ -580,10 +622,15 @@ projects.get('/:id/logs', zValidator('param', idParam), async (c) => {
 projects.get('/:id/health', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const result = await getProjectWithAuth(id, c.get('user')!.id)
-  if ('error' in result) return c.json({ status: result.status === 404 ? 'not_found' : 'forbidden' }, result.status)
+  if ('error' in result)
+    return c.json({ status: result.status === 404 ? 'not_found' : 'forbidden' }, result.status)
   const row = result.project
 
-  const sandboxRow = await db.selectFrom('sandbox').select(['host']).where('projectId', '=', id).executeTakeFirst()
+  const sandboxRow = await db
+    .selectFrom('sandbox')
+    .select(['host'])
+    .where('projectId', '=', id)
+    .executeTakeFirst()
   const previewUrl = sandboxRow?.host
   if (!previewUrl) return c.json({ status: 'no_sandbox' })
 
@@ -708,16 +755,12 @@ projects.get('/:id/github/status', zValidator('param', idParam), async (c) => {
     return c.json({ error: result.error }, result.status)
   }
 
-  // Get installations (per org/account)
-  const installations = await db.selectFrom('github_installations').selectAll().where('userId', '=', userId).execute()
-
-  // Get OAuth token (per user - one token for all installations)
-  const oauthToken = await db
-    .selectFrom('github_oauth_tokens')
-    .select('accessToken')
+  const installations = await db
+    .selectFrom('github_installations')
+    .selectAll()
     .where('userId', '=', userId)
-    .executeTakeFirst()
-  const hasToken = Boolean(oauthToken?.accessToken)
+    .execute()
+  const hasToken = Boolean(await getValidUserToken(userId))
 
   const installationList = installations.map((item) => ({
     id: Number(item.installationId),
@@ -842,7 +885,11 @@ projects.post(
       defaultBranch: defaultBranch || 'main',
     }
 
-    await db.updateTable('project').set({ github, updatedAt: new Date() }).where('id', '=', id).execute()
+    await db
+      .updateTable('project')
+      .set({ github, updatedAt: new Date() })
+      .where('id', '=', id)
+      .execute()
 
     // Update git remote in sandbox
     const sandboxRow = await db
@@ -892,7 +939,11 @@ projects.post('/:id/github/disconnect', zValidator('param', idParam), async (c) 
     return c.json({ error: result.error }, result.status)
   }
 
-  await db.updateTable('project').set({ github: null, updatedAt: new Date() }).where('id', '=', id).execute()
+  await db
+    .updateTable('project')
+    .set({ github: null, updatedAt: new Date() })
+    .where('id', '=', id)
+    .execute()
 
   return c.json({ disconnected: true })
 })
@@ -931,7 +982,11 @@ projects.post(
           .where('userId', '=', userId)
           .where('installationId', '=', installationId)
           .executeTakeFirst()
-      : await db.selectFrom('github_installations').selectAll().where('userId', '=', userId).executeTakeFirst()
+      : await db
+          .selectFrom('github_installations')
+          .selectAll()
+          .where('userId', '=', userId)
+          .executeTakeFirst()
 
     if (!installation) {
       return c.json(
@@ -942,26 +997,14 @@ projects.post(
       )
     }
 
-    // Get OAuth token (per-user, stored separately from installations)
-    const oauthToken = await db
-      .selectFrom('github_oauth_tokens')
-      .selectAll()
-      .where('userId', '=', userId)
-      .executeTakeFirst()
+    // Get valid OAuth token (auto-refreshes if expired)
+    const accessToken = await getValidUserToken(userId)
 
     try {
-      if (!oauthToken?.accessToken) {
+      if (!accessToken) {
         return c.json(
           {
-            error: 'GitHub authorization missing. Please authorize the GitHub App.',
-          },
-          400,
-        )
-      }
-      if (oauthToken.accessTokenExpiresAt && new Date(oauthToken.accessTokenExpiresAt) <= new Date()) {
-        return c.json(
-          {
-            error: 'GitHub authorization expired. Please re-authorize.',
+            error: 'GitHub authorization missing or expired. Please authorize the GitHub App.',
           },
           401,
         )
@@ -976,14 +1019,14 @@ projects.post(
             description,
             private: isPrivate ?? false,
             auto_init: false,
-            token: oauthToken.accessToken,
+            token: accessToken,
           })
         : await GitHubService.createUserRepository({
             name,
             description,
             private: isPrivate ?? false,
             auto_init: false,
-            token: oauthToken.accessToken,
+            token: accessToken,
           })
 
       if (!createResult.success || !createResult.repository) {
@@ -1001,7 +1044,11 @@ projects.post(
         defaultBranch: repo.default_branch,
       }
 
-      await db.updateTable('project').set({ github, updatedAt: new Date() }).where('id', '=', id).execute()
+      await db
+        .updateTable('project')
+        .set({ github, updatedAt: new Date() })
+        .where('id', '=', id)
+        .execute()
 
       // Initialize git and push to new repo (single shell call)
       const sandboxRow = await db

@@ -57,7 +57,14 @@ export function WaitlistScreen() {
         <div>
           <header className="mb-16 md:mb-24">
             <Link href="/" className="inline-block">
-              <Image src="/surgent-logo.svg" alt="Surgent" width={100} height={27} className="h-7 w-auto" priority />
+              <Image
+                src="/surgent-logo.svg"
+                alt="Surgent"
+                width={100}
+                height={27}
+                className="h-7 w-auto"
+                priority
+              />
             </Link>
           </header>
 
@@ -153,7 +160,9 @@ export function WaitlistScreen() {
         <footer className="mt-20 space-y-10">
           {/* Integrations */}
           <div className="space-y-4">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground/70">Integrations</p>
+            <p className="text-xs uppercase tracking-widest text-muted-foreground/70">
+              Integrations
+            </p>
             <div className="flex flex-wrap items-center gap-4 sm:gap-6 md:gap-8">
               <Image
                 src="/Whop_logo.svg.png"
@@ -211,7 +220,9 @@ export function WaitlistScreen() {
           </div>
 
           {/* Copyright */}
-          <div className="pt-6 text-xs text-muted-foreground/60">© Benrov, Inc. All rights reserved.</div>
+          <div className="pt-6 text-xs text-muted-foreground/60">
+            © Benrov, Inc. All rights reserved.
+          </div>
         </footer>
       </div>
     </div>

@@ -3,18 +3,29 @@ import { ArrowUp, Paperclip, X, Loader2, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { fileToDataUrl, uploadFile, attachmentsToParts, type UploadingAttachment, type FilePart } from '@/lib/upload'
+import {
+  fileToDataUrl,
+  uploadFile,
+  attachmentsToParts,
+  type UploadingAttachment,
+  type FilePart,
+} from '@/lib/upload'
 import ModelSelectorDropdown, { type ProviderModel } from './model-selector-dropdown'
 import type { Agent } from '@opencode-ai/sdk'
 
 export type { FilePart, ProviderModel }
 
 type Props = {
-  onSubmit: (value: string, files?: FilePart[], model?: string, providerID?: string) => void | Promise<void>
+  onSubmit: (
+    value: string,
+    files?: FilePart[],
+    model?: string,
+    providerID?: string,
+  ) => void | Promise<void>
   disabled?: boolean
   placeholder?: string
   className?: string
-  mode?: 'plan' | 'build'
+  mode?: 'plan' | 'orchestrator'
   onToggleMode?: () => void
   isWorking?: boolean
   onStop?: () => void
@@ -30,8 +41,18 @@ type Props = {
 // Fallback models when no providers are connected
 const FALLBACK_MODELS: ProviderModel[] = [
   { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', providerId: 'opencode', providerName: 'OpenCode' },
-  { id: 'claude-opus-4-5', name: 'Claude Opus 4.5', providerId: 'opencode', providerName: 'OpenCode' },
-  { id: 'gemini-3-flash', name: 'Gemini 3 Flash', providerId: 'opencode', providerName: 'OpenCode' },
+  {
+    id: 'claude-opus-4-5',
+    name: 'Claude Opus 4.5',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+  },
+  {
+    id: 'gemini-3-flash',
+    name: 'Gemini 3 Flash',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+  },
   { id: 'gemini-3-pro', name: 'Gemini 3 Pro', providerId: 'opencode', providerName: 'OpenCode' },
 ]
 
@@ -43,7 +64,7 @@ export default function ChatInput({
   disabled,
   placeholder = 'Ask anything...',
   className,
-  mode = 'plan',
+  mode = 'orchestrator',
   onToggleMode,
   isWorking,
   onStop,
@@ -71,7 +92,9 @@ export default function ChatInput({
   // Find current selected model
   const currentModel = useMemo(() => {
     if (selectedModel) {
-      return models.find((m) => m.id === selectedModel.modelId && m.providerId === selectedModel.providerId)
+      return models.find(
+        (m) => m.id === selectedModel.modelId && m.providerId === selectedModel.providerId,
+      )
     }
     return models[0]
   }, [models, selectedModel])
@@ -112,7 +135,9 @@ export default function ChatInput({
   )
 
   const addFiles = async (files: File[]) => {
-    const valid = files.filter((f) => f.size <= MAX_FILE_SIZE).slice(0, MAX_FILES - attachments.length)
+    const valid = files
+      .filter((f) => f.size <= MAX_FILE_SIZE)
+      .slice(0, MAX_FILES - attachments.length)
     if (!valid.length) return
 
     const newAttachments: UploadingAttachment[] = await Promise.all(
@@ -129,10 +154,14 @@ export default function ChatInput({
     for (const attachment of newAttachments) {
       uploadFile(attachment.file)
         .then(({ url, size }) => {
-          setAttachments((prev) => prev.map((a) => (a.id === attachment.id ? { ...a, status: 'done', url, size } : a)))
+          setAttachments((prev) =>
+            prev.map((a) => (a.id === attachment.id ? { ...a, status: 'done', url, size } : a)),
+          )
         })
         .catch(() => {
-          setAttachments((prev) => prev.map((a) => (a.id === attachment.id ? { ...a, status: 'error' } : a)))
+          setAttachments((prev) =>
+            prev.map((a) => (a.id === attachment.id ? { ...a, status: 'error' } : a)),
+          )
         })
     }
   }
@@ -261,7 +290,11 @@ export default function ChatInput({
               <div key={a.id} className="relative group">
                 <div className="size-12 sm:size-14 rounded-xl overflow-hidden bg-muted border border-border">
                   {a.url || a.preview ? (
-                    <img src={a.url || a.preview} alt={a.file.name} className="size-full object-cover" />
+                    <img
+                      src={a.url || a.preview}
+                      alt={a.file.name}
+                      className="size-full object-cover"
+                    />
                   ) : (
                     <div className="size-full flex items-center justify-center">
                       <FileText className="size-5 text-muted-foreground" />
@@ -300,12 +333,16 @@ export default function ChatInput({
                   onClick={() => handleSubagentSelect(agent)}
                   className={cn(
                     'w-full flex items-baseline gap-1.5 px-3 py-1.5 text-left transition-colors',
-                    index === highlightedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
+                    index === highlightedIndex
+                      ? 'bg-accent text-accent-foreground'
+                      : 'hover:bg-accent/50',
                   )}
                 >
                   <span className="text-[13px] font-medium text-brand">@{agent.name}</span>
                   {agent.description && (
-                    <span className="text-xs text-muted-foreground truncate">{agent.description}</span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {agent.description}
+                    </span>
                   )}
                 </button>
               ))}
@@ -383,11 +420,15 @@ export default function ChatInput({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={8}>
-                {mode === 'plan' ? 'Chat only — no file changes' : 'Agent mode — can edit files'}
+                {mode === 'plan' ? 'Chat only — no file changes' : 'Orchestrator — can edit files'}
               </TooltipContent>
             </Tooltip>
 
-            <ModelSelectorDropdown models={models} selectedModel={selectedModel} onSelect={handleModelSelect} />
+            <ModelSelectorDropdown
+              models={models}
+              selectedModel={selectedModel}
+              onSelect={handleModelSelect}
+            />
           </div>
 
           <Button

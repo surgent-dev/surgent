@@ -25,7 +25,9 @@ export const devTemplate = Template()
     DATABASE_URL: 'postgresql://devuser:devpass@localhost:5432/devdb',
   })
   .runCmd('/root/.bun/bin/bun add -g @ast-grep/cli @anthropic-ai/claude-code opencode-ai pm2')
-  .runCmd('git config --global user.name "Surgent Dev" && git config --global user.email "bot@surgent.dev"')
+  .runCmd(
+    'git config --global user.name "Surgent Dev" && git config --global user.email "bot@surgent.dev"',
+  )
   .runCmd(`git clone --depth 1 ${repoUrl} /home/user/surgent`)
   .runCmd('cd /home/user/surgent && /root/.bun/bin/bun install')
   .setWorkdir('/home/user/surgent')

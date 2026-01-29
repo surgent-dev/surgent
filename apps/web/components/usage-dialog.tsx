@@ -25,7 +25,13 @@ const RANGES = [
   { value: 90, label: '90d' },
 ]
 
-export default function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export default function UsageDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const [days, setDays] = useState(30)
 
   const { data, isLoading, isError } = useUsageQuery(undefined, { enabled: open, days })
@@ -65,7 +71,9 @@ export default function UsageDialog({ open, onOpenChange }: { open: boolean; onO
                   key={r.value}
                   onClick={() => setDays(r.value)}
                   className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                    days === r.value ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                    days === r.value
+                      ? 'bg-foreground text-background'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {r.label}
@@ -81,7 +89,9 @@ export default function UsageDialog({ open, onOpenChange }: { open: boolean; onO
                   {isLoading || !summary ? (
                     <Skeleton className="h-7 w-20" />
                   ) : (
-                    <span className="text-2xl font-bold tabular-nums">{fmtDollars(summary.dollars)}</span>
+                    <span className="text-2xl font-bold tabular-nums">
+                      {fmtDollars(summary.dollars)}
+                    </span>
                   )}
                 </div>
                 <span className="text-sm text-muted-foreground">/ ${LIMIT_DOLLARS}</span>
@@ -92,7 +102,11 @@ export default function UsageDialog({ open, onOpenChange }: { open: boolean; onO
                 <div className="h-2.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
-                      summary.pct >= 90 ? 'bg-rose-500' : summary.pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
+                      summary.pct >= 90
+                        ? 'bg-rose-500'
+                        : summary.pct >= 70
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500'
                     }`}
                     style={{ width: `${Math.max(summary.pct, 0.5)}%` }}
                   />
@@ -102,7 +116,9 @@ export default function UsageDialog({ open, onOpenChange }: { open: boolean; onO
 
             {/* Projects */}
             <div className="space-y-2">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Projects</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Projects
+              </span>
               {isLoading ? (
                 <div className="space-y-2">
                   <Skeleton className="h-10 rounded-lg" />
@@ -111,7 +127,10 @@ export default function UsageDialog({ open, onOpenChange }: { open: boolean; onO
               ) : projectsWithDollars.length ? (
                 <div className="space-y-1.5">
                   {projectsWithDollars.slice(0, 5).map((p) => (
-                    <div key={p.projectId} className="relative rounded-lg border bg-muted/20 px-3 py-2 overflow-hidden">
+                    <div
+                      key={p.projectId}
+                      className="relative rounded-lg border bg-muted/20 px-3 py-2 overflow-hidden"
+                    >
                       <div
                         className="absolute inset-y-0 left-0 bg-foreground/3 transition-all duration-500"
                         style={{ width: `${Math.max(p.pct, 0)}%` }}

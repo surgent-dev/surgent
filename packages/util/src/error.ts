@@ -1,4 +1,4 @@
-import z from "zod"
+import z from 'zod'
 
 export abstract class NamedError extends Error {
   abstract schema(): z.core.$ZodType
@@ -27,7 +27,7 @@ export abstract class NamedError extends Error {
       }
 
       static isInstance(input: any): input is InstanceType<typeof result> {
-        return typeof input === "object" && "name" in input && input.name === name
+        return typeof input === 'object' && 'name' in input && input.name === name
       }
 
       schema() {
@@ -41,12 +41,12 @@ export abstract class NamedError extends Error {
         }
       }
     }
-    Object.defineProperty(result, "name", { value: name })
+    Object.defineProperty(result, 'name', { value: name })
     return result
   }
 
   public static readonly Unknown = NamedError.create(
-    "UnknownError",
+    'UnknownError',
     z.object({
       message: z.string(),
     }),

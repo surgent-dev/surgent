@@ -27,7 +27,13 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('updatedAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
 
-  await db.schema.createIndex('organization_slug_uq').ifNotExists().on('organization').column('slug').unique().execute()
+  await db.schema
+    .createIndex('organization_slug_uq')
+    .ifNotExists()
+    .on('organization')
+    .column('slug')
+    .unique()
+    .execute()
 
   // Create member table
   await db.schema
@@ -59,7 +65,12 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('updatedAt', 'timestamptz')
     .execute()
 
-  await db.schema.createIndex('team_organizationId_idx').ifNotExists().on('team').column('organizationId').execute()
+  await db.schema
+    .createIndex('team_organizationId_idx')
+    .ifNotExists()
+    .on('team')
+    .column('organizationId')
+    .execute()
 
   // Create teamMember table
   await db.schema
@@ -71,7 +82,12 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('createdAt', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute()
 
-  await db.schema.createIndex('teamMember_teamId_idx').ifNotExists().on('teamMember').column('teamId').execute()
+  await db.schema
+    .createIndex('teamMember_teamId_idx')
+    .ifNotExists()
+    .on('teamMember')
+    .column('teamId')
+    .execute()
 
   // Create organizationRole table
   await db.schema

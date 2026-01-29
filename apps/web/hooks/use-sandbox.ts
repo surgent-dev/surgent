@@ -12,7 +12,9 @@ type SandboxState = {
   setPulsePaymentsTab: (pulse: boolean) => void
   // Callback to open changes tab (set by SplitView)
   openChangesTab?: (messageId?: string, sessionId?: string, diffs?: FileDiff[]) => void
-  setOpenChangesTab: (fn: ((messageId?: string, sessionId?: string, diffs?: FileDiff[]) => void) | undefined) => void
+  setOpenChangesTab: (
+    fn: ((messageId?: string, sessionId?: string, diffs?: FileDiff[]) => void) | undefined,
+  ) => void
 }
 
 export const useSandbox = create<SandboxState>()(

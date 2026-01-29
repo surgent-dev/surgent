@@ -29,7 +29,9 @@ export class GitHubService {
   /**
    * Creates a new GitHub repository with optional auto-initialization
    */
-  static async createUserRepository(options: CreateRepositoryOptions): Promise<CreateRepositoryResult> {
+  static async createUserRepository(
+    options: CreateRepositoryOptions,
+  ): Promise<CreateRepositoryResult> {
     const autoInit = options.auto_init ?? false
 
     log('Creating GitHub repository', {
@@ -63,7 +65,8 @@ export class GitHubService {
         if (response.status === 403) {
           return {
             success: false,
-            error: 'GitHub App user authorization required. Please authorize the GitHub App and try again.',
+            error:
+              'GitHub App user authorization required. Please authorize the GitHub App and try again.',
           }
         }
 
@@ -129,7 +132,8 @@ export class GitHubService {
         if (response.status === 403) {
           return {
             success: false,
-            error: 'GitHub App authorization or org permission required. Please authorize and try again.',
+            error:
+              'GitHub App authorization or org permission required. Please authorize and try again.',
           }
         }
 

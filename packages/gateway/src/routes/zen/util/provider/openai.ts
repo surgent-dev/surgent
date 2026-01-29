@@ -97,7 +97,11 @@ export function fromOpenaiRequest(body: any): CommonRequest {
 
   const msgs: any[] = []
 
-  const inMsgs = Array.isArray(body.input) ? body.input : Array.isArray(body.messages) ? body.messages : []
+  const inMsgs = Array.isArray(body.input)
+    ? body.input
+    : Array.isArray(body.messages)
+      ? body.messages
+      : []
 
   for (const m of inMsgs) {
     if (!m) continue
@@ -110,7 +114,9 @@ export function fromOpenaiRequest(body: any): CommonRequest {
         const args = typeof a === 'string' ? a : JSON.stringify(a ?? {})
         msgs.push({
           role: 'assistant',
-          tool_calls: [{ id: (m as any).id, type: 'function', function: { name, arguments: args } }],
+          tool_calls: [
+            { id: (m as any).id, type: 'function', function: { name, arguments: args } },
+          ],
         })
       }
       if ((m as any).type === 'function_call_output') {
@@ -127,7 +133,8 @@ export function fromOpenaiRequest(body: any): CommonRequest {
       if (typeof c === 'string' && c.length > 0) msgs.push({ role: 'system', content: c })
       if (Array.isArray(c)) {
         const t = c.find((p: any) => p && typeof p.text === 'string')
-        if (t && typeof t.text === 'string' && t.text.length > 0) msgs.push({ role: 'system', content: t.text })
+        if (t && typeof t.text === 'string' && t.text.length > 0)
+          msgs.push({ role: 'system', content: t.text })
       }
       continue
     }
@@ -140,18 +147,24 @@ export function fromOpenaiRequest(body: any): CommonRequest {
         const parts: any[] = []
         for (const p of c) {
           if (!p || !(p as any).type) continue
-          if (((p as any).type === 'text' || (p as any).type === 'input_text') && typeof (p as any).text === 'string')
+          if (
+            ((p as any).type === 'text' || (p as any).type === 'input_text') &&
+            typeof (p as any).text === 'string'
+          )
             parts.push({ type: 'text', text: (p as any).text })
           const ip = toImg(p)
           if (ip) parts.push(ip)
           if ((p as any).type === 'tool_result') {
             const id = (p as any).tool_call_id
             const content =
-              typeof (p as any).content === 'string' ? (p as any).content : JSON.stringify((p as any).content)
+              typeof (p as any).content === 'string'
+                ? (p as any).content
+                : JSON.stringify((p as any).content)
             msgs.push({ role: 'tool', tool_call_id: id, content })
           }
         }
-        if (parts.length === 1 && parts[0].type === 'text') msgs.push({ role: 'user', content: parts[0].text })
+        if (parts.length === 1 && parts[0].type === 'text')
+          msgs.push({ role: 'user', content: parts[0].text })
         else if (parts.length > 0) msgs.push({ role: 'user', content: parts })
       }
       continue
@@ -278,7 +291,10 @@ export function toOpenaiRequest(body: CommonRequest) {
     }
 
     if ((m as any).role === 'tool') {
-      const out = typeof (m as any).content === 'string' ? (m as any).content : JSON.stringify((m as any).content)
+      const out =
+        typeof (m as any).content === 'string'
+          ? (m as any).content
+          : JSON.stringify((m as any).content)
       input.push({ type: 'function_call_output', call_id: (m as any).tool_call_id, output: out })
       continue
     }
@@ -346,7 +362,9 @@ export function fromOpenaiResponse(resp: any): CommonResponse {
 
   const idIn = (r as any).id
   const id =
-    typeof idIn === 'string' ? idIn.replace(/^resp_/, 'chatcmpl_') : `chatcmpl_${Math.random().toString(36).slice(2)}`
+    typeof idIn === 'string'
+      ? idIn.replace(/^resp_/, 'chatcmpl_')
+      : `chatcmpl_${Math.random().toString(36).slice(2)}`
   const model = (r as any).model ?? (resp as any).model
 
   const out = Array.isArray((r as any).output) ? (r as any).output : []
@@ -473,7 +491,9 @@ export function toOpenaiResponse(resp: CommonResponse) {
   })()
 
   return {
-    id: (resp as any).id?.replace(/^chatcmpl_/, 'resp_') ?? `resp_${Math.random().toString(36).slice(2)}`,
+    id:
+      (resp as any).id?.replace(/^chatcmpl_/, 'resp_') ??
+      `resp_${Math.random().toString(36).slice(2)}`,
     object: 'response',
     model: (resp as any).model,
     output: outputItems,

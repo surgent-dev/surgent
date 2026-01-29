@@ -35,7 +35,11 @@ export default function DiffView({
       EditorState.readOnly.of(true),
       EditorView.editable.of(false),
       EditorView.lineWrapping,
-      EditorView.contentAttributes.of({ spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }),
+      EditorView.contentAttributes.of({
+        spellcheck: 'false',
+        autocorrect: 'off',
+        autocapitalize: 'off',
+      }),
       syntaxHighlighting(defaultHighlightStyle),
       EditorView.theme({ '&': { backgroundColor: 'transparent' } }),
     ]

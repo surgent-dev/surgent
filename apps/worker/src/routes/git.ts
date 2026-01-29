@@ -36,15 +36,22 @@ git.use('*', async (c, next) => {
 
 // === Routes ===
 
-// GET /:id/git/log - Single call to get all git info
+// GET /:id/git/log - Get git log (add ?fetch=true to sync with remote)
 git.get('/:id/git/log', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
+  const shouldFetch = c.req.query('fetch') === 'true'
 
   const result = await getProjectWithAuth(id, userId)
   if ('error' in result) return c.json({ error: result.error }, result.status)
 
-  const emptyResult: GitLogResult = { initialized: false, commits: [], branch: '', ahead: 0, behind: 0 }
+  const emptyResult: GitLogResult = {
+    initialized: false,
+    commits: [],
+    branch: '',
+    ahead: 0,
+    behind: 0,
+  }
 
   const sandbox = await getSandboxByProjectId(id)
   if (!sandbox) return c.json(emptyResult)
@@ -53,10 +60,10 @@ git.get('/:id/git/log', zValidator('param', idParam), async (c) => {
   const gh = result.project.github as ProjectGitHub | null
   const defaultBranch = gh?.defaultBranch || 'main'
 
-  // Build auth URL if connected
+  // Build auth URL if connected and fetching
   let authUrl = ''
   let cleanUrl = ''
-  if (gh?.repoOwner && gh.repoName) {
+  if (shouldFetch && gh?.repoOwner && gh.repoName) {
     cleanUrl = `https://github.com/${gh.repoOwner}/${gh.repoName}.git`
     const githubApp = createGitHubApp()
     if (githubApp) {
@@ -69,45 +76,41 @@ git.get('/:id/git/log', zValidator('param', idParam), async (c) => {
     }
   }
 
-  // Single script that does everything
   const script = `
 set -e
 cd '${cwd}' 2>/dev/null || exit 1
 
-# Check git init
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
   echo "NOT_INITIALIZED"
   exit 0
 fi
 
-# Get branch
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "${defaultBranch}")
 [ "$BRANCH" = "HEAD" ] && BRANCH="${defaultBranch}"
 echo "BRANCH:$BRANCH"
 
-# Get commits (30 max)
 echo "COMMITS_START"
 git log --format='%H%x1f%h%x1f%s%x1f%an%x1f%ai%x1e' -30 2>/dev/null || true
 echo "COMMITS_END"
 
-# Remote sync if auth available
 AHEAD=0
 BEHIND=0
 PUSHED_HASHES=""
 ${
   authUrl
     ? `
-# Set auth URL, fetch, then clean up
 git remote set-url origin '${authUrl}' 2>/dev/null || git remote add origin '${authUrl}' 2>/dev/null || true
 git fetch origin $BRANCH 2>/dev/null || true
 git remote set-url origin '${cleanUrl}' 2>/dev/null || true
-
-# Ahead/behind
 AHEAD=$(git rev-list origin/$BRANCH..HEAD --count 2>/dev/null || echo 0)
 BEHIND=$(git rev-list HEAD..origin/$BRANCH --count 2>/dev/null || echo 0)
 PUSHED_HASHES=$(git rev-list origin/$BRANCH 2>/dev/null || echo "")
 `
-    : ''
+    : `
+AHEAD=$(git rev-list origin/${defaultBranch}..HEAD --count 2>/dev/null || echo 0)
+BEHIND=$(git rev-list HEAD..origin/${defaultBranch} --count 2>/dev/null || echo 0)
+PUSHED_HASHES=$(git rev-list origin/${defaultBranch} 2>/dev/null || echo "")
+`
 }
 
 echo "AHEAD:$AHEAD"
@@ -209,15 +212,33 @@ echo "STATUS_END"
     const statusSection = output.match(/STATUS_START\n([\s\S]*?)\nSTATUS_END/)
     const lines = (statusSection?.[1]?.trim() || '').split('\n').filter(Boolean)
 
-    const modified: string[] = []
+    const staged: string[] = []
+    const unstaged: string[] = []
     const untracked: string[] = []
+
     for (const line of lines) {
+      const x = line[0] // staged status
+      const y = line[1] // unstaged status
       const file = line.slice(3)
-      if (line.startsWith('??')) untracked.push(file)
-      else modified.push(file)
+
+      if (x === '?' && y === '?') {
+        untracked.push(file)
+      } else {
+        if (x !== ' ' && x !== '?') staged.push(file)
+        if (y !== ' ' && y !== '?') unstaged.push(file)
+      }
     }
 
-    return c.json({ initialized: true, branch, clean: lines.length === 0, modified, untracked })
+    return c.json({
+      initialized: true,
+      branch,
+      clean: lines.length === 0,
+      staged,
+      unstaged,
+      untracked,
+      // Backwards compat
+      modified: [...new Set([...staged, ...unstaged])],
+    })
   } catch (err) {
     console.error('[git/status] error:', err)
     return c.json({ initialized: false })
@@ -264,7 +285,10 @@ echo "SHA:$(git rev-parse HEAD)"
       return c.json({ success: true, sha: shaMatch?.[1] })
     } catch (err) {
       console.error('[git/commit]', err)
-      return c.json({ success: false, error: err instanceof Error ? err.message : 'Commit failed' }, 500)
+      return c.json(
+        { success: false, error: err instanceof Error ? err.message : 'Commit failed' },
+        500,
+      )
     }
   },
 )
@@ -314,7 +338,10 @@ exit $EXIT_CODE
     if (res.code !== 0) {
       const out = res.output || ''
       if (out.includes('non-fast-forward') || out.includes('rejected')) {
-        return c.json({ success: false, error: 'Push rejected. Pull first or resolve conflicts.' }, 409)
+        return c.json(
+          { success: false, error: 'Push rejected. Pull first or resolve conflicts.' },
+          409,
+        )
       }
       return c.json({ success: false, error: out || 'Push failed' }, 500)
     }
@@ -336,7 +363,10 @@ exit $EXIT_CODE
     return c.json({ success: true, sha })
   } catch (err) {
     console.error('[git/push]', err)
-    return c.json({ success: false, error: err instanceof Error ? err.message : 'Push failed' }, 500)
+    return c.json(
+      { success: false, error: err instanceof Error ? err.message : 'Push failed' },
+      500,
+    )
   }
 })
 
@@ -383,7 +413,10 @@ exit $EXIT_CODE
     if (res.code !== 0) {
       const out = res.output || ''
       if (out.includes('Not possible to fast-forward') || out.includes('divergent')) {
-        return c.json({ success: false, error: 'Cannot fast-forward. Histories have diverged.' }, 409)
+        return c.json(
+          { success: false, error: 'Cannot fast-forward. Histories have diverged.' },
+          409,
+        )
       }
       return c.json({ success: false, error: out || 'Pull failed' }, 500)
     }
@@ -392,7 +425,10 @@ exit $EXIT_CODE
     return c.json({ success: true, sha: shaMatch?.[1] })
   } catch (err) {
     console.error('[git/pull]', err)
-    return c.json({ success: false, error: err instanceof Error ? err.message : 'Pull failed' }, 500)
+    return c.json(
+      { success: false, error: err instanceof Error ? err.message : 'Pull failed' },
+      500,
+    )
   }
 })
 

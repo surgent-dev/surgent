@@ -122,7 +122,8 @@ function getTodosFromToolPart(part: ToolPart): TodoItem[] {
   if (Array.isArray(input?.todos)) return input.todos as TodoItem[]
   if (part.state.status !== 'completed') return []
   try {
-    const val = typeof part.state.output === 'string' ? JSON.parse(part.state.output) : part.state.output
+    const val =
+      typeof part.state.output === 'string' ? JSON.parse(part.state.output) : part.state.output
     return Array.isArray(val) ? (val as TodoItem[]) : []
   } catch {
     return []
@@ -200,7 +201,8 @@ function Tool({
   const target = getTarget(part)
   const running = part.state.status === 'running' || part.state.status === 'pending'
   const meta = part.state.status === 'pending' ? undefined : part.state.metadata
-  const subSessionId = part.tool === 'task' && typeof meta?.sessionId === 'string' ? meta.sessionId : undefined
+  const subSessionId =
+    part.tool === 'task' && typeof meta?.sessionId === 'string' ? meta.sessionId : undefined
 
   const header = (() => {
     if (running) {
@@ -298,12 +300,17 @@ function Tool({
 }
 
 function SubagentStream({ projectId, sessionId }: { projectId: string; sessionId: string }) {
-  const { messages, parts, permissions, loading, connected } = useAgentStream({ projectId, sessionId })
+  const { messages, parts, permissions, loading, connected } = useAgentStream({
+    projectId,
+    sessionId,
+  })
 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span className={`size-1.5 rounded-full ${connected ? 'bg-success' : 'bg-muted-foreground/40'}`} />
+        <span
+          className={`size-1.5 rounded-full ${connected ? 'bg-success' : 'bg-muted-foreground/40'}`}
+        />
         <code className="text-[10px]">session:{sessionId.slice(0, 8)}</code>
         {loading && <Loader2 className="size-3 animate-spin" />}
       </div>
@@ -345,7 +352,9 @@ function Todos({ part }: { part: ToolPart }) {
                 <div
                   className={`size-3 sm:size-4 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 ${isDone ? 'bg-primary border-primary' : 'border-muted-foreground/30'}`}
                 >
-                  {isDone && <CheckCircle2 className="size-1.5 sm:size-2.5 text-primary-foreground" />}
+                  {isDone && (
+                    <CheckCircle2 className="size-1.5 sm:size-2.5 text-primary-foreground" />
+                  )}
                 </div>
                 <span
                   className={`break-normal [overflow-wrap:break-word] min-w-0 ${isDone ? 'line-through text-muted-foreground' : ''}`}
@@ -380,13 +389,17 @@ function Thinking({
         onClick={toggle}
         className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
-        <span className={`font-medium ${open ? 'text-foreground' : ''}`}>{streaming ? 'Thinking...' : 'Thoughts'}</span>
+        <span className={`font-medium ${open ? 'text-foreground' : ''}`}>
+          {streaming ? 'Thinking...' : 'Thoughts'}
+        </span>
         {!streaming && <span className="text-[10px] opacity-60">{open ? '▾' : '▸'}</span>}
       </button>
       {open && (
         <div className="pl-2 sm:pl-5 pt-1 sm:pt-1.5 text-[11px] sm:text-sm text-muted-foreground border-l-2 border-muted ml-1 sm:ml-1.5 min-w-0">
           {text ? (
-            <Markdown className="prose prose-sm max-w-none prose-muted **:text-[11px] sm:**:text-sm">{text}</Markdown>
+            <Markdown className="prose prose-sm max-w-none prose-muted **:text-[11px] sm:**:text-sm">
+              {text}
+            </Markdown>
           ) : streaming ? (
             <ShimmeringText text="Thinking..." duration={0.3} />
           ) : null}
@@ -420,7 +433,12 @@ function FileThumb({ file }: { file: FilePart }) {
 function ApiError({
   error,
 }: {
-  error: { code?: string; data?: { code?: string; message?: string }; message?: string; name?: string }
+  error: {
+    code?: string
+    data?: { code?: string; message?: string }
+    message?: string
+    name?: string
+  }
 }) {
   const code = error?.code || error?.data?.code
   const msg = error?.data?.message || error?.message || error?.name || 'Request failed'
@@ -514,7 +532,8 @@ export function AgentThread({
       .map((p) => p.text)
       .join('\n')
     const summary = m.summary
-    const fromSummary = summary && typeof summary === 'object' ? summary.body || summary.title || '' : ''
+    const fromSummary =
+      summary && typeof summary === 'object' ? summary.body || summary.title || '' : ''
     const text = fromParts || fromSummary
     if (m.role === 'user') {
       return text.replace(/!\[[^\]]*\]\([^)]+\)\n*/g, '').trim()
@@ -522,7 +541,8 @@ export function AgentThread({
     return text
   }
 
-  const getFiles = (m: Message) => partsMap[m.id]?.filter((p): p is FilePart => p.type === 'file') ?? []
+  const getFiles = (m: Message) =>
+    partsMap[m.id]?.filter((p): p is FilePart => p.type === 'file') ?? []
 
   const renderPart = (p: Part) => {
     if (p.type === 'subtask') {
@@ -566,7 +586,10 @@ export function AgentThread({
             <PermissionPrompt
               permission={permission}
               onRespond={(response) => respondToPermission(permission, response)}
-              responding={respondPermission.isPending && respondPermission.variables?.permissionId === permission.id}
+              responding={
+                respondPermission.isPending &&
+                respondPermission.variables?.permissionId === permission.id
+              }
               error={permissionErrors[permission.id]}
             />
           </div>
@@ -579,7 +602,10 @@ export function AgentThread({
           projectId={projectId}
           permission={permission}
           onRespondPermission={respondToPermission}
-          responding={respondPermission.isPending && respondPermission.variables?.permissionId === permission?.id}
+          responding={
+            respondPermission.isPending &&
+            respondPermission.variables?.permissionId === permission?.id
+          }
           respondError={permission ? permissionErrors[permission.id] : undefined}
         />
       )
@@ -601,7 +627,10 @@ export function AgentThread({
       const content = (p as TextPart).text?.trim()
       if (!content) return null
       return (
-        <Markdown key={p.id} className="[&_p]:text-[13px] [&_p]:sm:text-sm [&_li]:text-[13px] [&_li]:sm:text-sm">
+        <Markdown
+          key={p.id}
+          className="[&_p]:text-[13px] [&_p]:sm:text-sm [&_li]:text-[13px] [&_li]:sm:text-sm"
+        >
           {content}
         </Markdown>
       )
@@ -626,11 +655,18 @@ export function AgentThread({
         const text = getText(turn.user)
         const userFiles = getFiles(turn.user)
         const userParts = partsMap[turn.user.id] ?? []
-        const isSyntheticUser = userParts.some((p) => p.type === 'text' && (p as TextPart).synthetic)
+        const isSyntheticUser = userParts.some(
+          (p) => p.type === 'text' && (p as TextPart).synthetic,
+        )
         const isLast = idx === turns.length - 1
         const lastAssistant = turn.assistants[turn.assistants.length - 1]
         const working = isLast
-          ? (isWorking ?? !!(lastAssistant && lastAssistant.role === 'assistant' && !lastAssistant.time.completed))
+          ? (isWorking ??
+            !!(
+              lastAssistant &&
+              lastAssistant.role === 'assistant' &&
+              !lastAssistant.time.completed
+            ))
           : false
         const showPlanning = isLast && !!working && !toolWorking
         const showSending = isLast && userParts.length === 0 && !text && userFiles.length === 0
@@ -667,12 +703,16 @@ export function AgentThread({
                   (
                     m as Message & {
                       error?: { data?: { message?: string }; message?: string; name?: string }
-                      info?: { error?: { data?: { message?: string }; message?: string; name?: string } }
+                      info?: {
+                        error?: { data?: { message?: string }; message?: string; name?: string }
+                      }
                     }
                   ).error ||
                   (
                     m as Message & {
-                      info?: { error?: { data?: { message?: string }; message?: string; name?: string } }
+                      info?: {
+                        error?: { data?: { message?: string }; message?: string; name?: string }
+                      }
                     }
                   ).info?.error
                 if (!err) return null
@@ -690,7 +730,8 @@ export function AgentThread({
                     permission={permission}
                     onRespond={(response) => respondToPermission(permission, response)}
                     responding={
-                      respondPermission.isPending && respondPermission.variables?.permissionId === permission.id
+                      respondPermission.isPending &&
+                      respondPermission.variables?.permissionId === permission.id
                     }
                     error={permissionErrors[permission.id]}
                   />

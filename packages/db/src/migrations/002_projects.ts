@@ -19,7 +19,12 @@ export async function up(db: Kysely<any>): Promise<void> {
     .execute()
 
   // Index for listing projects by user
-  await db.schema.createIndex('project_userId_idx').ifNotExists().on('project').column('userId').execute()
+  await db.schema
+    .createIndex('project_userId_idx')
+    .ifNotExists()
+    .on('project')
+    .column('userId')
+    .execute()
 
   await db.schema
     .createIndex('project_organizationId_idx')
@@ -43,7 +48,12 @@ export async function up(db: Kysely<any>): Promise<void> {
     .execute()
 
   // Index for listing chats by project
-  await db.schema.createIndex('chats_projectId_idx').ifNotExists().on('chats').column('projectId').execute()
+  await db.schema
+    .createIndex('chats_projectId_idx')
+    .ifNotExists()
+    .on('chats')
+    .column('projectId')
+    .execute()
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
