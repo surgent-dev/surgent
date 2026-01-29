@@ -75,6 +75,7 @@
           env.RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
           env.LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.openssl ];
           env.PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+          env.SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
 
           shellHook = ''
             echo "Surgent development environment"

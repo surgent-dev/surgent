@@ -288,6 +288,7 @@ export class SurgentStack extends cdk.Stack {
         SURPAY_BASE_URL: 'pay.surgent.dev',
         SQS_WEBHOOKS_QUEUE_URL: webhooksQueue.queueUrl,
         SQS_WEBHOOKS_DLQ_URL: webhooksDlq.queueUrl,
+        RUST_LOG: 'warn,surpay=info',
       },
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'surpay' }),
     })
@@ -337,6 +338,19 @@ export class SurgentStack extends cdk.Stack {
 
     // Security: ECS only allows traffic from ALB on port 8090
     surpayService.connections.allowFrom(alb, ec2.Port.tcp(8090), 'Allow traffic from ALB')
+
+    // Auto-scaling: min 2, max 6
+    const surpayScaling = surpayService.autoScaleTaskCount({
+      minCapacity: 2,
+      maxCapacity: 6,
+    })
+
+    surpayScaling.scaleOnRequestCount('SurpayRequestCountScaling', {
+      targetGroup: surpayTargetGroup,
+      requestsPerTarget: 500,
+      scaleInCooldown: cdk.Duration.seconds(120),
+      scaleOutCooldown: cdk.Duration.seconds(30),
+    })
 
     // Surpay Outputs
     new cdk.CfnOutput(this, 'SurpayRepositoryUri', {

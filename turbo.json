@@ -6,7 +6,8 @@
     "LD_LIBRARY_PATH",
     "OPENSSL_DIR",
     "OPENSSL_LIB_DIR",
-    "OPENSSL_INCLUDE_DIR"
+    "OPENSSL_INCLUDE_DIR",
+    "SSL_CERT_FILE"
   ],
   "tasks": {
     "build": {
