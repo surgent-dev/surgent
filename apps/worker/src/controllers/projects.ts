@@ -1,6 +1,7 @@
 import type { Sandbox } from '@/apis/sandbox'
 import type { ProjectMetadata } from '@repo/db'
 import { config } from '@/lib/config'
+import { db } from '@/lib/db'
 import { HttpError } from '@/lib/errors'
 import { getProvider, resumeSandbox, workspacePath, defaultProviderName } from '@/lib/sandbox'
 import { sanitizeHostname } from '@/lib/utils'
@@ -229,11 +230,14 @@ async function execPm2Start(
 ) {
   const quotedName = shellQuote(name)
   const quotedCommand = shellQuote(command)
-  await sandbox.exec(`pm2 delete ${quotedName} 2>/dev/null; pm2 start ${quotedCommand} --name ${quotedName}`, {
-    timeout: 300_000,
-    cwd,
-    env,
-  })
+  await sandbox.exec(
+    `pm2 delete ${quotedName} 2>/dev/null; pm2 start ${quotedCommand} --name ${quotedName}`,
+    {
+      timeout: 300_000,
+      cwd,
+      env,
+    },
+  )
 }
 
 async function ensurePm2Process(
@@ -251,7 +255,13 @@ async function ensurePm2Process(
 async function startOpencodeServer(sandbox: Sandbox, cwd: string, env?: Record<string, string>) {
   console.log('[opencode] starting server...', { sandboxId: sandbox.id, cwd })
   // Trusted internal command - bypass validation
-  await execPm2Start(sandbox, cwd, 'opencode-server', 'opencode serve --hostname 0.0.0.0 --port 4096', env)
+  await execPm2Start(
+    sandbox,
+    cwd,
+    'opencode-server',
+    'opencode serve --hostname 0.0.0.0 --port 4096',
+    env,
+  )
   console.log('[opencode] server started on port 4096')
 }
 
@@ -686,6 +696,7 @@ export async function downloadProject(
     '.',
   ].join(' ')
 
+  try {
     const result = await sandbox.exec(tarCmd, { cwd: workingDir, timeout: 180_000 })
     if (result.code !== 0) {
       throw new HttpError(500, `Failed to create archive: ${result.output}`)
