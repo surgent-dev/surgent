@@ -6,10 +6,12 @@ import Conversation from './conversation'
 import PreviewPanel, { type PreviewTab } from './preview-panel'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { useActivateProject, useProjectQuery } from '@/queries/projects'
+import { useActivateProject } from '@/queries/projects'
 import { useSandbox } from '@/hooks/use-sandbox'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useSandboxReady } from '@/hooks/use-sandbox-ready'
 import ProjectHeader from './project-header'
+import { ProjectInitOverlay } from './project-init-overlay'
 
 interface SplitViewProps {
   projectId?: string
@@ -19,7 +21,8 @@ interface SplitViewProps {
 
 export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: SplitViewProps) {
   const { mutate: activateProject } = useActivateProject()
-  const { data: project } = useProjectQuery(projectId)
+  const { isReady, stage, project } = useSandboxReady(projectId)
+
   const setSandboxId = useSandbox((state: any) => state.setSandboxId)
   const activeSessionId = useSandbox((s) => (projectId ? s.activeSessionId[projectId] : undefined))
   const lastActivatedId = useRef<string | undefined>(undefined)
@@ -67,18 +70,18 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
 
   const handleOpenChangesTab = useCallback(
     (messageId?: string, sessionId?: string, diffs?: FileDiff[]) => {
-      const id = messageId ? `changes-${messageId}` : 'changes-session'
       const sid = sessionId || activeSessionId
+      const id = messageId ? `changes-${messageId}` : sid ? `changes-session-${sid}` : 'changes-session'
       const title = messageId ? 'Changes' : 'Session Changes'
       setTabs((prev) => {
         const existing = prev.findIndex((t) => t.id === id)
+        const nextTab = { id, type: 'changes' as const, title, messageId, sessionId: sid, diffs }
         if (existing !== -1) {
-          if (!diffs) return prev
           const next = [...prev]
-          next[existing] = { ...prev[existing]!, diffs, sessionId: sid }
+          next[existing] = { ...prev[existing]!, ...nextTab }
           return next
         }
-        return [...prev, { id, type: 'changes' as const, title, messageId, sessionId: sid, diffs }]
+        return [...prev, nextTab]
       })
       setActiveTabId(id)
     },
@@ -107,6 +110,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
 
   return (
     <div className="h-dvh w-full bg-background flex flex-col overflow-hidden">
+      <ProjectInitOverlay show={!isReady} stage={stage} />
       <ProjectHeader projectId={projectId} project={project} />
       <div className="flex-1 min-h-0">
         {isMobile ? (

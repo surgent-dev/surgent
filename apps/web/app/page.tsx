@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Github, Twitter, ArrowRight } from 'lucide-react'
+import { Github, Twitter } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { motion } from 'motion/react'
@@ -11,8 +11,6 @@ import { WaitlistScreen } from '@/components/waitlist-screen'
 import { ChatComposer } from '@/components/chat/chat-composer'
 import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCreateProject } from '@/queries/projects'
-import { toast } from 'react-hot-toast'
 
 // Typing placeholder hook
 function useTypingPlaceholder(placeholders: string[], typingSpeed = 50, pauseDuration = 2000) {
@@ -123,7 +121,6 @@ export default function Index() {
   const [promptValue, setPromptValue] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const create = useCreateProject()
   const typingPlaceholder = useTypingPlaceholder(typingPlaceholders)
 
   if (waitlistMode) return <WaitlistScreen />
@@ -136,56 +133,19 @@ export default function Index() {
     load()
   }, [])
 
-  const projectTypes: Record<string, { name: string; githubUrl: string; initConvex: boolean }> = {
-    fullstack: {
-      name: 'Fullstack',
-      githubUrl: 'https://github.com/bahodirr/worker-vite-react-template',
-      initConvex: true,
-    },
-    landing: {
-      name: 'Landing',
-      githubUrl: 'https://github.com/bahodirr/web-landing-starter',
-      initConvex: false,
-    },
-    simple: {
-      name: 'Utility',
-      githubUrl: 'https://github.com/bahodirr/worker-vite-react-simple-template',
-      initConvex: false,
-    },
-  }
-
   const handlePromptSend = (text: string, files?: FileList, projectType = 'simple') => {
-    const initial = text.trim()
-    if (!initial) return
+    const prompt = text.trim()
+    if (!prompt) return
 
     if (isLoggedIn) {
-      toast.loading('Creating your project…', { id: 'create-project' })
-      const config = projectTypes[projectType] || projectTypes.simple!
-      const { name, githubUrl, initConvex } = config
-
-      create.mutate(
-        {
-          name: `${name} Website ${new Date().toLocaleDateString()}`,
-          githubUrl,
-          initConvex,
-        },
-        {
-          onSuccess: ({ id }) => {
-            toast.success('Project created!', { id: 'create-project' })
-            const q = new URLSearchParams({ initial }).toString()
-            router.push(`/project/${id}?${q}`)
-          },
-          onError: (error) =>
-            toast.error(error instanceof Error ? error.message : String(error), {
-              id: 'create-project',
-            }),
-        },
-      )
+      // Navigate immediately to project creation page
+      const params = new URLSearchParams({ prompt, type: projectType })
+      router.push(`/project/new?${params.toString()}`)
     } else {
       // Save prompt to sessionStorage as backup
-      sessionStorage.setItem('pendingPrompt', JSON.stringify({ text: initial, projectType }))
+      sessionStorage.setItem('pendingPrompt', JSON.stringify({ text: prompt, projectType }))
       // Redirect to signup, then back to main page with initial param
-      const next = `/?initial=${encodeURIComponent(initial)}`
+      const next = `/?initial=${encodeURIComponent(prompt)}`
       router.push(`/signup?next=${encodeURIComponent(next)}`)
     }
   }
@@ -333,23 +293,12 @@ export default function Index() {
                 transition={{ duration: 0.6, delay: 0.4 }}
                 className="max-w-xl mx-auto w-full pt-4 space-y-4"
               >
-                <div className="relative">
-                  <ChatComposer
+                <ChatComposer
                     onSend={handlePromptSend}
                     placeholder={typingPlaceholder || 'What do you want to build?'}
-                    disabled={create.isPending}
                     value={promptValue}
                     onValueChange={setPromptValue}
                   />
-                  {create.isPending && (
-                    <div className="absolute inset-0 rounded-xl bg-background/60 backdrop-blur-sm flex items-center justify-center border border-border">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <div className="h-4 w-4 border-2 border-brand-foreground border-t-transparent rounded-full animate-spin" />
-                        Creating your project… Give us a sec
-                      </div>
-                    </div>
-                  )}
-                </div>
 
                 {/* Trust line */}
                 <motion.p
