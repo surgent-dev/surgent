@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Github, Twitter } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -115,7 +115,7 @@ function TemplateCard({ template }: { template: (typeof templates)[0] }) {
   )
 }
 
-export default function Index() {
+function IndexContent() {
   const waitlistMode = isWaitlistMode()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [promptValue, setPromptValue] = useState('')
@@ -294,11 +294,11 @@ export default function Index() {
                 className="max-w-xl mx-auto w-full pt-4 space-y-4"
               >
                 <ChatComposer
-                    onSend={handlePromptSend}
-                    placeholder={typingPlaceholder || 'What do you want to build?'}
-                    value={promptValue}
-                    onValueChange={setPromptValue}
-                  />
+                  onSend={handlePromptSend}
+                  placeholder={typingPlaceholder || 'What do you want to build?'}
+                  value={promptValue}
+                  onValueChange={setPromptValue}
+                />
 
                 {/* Trust line */}
                 <motion.p
@@ -378,5 +378,13 @@ export default function Index() {
         </footer>
       </div>
     </div>
+  )
+}
+
+export default function Index() {
+  return (
+    <Suspense>
+      <IndexContent />
+    </Suspense>
   )
 }

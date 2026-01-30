@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { isWaitlistMode } from '@/lib/waitlist'
 
-export default function SignupPage() {
+function SignupContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const searchParams = useSearchParams()
@@ -104,5 +104,13 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupContent />
+    </Suspense>
   )
 }

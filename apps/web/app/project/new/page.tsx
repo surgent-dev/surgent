@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { Suspense, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCreateProject } from '@/queries/projects'
 import { ProjectInitOverlay } from '@/components/project-init-overlay'
@@ -23,7 +23,7 @@ const projectConfigs: Record<string, { name: string; githubUrl: string; initConv
   },
 }
 
-export default function NewProjectPage() {
+function NewProjectContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { mutateAsync } = useCreateProject()
@@ -60,5 +60,19 @@ export default function NewProjectPage() {
     <div className="h-dvh w-full bg-background">
       <ProjectInitOverlay show={true} stage="creating" />
     </div>
+  )
+}
+
+export default function NewProjectPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="h-dvh w-full bg-background">
+          <ProjectInitOverlay show={true} stage="creating" />
+        </div>
+      }
+    >
+      <NewProjectContent />
+    </Suspense>
   )
 }
