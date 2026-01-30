@@ -51,13 +51,14 @@ export function getWorkerByProjectId(projectId: string) {
   return db.selectFrom('worker').selectAll().where('projectId', '=', projectId).executeTakeFirst()
 }
 
-export function getEnvVarsByProjectId(projectId: string, environment: string) {
-  return db
+export function getEnvVarsByProjectId(projectId: string, environment: string, integrationId?: string) {
+  let query = db
     .selectFrom('env_var')
     .select(['key', 'value'])
     .where('projectId', '=', projectId)
     .where('environment', '=', environment)
-    .execute()
+  if (integrationId) query = query.where('integrationId', '=', integrationId)
+  return query.execute()
 }
 
 export async function countProjectsByOrganizationId(organizationId: string) {
@@ -274,4 +275,100 @@ export async function getDeploymentByVersionId(
     .where('cloudflareVersionId', '=', versionId)
     .executeTakeFirst()
   return row ? { id: row.id as string } : null
+}
+
+// ============================================================================
+// Integrations
+// ============================================================================
+
+export async function createIntegration(args: {
+  projectId: string
+  provider: string
+  config?: Record<string, unknown>
+  status?: string
+}) {
+  const row = await db
+    .insertInto('integration')
+    .values({
+      projectId: args.projectId,
+      provider: args.provider,
+      config: args.config ?? null,
+      status: args.status ?? 'connected',
+      createdAt: new Date(),
+    })
+    .returning(['id'])
+    .executeTakeFirstOrThrow()
+  return { id: row.id as string }
+}
+
+export async function getIntegrationByProvider(projectId: string, provider: string) {
+  return db
+    .selectFrom('integration')
+    .selectAll()
+    .where('projectId', '=', projectId)
+    .where('provider', '=', provider)
+    .executeTakeFirst()
+}
+
+export async function updateIntegrationConfig(id: string, config: unknown) {
+  await db.updateTable('integration').set({ config }).where('id', '=', id).execute()
+}
+
+export async function deleteIntegration(id: string) {
+  await db.deleteFrom('integration').where('id', '=', id).execute()
+}
+
+// ============================================================================
+// Environment Variables
+// ============================================================================
+
+export async function upsertEnvVar(args: {
+  projectId: string
+  environment: string
+  key: string
+  value: string | null
+  integrationId?: string | null
+}) {
+  const now = new Date()
+  const result = await db
+    .updateTable('env_var')
+    .set({
+      value: args.value,
+      integrationId: args.integrationId ?? null,
+      updatedAt: now,
+    })
+    .where('projectId', '=', args.projectId)
+    .where('environment', '=', args.environment)
+    .where('key', '=', args.key)
+    .executeTakeFirst()
+
+  if (result && result.numUpdatedRows > 0n) return
+
+  await db
+    .insertInto('env_var')
+    .values({
+      projectId: args.projectId,
+      environment: args.environment,
+      key: args.key,
+      value: args.value,
+      integrationId: args.integrationId ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .execute()
+}
+
+export async function upsertEnvVars(
+  projectId: string,
+  environment: string,
+  vars: Record<string, string>,
+  integrationId?: string | null,
+) {
+  for (const [key, value] of Object.entries(vars)) {
+    await upsertEnvVar({ projectId, environment, key, value, integrationId })
+  }
+}
+
+export async function deleteEnvVarsByIntegration(integrationId: string) {
+  await db.deleteFrom('env_var').where('integrationId', '=', integrationId).execute()
 }

@@ -46,6 +46,13 @@ interface CreateProjectResponse {
   deploymentUrl: string
 }
 
+interface CreateDeploymentResponse {
+  name: string
+  deploymentType: 'dev' | 'prod' | 'preview' | 'custom'
+  projectId: number
+  deploymentUrl?: string
+}
+
 interface CreateDeployKeyResponse {
   deployKey: string
 }
@@ -73,8 +80,24 @@ export async function createProjectOnTeam(args: {
   }
 }
 
+export async function createDeployment(args: {
+  projectId: string
+  type: 'dev' | 'prod'
+}): Promise<{ name: string; deploymentUrl: string }> {
+  const body = await convexApi<CreateDeploymentResponse>(
+    `/projects/${encodeURIComponent(args.projectId)}/create_deployment`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ type: args.type }),
+    },
+  )
+
+  const url = body.deploymentUrl ?? `https://${body.name}.convex.cloud`
+  return { name: body.name, deploymentUrl: url }
+}
+
 export async function createDeployKey(deploymentName: string): Promise<string> {
-  const body: any = await convexApi(
+  const body = await convexApi<CreateDeployKeyResponse>(
     `/deployments/${encodeURIComponent(deploymentName)}/create_deploy_key`,
     {
       method: 'POST',
@@ -123,8 +146,8 @@ export async function listDeploymentEnvVars(
     throw new Error(text || `List env vars failed: ${res.status}`)
   }
 
-  const body = await safeJsonParse<ListEnvVarsResponse>(res)
-  return body.environmentVariables || {}
+  const body = await res.json() as { environmentVariables: Record<string, string> }
+  return body.environmentVariables
 }
 
 export interface DashboardCredentials {

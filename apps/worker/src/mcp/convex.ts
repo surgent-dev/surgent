@@ -13,24 +13,7 @@ import {
   type ConvexValue,
 } from '@/apis/convex'
 import { workspacePath, defaultProviderName } from '@/lib/sandbox'
-
-// Surpay template for billing integration
-const SURPAY_TEMPLATE = `import { Surpay } from "@surgent-dev/surpay-convex";
-
-const surpay = new Surpay({
-  apiKey: process.env.SURGENT_API_KEY!,
-  identify: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-    return {
-      customerId: identity.subject,
-      customerData: { name: identity.name, email: identity.email },
-    };
-  },
-});
-
-export const { createCheckout, check } = surpay.api();
-`
+import * as ProjectService from '@/services/projects'
 
 // Context passed to MCP tools - contains project credentials
 export interface McpContext {
@@ -46,7 +29,6 @@ export interface McpContext {
 // Tool input schemas - using objects compatible with MCP SDK
 const createProjectSchema = {
   name: z.string().describe('Name for the new Convex project'),
-  deploymentType: z.enum(['dev', 'prod']).optional().describe('Deployment type (default: dev)'),
 }
 
 const deleteProjectSchema = {
@@ -75,8 +57,11 @@ const err = (error: string): McpResponse => ({
 })
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
-function getContext(extra: { _meta?: { context?: unknown } }): McpContext | undefined {
-  const ctx = extra._meta?.context
+function getContext(extra: unknown): McpContext | undefined {
+  if (!extra || typeof extra !== 'object') return undefined
+  const meta = (extra as Record<string, unknown>)._meta
+  if (!meta || typeof meta !== 'object') return undefined
+  const ctx = (meta as Record<string, unknown>).context
   if (!ctx || typeof ctx !== 'object') return undefined
   return ctx as McpContext
 }
@@ -112,17 +97,14 @@ async function writeEnvToSandbox(
   const path = resolveEnvPath(ctx)
   if (!path) return { status: 'skipped', reason: 'Missing workingDirectory or projectId' }
 
-  let sandbox: E2BSandbox | undefined
   try {
-    sandbox = await E2BSandbox.connect(ctx.sandboxId)
+    const sandbox = await E2BSandbox.connect(ctx.sandboxId)
     const existing = await sandbox.files.read(path).catch(() => '') // file may not exist
     const merged = { ...parseDotEnv(existing), ...vars }
     await sandbox.files.write(path, formatEnv(merged))
     return { status: 'written', path }
   } catch (e) {
     return { status: 'failed', error: errMsg(e) }
-  } finally {
-    await sandbox?.close?.().catch(() => {}) // best-effort cleanup
   }
 }
 
@@ -140,58 +122,113 @@ export function createConvexMcpServer(): McpServer {
     'create_project',
     {
       title: 'Create Convex Project',
-      description: `Create a new Convex project and deployment under the team account with billing/payments setup included.
+      description: `Create a new Convex project for backend development.
 
 Use this when starting a new backend - it provisions a fresh Convex database instance.
 
 Returns:
 - project: Object with projectId, deploymentName, deploymentUrl, deployKey
-- envVars: Ready-to-use environment variables object (CONVEX_DEPLOYMENT, CONVEX_URL, CONVEX_DEPLOY_KEY, VITE_CONVEX_URL)
-- envFileContent: Complete .env file content as a string - write this directly to .env file
-- surpayTemplate: Template content for billing integration (write to surpayFilePath)
-- surpayFilePath: Where to write the surpay template (convex/surpay.ts)
-- dependencies: Packages to install for billing functionality
+- envVars: Environment variables (CONVEX_DEPLOYMENT, CONVEX_URL, CONVEX_DEPLOY_KEY, VITE_CONVEX_URL)
+- envFileContent: Complete .env file content as a string
+- integration: The integration record (id, provider, status)
 
-To set up the sandbox after creation:
-1. Write envFileContent to .env file in the project root (for Convex CLI auth)
-2. Install dependencies (includes @surgent-dev/surpay-convex for billing)
-3. Write surpayTemplate to surpayFilePath for billing integration
-4. Run 'npx convex dev' to start the development server
+If Convex integration already exists, returns existing integration and env vars.
 
-Billing is ready to use once the user connects Stripe (SURGENT_API_KEY is set automatically on the Convex deployment).
-
-IMPORTANT: Save deploymentUrl and deployKey - you'll need them in _meta.context for subsequent operations (queries, mutations, env vars).
-
-Optional sandbox write-through:
-- If _meta.context includes sandboxId and either workingDirectory or projectId,
-  the tool will write env vars directly to .env.local in the sandbox repo.
-- You can override the target file with _meta.context.envFile.`,
+IMPORTANT: Save deploymentUrl and deployKey - you'll need them in _meta.context for subsequent operations.`,
       inputSchema: createProjectSchema,
     },
     async (args, extra) => {
       const ctx = getContext(extra)
+      if (!ctx?.projectId) return err('Missing projectId in context - required to link Convex integration')
+
+      // Hardcoded to development for now
+      const environment = 'development'
+
       try {
+        // Check if Convex integration already exists for this project
+        const existingIntegration = await ProjectService.getIntegrationByProvider(ctx.projectId, 'convex')
+        if (existingIntegration) {
+          const config = existingIntegration.config as {
+            convexProjectId?: string
+            deploymentName?: string
+            deploymentUrl?: string
+            deployments?: { development?: { name?: string; url?: string } }
+          } | null
+          const dev = config?.deployments?.development
+          const name = dev?.name ?? config?.deploymentName
+          const url = dev?.url ?? config?.deploymentUrl
+
+          // Fetch existing env vars for this integration only
+          const envVarRows = await ProjectService.getEnvVarsByProjectId(ctx.projectId, environment, existingIntegration.id ?? undefined)
+          const envVars = Object.fromEntries(
+            envVarRows.filter((row) => row.value).map((row) => [row.key, row.value as string])
+          )
+
+          return ok({
+            message: 'Convex integration already exists for this project. Returning existing integration and env vars.',
+            alreadyExists: true,
+            integration: {
+              id: existingIntegration.id,
+              provider: 'convex',
+              status: existingIntegration.status,
+              convexProjectId: config?.convexProjectId,
+              deploymentName: name,
+              deploymentUrl: url,
+            },
+            envVars,
+            envFileContent: Object.entries(envVars)
+              .map(([k, v]) => `${k}=${v}`)
+              .join('\n'),
+          })
+        }
+
+        // Create Convex project (dev deployment only)
         const project = await createProjectOnTeam({
           name: args.name,
-          deploymentType: args.deploymentType,
+          deploymentType: 'dev',
         })
         const deployKey = await createDeployKey(project.deploymentName)
+
+        // Create integration record
+        const integration = await ProjectService.createIntegration({
+          projectId: ctx.projectId,
+          provider: 'convex',
+          config: {
+            convexProjectId: project.projectId,
+            deployments: {
+              development: {
+                name: project.deploymentName,
+                url: project.deploymentUrl,
+              },
+            },
+          },
+          status: 'connected',
+        })
+
+        // Define env vars for development
         const envVars = {
           CONVEX_DEPLOYMENT: `dev:${project.deploymentName}`,
           CONVEX_URL: project.deploymentUrl,
           CONVEX_DEPLOY_KEY: deployKey,
           VITE_CONVEX_URL: project.deploymentUrl,
         }
+
+        // Save env vars to database linked to integration
+        await ProjectService.upsertEnvVars(ctx.projectId, environment, envVars, integration.id)
+
+        // Also write to sandbox if available
         const envFileWrite = await writeEnvToSandbox(ctx, envVars)
 
         const message =
           envFileWrite.status === 'written'
-            ? `Convex project created and env variables already written to ${envFileWrite.path}. No manual setup needed - continue building your app.`
-            : 'Convex project created successfully. Write envFileContent to .env.local to configure your app.'
+            ? `Convex project created and env variables saved. Also written to ${envFileWrite.path}. No manual setup needed - continue building your app.`
+            : 'Convex project created and env variables saved to database. Write envFileContent to .env.local to configure your app.'
 
         return ok({
           message,
+          alreadyExists: false,
           project: { ...project, deployKey },
+          integration: { id: integration.id, provider: 'convex', status: 'connected' },
           envVars,
           envFileContent: Object.entries(envVars)
             .map(([k, v]) => `${k}=${v}`)

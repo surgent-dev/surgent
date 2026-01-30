@@ -10,6 +10,7 @@ import { parse as parseDotEnv } from 'dotenv'
 import path from 'path'
 import stripJsonComments from 'strip-json-comments'
 import * as ProjectService from '@/services/projects'
+import { createDeployment, createDeployKey } from '@/apis/convex'
 import {
   buildDeploymentConfig,
   parseWranglerConfig,
@@ -70,6 +71,16 @@ export interface DeployProjectArgs {
   projectId: string
   deployName?: string
   deploymentId: string
+}
+
+type ConvexConfig = {
+  convexProjectId?: string
+  deploymentName?: string
+  deploymentUrl?: string
+  deployments?: {
+    development?: { name?: string; url?: string }
+    production?: { name?: string; url?: string }
+  }
 }
 
 export interface UndeployProjectArgs {
@@ -326,6 +337,48 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
   await updateStatus('starting')
 
   try {
+    const convex = await ProjectService.getIntegrationByProvider(projectId, 'convex')
+    const envVars = await (async () => {
+      const base = await getProjectEnvVars(projectId, 'production')
+      if (!convex?.id) return base
+
+      const cfg = (convex.config ?? {}) as ConvexConfig
+      const convexId = cfg.convexProjectId
+      if (!convexId) return base // no project ID means incomplete integration, skip
+
+      const prod = cfg.deployments?.production
+      if (prod?.name) return base // already provisioned
+
+      const required = ['CONVEX_URL', 'CONVEX_DEPLOY_KEY', 'VITE_CONVEX_URL', 'CONVEX_DEPLOYMENT']
+      const missing = required.filter((key) => !base[key])
+      if (!missing.length) return base
+
+      // Create prod deployment
+      const created = await createDeployment({ projectId: convexId, type: 'prod' })
+      const key = await createDeployKey(created.name)
+
+      const vars = {
+        CONVEX_DEPLOYMENT: `prod:${created.name}`,
+        CONVEX_URL: created.deploymentUrl,
+        CONVEX_DEPLOY_KEY: key,
+        VITE_CONVEX_URL: created.deploymentUrl,
+      }
+      await ProjectService.upsertEnvVars(projectId, 'production', vars, convex.id)
+
+      // Update config with prod deployment info
+      const dev = cfg.deployments?.development ?? (cfg.deploymentName ? { name: cfg.deploymentName, url: cfg.deploymentUrl } : undefined)
+      const nextConfig: ConvexConfig = {
+        ...cfg,
+        deployments: {
+          ...(dev ? { development: dev } : {}),
+          production: { name: created.name, url: created.deploymentUrl },
+        },
+      }
+      await ProjectService.updateIntegrationConfig(convex.id, nextConfig)
+
+      return getProjectEnvVars(projectId, 'production')
+    })()
+
     const sandbox = await getProvider().resume(sandboxRow.id)
 
     await updateStatus('building')
@@ -340,14 +393,9 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     if (!assetsDir) throw new Error('No dist/ directory found after build')
 
     const { manifest, files } = await collectAssets(sandbox, assetsDir, scriptName)
-    console.log('[deploy] assets collected:', {
-      assetsDir,
-      fileCount: files.length,
-      paths: Object.keys(manifest).slice(0, 20),
-    })
-    if (!Object.keys(manifest).length) throw new Error('No assets found in dist/')
+    const assetPaths = Object.keys(manifest)
+    if (!assetPaths.length) throw new Error('No assets found in dist/')
 
-    const envVars = await getProjectEnvVars(projectId, 'production')
     const localEnv = await readEnvFile(sandbox, `${workingDir}/.env.local`)
 
     await updateStatus('uploading')
@@ -358,6 +406,33 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
 
     if (localEnv) deployConfig.vars = { ...localEnv, ...deployConfig.vars }
     if (Object.keys(envVars).length) deployConfig.vars = { ...deployConfig.vars, ...envVars }
+
+    const assetPreview = assetPaths.slice(0, 12)
+    const assetMore = assetPaths.length - assetPreview.length
+    const envKeys = Object.keys(deployConfig.vars || {}).sort()
+    const envPreview = envKeys.slice(0, 20)
+    const envMore = envKeys.length - envPreview.length
+    const localKeys = Object.keys(localEnv || {})
+    const projectKeys = Object.keys(envVars)
+
+    console.log('[deploy] plan', {
+      projectId,
+      deploymentId,
+      scriptName,
+      assets: {
+        dir: assetsDir,
+        count: assetPaths.length,
+        files: files.length,
+        paths: assetPreview,
+        ...(assetMore ? { more: assetMore } : {}),
+      },
+      env: {
+        count: envKeys.length,
+        keys: envPreview,
+        ...(envMore ? { more: envMore } : {}),
+        sources: { local: localKeys.length, project: projectKeys.length },
+      },
+    })
 
     const fileContents = new Map(files.map((f) => [f.path, Buffer.from(f.base64, 'base64')]))
     await deployToDispatch(
@@ -543,17 +618,20 @@ export async function initializeProject(
     throw new Error('SURGENT_BASE_URL and OPENCODE_BASE_URL are not set')
   }
   const devEnv = await getProjectEnvVars(projectId, 'development')
+  const opencodeConfigDir = config.opencode.configDir
+  const opencodeEnv = {
+    ...devEnv,
+    SURGENT_API_KEY: apiKeyResult.key,
+    SURGENT_BASE_URL: config.surgent.baseUrl,
+    OPENCODE_API_KEY: apiKeyResult.key,
+    OPENCODE_BASE_URL: config.opencode.baseUrl,
+    OPENCODE_CONFIG_DIR: opencodeConfigDir,
+  }
   const { sandbox, previewUrl } = await getOrCreateSandbox({
     port: PREVIEW_PORT,
     workingDirectory,
     name: 'server',
-    env: {
-      ...devEnv,
-      SURGENT_API_KEY: apiKeyResult.key,
-      SURGENT_BASE_URL: config.surgent.baseUrl,
-      OPENCODE_API_KEY: apiKeyResult.key,
-      OPENCODE_BASE_URL: config.opencode.baseUrl,
-    },
+    env: opencodeEnv,
   })
   console.log('[init] sandbox created:', sandbox.id, 'provider:', defaultProviderName)
 
@@ -591,9 +669,8 @@ export async function initializeProject(
   if (initScript)
     await sandbox.exec(buildBashCommand(workingDirectory, initScript), { timeout: 600_000 })
   if (devScript) await ensurePm2Process(sandbox, workingDirectory, processName, devScript, devEnv)
-  const opencodeConfigDir = config.opencode.configDir
   await ensureOpencodeConfigRepo(sandbox, config.opencode.configRepoUrl, opencodeConfigDir)
-  await startOpencodeServer(sandbox, workingDirectory, { OPENCODE_CONFIG_DIR: opencodeConfigDir })
+  await startOpencodeServer(sandbox, workingDirectory, opencodeEnv)
 
   await ProjectService.updateProject(projectId, {
     metadata: { workingDirectory, processName, startCommand: devScript },
@@ -614,12 +691,22 @@ export async function resumeProject(
 ): Promise<{ sandboxId: string; previewUrl: string }> {
   const workingDirectory = workspacePath(args.projectId)
   const devEnv = await getProjectEnvVars(args.projectId, 'development')
+  const opencodeConfigDir = config.opencode.configDir
+  const opencodeKey = devEnv.OPENCODE_API_KEY || devEnv.SURGENT_API_KEY
+  const opencodeEnv = {
+    ...devEnv,
+    ...(opencodeKey ? { OPENCODE_API_KEY: opencodeKey } : {}),
+    ...(config.surgent.baseUrl ? { SURGENT_BASE_URL: config.surgent.baseUrl } : {}),
+    ...(config.opencode.baseUrl ? { OPENCODE_BASE_URL: config.opencode.baseUrl } : {}),
+    OPENCODE_CONFIG_DIR: opencodeConfigDir,
+  }
 
   const { sandbox, previewUrl } = await getOrCreateSandbox({
     sandboxId: args.sandboxId,
     port: PREVIEW_PORT,
     workingDirectory,
     name: 'server',
+    env: opencodeEnv,
   })
 
   try {
@@ -635,9 +722,8 @@ export async function resumeProject(
       )
     }
 
-    const opencodeConfigDir = config.opencode.configDir
     await ensureOpencodeConfigRepo(sandbox, config.opencode.configRepoUrl, opencodeConfigDir)
-    await startOpencodeServer(sandbox, workingDirectory, { OPENCODE_CONFIG_DIR: opencodeConfigDir })
+    await startOpencodeServer(sandbox, workingDirectory, opencodeEnv)
   } catch (err) {
     console.log('[resume] error', err)
   }
