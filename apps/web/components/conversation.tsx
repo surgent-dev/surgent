@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
@@ -16,21 +17,17 @@ import { http } from '@/lib/http'
 import {
   MessageCircle,
   Loader2,
-  MessagesSquare,
-  Terminal,
   Plus,
-  History,
-  Check,
   AlertCircle,
   X,
   RefreshCw,
   Redo2,
   GitCompare,
   ArrowDown,
+  MoreHorizontal,
 } from 'lucide-react'
 import { Chat, ArrowElbowDownRight } from '@phosphor-icons/react'
 import ChatInput, { type FilePart, type ProviderModel } from './chat-input'
-import TerminalWidget from './terminal/terminal-widget'
 import { useSandbox } from '@/hooks/use-sandbox'
 import useAgentStream, { type SessionStatusRetry } from '@/lib/use-agent-stream'
 import { computeWorkingFromParts } from '@/lib/agent-working'
@@ -104,51 +101,6 @@ const formatTitle = (title: string) => {
   }
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'flex items-center gap-1 px-2.5 text-sm border-r transition-colors shrink-0 @md/conversation:gap-2 @md/conversation:px-4',
-        active ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-muted/50',
-      )}
-    >
-      {children}
-    </button>
-  )
-}
-
-function ActionButton({
-  onClick,
-  disabled,
-  children,
-}: {
-  onClick: () => void
-  disabled?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'flex items-center gap-1 px-2.5 text-sm border-l transition-colors shrink-0 @md/conversation:gap-2 @md/conversation:px-4',
-        disabled ? 'opacity-50 cursor-not-allowed' : 'text-muted-foreground hover:bg-muted/50',
-      )}
-    >
-      {children}
-    </button>
-  )
-}
-
 function RetryCountdown({ retryInfo }: { retryInfo: SessionStatusRetry }) {
   const [remaining, setRemaining] = useState(() =>
     Math.max(0, Math.ceil((retryInfo.next - Date.now()) / 1000)),
@@ -215,8 +167,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const prefilledRef = useRef(false)
   const [showScrollButton, setShowScrollButton] = useState(false)
 
-  const showTerminal = searchParams?.get('terminal') === 'true'
-  const [tab, setTab] = useState<'chat' | 'terminal'>('chat')
   const [mode, setMode] = useState<'plan' | 'orchestrator'>('orchestrator')
   const [providerOpen, setProviderOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
@@ -225,12 +175,12 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   >(undefined)
   const lastSentRef = useRef<string>('')
 
-  const sandboxId = useSandbox((s) => s.sandboxId || undefined)
   const storedSessionId = useSandbox((s) => (projectId ? s.activeSessionId[projectId] : undefined))
   const setActiveSession = useSandbox((s) => s.setActiveSession)
   const openChangesTab = useSandbox((s) => s.openChangesTab)
 
-  const { data: sessions = [] } = useSessionsQuery(projectId)
+  const sessionsQuery = useSessionsQuery(projectId)
+  const sessions = sessionsQuery.data ?? []
   const { data: subagents = [] } = useSubagents(projectId)
   const create = useCreateSession(projectId)
   const send = useSendMessage(projectId)
@@ -265,6 +215,9 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     const timeline = messages.flatMap((m) => parts[m.id] || [])
     return computeWorkingFromParts(timeline)
   }, [status, messages, parts])
+
+  const inputDisabled = working || create.isPending || !activeId
+  const inputPlaceholder = working ? 'Working...' : 'Ask anything...'
 
   useEffect(() => {
     if (!projectId || !activeId) return
@@ -364,12 +317,14 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     providerID?: string,
     variant?: string,
   ) => {
-    if (!activeId || (!text.trim() && !files?.length) || working) return
-    lastSentRef.current = text.trim()
+    const trimmed = text.trim()
+    if ((!trimmed && !files?.length) || working || !activeId) return
+
+    lastSentRef.current = trimmed
     setInputValue('')
     send.mutate({
       sessionId: activeId,
-      text: text.trim(),
+      text: trimmed,
       agent: mode,
       files,
       model,
@@ -466,6 +421,26 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     return { message: isContext ? 'Context limit reached. Start a new session.' : msg, isContext }
   })()
 
+  // Unified error display (combines session errors and assistant errors)
+  const displayError = useMemo(() => {
+    if (sessionError) {
+      const err = sessionError as any
+      const msg = err.data?.message || err.message || err.name || String(sessionError)
+      if (msg.toLowerCase().includes('abort')) return null
+      const isContext =
+        (err.code || err.data?.code) === 'context_length_exceeded' || msg.includes('context')
+      return {
+        message: isContext ? 'Context limit reached. Start a new session.' : msg,
+        isContext,
+        isDismissible: true,
+      }
+    }
+    if (lastAssistantError) {
+      return { ...lastAssistantError, isDismissible: false }
+    }
+    return null
+  }, [sessionError, lastAssistantError])
+
   const { data: providerData } = useQuery<ProviderResponse>({
     queryKey: ['opencode-models', projectId],
     enabled: Boolean(projectId),
@@ -550,44 +525,92 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
   const shownTokens = usageRef.current?.ctxTokens
   const shownPct = usageRef.current?.contextPct
-  const shownCost = usageRef.current?.costSpent ?? 0
   const contextExceeded = usageRef.current?.contextExceeded
 
   return (
     <div className="flex flex-col h-full w-full min-w-0 @container/conversation">
       {/* Header */}
       <header className="flex flex-col border-b bg-muted/30 shrink-0">
-        {/* Tabs + Session + Actions */}
-        <div className="flex h-10 items-stretch border-b min-w-0">
-          <TabButton active={tab === 'chat'} onClick={() => setTab('chat')}>
-            <MessagesSquare className="size-4" />
-            <span className="hidden @md/conversation:inline">Chat</span>
-          </TabButton>
-          {showTerminal && (
-            <TabButton active={tab === 'terminal'} onClick={() => setTab('terminal')}>
-              <Terminal className="size-4" />
-              <span className="hidden @md/conversation:inline">Terminal</span>
-            </TabButton>
+        <div className="flex h-10 items-center px-3 gap-2 min-w-0 text-xs">
+          <span
+            className={cn(
+              'size-2 rounded-full',
+              !connected && 'bg-muted-foreground/40',
+              connected && isRetrying && 'bg-warning',
+              connected && !isRetrying && 'bg-success',
+            )}
+          />
+          <span className="font-medium truncate max-w-40 @md/conversation:max-w-72">
+            {sessionName}
+          </span>
+
+          {connected && isRetrying && retryInfo && (
+            <>
+              <span className="text-muted-foreground">·</span>
+              <RetryCountdown retryInfo={retryInfo} />
+            </>
+          )}
+
+          {connected && !isRetrying && (compacting || session?.time?.compacting) && (
+            <>
+              <span className="text-muted-foreground">·</span>
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <Loader2 className="size-2.5 animate-spin" />
+                Compacting
+              </span>
+            </>
+          )}
+
+          {connected && !isRetrying && !compacting && !session?.time?.compacting && (
+            <>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-muted-foreground tabular-nums">
+                {shownTokens?.toLocaleString() ?? '—'} tokens
+                {shownPct !== undefined && !contextExceeded && (
+                  <span className="hidden @md/conversation:inline"> / {shownPct}%</span>
+                )}
+              </span>
+              {contextExceeded && (
+                <>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="text-destructive font-medium">Context exceeded</span>
+                </>
+              )}
+              <span className="text-muted-foreground">·</span>
+              <button
+                onClick={() => openChangesTab?.(undefined, activeId)}
+                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <GitCompare className="size-3" />
+                <span>Changes</span>
+              </button>
+            </>
           )}
 
           <div className="flex-1" />
-
-          <ActionButton onClick={handleCreate} disabled={create.isPending}>
-            {create.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Plus className="size-4" />
-            )}
-            <span className="hidden @md/conversation:inline">New session</span>
-          </ActionButton>
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center px-2.5 text-sm border-l text-muted-foreground hover:bg-muted/50 @md/conversation:px-4">
-                <History className="size-4" />
+              <button
+                className="flex items-center justify-center size-7 rounded-md text-muted-foreground hover:bg-muted/50"
+                aria-label="Session menu"
+              >
+                <MoreHorizontal className="size-4" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem
+                onClick={handleCreate}
+                disabled={create.isPending}
+                className="gap-2"
+              >
+                {create.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Plus className="size-4" />
+                )}
+                <span>New session</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {sessionTree.map((s) => (
                 <div key={s.id}>
                   <DropdownMenuItem
@@ -602,7 +625,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                     <DropdownMenuItem
                       key={sub.id}
                       onClick={() => projectId && setActiveSession(projectId, sub.id)}
-                      className={cn('gap-1.5 pl-5', sub.id === activeId ? 'bg-accent' : 'text-muted-foreground')}
+                      className={cn(
+                        'gap-1.5 pl-5',
+                        sub.id === activeId ? 'bg-accent' : 'text-muted-foreground',
+                      )}
                     >
                       <ArrowElbowDownRight className="size-3" />
                       <span className="truncate text-xs">{formatTitle(sub.title || 'Task')}</span>
@@ -613,235 +639,153 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        {/* Context stats */}
-        <div className="h-8 flex items-center px-3 gap-2 min-w-0 text-xs">
-          <span
-            className={`size-2 rounded-full ${!connected ? 'bg-muted-foreground/40' : isRetrying ? 'bg-warning' : 'bg-success'}`}
-            title={connected ? (isRetrying ? 'Retrying...' : 'Agent connected') : undefined}
-          />
-          <span className="font-medium truncate max-w-32 @md/conversation:max-w-64">
-            {sessionName}
-          </span>
-          {connected && (
-            <>
-              {isRetrying && retryInfo ? (
-                <>
-                  <span className="text-muted-foreground">·</span>
-                  <RetryCountdown retryInfo={retryInfo} />
-                </>
-              ) : compacting || session?.time?.compacting ? (
-                <>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="flex items-center gap-1 text-muted-foreground">
-                    <Loader2 className="size-2.5 animate-spin" />
-                    Compacting
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="text-muted-foreground tabular-nums">
-                    {shownTokens?.toLocaleString() ?? '—'} tokens
-                    {shownPct !== undefined && !contextExceeded && (
-                      <span className="hidden @md/conversation:inline"> / {shownPct}%</span>
-                    )}
-                  </span>
-                  {contextExceeded ? (
-                    <>
-                      <span className="text-muted-foreground">·</span>
-                      <span className="text-destructive font-medium">Context exceeded</span>
-                    </>
-                  ) : null}
-                  <span className="text-muted-foreground">·</span>
-                  <span className="font-medium">{Math.round(shownCost * 100)} credits</span>
-                  <span className="text-muted-foreground">·</span>
-                  <button
-                    onClick={() => openChangesTab?.(undefined, activeId)}
-                    className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <GitCompare className="size-3" />
-                    <span>Changes</span>
-                  </button>
-                </>
-              )}
-            </>
-          )}
-        </div>
-
-        {(() => {
-          if (!sessionError) return null
-          const err = sessionError as any
-          const msg = err.data?.message || err.message || err.name || String(sessionError)
-          if (msg.toLowerCase().includes('abort')) return null
-          const isContext =
-            (err.code || err.data?.code) === 'context_length_exceeded' || msg.includes('context')
-          return (
-            <div
-              className={cn(
-                'flex items-center gap-2 px-3 py-1.5 text-xs border-t animate-in slide-in-from-top-1',
-                isContext ? 'bg-warning/10 text-warning' : 'bg-destructive/10 text-destructive',
-              )}
-            >
-              <AlertCircle className="size-3.5 shrink-0" />
-              <p className="flex-1 min-w-0 font-medium truncate">
-                {isContext ? 'Context limit reached. Start a new session.' : msg}
-              </p>
-              <button
-                onClick={dismissError}
-                className="p-0.5 rounded transition-colors hover:bg-muted"
-              >
-                <X className="size-3" />
-              </button>
-            </div>
-          )
-        })()}
       </header>
 
       {/* Chat */}
-      {tab === 'chat' && (
-        <div className="flex flex-col flex-1 min-h-0">
-          <div ref={scrollRef} className="flex-1 min-h-0 relative">
-            <ScrollArea className="h-full">
-              <div
-                ref={contentRef}
-                className="max-w-3xl mx-auto px-2 py-4 @md/conversation:px-4 @md/conversation:py-6 overflow-hidden"
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center min-h-[300px]">
-                    <Loader2 className="size-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : visibleMessages.length ? (
-                  <AgentThread
-                    projectId={projectId}
-                    sessionId={activeId!}
-                    messages={visibleMessages}
-                    partsMap={parts}
-                    permissions={permissions}
-                    isWorking={working}
-                    onRevert={handleRevert}
-                  />
-                ) : (
-                  <EmptyState />
-                )}
-              </div>
-            </ScrollArea>
-            {/* Scroll to bottom button */}
-            {showScrollButton && (
-              <button
-                onClick={() => scrollToBottom(true)}
-                className={cn(
-                  'absolute bottom-4 right-4 z-10',
-                  'flex items-center justify-center size-9 rounded-full',
-                  'bg-primary text-primary-foreground shadow-lg',
-                  'hover:bg-primary/90 transition-all',
-                  'animate-in fade-in slide-in-from-bottom-2 duration-200',
-                )}
-                aria-label="Scroll to bottom"
-              >
-                <ArrowDown className="size-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="px-2 py-2 shrink-0 relative @md/conversation:px-4 @md/conversation:py-4">
-            <div className="max-w-3xl mx-auto">
-              {/* Revert banner */}
-              {revertMessageId && (
-                <div className="mb-2 px-3 py-2 rounded-lg border border-warning/20 bg-warning/10 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="flex-1 text-warning font-medium">
-                      Changes reverted. File modifications have been undone.
-                    </span>
-                    <button
-                      onClick={handleUnrevert}
-                      disabled={unrevert.isPending}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-warning/20 hover:bg-warning/30 text-warning font-medium transition-colors disabled:opacity-50"
-                    >
-                      {unrevert.isPending ? (
-                        <Loader2 className="size-3 animate-spin" />
-                      ) : (
-                        <Redo2 className="size-3" />
-                      )}
-                      <span>Restore</span>
-                    </button>
-                  </div>
+      <div className="flex flex-col flex-1 min-h-0">
+        <div ref={scrollRef} className="flex-1 min-h-0 relative">
+          <ScrollArea className="h-full">
+            <div
+              ref={contentRef}
+              className="max-w-3xl mx-auto px-2 py-4 @md/conversation:px-4 @md/conversation:py-6 overflow-hidden"
+            >
+              {loading ? (
+                <div className="flex items-center justify-center min-h-[300px]">
+                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
                 </div>
+              ) : visibleMessages.length ? (
+                <AgentThread
+                  projectId={projectId}
+                  sessionId={activeId!}
+                  messages={visibleMessages}
+                  partsMap={parts}
+                  permissions={permissions}
+                  isWorking={working}
+                  onRevert={handleRevert}
+                />
+              ) : (
+                <EmptyState />
               )}
-              {lastAssistantError && (
-                <div
-                  className={cn(
-                    'mb-2 px-3 py-2 rounded-lg border text-xs',
-                    lastAssistantError.isContext
-                      ? 'bg-warning/10 border-warning/20 text-warning'
-                      : 'bg-muted/50 text-muted-foreground',
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="size-3.5 shrink-0" />
-                    <p className="flex-1 min-w-0 wrap-break-word line-clamp-2">
-                      {lastAssistantError.message}
-                    </p>
-                    <button
-                      onClick={handleCreate}
-                      disabled={create.isPending}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors shrink-0 hover:bg-muted"
-                    >
-                      {create.isPending ? (
-                        <Loader2 className="size-3 animate-spin" />
-                      ) : (
-                        <Plus className="size-3" />
-                      )}
-                      <span>New session</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-              {questions.length > 0 && (
-                <div className="mb-3 space-y-2">
-                  {questions.map((q) => {
-                    const pending =
-                      (replyQuestion.isPending && replyQuestion.variables?.id === q.id) ||
-                      (rejectQuestion.isPending && rejectQuestion.variables === q.id)
-                    return (
-                      <QuestionPrompt
-                        key={q.id}
-                        request={q}
-                        onReply={(answers) => replyQuestion.mutate({ id: q.id, answers })}
-                        onReject={() => rejectQuestion.mutate(q.id)}
-                        pending={pending}
-                      />
-                    )
-                  })}
-                </div>
-              )}
-              <ChatInput
-                onSubmit={handleSend}
-                disabled={working}
-                placeholder={working ? 'Working...' : 'Ask anything...'}
-                mode={mode}
-                onToggleMode={() => setMode((m) => (m === 'plan' ? 'orchestrator' : 'plan'))}
-                isWorking={working}
-                onStop={handleAbort}
-                isStopping={abort.isPending}
-                value={inputValue}
-                onValueChange={setInputValue}
-                models={availableModels}
-                selectedModel={selectedModel}
-                onModelChange={handleModelChange}
-                subagents={subagents}
-              />
             </div>
+          </ScrollArea>
+          {/* Scroll to bottom button */}
+          {showScrollButton && (
+            <button
+              onClick={() => scrollToBottom(true)}
+              className={cn(
+                'absolute bottom-4 right-4 z-10',
+                'flex items-center justify-center size-9 rounded-full',
+                'bg-primary text-primary-foreground shadow-lg',
+                'hover:bg-primary/90 transition-all',
+                'animate-in fade-in slide-in-from-bottom-2 duration-200',
+              )}
+              aria-label="Scroll to bottom"
+            >
+              <ArrowDown className="size-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="px-2 py-2 shrink-0 relative @md/conversation:px-4 @md/conversation:py-4">
+          <div className="max-w-3xl mx-auto">
+            {/* Revert banner */}
+            {revertMessageId && (
+              <div className="mb-2 px-3 py-2 rounded-lg border border-warning/20 bg-warning/10 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 text-warning font-medium">
+                    Changes reverted. File modifications have been undone.
+                  </span>
+                  <button
+                    onClick={handleUnrevert}
+                    disabled={unrevert.isPending}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-warning/20 hover:bg-warning/30 text-warning font-medium transition-colors disabled:opacity-50"
+                  >
+                    {unrevert.isPending ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <Redo2 className="size-3" />
+                    )}
+                    <span>Restore</span>
+                  </button>
+                </div>
+              </div>
+            )}
+            {displayError && (
+              <div
+                className={cn(
+                  'mb-2 px-3 py-2 rounded-lg border text-xs',
+                  displayError.isContext
+                    ? 'bg-warning/10 border-warning/20 text-warning'
+                    : 'bg-destructive/10 border-destructive/20 text-destructive',
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="size-3.5 shrink-0" />
+                  <p className="flex-1 min-w-0 wrap-break-word line-clamp-2">
+                    {displayError.message}
+                  </p>
+                  {displayError.isDismissible && (
+                    <button
+                      onClick={dismissError}
+                      className="p-1 rounded-md transition-colors shrink-0 hover:bg-muted/50"
+                      aria-label="Dismiss"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  )}
+                  <button
+                    onClick={handleCreate}
+                    disabled={create.isPending}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors shrink-0 hover:bg-muted/50"
+                  >
+                    {create.isPending ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <Plus className="size-3" />
+                    )}
+                    <span>New session</span>
+                  </button>
+                </div>
+              </div>
+            )}
+            {questions.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {questions.map((q) => {
+                  const pending =
+                    (replyQuestion.isPending && replyQuestion.variables?.id === q.id) ||
+                    (rejectQuestion.isPending && rejectQuestion.variables === q.id)
+                  return (
+                    <QuestionPrompt
+                      key={q.id}
+                      request={q}
+                      onReply={(answers) => replyQuestion.mutate({ id: q.id, answers })}
+                      onReject={() => rejectQuestion.mutate(q.id)}
+                      pending={pending}
+                    />
+                  )
+                })}
+              </div>
+            )}
+            <ChatInput
+              onSubmit={handleSend}
+              disabled={inputDisabled}
+              placeholder={inputPlaceholder}
+              mode={mode}
+              onToggleMode={() => setMode((m) => (m === 'plan' ? 'orchestrator' : 'plan'))}
+              isWorking={working}
+              onStop={handleAbort}
+              isStopping={abort.isPending}
+              value={inputValue}
+              onValueChange={setInputValue}
+              models={availableModels}
+              selectedModel={selectedModel}
+              onModelChange={handleModelChange}
+              subagents={subagents}
+            />
           </div>
         </div>
-      )}
-
-      {/* Terminal */}
-      {showTerminal && tab === 'terminal' && (
-        <div className="flex-1 min-h-0 p-3">
-          <TerminalWidget sandboxId={sandboxId} className="size-full rounded-lg" />
-        </div>
-      )}
+      </div>
 
       <ProviderDialog open={providerOpen} onOpenChange={setProviderOpen} projectId={projectId} />
     </div>
