@@ -1,22 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { toast } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import Image from 'next/image'
 import { authClient } from '@/lib/auth-client'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, MoreVertical, Code2, Clock, Activity, Pencil, Trash2, Play } from 'lucide-react'
+import { Plus, MoreHorizontal, Pencil, Trash2, ExternalLink, FolderOpen } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -28,13 +29,172 @@ import { Input } from '@/components/ui/input'
 import { useProjectsQuery, useRenameProject, useDeleteProject } from '@/queries/projects'
 import type { Project } from '@/types/project'
 
-// Project type moved to '@/types/project'
-
 interface User {
   id: string
   email: string
   name?: string
   image?: string
+}
+
+// Deterministic soft color from project ID
+function getProjectColor(id: string): string {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const hue = Math.abs(hash) % 360
+  return `hsl(${hue}, 35%, 95%)`
+}
+
+function getProjectAccent(id: string): string {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const hue = Math.abs(hash) % 360
+  return `hsl(${hue}, 30%, 50%)`
+}
+
+// Format relative time
+function formatRelativeDate(dateString: string): string {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 1) return 'Just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7) return `${diffDays}d ago`
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// Project Card
+function ProjectCard({
+  project,
+  onRename,
+  onDelete,
+  onClick,
+}: {
+  project: Project
+  onRename: () => void
+  onDelete: () => void
+  onClick: () => void
+}) {
+  const bgColor = getProjectColor(project.id)
+  const accentColor = getProjectAccent(project.id)
+  const initial = project.name.charAt(0).toUpperCase()
+  const isLive = project.worker?.status === 'active' && project.worker?.hostname
+
+  return (
+    <div
+      onClick={onClick}
+      className={cn(
+        'group relative flex flex-col rounded-xl border bg-card overflow-hidden',
+        'border-border/50 hover:border-border/80 hover:shadow-sm',
+        'cursor-pointer transition-all duration-200',
+      )}
+    >
+      {/* Preview area */}
+      <div
+        className="relative h-36 sm:h-40 flex items-center justify-center"
+        style={{ backgroundColor: bgColor }}
+      >
+        <span
+          className="text-4xl sm:text-5xl font-semibold select-none"
+          style={{ color: accentColor }}
+        >
+          {initial}
+        </span>
+
+        {/* Live indicator */}
+        {isLive && (
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-xs font-medium text-neutral-700">Live</span>
+          </div>
+        )}
+
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+          <Button
+            size="sm"
+            className="bg-white text-neutral-900 hover:bg-white/90 shadow-lg"
+            onClick={(e) => {
+              e.stopPropagation()
+              onClick()
+            }}
+          >
+            Open project
+          </Button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-medium text-foreground truncate">{project.name}</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              {formatRelativeDate(project.createdAt)}
+            </p>
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <button
+                className={cn(
+                  'h-8 w-8 flex items-center justify-center rounded-lg',
+                  'opacity-0 group-hover:opacity-100 hover:bg-muted transition-all',
+                )}
+              >
+                <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              {isLive && (
+                <>
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      window.open(`https://${project.worker!.hostname}`, '_blank')
+                    }}
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Visit site
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRename()
+                }}
+              >
+                <Pencil className="mr-2 h-4 w-4" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete()
+                }}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function DashboardPage() {
@@ -49,32 +209,21 @@ export default function DashboardPage() {
   const [newName, setNewName] = useState('')
 
   useEffect(() => {
-    checkAuth()
-  }, [])
-
-  const checkAuth = async () => {
-    const { data, error } = await authClient.getSession()
-    if (error || !data?.user) {
-      router.push('/login')
-      return
-    }
-    setUser(data.user as User)
-  }
+    authClient.getSession().then(({ data, error }) => {
+      if (error || !data?.user) {
+        router.push('/login')
+        return
+      }
+      setUser(data.user as User)
+    })
+  }, [router])
 
   const handleSignOut = async () => {
     await authClient.signOut()
     router.push('/login')
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })
-  }
-
-  const handleRename = () => {
+  const handleRename = useCallback(() => {
     if (!projectToRename || !newName.trim()) return
     rename.mutate(
       { id: projectToRename.id, name: newName.trim() },
@@ -83,12 +232,12 @@ export default function DashboardPage() {
           toast.success('Project renamed')
           setProjectToRename(null)
         },
-        onError: () => toast.error('Failed to rename project'),
+        onError: () => toast.error('Failed to rename'),
       },
     )
-  }
+  }, [projectToRename, newName, rename])
 
-  const handleDelete = () => {
+  const handleDelete = useCallback(() => {
     if (!projectToDelete) return
     deleteProject.mutate(
       { id: projectToDelete.id },
@@ -97,230 +246,137 @@ export default function DashboardPage() {
           toast.success('Project deleted')
           setProjectToDelete(null)
         },
-        onError: () => toast.error('Failed to delete project'),
+        onError: () => toast.error('Failed to delete'),
       },
     )
-  }
+  }, [projectToDelete, deleteProject])
 
+  // Loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="border-b bg-muted/30 px-8 py-4">
+        <header className="w-full px-6 py-6">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <Skeleton className="h-8 w-32 rounded-xl" />
+            <Skeleton className="h-8 w-28" />
             <Skeleton className="h-10 w-10 rounded-full" />
           </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-8 py-8 space-y-8">
-          <div className="space-y-3">
-            <Skeleton className="h-8 w-64 rounded-xl" />
-            <Skeleton className="h-5 w-96 rounded-xl" />
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="rounded-3xl border border-border/50 bg-muted/30 p-6 space-y-4"
-              >
-                <div className="space-y-2">
-                  <Skeleton className="h-6 w-32 rounded-xl" />
-                  <Skeleton className="h-4 w-24 rounded-xl" />
+        </header>
+        <main className="max-w-7xl mx-auto py-8">
+          <Skeleton className="h-9 w-40 mb-10" />
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="rounded-xl border border-border/50 overflow-hidden">
+                <Skeleton className="h-40 rounded-none" />
+                <div className="p-4 space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-4 w-20" />
                 </div>
-                <Skeleton className="h-4 w-full rounded-xl" />
               </div>
             ))}
           </div>
-        </div>
+        </main>
       </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-muted/30">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-medium">Surgent</h1>
-            <Badge variant="secondary" className="text-xs rounded-full px-2 py-0.5">
-              Beta
-            </Badge>
-          </div>
+      {/* Header - matching main page style */}
+      <header className="w-full px-6 py-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <Image
+              src="/surgent-logo.svg"
+              alt="Surgent"
+              width={119}
+              height={32}
+              className="h-8 w-auto"
+              priority
+            />
+          </Link>
 
-          <div className="flex items-center space-x-4">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={user?.image} alt={user?.name || user?.email} />
-                    <AvatarFallback>
-                      {user?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end" forceMount>
-                <DropdownMenuLabel className="py-3">
-                  <div className="flex flex-col space-y-1">
-                    <span className="font-medium text-base">{user?.name || user?.email}</span>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="h-10 w-10 rounded-full ring-1 ring-border/60 hover:ring-border transition-all">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={user?.image} />
+                  <AvatarFallback className="text-sm bg-muted">
+                    {user?.name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <div className="px-3 py-2">
+                <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-8 py-8">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-light mb-3">
-            Welcome back{user?.name ? `, ${user.name}` : ''}
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            Create and manage your Claude-powered projects
-          </p>
+      {/* Main */}
+      <main className="max-w-7xl mx-auto py-8">
+        {/* Title row */}
+        <div className="flex items-center justify-between mb-10">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Your Projects</h1>
+          <Button onClick={() => router.push('/')} className="gap-2 rounded-full">
+            <Plus className="h-4 w-4" />
+            New project
+          </Button>
         </div>
 
-        {/* Projects Section */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium">Your Projects</h3>
-            <Button
-              onClick={() => router.push('/')}
-              className="flex items-center gap-2 rounded-full"
-            >
+        {/* Projects grid */}
+        {projects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-6">
+              <FolderOpen className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-medium mb-2">No projects yet</h2>
+            <p className="text-muted-foreground mb-8 max-w-sm">
+              Create your first project to start building with AI
+            </p>
+            <Button onClick={() => router.push('/')} className="gap-2 rounded-full">
               <Plus className="h-4 w-4" />
-              New Project
+              Create your first project
             </Button>
           </div>
-
-          {/* error toasts are shown via react-hot-toast */}
-
-          {projects.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-border/50 bg-muted/30 p-12">
-              <div className="flex flex-col items-center justify-center text-center">
-                <Code2 className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">No projects yet</h3>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Create your first project to get started
-                </p>
-                <Button
-                  onClick={() => router.push('/')}
-                  className="flex items-center gap-2 rounded-full"
-                >
-                  <Plus className="h-4 w-4" />
-                  Create Project
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {projects.map((project: Project) => (
-                <div
-                  key={project.id}
-                  className="rounded-3xl border border-border/50 bg-muted/30 p-6 hover:bg-muted/50 hover:border-border/70 transition-all cursor-pointer group"
-                  onClick={() => router.push(`/project/${project.id}`)}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="space-y-1">
-                      <h4 className="text-base font-medium group-hover:text-foreground transition-colors">
-                        {project.name}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        Created {formatDate(project.createdAt)}
-                      </p>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="ghost"
-                          className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setNewName(project.name)
-                            setProjectToRename(project)
-                          }}
-                        >
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setProjectToDelete(project)
-                          }}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1.5">
-                        <Activity className="h-3 w-3" />
-                        <span>{project.sandbox?.id ? 'Active' : 'Not initialized'}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="h-3 w-3" />
-                        <span>Updated recently</span>
-                      </div>
-                    </div>
-                    {project.github?.repoOwner && project.github?.repoName && (
-                      <Badge variant="secondary" className="text-xs rounded-full px-2 py-0.5">
-                        {`${project.github.repoOwner}/${project.github.repoName}`}
-                      </Badge>
-                    )}
-                    {!project.github?.repoOwner && project.github?.repo && (
-                      <Badge variant="secondary" className="text-xs rounded-full px-2 py-0.5">
-                        {project.github.repo}
-                      </Badge>
-                    )}
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        router.push(`/project/${project.id}`)
-                      }}
-                      className="w-full cursor-pointer bg-blue-500 hover:bg-blue-600 text-white"
-                    >
-                      <Play className="mr-2 h-4 w-4" />
-                      View Project
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {projects.map((project: Project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                onClick={() => router.push(`/project/${project.id}`)}
+                onRename={() => {
+                  setNewName(project.name)
+                  setProjectToRename(project)
+                }}
+                onDelete={() => setProjectToDelete(project)}
+              />
+            ))}
+          </div>
+        )}
       </main>
 
       {/* Rename Dialog */}
       <Dialog open={!!projectToRename} onOpenChange={(open) => !open && setProjectToRename(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Rename Project</DialogTitle>
+            <DialogTitle>Rename project</DialogTitle>
           </DialogHeader>
           <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Project name"
             onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+            autoFocus
           />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setProjectToRename(null)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setProjectToRename(null)}>
               Cancel
             </Button>
             <Button onClick={handleRename} disabled={rename.isPending || !newName.trim()}>
@@ -332,17 +388,17 @@ export default function DashboardPage() {
 
       {/* Delete Dialog */}
       <Dialog open={!!projectToDelete} onOpenChange={(open) => !open && setProjectToDelete(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Delete Project</DialogTitle>
+            <DialogTitle>Delete project</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground">
             Are you sure you want to delete{' '}
             <span className="font-medium text-foreground">{projectToDelete?.name}</span>? This
             action cannot be undone.
           </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setProjectToDelete(null)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setProjectToDelete(null)}>
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleteProject.isPending}>
