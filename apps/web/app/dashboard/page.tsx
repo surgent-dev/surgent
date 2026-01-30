@@ -286,7 +286,7 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <Image
-              src="/surgent-logo.svg"
+              src="/surgent-logo.png"
               alt="Surgent"
               width={119}
               height={32}
