@@ -10,13 +10,6 @@ import {
   PromptInputActions,
   PromptInputTextarea,
 } from '@/components/ui/prompt-input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
 const MAX_PHOTOS = 6
 
@@ -41,7 +34,6 @@ export function ChatComposer({
   const value = controlledValue !== undefined ? controlledValue : internalValue
   const setValue = onValueChange || setInternalValue
   const [files, setFiles] = useState<File[]>([])
-  const [projectType, setProjectType] = useState<string>('simple')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const clearFiles = () => {
@@ -60,7 +52,7 @@ export function ChatComposer({
     const text = value.trim()
     if (disabled) return
     if (!text && files.length === 0) return
-    onSend(text, createFileList(files), projectType)
+    onSend(text, createFileList(files), 'simple')
     setValue('')
     clearFiles()
   }
@@ -165,20 +157,6 @@ export function ChatComposer({
                 <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </Button>
             </PromptInputAction>
-
-            <Select value={projectType} onValueChange={setProjectType}>
-              <SelectTrigger
-                size="sm"
-                className="h-7 sm:h-8 rounded-xl border border-border bg-background text-xs sm:text-sm px-2 sm:px-3"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="fullstack">Full Stack App</SelectItem>
-                <SelectItem value="simple">Web Application</SelectItem>
-                <SelectItem value="landing">Landing Page</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="ml-auto flex items-center gap-1 sm:gap-1.5">

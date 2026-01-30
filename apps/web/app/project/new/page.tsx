@@ -6,16 +6,6 @@ import { useCreateProject } from '@/queries/projects'
 import { ProjectInitOverlay } from '@/components/project-init-overlay'
 
 const projectConfigs: Record<string, { name: string; githubUrl: string; initConvex: boolean }> = {
-  fullstack: {
-    name: 'Fullstack',
-    githubUrl: 'https://github.com/bahodirr/worker-vite-react-template',
-    initConvex: true,
-  },
-  landing: {
-    name: 'Landing',
-    githubUrl: 'https://github.com/bahodirr/web-landing-starter',
-    initConvex: false,
-  },
   simple: {
     name: 'Utility',
     githubUrl: 'https://github.com/bahodirr/worker-vite-react-simple-template',
