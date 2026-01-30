@@ -48,12 +48,6 @@ const FALLBACK_MODELS: ProviderModel[] = [
     providerName: 'OpenCode',
   },
   {
-    id: 'claude-opus-4-5',
-    name: 'Claude Opus 4.5',
-    providerId: 'opencode',
-    providerName: 'OpenCode',
-  },
-  {
     id: 'gemini-3-flash',
     name: 'Gemini 3 Flash',
     providerId: 'opencode',
@@ -268,7 +262,13 @@ export default function ChatInput({
     setSelectedSubagent(undefined)
     const model = currentModel ?? models[0]
     if (!model) return
-    onSubmit(text, fileParts.length ? fileParts : undefined, model.id, model.providerId, currentVariant)
+    onSubmit(
+      text,
+      fileParts.length ? fileParts : undefined,
+      model.id,
+      model.providerId,
+      currentVariant,
+    )
   }
 
   // Handle keyboard navigation in subagent dropdown
