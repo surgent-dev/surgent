@@ -25,6 +25,7 @@ pub struct Customer {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TransactionSummary {
     id: Uuid,
     created_at: chrono::DateTime<chrono::Utc>,
@@ -34,15 +35,13 @@ pub struct TransactionSummary {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SubscriptionSummary {
     id: Uuid,
     created_at: chrono::DateTime<chrono::Utc>,
-    #[serde(rename = "currentPeriodStart")]
     current_period_start: Option<chrono::DateTime<chrono::Utc>>,
-    #[serde(rename = "currentPeriodEnd")]
     current_period_end: Option<chrono::DateTime<chrono::Utc>>,
     status: SubscriptionStatus,
-    #[serde(rename = "processorSubscriptionId")]
     processor_subscription_id: Option<String>,
 }
 

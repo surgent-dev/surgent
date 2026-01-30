@@ -655,8 +655,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           <DialogHeader>
             <DialogTitle>Stripe Account Already Connected</DialogTitle>
             <DialogDescription>
-              This Stripe account is already connected to another project. Would you like to move it to this project
-              instead?
+              This Stripe account is already connected to another project. Would you like to move it
+              to this project instead?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -669,9 +669,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   onSuccess: (data) => {
                     setIsStripeConflictOpen(false)
                     setConflictAccountId(null)
-                    window.location.href = data.oauth_url
+                    window.location.href = data.oauthUrl
                   },
-                  onError: () => toast.error('Failed to start Stripe connection', { position: 'top-right' }),
+                  onError: () =>
+                    toast.error('Failed to start Stripe connection', { position: 'top-right' }),
                 })
               }}
             >
@@ -692,7 +693,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                       setPulsePaymentsTab(true)
                       setTimeout(() => setPulsePaymentsTab(false), 10000)
                     },
-                    onError: () => toast.error('Failed to move Stripe account', { position: 'top-right' }),
+                    onError: () =>
+                      toast.error('Failed to move Stripe account', { position: 'top-right' }),
                   },
                 )
               }}

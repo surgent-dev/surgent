@@ -10,12 +10,12 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::core::auth::{AuthenticatedUser, ProjectIdQuery, resolve_project_id};
-use crate::integrations::types::ProcessorPriceRequest;
+use crate::integrations::types::{ProcessorPriceRequest, ProcessorProductRequest};
 use crate::types::RecurringInterval;
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateProductPriceRequest {
-    #[serde(rename = "productGroup")]
     pub product_group: String,
     pub name: Option<String>,
     pub description: Option<String>,
@@ -27,6 +27,7 @@ pub struct CreateProductPriceRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateProductPriceResponse {
     pub product_price_id: Uuid,
 }
@@ -62,7 +63,7 @@ pub async fn create_product_price(
     let pool = &state.pool;
     let product = sqlx::query!(
         r#"
-        SELECT p.id, p."processorProductId"
+        SELECT p.id, p.name, p.description, p.slug, p."productGroup", p.version, p."processorProductId"
         FROM product p
         WHERE p."productGroup" = $1
           AND p."projectId" = $2
@@ -94,32 +95,127 @@ pub async fn create_product_price(
         }
     };
 
+    let org_id = auth
+        .organization_id
+        .map(|id| id.to_string())
+        .unwrap_or_default();
+
     let processor_product_id = match product.processorProductId {
         Some(id) => id,
         None => {
-            tracing::error!(
+            tracing::info!(
                 product_id = %product.id,
-                "Product not synced to payment processor"
+                product_group = %product.productGroup,
+                "Product not synced to payment processor, performing eager sync"
             );
-            return Err((
-                StatusCode::BAD_REQUEST,
-                "Product not synced to payment processor".to_string(),
-            ));
+
+            let processor = state.registry.get("stripe").await.ok_or((
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Payment processor not available".to_string(),
+            ))?;
+
+            let processor_req = ProcessorProductRequest {
+                name: product.name.clone(),
+                description: product.description.clone(),
+                active: true,
+                metadata: HashMap::from([
+                    ("productGroup".to_string(), product.productGroup.clone()),
+                    ("surpay_product_id".to_string(), product.id.to_string()),
+                    ("org_id".to_string(), org_id.clone()),
+                    ("slug".to_string(), product.slug.clone()),
+                    (
+                        "version".to_string(),
+                        product.version.unwrap_or(1).to_string(),
+                    ),
+                ]),
+            };
+
+            let processor_product = processor.create_product(processor_req).await.map_err(|e| {
+                tracing::error!(
+                    product_id = %product.id,
+                    product_group = %product.productGroup,
+                    error = %e,
+                    "Failed to create processor product during eager sync"
+                );
+                (StatusCode::BAD_GATEWAY, e)
+            })?;
+
+            sqlx::query!(
+                r#"UPDATE product SET "processorProductId" = $1 WHERE id = $2"#,
+                &processor_product.id,
+                product.id
+            )
+            .execute(pool)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    product_id = %product.id,
+                    error = %e,
+                    "Failed to update product with processorProductId"
+                );
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Database error: {}", e),
+                )
+            })?;
+
+            tracing::info!(
+                product_id = %product.id,
+                processor_product_id = %processor_product.id,
+                "Successfully synced product to payment processor"
+            );
+
+            processor_product.id
         }
     };
 
     let product_price_id = Uuid::new_v4();
     let normalized_recurring_interval = req.recurring_interval.as_ref().filter(|s| !s.is_empty());
 
+    // Check if existing prices have a different pricing model (subscription vs one-time)
+    let existing_price = sqlx::query!(
+        r#"
+        SELECT "recurringInterval" as "recurring_interval: RecurringInterval"
+        FROM product_price
+        WHERE "productId" = $1
+        LIMIT 1
+        "#,
+        product.id
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "Database error checking existing prices");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
+
+    if let Some(existing) = existing_price {
+        let existing_is_subscription = existing.recurring_interval.is_some();
+        let new_is_subscription = normalized_recurring_interval.is_some();
+
+        if existing_is_subscription && !new_is_subscription {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Cannot add one-time price to product with existing subscription prices"
+                    .to_string(),
+            ));
+        }
+        if !existing_is_subscription && new_is_subscription {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Cannot add subscription price to product with existing one-time prices"
+                    .to_string(),
+            ));
+        }
+    }
+
     let processor = state.registry.get("stripe").await.ok_or((
         StatusCode::SERVICE_UNAVAILABLE,
         "Payment processor not available".to_string(),
     ))?;
-
-    let org_id = auth
-        .organization_id
-        .map(|id| id.to_string())
-        .unwrap_or_default();
 
     let processor_req = ProcessorPriceRequest {
         product: processor_product_id,

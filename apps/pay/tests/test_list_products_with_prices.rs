@@ -311,10 +311,10 @@ async fn test_list_products_with_prices_price_values_are_correct(pool: PgPool) -
     let price = &prices[0];
     assert_eq!(price["id"].as_str(), Some(price_id.to_string().as_str()));
     assert_eq!(price["name"].as_str(), Some("Monthly Plan"));
-    assert_eq!(price["price_amount"].as_i64(), Some(2999));
-    assert_eq!(price["price_currency"].as_str(), Some("EUR"));
-    assert_eq!(price["recurring_interval"].as_str(), Some("month"));
-    assert_eq!(price["is_default"].as_bool(), Some(false));
+    assert_eq!(price["priceAmount"].as_i64(), Some(2999));
+    assert_eq!(price["priceCurrency"].as_str(), Some("EUR"));
+    assert_eq!(price["recurringInterval"].as_str(), Some("month"));
+    assert_eq!(price["isDefault"].as_bool(), Some(false));
     Ok(())
 }
 
@@ -378,16 +378,16 @@ async fn test_list_products_with_prices_multiple_prices_with_different_values(
         .find(|p| p["id"].as_str() == Some(monthly_id.to_string().as_str()))
         .expect("Monthly price not found");
     assert_eq!(monthly["name"].as_str(), Some("Monthly"));
-    assert_eq!(monthly["price_amount"].as_i64(), Some(999));
-    assert_eq!(monthly["recurring_interval"].as_str(), Some("month"));
+    assert_eq!(monthly["priceAmount"].as_i64(), Some(999));
+    assert_eq!(monthly["recurringInterval"].as_str(), Some("month"));
 
     let yearly = prices
         .iter()
         .find(|p| p["id"].as_str() == Some(yearly_id.to_string().as_str()))
         .expect("Yearly price not found");
     assert_eq!(yearly["name"].as_str(), Some("Yearly"));
-    assert_eq!(yearly["price_amount"].as_i64(), Some(9999));
-    assert_eq!(yearly["recurring_interval"].as_str(), Some("year"));
+    assert_eq!(yearly["priceAmount"].as_i64(), Some(9999));
+    assert_eq!(yearly["recurringInterval"].as_str(), Some("year"));
     Ok(())
 }
 

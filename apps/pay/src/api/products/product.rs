@@ -38,8 +38,8 @@ pub struct Product {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateProductRequest {
-    #[serde(rename = "productGroup")]
     pub product_group: String,
     pub name: String,
     pub description: Option<String>,
@@ -48,9 +48,9 @@ pub struct CreateProductRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateProductResponse {
     pub product_id: Uuid,
-    #[serde(rename = "productGroup")]
     pub product_group: String,
     pub version: i32,
 }
@@ -198,6 +198,7 @@ pub async fn create_product(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateProductRequest {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -207,15 +208,16 @@ pub struct UpdateProductRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateProductResponse {
     pub product_id: Uuid,
-    #[serde(rename = "productGroup")]
     pub product_group: String,
     pub version: i32,
 }
 
 // Response structs for GET /product/prices
 #[derive(Debug, Serialize, ToSchema, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct ProductPriceResponse {
     pub id: Uuid,
     pub name: Option<String>,
@@ -311,6 +313,42 @@ pub async fn update_product(
         verify_project_access(&state.pool, auth.user_id, existing.project_id).await?;
     }
 
+    // Only metadata changes (is_archived, is_default) - update in place without versioning
+    let is_metadata_only_update =
+        req.name.is_none() && req.description.is_none() && req.slug.is_none();
+
+    if is_metadata_only_update {
+        sqlx::query!(
+            r#"
+            UPDATE product
+            SET "isArchived" = COALESCE($1, "isArchived"),
+                "isDefault" = COALESCE($2, "isDefault")
+            WHERE id = $3
+            "#,
+            req.is_archived,
+            req.is_default,
+            product_id
+        )
+        .execute(&state.pool)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Database error: {}", e),
+            )
+        })?;
+
+        return Ok((
+            StatusCode::OK,
+            Json(UpdateProductResponse {
+                product_id,
+                product_group: existing.product_group,
+                version: existing.version.unwrap_or(1),
+            }),
+        ));
+    }
+
+    // Content changes (name, description, slug) - create new version
     let max_version = sqlx::query_scalar!(
         r#"
         SELECT COALESCE(MAX(version), 0) as "max!"

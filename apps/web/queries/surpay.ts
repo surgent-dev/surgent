@@ -8,20 +8,20 @@ export interface SurpayAccount {
   status: string
   country: string
   currency: string
-  details_submitted: boolean
-  charges_enabled: boolean
-  payouts_enabled: boolean
-  business_type?: string | null
-  processor_account_id?: string | null
+  detailsSubmitted: boolean
+  chargesEnabled: boolean
+  payoutsEnabled: boolean
+  businessType?: string | null
+  processorAccountId?: string | null
 }
 
 export interface SurpayConnectResponse {
-  oauth_url: string
+  oauthUrl: string
 }
 
 // API functions
 async function fetchSurpayAccounts(projectId: string): Promise<SurpayAccount[]> {
-  return payHttp.get('accounts', { searchParams: { project_id: projectId } }).json()
+  return payHttp.get('accounts', { searchParams: { projectId } }).json()
 }
 
 async function fetchSurpayAccount(projectId: string, accountId: string): Promise<SurpayAccount> {
@@ -31,7 +31,7 @@ async function fetchSurpayAccount(projectId: string, accountId: string): Promise
 async function connectSurpay(projectId: string): Promise<SurpayConnectResponse> {
   return payHttp
     .post('accounts/connect', {
-      searchParams: { project_id: projectId },
+      searchParams: { projectId },
       json: { processor: 'stripe', country: 'us' },
     })
     .json()
@@ -42,7 +42,7 @@ async function disconnectSurpay(accountId: string): Promise<{ disconnected: bool
 }
 
 async function moveAccount(accountId: string, projectId: string): Promise<SurpayAccount> {
-  return payHttp.patch(`accounts/${accountId}`, { json: { project_id: projectId } }).json()
+  return payHttp.patch(`accounts/${accountId}`, { json: { projectId } }).json()
 }
 
 // Hooks

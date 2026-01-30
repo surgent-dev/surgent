@@ -240,9 +240,9 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
     );
 
     let response_body = read_body(response.into_body()).await;
-    let checkout_url = response_body["checkout_url"]
+    let checkout_url = response_body["checkoutUrl"]
         .as_str()
-        .expect("Response must contain 'checkout_url' field");
+        .expect("Response must contain 'checkoutUrl' field");
 
     assert!(
         checkout_url.starts_with("https://checkout.stripe.com"),
@@ -348,9 +348,9 @@ async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestRe
     let response_body_json: serde_json::Value =
         serde_json::from_str(&response_body).expect("Response body should be valid JSON");
 
-    let checkout_url = response_body_json["checkout_url"]
+    let checkout_url = response_body_json["checkoutUrl"]
         .as_str()
-        .expect("Response must contain 'checkout_url' field");
+        .expect("Response must contain 'checkoutUrl' field");
 
     assert!(
         checkout_url.starts_with("https://checkout.stripe.com"),
@@ -430,9 +430,9 @@ async fn test_create_checkout_minimal_request(pool: PgPool) -> TestResult {
         StatusCode::CREATED,
         "Expected 201 CREATED status for minimal checkout request"
     );
-    let checkout_url = response_body["checkout_url"]
+    let checkout_url = response_body["checkoutUrl"]
         .as_str()
-        .expect("Response must contain 'checkout_url' field");
+        .expect("Response must contain 'checkoutUrl' field");
     assert!(
         checkout_url.starts_with("https://checkout.stripe.com"),
         "checkout_url should start with 'https://checkout.stripe.com', got: {}",

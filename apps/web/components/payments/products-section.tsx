@@ -1,0 +1,411 @@
+'use client'
+
+import { useState } from 'react'
+import { Archive, Loader2, Package, Pencil, Plus, Settings } from 'lucide-react'
+import {
+  useProducts,
+  type Product,
+  type ProductWithPrices,
+  type ProductPrice,
+} from '@/queries/products'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { CreateProductDialog } from './create-product-dialog'
+import { CreatePriceDialog } from './create-price-dialog'
+import { EditProductDialog } from './edit-product-dialog'
+import { cn } from '@/lib/utils'
+
+const formatPrice = (cents: number, currency: string) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+  }).format(cents / 100)
+}
+
+const formatInterval = (interval: ProductPrice['recurringInterval']) => {
+  switch (interval) {
+    case 'month':
+      return 'per month'
+    case 'year':
+      return 'per year'
+    case 'week':
+      return 'per week'
+    case 'day':
+      return 'per day'
+    default:
+      return 'one-time'
+  }
+}
+
+function LoadingState() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[300px] text-center px-4">
+      <div className="rounded-full bg-muted p-3 mb-3">
+        <Loader2 className="size-6 text-muted-foreground animate-spin" strokeWidth={1.5} />
+      </div>
+      <p className="font-medium text-sm">Loading products</p>
+      <p className="text-xs text-muted-foreground">Please wait...</p>
+    </div>
+  )
+}
+
+function EmptyState({ isArchived }: { isArchived?: boolean }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[300px] text-center px-4">
+      <div className="rounded-full bg-muted p-3 mb-3">
+        {isArchived ? (
+          <Archive className="size-6 text-muted-foreground" strokeWidth={1.5} />
+        ) : (
+          <Package className="size-6 text-muted-foreground" strokeWidth={1.5} />
+        )}
+      </div>
+      <p className="font-medium text-sm">
+        {isArchived ? 'No archived products' : 'No products yet'}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {isArchived
+          ? 'Archived products will appear here'
+          : 'Create your first product to start accepting payments'}
+      </p>
+    </div>
+  )
+}
+
+function PricePill({ price }: { price: ProductPrice }) {
+  const interval = formatInterval(price.recurringInterval)
+  return (
+    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted/50 text-sm">
+      <span className="font-semibold tabular-nums">
+        {formatPrice(price.priceAmount, price.priceCurrency)}
+      </span>
+      <span className="text-muted-foreground">{interval}</span>
+    </div>
+  )
+}
+
+function ProductCard({
+  item,
+  onEdit,
+  onAddPrice,
+}: {
+  item: ProductWithPrices
+  onEdit: (product: Product) => void
+  onAddPrice: (item: ProductWithPrices) => void
+}) {
+  const { product, prices } = item
+  const canAddPrice = prices.length === 0
+
+  return (
+    <div
+      className={cn(
+        'rounded-lg border bg-card p-4 space-y-3 shadow-sm',
+        product.isArchived && 'opacity-60',
+      )}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold">{product.name}</span>
+          {product.isArchived && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+              Archived
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {!product.isArchived && canAddPrice && (
+            <button
+              onClick={() => onAddPrice(item)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors bg-brand text-brand-foreground hover:bg-brand/90"
+            >
+              <Plus className="size-3" strokeWidth={2.5} />
+              <span>Add Price</span>
+            </button>
+          )}
+          <button
+            onClick={() => onEdit(product)}
+            className="group flex items-center gap-1 px-2 py-1.5 text-xs rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+          >
+            <Pencil className="size-3" />
+            <span className="hidden group-hover:inline">Settings</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Prices */}
+      {prices.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {prices.map((price) => (
+            <PricePill key={price.id} price={price} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface NavItemProps {
+  icon: React.ElementType
+  label: string
+  count: number
+  active: boolean
+  onClick: () => void
+}
+
+function NavItem({ icon: Icon, label, count, active, onClick }: NavItemProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'w-full flex items-center justify-between px-3 py-2.5 rounded-md text-[13px] font-medium transition-colors',
+        active
+          ? 'bg-foreground/10 text-foreground'
+          : 'text-muted-foreground hover:text-foreground hover:bg-muted/70',
+      )}
+    >
+      <div className="flex items-center gap-2.5">
+        <Icon className="size-4" strokeWidth={active ? 2 : 1.5} />
+        <span>{label}</span>
+      </div>
+      {count >= 0 && (
+        <span
+          className={cn(
+            'text-xs tabular-nums px-1.5 py-0.5 rounded-full min-w-[20px] text-center',
+            active ? 'bg-foreground/10' : 'bg-muted',
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  )
+}
+
+interface SettingsNavItemProps {
+  icon: React.ElementType
+  label: string
+  active: boolean
+  onClick: () => void
+}
+
+function SettingsNavItem({ icon: Icon, label, active, onClick }: SettingsNavItemProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-[13px] font-medium transition-colors',
+        active
+          ? 'bg-foreground/10 text-foreground'
+          : 'text-muted-foreground hover:text-foreground hover:bg-muted/70',
+      )}
+    >
+      <Icon className="size-4" strokeWidth={active ? 2 : 1.5} />
+      <span>{label}</span>
+    </button>
+  )
+}
+
+interface StripeStatusCardProps {
+  isConnected: boolean
+  processor?: string
+  onDisconnect?: () => void
+  isDisconnecting?: boolean
+}
+
+function StripeStatusCard({
+  isConnected,
+  processor,
+  onDisconnect,
+  isDisconnecting,
+}: StripeStatusCardProps) {
+  return (
+    <div className="rounded-lg border bg-card p-3 space-y-2.5">
+      <div className="flex items-center gap-2.5">
+        <div
+          className={cn(
+            'size-8 rounded-md flex items-center justify-center',
+            isConnected ? 'bg-success/10' : 'bg-muted',
+          )}
+        >
+          <svg
+            className={cn('size-5', isConnected ? 'text-success' : 'text-muted-foreground')}
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium text-sm">{processor || 'Stripe'}</span>
+            {isConnected && <span className="size-2 rounded-full bg-success animate-pulse" />}
+          </div>
+          <span className={cn('text-xs', isConnected ? 'text-success' : 'text-muted-foreground')}>
+            {isConnected ? 'Connected' : 'Not connected'}
+          </span>
+        </div>
+      </div>
+      {isConnected && onDisconnect && (
+        <button
+          onClick={onDisconnect}
+          disabled={isDisconnecting}
+          className="w-full text-xs text-muted-foreground hover:text-destructive transition-colors py-1"
+        >
+          {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+export function ProductsSection({
+  projectId,
+  stripeConnected = false,
+  stripeProcessor,
+  onDisconnect,
+  isDisconnecting,
+}: {
+  projectId: string
+  stripeConnected?: boolean
+  stripeProcessor?: string
+  onDisconnect?: () => void
+  isDisconnecting?: boolean
+}) {
+  const { data: products, isLoading } = useProducts(projectId)
+  const [view, setView] = useState<'active' | 'archived' | 'settings'>('active')
+
+  const [createProductOpen, setCreateProductOpen] = useState(false)
+  const [createPriceOpen, setCreatePriceOpen] = useState(false)
+  const [editProductOpen, setEditProductOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [selectedPrices, setSelectedPrices] = useState<ProductPrice[]>([])
+
+  const activeProducts = products?.filter((p) => !p.product.isArchived) ?? []
+  const archivedProducts = products?.filter((p) => p.product.isArchived) ?? []
+  const displayProducts = view === 'active' ? activeProducts : archivedProducts
+
+  const handleEdit = (product: Product) => {
+    setSelectedProduct(product)
+    setEditProductOpen(true)
+  }
+
+  const handleAddPrice = (item: ProductWithPrices) => {
+    setSelectedProduct(item.product)
+    setSelectedPrices(item.prices)
+    setCreatePriceOpen(true)
+  }
+
+  return (
+    <div className="h-full flex">
+      {/* Sidebar */}
+      <div className="w-[200px] shrink-0 border-r bg-muted/20 p-3 flex flex-col gap-4">
+        <div className="space-y-1">
+          <NavItem
+            icon={Package}
+            label="Products"
+            count={activeProducts.length}
+            active={view === 'active'}
+            onClick={() => setView('active')}
+          />
+          <NavItem
+            icon={Archive}
+            label="Archived"
+            count={archivedProducts.length}
+            active={view === 'archived'}
+            onClick={() => setView('archived')}
+          />
+          <SettingsNavItem
+            icon={Settings}
+            label="Settings"
+            active={view === 'settings'}
+            onClick={() => setView('settings')}
+          />
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="h-11 px-4 flex items-center justify-between border-b bg-muted/30 shrink-0">
+          <div className="flex items-center gap-2">
+            {view === 'active' && <Package className="size-4 text-muted-foreground" />}
+            {view === 'archived' && <Archive className="size-4 text-muted-foreground" />}
+            {view === 'settings' && <Settings className="size-4 text-muted-foreground" />}
+            <span className="font-medium text-sm">
+              {view === 'active' ? 'Products' : view === 'archived' ? 'Archived' : 'Settings'}
+            </span>
+            {view !== 'settings' && displayProducts.length > 0 && (
+              <>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-xs text-muted-foreground">
+                  {displayProducts.length} item
+                  {displayProducts.length !== 1 ? 's' : ''}
+                </span>
+              </>
+            )}
+          </div>
+          {view === 'active' && (
+            <button
+              onClick={() => setCreateProductOpen(true)}
+              className="flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              <Plus className="size-4" />
+              <span>Create</span>
+            </button>
+          )}
+        </header>
+
+        {view === 'settings' ? (
+          <div className="p-4 max-w-md">
+            <StripeStatusCard
+              isConnected={stripeConnected}
+              processor={stripeProcessor}
+              onDisconnect={onDisconnect}
+              isDisconnecting={isDisconnecting}
+            />
+          </div>
+        ) : isLoading ? (
+          <LoadingState />
+        ) : displayProducts.length === 0 ? (
+          <EmptyState isArchived={view === 'archived'} />
+        ) : (
+          <ScrollArea className="flex-1">
+            <div className="p-3 space-y-2">
+              {displayProducts.map((item) => (
+                <ProductCard
+                  key={item.product.id}
+                  item={item}
+                  onEdit={handleEdit}
+                  onAddPrice={handleAddPrice}
+                />
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+      </div>
+
+      <CreateProductDialog
+        projectId={projectId}
+        open={createProductOpen}
+        onOpenChange={setCreateProductOpen}
+      />
+
+      <CreatePriceDialog
+        projectId={projectId}
+        productGroup={selectedProduct?.productGroup ?? ''}
+        productName={selectedProduct?.name ?? ''}
+        open={createPriceOpen}
+        onOpenChange={setCreatePriceOpen}
+        existingPrices={selectedPrices}
+      />
+
+      {selectedProduct && (
+        <EditProductDialog
+          projectId={projectId}
+          product={selectedProduct}
+          open={editProductOpen}
+          onOpenChange={setEditProductOpen}
+        />
+      )}
+    </div>
+  )
+}

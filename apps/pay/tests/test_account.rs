@@ -345,15 +345,15 @@ async fn test_get_account_success(pool: PgPool) -> TestResult {
     assert_eq!(body["id"].as_str().unwrap(), account_id.to_string());
     assert_eq!(body["processor"].as_str().unwrap(), "stripe");
     assert_eq!(
-        body["processor_account_id"].as_str().unwrap(),
+        body["processorAccountId"].as_str().unwrap(),
         "acct_test_123"
     );
     assert_eq!(body["status"].as_str().unwrap(), "pending");
     assert_eq!(body["country"].as_str().unwrap(), "US");
     assert_eq!(body["currency"].as_str().unwrap(), "usd");
-    assert_eq!(body["business_type"].as_str().unwrap(), "company");
-    assert!(body["details_submitted"].as_bool().unwrap());
-    assert!(body["charges_enabled"].as_bool().unwrap());
+    assert_eq!(body["businessType"].as_str().unwrap(), "company");
+    assert!(body["detailsSubmitted"].as_bool().unwrap());
+    assert!(body["chargesEnabled"].as_bool().unwrap());
     Ok(())
 }
 
@@ -412,9 +412,9 @@ async fn test_create_connect_account_success(pool: PgPool) -> TestResult {
     assert_eq!(response.status(), StatusCode::OK);
     let body = read_body(response.into_body()).await;
 
-    // Response only contains oauth_url (no account_id since no DB row is created)
-    assert!(body.get("oauth_url").is_some());
-    let oauth_url = body["oauth_url"].as_str().unwrap();
+    // Response only contains oauthUrl (no accountId since no DB row is created)
+    assert!(body.get("oauthUrl").is_some());
+    let oauth_url = body["oauthUrl"].as_str().unwrap();
     assert!(oauth_url.contains("oauth"));
 
     // Verify no account was created in database (state is self-contained)
@@ -494,12 +494,12 @@ async fn test_create_connect_account_real_stripe(pool: PgPool) -> TestResult {
     }
     let body = read_body(response.into_body()).await;
 
-    // Response only contains oauth_url (no account_id since state is self-contained)
-    assert!(body.get("oauth_url").is_some());
-    let oauth_url = body["oauth_url"].as_str().unwrap();
+    // Response only contains oauthUrl (no accountId since state is self-contained)
+    assert!(body.get("oauthUrl").is_some());
+    let oauth_url = body["oauthUrl"].as_str().unwrap();
     assert!(
         oauth_url.contains("oauth") || oauth_url.contains("connect"),
-        "oauth_url should contain 'oauth' or 'connect', got: {}",
+        "oauthUrl should contain 'oauth' or 'connect', got: {}",
         oauth_url
     );
 

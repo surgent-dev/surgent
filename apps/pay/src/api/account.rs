@@ -210,6 +210,7 @@ pub struct Account {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectAccountRequest {
     pub processor: String,
     pub account_type: Option<String>,
@@ -219,6 +220,7 @@ pub struct ConnectAccountRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectAccountResponse {
     pub account_id: Uuid,
     pub processor_account_id: String,
@@ -226,6 +228,7 @@ pub struct ConnectAccountResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct OAuthInitResponse {
     pub oauth_url: String,
 }
@@ -237,6 +240,7 @@ pub struct OAuthCallbackParams {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct OAuthCallbackResponse {
     pub account_id: Uuid,
     pub processor_account_id: String,
@@ -249,6 +253,7 @@ pub struct CallbackParams {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectedAccountResponse {
     pub id: Uuid,
     pub processor: String,
@@ -719,6 +724,7 @@ pub async fn get_account(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ListAccountsQuery {
     pub project_id: Option<Uuid>,
 }
@@ -801,6 +807,7 @@ pub async fn list_accounts(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateAccountRequest {
     pub project_id: Uuid,
 }

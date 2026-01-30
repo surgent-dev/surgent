@@ -16,6 +16,7 @@ use uuid::Uuid;
 use super::Config;
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectIdQuery {
     pub project_id: Option<Uuid>,
 }

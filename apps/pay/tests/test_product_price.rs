@@ -48,7 +48,7 @@ async fn test_create_product_price_success(pool: PgPool) -> TestResult {
     assert_eq!(response.status(), StatusCode::CREATED);
 
     let body = read_body(response.into_body()).await;
-    assert!(body.get("product_price_id").is_some());
+    assert!(body.get("productPriceId").is_some());
     Ok(())
 }
 
@@ -80,7 +80,7 @@ async fn test_create_product_price_minimal(pool: PgPool) -> TestResult {
     assert_eq!(response.status(), StatusCode::CREATED);
 
     let body = read_body(response.into_body()).await;
-    assert!(body.get("product_price_id").is_some());
+    assert!(body.get("productPriceId").is_some());
     Ok(())
 }
 
@@ -273,7 +273,7 @@ async fn test_create_product_price_stripe_integration(pool: PgPool) -> TestResul
     assert_eq!(response.status(), StatusCode::CREATED);
 
     let response_body = read_body(response.into_body()).await;
-    let product_price_id = Uuid::parse_str(response_body["product_price_id"].as_str().unwrap())?;
+    let product_price_id = Uuid::parse_str(response_body["productPriceId"].as_str().unwrap())?;
 
     let price_record = sqlx::query!(
         r#"
@@ -329,7 +329,7 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
         )
         .await?;
     assert_eq!(response.status(), StatusCode::CREATED);
-    let monthly_price_id = read_body(response.into_body()).await["product_price_id"]
+    let monthly_price_id = read_body(response.into_body()).await["productPriceId"]
         .as_str()
         .unwrap()
         .to_string();
@@ -353,7 +353,7 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
         )
         .await?;
     assert_eq!(response.status(), StatusCode::CREATED);
-    let onetime_price_id = read_body(response.into_body()).await["product_price_id"]
+    let onetime_price_id = read_body(response.into_body()).await["productPriceId"]
         .as_str()
         .unwrap()
         .to_string();

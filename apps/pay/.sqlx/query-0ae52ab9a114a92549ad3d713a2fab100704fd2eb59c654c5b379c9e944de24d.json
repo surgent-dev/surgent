@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id\n        FROM subscription\n        WHERE \"customerId\" = $1\n          AND \"productId\" = $2\n          AND status = ANY($3::subscription_status[])\n        LIMIT 1\n        ",
+  "query": "\n        SELECT id\n        FROM subscription\n        WHERE \"customerId\" = $1\n          AND \"productId\" = $2\n          AND status = ANY($3::subscription_status[])\n          AND \"projectId\" = $4\n        LIMIT 1\n        ",
   "describe": {
     "columns": [
       {
@@ -35,12 +35,13 @@
               }
             }
           }
-        }
+        },
+        "Uuid"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "28062859e04612affc4263dd32c13a57ffc13082fde19dd2e192d8df049a2e59"
+  "hash": "0ae52ab9a114a92549ad3d713a2fab100704fd2eb59c654c5b379c9e944de24d"
 }
