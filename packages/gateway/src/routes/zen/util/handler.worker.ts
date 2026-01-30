@@ -176,6 +176,34 @@ export async function handleZenRequest(
     })
     logger.debug('STATUS: ' + res.status + ' ' + res.statusText)
 
+    if (resStatus >= 400) {
+      const contentType = res.headers.get('content-type') ?? ''
+      const raw = await res.text()
+      const body = (() => {
+        if (raw && contentType.includes('application/json')) return raw
+        if (raw)
+          return JSON.stringify({
+            type: 'error',
+            error: { type: 'UpstreamError', message: raw },
+          })
+        return JSON.stringify({
+          type: 'error',
+          error: {
+            type: 'UpstreamError',
+            message: res.statusText || 'Upstream error',
+          },
+        })
+      })()
+      if (!resHeaders.get('content-type')) resHeaders.set('content-type', 'application/json')
+      dataDumper?.provideResponse(body)
+      dataDumper?.flush()
+      return new Response(body, {
+        status: resStatus,
+        statusText: res.statusText,
+        headers: resHeaders,
+      })
+    }
+
     if (!isStream) {
       const responseConverter = createResponseConverter(providerInfo.format, opts.format)
       const json: { usage?: unknown } = await res.json()

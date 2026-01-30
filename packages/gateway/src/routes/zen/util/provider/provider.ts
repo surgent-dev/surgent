@@ -107,6 +107,9 @@ export interface CommonRequest {
   stream?: boolean
   tools?: CommonTool[]
   tool_choice?: 'auto' | 'required' | { type: 'function'; function: { name: string } }
+  text?: { verbosity?: 'low' | 'medium' | 'high' }
+  verbosity?: 'low' | 'medium' | 'high'
+  reasoning?: Record<string, unknown>
 }
 
 export interface CommonResponse {

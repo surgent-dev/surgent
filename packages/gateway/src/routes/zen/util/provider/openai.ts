@@ -73,6 +73,9 @@ export const openaiHelper: ProviderHelper = () => ({
 export function fromOpenaiRequest(body: any): CommonRequest {
   if (!body || typeof body !== 'object') return body
 
+  const v = body?.text?.verbosity ?? body?.verbosity
+  const verbosity = v === 'low' || v === 'medium' || v === 'high' ? v : undefined
+
   const toImg = (p: any) => {
     if (!p || typeof p !== 'object') return undefined
     if ((p as any).type === 'image_url' && (p as any).image_url)
@@ -207,6 +210,13 @@ export function fromOpenaiRequest(body: any): CommonRequest {
     return undefined
   })()
 
+  const reasoning = (() => {
+    const v = body.reasoning
+    if (!v) return { effort: 'medium' }
+    if (typeof v !== 'object' || Array.isArray(v)) return { effort: 'medium' }
+    return v
+  })()
+
   return {
     model: body.model,
     max_tokens: body.max_output_tokens ?? body.max_tokens,
@@ -217,6 +227,8 @@ export function fromOpenaiRequest(body: any): CommonRequest {
     stream: !!body.stream,
     tools: Array.isArray(body.tools) ? body.tools : undefined,
     tool_choice: tc,
+    ...(verbosity ? { verbosity } : {}),
+    reasoning,
   }
 }
 
@@ -334,6 +346,11 @@ export function toOpenaiRequest(body: CommonRequest) {
     })
   })()
 
+  const v = body.text?.verbosity ?? body.verbosity
+  const override = v === 'low' || v === 'medium' || v === 'high' ? v : undefined
+  const verbosity = override ?? (body.model === 'gpt-5-codex' ? 'medium' : 'low')
+  const reasoning = body.reasoning
+
   return {
     model: body.model,
     input,
@@ -348,8 +365,8 @@ export function toOpenaiRequest(body: CommonRequest) {
     metadata: (body as any).metadata,
     store: (body as any).store,
     user: (body as any).user,
-    text: { verbosity: body.model === 'gpt-5-codex' ? 'medium' : 'low' },
-    reasoning: { effort: 'medium' },
+    text: { verbosity },
+    reasoning,
   }
 }
 
@@ -395,6 +412,9 @@ export function fromOpenaiResponse(resp: any): CommonResponse {
     if (r === 'content_filter') return 'content_filter'
     return null
   }
+  const finishFrom = (reason: string | null | undefined, status: string | undefined) =>
+    finish(reason ?? null) ??
+    (status === 'completed' ? 'stop' : status === 'incomplete' ? 'length' : null)
 
   const u = (r as any).usage ?? (resp as any).usage
   const usage = (() => {
@@ -412,6 +432,7 @@ export function fromOpenaiResponse(resp: any): CommonResponse {
     }
   })()
 
+  const status = (r as any).status ?? (resp as any).status
   return {
     id,
     object: 'chat.completion',
@@ -425,7 +446,7 @@ export function fromOpenaiResponse(resp: any): CommonResponse {
           ...(text && text.length > 0 ? { content: text } : {}),
           ...(tcs.length > 0 ? { tool_calls: tcs } : {}),
         },
-        finish_reason: finish((r as any).stop_reason ?? null),
+        finish_reason: finishFrom((r as any).stop_reason ?? (r as any).incomplete_details?.reason, status),
       },
     ],
     ...(usage ? { usage } : {}),
@@ -559,14 +580,17 @@ export function fromOpenaiChunk(chunk: string): CommonChunk | string {
   }
 
   if (e === 'response.completed') {
-    const fr = (() => {
-      const sr = (respObj as any).stop_reason ?? (json as any).stop_reason
-      if (sr === 'stop') return 'stop'
-      if (sr === 'tool_call' || sr === 'tool_calls') return 'tool_calls'
-      if (sr === 'length' || sr === 'max_output_tokens') return 'length'
-      if (sr === 'content_filter') return 'content_filter'
-      return null
-    })()
+    const sr = (respObj as any).stop_reason ?? (json as any).stop_reason
+    const status = (respObj as any).status ?? (json as any).response?.status
+    const fr =
+      (() => {
+        if (sr === 'stop') return 'stop'
+        if (sr === 'tool_call' || sr === 'tool_calls') return 'tool_calls'
+        if (sr === 'length' || sr === 'max_output_tokens') return 'length'
+        if (sr === 'content_filter') return 'content_filter'
+        return null
+      })() ??
+      (status === 'completed' ? 'stop' : status === 'incomplete' ? 'length' : null)
     out.choices.push({ index: 0, delta: {}, finish_reason: fr })
 
     const u = (respObj as any).usage ?? (json as any).response?.usage

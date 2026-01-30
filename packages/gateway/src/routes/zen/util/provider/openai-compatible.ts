@@ -84,6 +84,9 @@ export const oaCompatHelper: ProviderHelper = () => ({
 export function fromOaCompatibleRequest(body: any): CommonRequest {
   if (!body || typeof body !== 'object') return body
 
+  const v = body?.text?.verbosity ?? body?.verbosity
+  const verbosity = v === 'low' || v === 'medium' || v === 'high' ? v : undefined
+
   const msgsIn = Array.isArray(body.messages) ? body.messages : []
   const msgsOut: any[] = []
 
@@ -138,6 +141,7 @@ export function fromOaCompatibleRequest(body: any): CommonRequest {
     stream: !!body.stream,
     tools: Array.isArray(body.tools) ? body.tools : undefined,
     tool_choice: body.tool_choice,
+    ...(verbosity ? { verbosity } : {}),
   }
 }
 
