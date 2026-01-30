@@ -219,6 +219,7 @@ pub struct ConnectAccountRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectAccountResponse {
     pub account_id: Uuid,
     pub processor_account_id: String,
@@ -226,6 +227,7 @@ pub struct ConnectAccountResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct OAuthInitResponse {
     pub oauth_url: String,
 }
@@ -237,6 +239,7 @@ pub struct OAuthCallbackParams {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct OAuthCallbackResponse {
     pub account_id: Uuid,
     pub processor_account_id: String,
@@ -249,6 +252,7 @@ pub struct CallbackParams {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectedAccountResponse {
     pub id: Uuid,
     pub processor: String,

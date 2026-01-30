@@ -41,7 +41,7 @@ async fn create_product_with_api_key(app: &mut axum::Router, api_key: &str) -> (
         .unwrap();
 
     let body = read_body(response.into_body()).await;
-    let product_id = Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap();
+    let product_id = Uuid::parse_str(body["productId"].as_str().unwrap()).unwrap();
     (product_id, product_group)
 }
 
@@ -73,7 +73,7 @@ async fn create_product_with_group_api_key(
         .unwrap();
 
     let body = read_body(response.into_body()).await;
-    Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap()
+    Uuid::parse_str(body["productId"].as_str().unwrap()).unwrap()
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -103,7 +103,7 @@ async fn test_create_product_success(pool: PgPool) -> TestResult {
     assert_eq!(response.status(), StatusCode::CREATED);
 
     let body = read_body(response.into_body()).await;
-    assert!(body.get("product_id").is_some());
+    assert!(body.get("productId").is_some());
     assert!(body.get("productGroup").is_some());
     assert_eq!(body.get("version").and_then(|v| v.as_i64()), Some(1));
     Ok(())
@@ -253,7 +253,7 @@ async fn test_create_product_api_key_scoped_to_project(pool: PgPool) -> TestResu
     assert_eq!(response.status(), StatusCode::CREATED);
 
     let resp_body = read_body(response.into_body()).await;
-    let product_id = Uuid::parse_str(resp_body["product_id"].as_str().unwrap())?;
+    let product_id = Uuid::parse_str(resp_body["productId"].as_str().unwrap())?;
 
     // Verify product is in project1, not project2
     let product = sqlx::query!(
@@ -343,8 +343,8 @@ async fn test_update_product_success(pool: PgPool) -> TestResult {
     assert_eq!(response.status(), StatusCode::CREATED);
 
     let body = read_body(response.into_body()).await;
-    assert!(body.get("product_id").is_some());
-    assert_ne!(body["product_id"].as_str().unwrap(), product_id.to_string());
+    assert!(body.get("productId").is_some());
+    assert_ne!(body["productId"].as_str().unwrap(), product_id.to_string());
     assert_eq!(body["productGroup"].as_str().unwrap(), product_group);
     assert_eq!(body.get("version").and_then(|v| v.as_i64()), Some(2));
     Ok(())
@@ -380,7 +380,7 @@ async fn test_update_product_increments_version_correctly(pool: PgPool) -> TestR
     assert_eq!(response.status(), StatusCode::CREATED);
     let body = read_body(response.into_body()).await;
     assert_eq!(body.get("version").and_then(|v| v.as_i64()), Some(2));
-    let product_id_v2 = body["product_id"].as_str().unwrap();
+    let product_id_v2 = body["productId"].as_str().unwrap();
 
     // Update v2 to version 3
     let response = app
@@ -512,7 +512,7 @@ async fn test_create_product_with_stripe_integration(pool: PgPool) -> TestResult
     assert_eq!(response.status(), StatusCode::CREATED);
 
     let body = read_body(response.into_body()).await;
-    let product_id = Uuid::parse_str(body["product_id"].as_str().unwrap())?;
+    let product_id = Uuid::parse_str(body["productId"].as_str().unwrap())?;
 
     // Verify database record and processorProductId population
     let product = sqlx::query!(

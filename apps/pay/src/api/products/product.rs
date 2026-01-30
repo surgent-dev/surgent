@@ -48,9 +48,9 @@ pub struct CreateProductRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateProductResponse {
     pub product_id: Uuid,
-    #[serde(rename = "productGroup")]
     pub product_group: String,
     pub version: i32,
 }
@@ -207,15 +207,16 @@ pub struct UpdateProductRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateProductResponse {
     pub product_id: Uuid,
-    #[serde(rename = "productGroup")]
     pub product_group: String,
     pub version: i32,
 }
 
 // Response structs for GET /product/prices
 #[derive(Debug, Serialize, ToSchema, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct ProductPriceResponse {
     pub id: Uuid,
     pub name: Option<String>,

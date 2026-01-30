@@ -27,6 +27,7 @@ pub struct CreateProductPriceRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateProductPriceResponse {
     pub product_price_id: Uuid,
 }

@@ -78,6 +78,7 @@ impl CreateCheckoutRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateCheckoutResponse {
     pub checkout_url: String,
     pub customer_id: String,

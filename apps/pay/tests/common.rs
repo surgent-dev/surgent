@@ -669,7 +669,7 @@ impl TestAppExt for Router {
             .unwrap();
 
         let body = read_body(response.into_body()).await;
-        let id = Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap();
+        let id = Uuid::parse_str(body["productId"].as_str().unwrap()).unwrap();
         CreatedProduct {
             id,
             slug,
@@ -704,7 +704,7 @@ impl TestAppExt for Router {
             .unwrap();
 
         let body = read_body(response.into_body()).await;
-        let id = Uuid::parse_str(body["product_id"].as_str().unwrap()).unwrap();
+        let id = Uuid::parse_str(body["productId"].as_str().unwrap()).unwrap();
         (id, slug)
     }
 
@@ -752,6 +752,6 @@ impl TestAppExt for Router {
             .unwrap();
 
         let body = read_body(response.into_body()).await;
-        Uuid::parse_str(body["product_price_id"].as_str().unwrap()).unwrap()
+        Uuid::parse_str(body["productPriceId"].as_str().unwrap()).unwrap()
     }
 }
