@@ -28,10 +28,12 @@ import {
   GitCompare,
   ArrowDown,
 } from 'lucide-react'
+import { Chat, ArrowElbowDownRight } from '@phosphor-icons/react'
 import ChatInput, { type FilePart, type ProviderModel } from './chat-input'
 import TerminalWidget from './terminal/terminal-widget'
 import { useSandbox } from '@/hooks/use-sandbox'
 import useAgentStream, { type SessionStatusRetry } from '@/lib/use-agent-stream'
+import { computeWorkingFromParts } from '@/lib/agent-working'
 import { AgentThread } from '@/components/agent/agent-thread'
 import QuestionPrompt from '@/components/agent/question-prompt'
 import {
@@ -51,6 +53,46 @@ export interface ConversationProps {
   projectId?: string
   initialPrompt?: string
 }
+
+type ProviderResponse = {
+  all: Array<{
+    id: string
+    name?: string
+    models: Record<string, { id?: string; name?: string; limit?: { context?: number } }>
+  }>
+  default?: Record<string, string>
+}
+
+const FALLBACK_MODELS: ProviderModel[] = [
+  {
+    id: 'gpt-5.2-codex',
+    name: 'GPT-5.2 Codex',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+    limit: { context: 400000 },
+  },
+  {
+    id: 'claude-opus-4-5',
+    name: 'Claude Opus 4.5',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+    limit: { context: 200000 },
+  },
+  {
+    id: 'gemini-3-flash',
+    name: 'Gemini 3 Flash',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+    limit: { context: 1048576 },
+  },
+  {
+    id: 'gemini-3-pro',
+    name: 'Gemini 3 Pro',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+    limit: { context: 1048576 },
+  },
+]
 
 const formatTitle = (title: string) => {
   const isoMatch = title.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
@@ -178,10 +220,9 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const [mode, setMode] = useState<'plan' | 'orchestrator'>('orchestrator')
   const [providerOpen, setProviderOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
-  const [selectedModel, setSelectedModel] = useState<{ modelId: string; providerId: string }>({
-    modelId: 'gpt-5.2-codex',
-    providerId: 'opencode',
-  })
+  const [selectedModel, setSelectedModel] = useState<
+    { modelId: string; providerId: string } | undefined
+  >(undefined)
   const lastSentRef = useRef<string>('')
 
   const sandboxId = useSandbox((s) => s.sandboxId || undefined)
@@ -218,7 +259,12 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     isRetrying,
     retryInfo,
   } = useAgentStream({ projectId, sessionId: activeId })
-  const working = status?.type !== undefined && status.type !== 'idle'
+
+  const working = useMemo(() => {
+    if (status?.type) return status.type !== 'idle'
+    const timeline = messages.flatMap((m) => parts[m.id] || [])
+    return computeWorkingFromParts(timeline)
+  }, [status, messages, parts])
 
   useEffect(() => {
     if (!projectId || !activeId) return
@@ -292,14 +338,16 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     }
   }, [activeId, scrollToBottom])
 
-  // Prefill initial prompt into the input (don't auto-send)
+  // Prefill initial prompt into input
   useEffect(() => {
     if (!initialPrompt || prefilledRef.current) return
     const text = initialPrompt.trim()
     if (!text) return
-    if (!inputValue) setInputValue(text)
-    prefilledRef.current = true
 
+    prefilledRef.current = true
+    if (!inputValue) setInputValue(text)
+
+    // Clean up URL param
     try {
       const params = new URLSearchParams(searchParams?.toString?.() || '')
       if (params.has('initial')) {
@@ -309,11 +357,25 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     } catch {}
   }, [initialPrompt, inputValue, pathname, router, searchParams])
 
-  const handleSend = (text: string, files?: FilePart[], model?: string, providerID?: string) => {
+  const handleSend = (
+    text: string,
+    files?: FilePart[],
+    model?: string,
+    providerID?: string,
+    variant?: string,
+  ) => {
     if (!activeId || (!text.trim() && !files?.length) || working) return
     lastSentRef.current = text.trim()
     setInputValue('')
-    send.mutate({ sessionId: activeId, text: text.trim(), agent: mode, files, model, providerID })
+    send.mutate({
+      sessionId: activeId,
+      text: text.trim(),
+      agent: mode,
+      files,
+      model,
+      providerID,
+      variant,
+    })
   }
 
   const handleAbort = () => {
@@ -348,6 +410,19 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
   const activeSession = sessions.find((s) => s.id === activeId)
   const sessionName = formatTitle(session?.title || activeSession?.title || 'Untitled')
+
+  // Group sessions by parent
+  const sessionTree = useMemo(() => {
+    const children = new Map<string, typeof sessions>()
+    const roots: typeof sessions = []
+
+    for (const s of sessions) {
+      const pid = (s as any).parentID
+      pid ? children.set(pid, [...(children.get(pid) || []), s]) : roots.push(s)
+    }
+
+    return roots.map((s) => ({ ...s, subs: children.get(s.id) || [] }))
+  }, [sessions])
 
   const assistantMessages = visibleMessages.filter((m) => m.role === 'assistant')
 
@@ -391,41 +466,37 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     return { message: isContext ? 'Context limit reached. Start a new session.' : msg, isContext }
   })()
 
-  // Hardcoded models - no API call needed
-  const availableModels: ProviderModel[] = [
-    {
-      id: 'gpt-5.2-codex',
-      name: 'GPT-5.2 Codex',
-      providerId: 'opencode',
-      providerName: 'OpenCode',
-      limit: { context: 400000 },
-    },
-    {
-      id: 'claude-opus-4-5',
-      name: 'Claude Opus 4.5',
-      providerId: 'opencode',
-      providerName: 'OpenCode',
-      limit: { context: 200000 },
-    },
-    {
-      id: 'gemini-3-flash',
-      name: 'Gemini 3 Flash',
-      providerId: 'opencode',
-      providerName: 'OpenCode',
-      limit: { context: 1048576 },
-    },
-    {
-      id: 'gemini-3-pro',
-      name: 'Gemini 3 Pro',
-      providerId: 'opencode',
-      providerName: 'OpenCode',
-      limit: { context: 1048576 },
-    },
-  ]
+  const { data: providerData } = useQuery<ProviderResponse>({
+    queryKey: ['opencode-models', projectId],
+    enabled: Boolean(projectId),
+    staleTime: 60_000,
+    queryFn: async () => http.get(`api/agent/${projectId}/provider`).json<ProviderResponse>(),
+  })
+
+  const availableModels = useMemo(() => {
+    if (!providerData) return FALLBACK_MODELS
+    const provider = providerData.all?.find((item) => item.id === 'opencode')
+    if (!provider?.models) return []
+    return FALLBACK_MODELS.filter((model) => Boolean(provider.models[model.id]))
+  }, [providerData])
 
   const handleModelChange = (modelId: string, providerId: string) => {
     setSelectedModel({ modelId, providerId })
   }
+
+  useEffect(() => {
+    if (!availableModels.length) return
+    if (selectedModel) {
+      const exists = availableModels.some(
+        (model) =>
+          model.id === selectedModel.modelId && model.providerId === selectedModel.providerId,
+      )
+      if (exists) return
+    }
+    const fallback = availableModels[0]
+    if (!fallback) return
+    setSelectedModel({ modelId: fallback.id, providerId: fallback.providerId })
+  }, [availableModels, selectedModel])
 
   // Reset state on session change
   useEffect(() => {
@@ -516,16 +587,28 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                 <History className="size-4" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64 max-h-72 overflow-y-auto">
-              {sessions.map((s) => (
-                <DropdownMenuItem
-                  key={s.id}
-                  onClick={() => projectId && setActiveSession(projectId, s.id)}
-                  className="gap-2"
-                >
-                  {s.id === activeId ? <Check className="size-4" /> : <span className="w-4" />}
-                  <span className="truncate">{formatTitle(s.title || 'Untitled')}</span>
-                </DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-64">
+              {sessionTree.map((s) => (
+                <div key={s.id}>
+                  <DropdownMenuItem
+                    onClick={() => projectId && setActiveSession(projectId, s.id)}
+                    className={cn('gap-2', s.id === activeId && 'bg-accent')}
+                  >
+                    <Chat weight={s.id === activeId ? 'fill' : 'regular'} className="size-4" />
+                    <span className="truncate">{formatTitle(s.title || 'Untitled')}</span>
+                  </DropdownMenuItem>
+
+                  {s.subs.map((sub) => (
+                    <DropdownMenuItem
+                      key={sub.id}
+                      onClick={() => projectId && setActiveSession(projectId, sub.id)}
+                      className={cn('gap-1.5 pl-5', sub.id === activeId ? 'bg-accent' : 'text-muted-foreground')}
+                    >
+                      <ArrowElbowDownRight className="size-3" />
+                      <span className="truncate text-xs">{formatTitle(sub.title || 'Task')}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </div>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>

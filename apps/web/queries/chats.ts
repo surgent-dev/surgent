@@ -68,6 +68,7 @@ async function sendMessage(
   files?: FilePartInput[],
   model?: string,
   providerID?: string,
+  variant?: string,
 ): Promise<Message> {
   const parts: Array<{
     type: string
@@ -102,6 +103,9 @@ async function sendMessage(
 
   if (model && model.trim()) {
     body.model = { providerID, modelID: model }
+  }
+  if (variant && variant.trim()) {
+    body.variant = variant
   }
 
   const data = await http
@@ -164,10 +168,11 @@ export function useSendMessage(projectId?: string) {
       files?: FilePartInput[]
       model?: string
       providerID?: string
+      variant?: string
     }
   >({
-    mutationFn: ({ sessionId, text, agent, files, model, providerID }) =>
-      sendMessage(projectId as string, sessionId, text, agent, files, model, providerID),
+    mutationFn: ({ sessionId, text, agent, files, model, providerID, variant }) =>
+      sendMessage(projectId as string, sessionId, text, agent, files, model, providerID, variant),
   })
 }
 

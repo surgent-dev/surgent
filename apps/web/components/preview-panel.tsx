@@ -524,9 +524,9 @@ export default function PreviewPanel({
   const activeSessionId = useSandbox((s) => (projectId ? s.activeSessionId[projectId] : undefined))
 
   // Fetch diffs for changes tab
-  const shouldFetchDiffs = type === 'changes' && !tab?.diffs && !tab?.messageId
+  const shouldFetchDiffs = type === 'changes' && !tab?.diffs
   const diffSessionId = shouldFetchDiffs ? tab?.sessionId || activeSessionId : undefined
-  const diffMessageId = shouldFetchDiffs && tab?.messageId ? tab.messageId : undefined
+  const diffMessageId = shouldFetchDiffs ? tab?.messageId : undefined
   const { data: messageDiffs, isLoading: diffsLoading } = useSessionDiff(
     projectId,
     diffSessionId,

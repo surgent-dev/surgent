@@ -21,6 +21,7 @@ type Props = {
     files?: FilePart[],
     model?: string,
     providerID?: string,
+    variant?: string,
   ) => void | Promise<void>
   disabled?: boolean
   placeholder?: string
@@ -40,7 +41,12 @@ type Props = {
 
 // Fallback models when no providers are connected
 const FALLBACK_MODELS: ProviderModel[] = [
-  { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', providerId: 'opencode', providerName: 'OpenCode' },
+  {
+    id: 'gpt-5.2-codex',
+    name: 'GPT-5.2 Codex',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+  },
   {
     id: 'claude-opus-4-5',
     name: 'Claude Opus 4.5',
@@ -53,11 +59,45 @@ const FALLBACK_MODELS: ProviderModel[] = [
     providerId: 'opencode',
     providerName: 'OpenCode',
   },
-  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', providerId: 'opencode', providerName: 'OpenCode' },
+  {
+    id: 'gemini-3-pro',
+    name: 'Gemini 3 Pro',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+  },
 ]
 
 const MAX_FILES = 5
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
+// Provider reasoning variants (1:1 mapping to UI levels)
+// OpenAI: 1x=low, 2x=medium, 3x=high, 4x=xhigh
+// Claude: 1x=high, 2x=max
+// Gemini: 1x=low, 2x=high
+type Provider = 'openai' | 'claude' | 'gemini'
+
+const PROVIDER_VARIANTS: Record<Provider, readonly string[]> = {
+  openai: ['low', 'medium', 'high', 'xhigh'],
+  claude: ['high', 'max'],
+  gemini: ['low', 'high'],
+}
+
+function detectProvider(modelId?: string): Provider {
+  const id = modelId?.toLowerCase() ?? ''
+  if (id.includes('claude')) return 'claude'
+  if (id.includes('gemini')) return 'gemini'
+  return 'openai'
+}
+
+function getReasoningConfig(modelId?: string) {
+  const provider = detectProvider(modelId)
+  const variants = PROVIDER_VARIANTS[provider]
+  return {
+    variants,
+    maxLevel: variants.length - 1,
+    getVariant: (level: number) => variants[Math.min(level, variants.length - 1)] ?? variants[0],
+  }
+}
 
 export default function ChatInput({
   onSubmit,
@@ -85,6 +125,7 @@ export default function ChatInput({
   const [showSubagentDropdown, setShowSubagentDropdown] = useState(false)
   const [subagentFilter, setSubagentFilter] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const [level, setLevel] = useState<number>(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dragCounter = useRef(0)
@@ -98,6 +139,18 @@ export default function ChatInput({
     }
     return models[0]
   }, [models, selectedModel])
+  const reasoning = useMemo(() => getReasoningConfig(currentModel?.id), [currentModel?.id])
+  const currentVariant = reasoning.getVariant(level)
+  const levelTone = useMemo(() => {
+    const ratio = reasoning.maxLevel > 0 ? level / reasoning.maxLevel : 1
+    if (ratio < 0.5) return 'text-muted-foreground'
+    if (ratio < 1) return 'text-foreground'
+    return 'text-brand'
+  }, [level, reasoning.maxLevel])
+
+  useEffect(() => {
+    setLevel(0)
+  }, [currentModel?.id])
 
   const handleModelSelect = (modelId: string, providerId: string) => {
     onModelChange?.(modelId, providerId)
@@ -213,9 +266,9 @@ export default function ChatInput({
     setValue('')
     setAttachments([])
     setSelectedSubagent(undefined)
-    const model = currentModel ?? models[0] ?? FALLBACK_MODELS[0]
+    const model = currentModel ?? models[0]
     if (!model) return
-    onSubmit(text, fileParts.length ? fileParts : undefined, model.id, model.providerId)
+    onSubmit(text, fileParts.length ? fileParts : undefined, model.id, model.providerId, currentVariant)
   }
 
   // Handle keyboard navigation in subagent dropdown
@@ -429,6 +482,25 @@ export default function ChatInput({
               selectedModel={selectedModel}
               onSelect={handleModelSelect}
             />
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setLevel((v) => (v + 1) % reasoning.variants.length)}
+                  className={cn(
+                    'h-8 px-2.5 text-xs rounded-lg transition-all flex items-center gap-2 outline-none border border-border/50',
+                    'hover:bg-muted/60 active:translate-y-[1px]',
+                  )}
+                >
+                  <span className="text-muted-foreground">Reasoning</span>
+                  <span className={cn('font-medium capitalize', levelTone)}>{currentVariant}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={8}>
+                Click to cycle
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           <Button

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import type {
   Message,
   Part,
@@ -12,9 +12,44 @@ import type {
   PatchPart,
   FileDiff,
 } from '@opencode-ai/sdk'
+
+// Type guards
+function isToolPart(p: Part): p is ToolPart {
+  return p.type === 'tool'
+}
+
+function isPatchPart(p: Part): p is PatchPart {
+  return p.type === 'patch'
+}
+
+function isTextPart(p: Part): p is TextPart {
+  return p.type === 'text'
+}
+
+function isFilePart(p: Part): p is FilePart {
+  return p.type === 'file'
+}
+
+function isReasoningPart(p: Part): p is ReasoningPart {
+  return p.type === 'reasoning'
+}
+
+// Utility for safely accessing input from non-pending tool state
+function getToolInput(part: ToolPart): Record<string, unknown> | undefined {
+  if (part.state.status === 'pending') return undefined
+  return part.state.input as Record<string, unknown>
+}
+
+// Utility for safely accessing object values
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return undefined
+}
 import {
   AlertCircle,
-  Bot,
+  ArrowDown,
   CheckCircle2,
   Eye,
   FilePenLine,
@@ -32,6 +67,8 @@ import { ShimmeringText } from '@/components/ui/shimmer-text'
 import { Markdown } from '@/components/ui/markdown'
 import { useRespondPermission } from '@/queries/chats'
 import useAgentStream from '@/lib/use-agent-stream'
+import { computeWorkingFromParts } from '@/lib/agent-working'
+import { useSandbox } from '@/hooks/use-sandbox'
 import MessageDiffBadge from './message-diff-badge'
 
 type PermissionResponse = 'once' | 'always' | 'reject'
@@ -48,14 +85,14 @@ const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: stri
   webfetch: { icon: Globe, done: 'Fetched', doing: 'Fetching...' },
   todowrite: { icon: ListTodo, done: 'Todos', doing: 'Updating...' },
   todoread: { icon: ListTodo, done: 'Todos', doing: 'Loading...' },
-  task: { icon: Bot, done: 'Subagent', doing: 'Subagent...' },
+  task: { icon: Terminal, done: 'Task', doing: 'Running...' },
   dev: { icon: Play, done: 'Started', doing: 'Starting...' },
   devLogs: { icon: Terminal, done: 'Logs', doing: 'Loading...' },
 }
 
 function getTarget(part: ToolPart): string | undefined {
-  if (part.state.status === 'pending') return
-  const input = part.state.input as Record<string, unknown>
+  const input = getToolInput(part)
+  if (!input) return undefined
   if (['read', 'write', 'edit'].includes(part.tool))
     return String(input.filePath || '')
       .split(/[/\\]/)
@@ -70,6 +107,37 @@ function getTarget(part: ToolPart): string | undefined {
     if (typeof URL.canParse === 'function' && URL.canParse(url)) return new URL(url).hostname
     return url
   }
+}
+
+function getSessionId(value?: unknown): string | undefined {
+  const meta = asRecord(value)
+  if (!meta) return undefined
+  if (typeof meta.sessionId === 'string') return meta.sessionId
+  if (typeof meta.sessionID === 'string') return meta.sessionID
+  if (typeof meta.session_id === 'string') return meta.session_id
+  if (typeof meta.subSessionId === 'string') return meta.subSessionId
+  if (typeof meta.subSessionID === 'string') return meta.subSessionID
+  if (typeof meta.sub_session_id === 'string') return meta.sub_session_id
+  const session = asRecord(meta.session)
+  if (session && typeof session.id === 'string') return session.id
+  return undefined
+}
+
+function getSubagentName(part: ToolPart): string | undefined {
+  if (part.tool !== 'task') return undefined
+  const input = getToolInput(part)
+  if (!input) return undefined
+  if (typeof input.subagent_type === 'string') return input.subagent_type
+  if (typeof input.agent === 'string') return input.agent
+  return undefined
+}
+
+function getTaskDescription(part: ToolPart): string | undefined {
+  if (part.tool !== 'task') return undefined
+  const input = getToolInput(part)
+  if (!input) return undefined
+  if (typeof input.description === 'string' && input.description.trim() !== '') return input.description
+  return undefined
 }
 
 function formatValue(val: unknown): string {
@@ -99,17 +167,16 @@ function groupTurns(messages: Message[]): Turn[] {
 function countFileModifications(timeline: Part[]): number {
   const modifiedFiles = new Set<string>()
   for (const p of timeline) {
-    if (p.type === 'patch') {
-      const patch = p as PatchPart
-      for (const file of patch.files) modifiedFiles.add(file)
+    if (isPatchPart(p)) {
+      for (const file of p.files) modifiedFiles.add(file)
       continue
     }
-    if (p.type !== 'tool') continue
-    const toolPart = p as ToolPart
-    if (!FILE_MODIFYING_TOOLS.has(toolPart.tool)) continue
-    if (toolPart.state.status !== 'completed') continue
-    const input = toolPart.state.input as Record<string, unknown>
-    const filePath = String(input.filePath || input.file_path || '')
+    if (!isToolPart(p)) continue
+    if (!FILE_MODIFYING_TOOLS.has(p.tool)) continue
+    if (p.state.status !== 'completed') continue
+    const input = getToolInput(p)
+    if (!input) continue
+    const filePath = String(input.filePath || input.file_path || input.path || input.file || '')
     if (filePath) modifiedFiles.add(filePath)
   }
   return modifiedFiles.size
@@ -117,14 +184,46 @@ function countFileModifications(timeline: Part[]): number {
 
 type TodoItem = { id?: string; content?: string; status?: string }
 
+// Error type for API responses
+type ApiErrorInfo = {
+  code?: string
+  data?: { code?: string; message?: string }
+  message?: string
+  name?: string
+}
+
+// Extract error from message (messages may have error or info.error)
+function getMessageError(m: Message): ApiErrorInfo | undefined {
+  const record = m as Record<string, unknown>
+  const error = asRecord(record.error)
+  if (error) return error as ApiErrorInfo
+  const info = asRecord(record.info)
+  if (info) {
+    const infoError = asRecord(info.error)
+    if (infoError) return infoError as ApiErrorInfo
+  }
+  return undefined
+}
+
+// Extract diffs from message summary
+function getMessageDiffs(m: Message): FileDiff[] | undefined {
+  const summary = asRecord(m.summary)
+  if (!summary) return undefined
+  if (Array.isArray(summary.diffs)) return summary.diffs as FileDiff[]
+  return undefined
+}
+
 function getTodosFromToolPart(part: ToolPart): TodoItem[] {
-  const input = part.state.status !== 'pending' ? (part.state.input as Record<string, unknown>) : {}
-  if (Array.isArray(input?.todos)) return input.todos as TodoItem[]
+  const input = getToolInput(part)
+  if (input && Array.isArray(input.todos)) {
+    return input.todos as TodoItem[]
+  }
   if (part.state.status !== 'completed') return []
   try {
     const val =
       typeof part.state.output === 'string' ? JSON.parse(part.state.output) : part.state.output
-    return Array.isArray(val) ? (val as TodoItem[]) : []
+    if (Array.isArray(val)) return val as TodoItem[]
+    return []
   } catch {
     return []
   }
@@ -187,6 +286,8 @@ function Tool({
   onRespondPermission,
   responding,
   respondError,
+  defaultExpanded,
+  compact,
 }: {
   part: ToolPart
   projectId?: string
@@ -194,15 +295,124 @@ function Tool({
   onRespondPermission?: (permission: Permission, response: PermissionResponse) => void
   responding?: boolean
   respondError?: string
+  defaultExpanded?: boolean
+  compact?: boolean
 }) {
-  const [expanded, setExpanded] = useState(false)
   const cfg = TOOLS[part.tool] || { icon: FileText, done: part.tool, doing: 'Working...' }
   const Icon = cfg.icon
   const target = getTarget(part)
-  const running = part.state.status === 'running' || part.state.status === 'pending'
+  const subagentName = getSubagentName(part)
+  const taskDescription = getTaskDescription(part)
+  const taskRunning = part.state.status === 'running' || part.state.status === 'pending'
   const meta = part.state.status === 'pending' ? undefined : part.state.metadata
-  const subSessionId =
-    part.tool === 'task' && typeof meta?.sessionId === 'string' ? meta.sessionId : undefined
+  const input = part.state.status === 'pending' ? undefined : part.state.input
+  const nextSubSessionId =
+    part.tool === 'task'
+      ? getSessionId(meta) || getSessionId(part.metadata) || getSessionId(input)
+      : undefined
+  const [subSessionId, setSubSessionId] = useState(nextSubSessionId)
+  const isSubagentTask = part.tool === 'task'
+  const [subWorking, setSubWorking] = useState<boolean | undefined>(undefined)
+  const [subDiffCount, setSubDiffCount] = useState<number | undefined>(undefined)
+  const openChangesTab = useSandbox((s) => s.openChangesTab)
+  const running = isSubagentTask ? subWorking ?? taskRunning : taskRunning
+  const compactMode = compact === true
+
+  // Track expanded state - auto-expand when running
+  const [expanded, setExpanded] = useState(defaultExpanded ?? true)
+  const [wasRunning, setWasRunning] = useState(running)
+  const isExpanded = compactMode ? false : expanded
+
+  // Subagent tasks: auto-expand when running, auto-collapse when done
+  useEffect(() => {
+    if (isSubagentTask) {
+      const isRunning = subWorking ?? taskRunning
+      if (!wasRunning && isRunning) setExpanded(true)
+      if (wasRunning && !isRunning) setExpanded(false)
+      setWasRunning(isRunning)
+      return
+    }
+    if (wasRunning && !running) setExpanded(false)
+    setWasRunning(running)
+  }, [isSubagentTask, running, subWorking, taskRunning, wasRunning])
+
+  useEffect(() => {
+    if (!nextSubSessionId || nextSubSessionId === subSessionId) return
+    setSubSessionId(nextSubSessionId)
+    setSubWorking(undefined)
+    setSubDiffCount(undefined)
+  }, [nextSubSessionId, subSessionId])
+
+  // Subagent tasks with sliding window view
+  if (isSubagentTask && projectId) {
+    return (
+      <div className={permission ? 'space-y-2' : undefined}>
+        {/* Header */}
+        <button
+          onClick={() => setExpanded((s) => !s)}
+          className="group flex items-center gap-2.5 w-full text-left py-1"
+        >
+          {running ? (
+            <span className="size-2 rounded-full bg-brand animate-pulse shrink-0" />
+          ) : (
+            <span className="size-2 rounded-full bg-muted-foreground/30 shrink-0" />
+          )}
+          <span className="text-sm text-foreground truncate">
+            <span>{taskDescription || target || 'Sub-assistant'}</span>
+            {subagentName && (
+              <>
+                <span className="text-muted-foreground/40"> — </span>
+                {running ? (
+                  <ShimmeringText text={`@${subagentName}`} duration={0.6} className="text-brand/80" />
+                ) : (
+                  <span className="text-brand/70">@{subagentName}</span>
+                )}
+              </>
+            )}
+          </span>
+          {!running && subDiffCount !== undefined && subDiffCount > 0 && (
+            <span
+              role="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                openChangesTab?.(undefined, subSessionId)
+              }}
+              className="ml-2 text-[10px] text-muted-foreground/70 hover:text-foreground bg-muted hover:bg-muted/80 px-1.5 py-0.5 rounded-full cursor-pointer transition-colors"
+            >
+              {subDiffCount} file{subDiffCount !== 1 ? 's' : ''} changed
+            </span>
+          )}
+          <span className="ml-auto text-xs text-muted-foreground/50 group-hover:text-muted-foreground">
+            {expanded ? 'Collapse' : 'Expand'}
+          </span>
+        </button>
+
+        {/* Sliding window content */}
+        {subSessionId && (
+          <div className={expanded ? 'block' : 'hidden'}>
+            <SubagentStream
+              projectId={projectId}
+              sessionId={subSessionId}
+              onWorkingChange={setSubWorking}
+              onDiffCountChange={setSubDiffCount}
+            />
+          </div>
+        )}
+        {expanded && !subSessionId && running && (
+          <div className="text-sm text-muted-foreground/50 py-2 pl-4">Starting...</div>
+        )}
+
+        {permission && onRespondPermission && (
+          <PermissionPrompt
+            permission={permission}
+            onRespond={(response) => onRespondPermission(permission, response)}
+            responding={responding === true}
+            error={respondError}
+          />
+        )}
+      </div>
+    )
+  }
 
   const header = (() => {
     if (running) {
@@ -229,21 +439,39 @@ function Tool({
 
     return (
       <div className="group flex items-center gap-1 py-0.5 sm:py-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
-        <Icon className={`size-2.5 sm:size-3.5 shrink-0 ${expanded ? 'text-foreground' : ''}`} />
+        <Icon className={`size-2.5 sm:size-3.5 shrink-0 ${isExpanded ? 'text-foreground' : ''}`} />
         <span>{cfg.done}</span>
         {target && (
           <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">
             {target}
           </code>
         )}
-        <span
-          className={`text-[10px] transition-opacity ${expanded ? 'opacity-60' : 'opacity-0 group-hover:opacity-60'}`}
-        >
-          {expanded ? '▾' : '▸'}
-        </span>
+        {!compactMode && (
+          <span
+            className={`text-[10px] transition-opacity ${isExpanded ? 'opacity-60' : 'opacity-0 group-hover:opacity-60'}`}
+          >
+            {isExpanded ? '▾' : '▸'}
+          </span>
+        )}
       </div>
     )
   })()
+
+  if (compactMode) {
+    return (
+      <div className={permission ? 'space-y-2' : undefined}>
+        {header}
+        {permission && onRespondPermission && (
+          <PermissionPrompt
+            permission={permission}
+            onRespond={(response) => onRespondPermission(permission, response)}
+            responding={responding === true}
+            error={respondError}
+          />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className={permission ? 'space-y-2' : undefined}>
@@ -256,10 +484,6 @@ function Tool({
 
       {expanded && (
         <div className="ml-3 sm:ml-4 pl-2 sm:pl-3 border-l-2 border-muted space-y-2 text-[11px] sm:text-xs">
-          {part.tool === 'task' && projectId && subSessionId && (
-            <SubagentStream projectId={projectId} sessionId={subSessionId} />
-          )}
-
           {part.tool !== 'task' && part.state.status !== 'pending' && (
             <div>
               <div className="text-muted-foreground/70 font-medium mb-1">Input</div>
@@ -299,28 +523,114 @@ function Tool({
   )
 }
 
-function SubagentStream({ projectId, sessionId }: { projectId: string; sessionId: string }) {
-  const { messages, parts, permissions, loading, connected } = useAgentStream({
+function SubagentStream({
+  projectId,
+  sessionId,
+  onWorkingChange,
+  onDiffCountChange,
+}: {
+  projectId: string
+  sessionId: string
+  onWorkingChange?: (working: boolean) => void
+  onDiffCountChange?: (count: number) => void
+}) {
+  const { messages, parts, permissions, status, loading, connected, lastAt } = useAgentStream({
     projectId,
     sessionId,
   })
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const stickRef = useRef(true)
+  const [showJump, setShowJump] = useState(false)
+  const [diffCount, setDiffCount] = useState<number | undefined>(undefined)
+  const working = useMemo(() => {
+    if (status?.type) return status.type !== 'idle'
+    const timeline = messages.flatMap((m) => parts[m.id] || [])
+    return computeWorkingFromParts(timeline)
+  }, [status, messages, parts])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+      const nearBottom = distance < 80
+      stickRef.current = nearBottom
+      setShowJump(!nearBottom)
+    }
+    el.addEventListener('scroll', onScroll)
+    onScroll()
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    if (!stickRef.current) return
+    el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
+    setShowJump((value) => (value ? false : value))
+  }, [lastAt])
+
+  useEffect(() => {
+    onWorkingChange?.(working)
+  }, [onWorkingChange, working])
+
+  useEffect(() => {
+    if (working) {
+      if (diffCount !== undefined) setDiffCount(undefined)
+      return
+    }
+    if (messages.length === 0) return
+    const timeline = messages.flatMap((m) => parts[m.id] || [])
+    const next = countFileModifications(timeline)
+    if (next === diffCount) return
+    setDiffCount(next)
+    onDiffCountChange?.(next)
+  }, [working, messages, parts, diffCount, onDiffCountChange])
+
+  if (messages.length === 0) {
+    return (
+      <div className="pl-4 border-l-2 border-border/40 text-sm text-muted-foreground/50 py-1">
+        {!connected
+          ? 'Connecting...'
+          : loading
+            ? 'Loading...'
+            : 'Working...'}
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span
-          className={`size-1.5 rounded-full ${connected ? 'bg-success' : 'bg-muted-foreground/40'}`}
+    <div className="relative pl-4 border-l-2 border-border/40">
+      <div ref={scrollRef} className="max-h-96 overflow-y-auto pr-2">
+        <AgentThread
+          projectId={projectId}
+          sessionId={sessionId}
+          messages={messages}
+          partsMap={parts}
+          permissions={permissions}
+          isWorking={working}
+          thoughtsStyle="inline"
+          thoughtsDefaultOpen
+          showActions={false}
+          toolDefaultExpanded={false}
+          toolMode="compact"
         />
-        <code className="text-[10px]">session:{sessionId.slice(0, 8)}</code>
-        {loading && <Loader2 className="size-3 animate-spin" />}
       </div>
-      <AgentThread
-        projectId={projectId}
-        sessionId={sessionId}
-        messages={messages}
-        partsMap={parts}
-        permissions={permissions}
-      />
+      {showJump && (
+        <button
+          onClick={() => {
+            const el = scrollRef.current
+            if (!el) return
+            el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+            stickRef.current = true
+            setShowJump(false)
+          }}
+          className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/80 shadow-sm"
+        >
+          <ArrowDown className="size-3" />
+          Latest
+        </button>
+      )}
     </div>
   )
 }
@@ -368,6 +678,20 @@ function Todos({ part }: { part: ToolPart }) {
       ) : (
         <p className="text-[11px] sm:text-xs text-muted-foreground">No tasks yet</p>
       )}
+    </div>
+  )
+}
+
+function SubagentThought({ text, streaming }: { text: string; streaming: boolean }) {
+  return (
+    <div className="py-0.5 text-[11px] sm:text-sm text-muted-foreground">
+      {text ? (
+        <Markdown className="prose prose-sm max-w-none prose-muted **:text-[11px] sm:**:text-sm">
+          {text}
+        </Markdown>
+      ) : streaming ? (
+        <ShimmeringText text="Thinking..." duration={0.3} />
+      ) : null}
     </div>
   )
 }
@@ -430,16 +754,7 @@ function FileThumb({ file }: { file: FilePart }) {
   )
 }
 
-function ApiError({
-  error,
-}: {
-  error: {
-    code?: string
-    data?: { code?: string; message?: string }
-    message?: string
-    name?: string
-  }
-}) {
+function ApiError({ error }: { error: ApiErrorInfo }) {
   const code = error?.code || error?.data?.code
   const msg = error?.data?.message || error?.message || error?.name || 'Request failed'
   const isContext = code === 'context_length_exceeded' || msg.includes('context')
@@ -464,6 +779,11 @@ export function AgentThread({
   permissions,
   isWorking,
   onRevert,
+  thoughtsStyle = 'toggle',
+  thoughtsDefaultOpen = false,
+  showActions = true,
+  toolDefaultExpanded = false,
+  toolMode = 'full',
 }: {
   projectId?: string
   sessionId: string
@@ -472,6 +792,11 @@ export function AgentThread({
   permissions?: Permission[]
   isWorking?: boolean
   onRevert?: (messageId: string) => void
+  thoughtsStyle?: 'toggle' | 'inline'
+  thoughtsDefaultOpen?: boolean
+  showActions?: boolean
+  toolDefaultExpanded?: boolean
+  toolMode?: 'full' | 'compact'
 }) {
   const [openThoughts, setOpenThoughts] = useState<Record<string, boolean>>({})
   const [permissionErrors, setPermissionErrors] = useState<Record<string, string>>({})
@@ -491,10 +816,9 @@ export function AgentThread({
     const ids = new Set<string>()
     messages.forEach((m) => {
       ;(partsMap[m.id] ?? []).forEach((p) => {
-        if (p.type !== 'tool') return
-        const toolPart = p as ToolPart
-        if (toolPart.tool === 'todoread') return
-        if (toolPart.callID) ids.add(toolPart.callID)
+        if (!isToolPart(p)) return
+        if (p.tool === 'todoread') return
+        if (p.callID) ids.add(p.callID)
       })
     })
     return ids
@@ -527,7 +851,7 @@ export function AgentThread({
 
   const getText = (m: Message) => {
     const fromParts = (partsMap[m.id] ?? [])
-      .filter((p): p is TextPart => p.type === 'text')
+      .filter(isTextPart)
       .filter((p) => !p.synthetic && !p.ignored)
       .map((p) => p.text)
       .join('\n')
@@ -542,7 +866,7 @@ export function AgentThread({
   }
 
   const getFiles = (m: Message) =>
-    partsMap[m.id]?.filter((p): p is FilePart => p.type === 'file') ?? []
+    partsMap[m.id]?.filter(isFilePart) ?? []
 
   const renderPart = (p: Part) => {
     if (p.type === 'subtask') {
@@ -559,30 +883,31 @@ export function AgentThread({
       )
     }
 
-    if (p.type === 'reasoning') {
-      const text = (p as ReasoningPart).text?.replace('[REDACTED]', '').trim() || ''
-      const streaming = !(p as ReasoningPart).time?.end
+    if (isReasoningPart(p)) {
+      const text = p.text?.replace('[REDACTED]', '').trim() || ''
+      const streaming = !p.time?.end
       if (!text && !streaming) return null
+      if (thoughtsStyle === 'inline')
+        return <SubagentThought key={p.id} text={text} streaming={streaming} />
       return (
         <Thinking
           key={p.id}
           text={text}
           streaming={streaming}
-          open={openThoughts[p.id] ?? streaming}
+          open={openThoughts[p.id] ?? (thoughtsDefaultOpen ? true : streaming)}
           toggle={() => setOpenThoughts((s) => ({ ...s, [p.id]: !s[p.id] }))}
         />
       )
     }
 
-    if (p.type === 'tool') {
-      const toolPart = p as ToolPart
-      const permission = toolPart.callID ? permissionByCallId.get(toolPart.callID) : undefined
-      if (toolPart.tool === 'todoread') return null
-      if (toolPart.tool === 'todowrite') {
-        if (!permission) return <Todos key={p.id} part={toolPart} />
+    if (isToolPart(p)) {
+      const permission = p.callID ? permissionByCallId.get(p.callID) : undefined
+      if (p.tool === 'todoread') return null
+      if (p.tool === 'todowrite') {
+        if (!permission) return <Todos key={p.id} part={p} />
         return (
           <div key={p.id} className="space-y-2">
-            <Todos part={toolPart} />
+            <Todos part={p} />
             <PermissionPrompt
               permission={permission}
               onRespond={(response) => respondToPermission(permission, response)}
@@ -598,7 +923,7 @@ export function AgentThread({
       return (
         <Tool
           key={p.id}
-          part={toolPart}
+          part={p}
           projectId={projectId}
           permission={permission}
           onRespondPermission={respondToPermission}
@@ -607,24 +932,27 @@ export function AgentThread({
             respondPermission.variables?.permissionId === permission?.id
           }
           respondError={permission ? permissionErrors[permission.id] : undefined}
+          defaultExpanded={toolDefaultExpanded}
+          compact={toolMode === 'compact'}
         />
       )
     }
 
-    if (p.type === 'file')
+    if (isFilePart(p)) {
       return (
         <div key={p.id} className="flex gap-1 py-1">
-          <FileThumb file={p as FilePart} />
+          <FileThumb file={p} />
         </div>
       )
+    }
 
     // Hide step markers - these are internal and noisy
-    if (p.type === 'step-start' || p.type === 'step-finish' || p.type === 'patch') {
+    if (p.type === 'step-start' || p.type === 'step-finish' || isPatchPart(p)) {
       return null
     }
 
-    if (p.type === 'text') {
-      const content = (p as TextPart).text?.trim()
+    if (isTextPart(p)) {
+      const content = p.text?.trim()
       if (!content) return null
       return (
         <Markdown
@@ -643,23 +971,27 @@ export function AgentThread({
     <div className="space-y-4 sm:space-y-6">
       {turns.map((turn, idx) => {
         const timeline = turn.assistants.flatMap((m) => partsMap[m.id] || [])
-        const messageDiffs = (turn.user.summary as { diffs?: FileDiff[] })?.diffs
+        const messageDiffs = getMessageDiffs(turn.user)
         const fileModCount = messageDiffs?.length ?? countFileModifications(timeline)
         const lastAssistantId = turn.assistants[turn.assistants.length - 1]?.id
         const toolWorking = timeline.some((p) => {
-          if (p.type !== 'tool') return false
-          const toolPart = p as ToolPart
-          return toolPart.state.status === 'running' || toolPart.state.status === 'pending'
+          if (!isToolPart(p)) return false
+          return p.state.status === 'running' || p.state.status === 'pending'
         })
 
         const text = getText(turn.user)
         const userFiles = getFiles(turn.user)
         const userParts = partsMap[turn.user.id] ?? []
-        const isSyntheticUser = userParts.some(
-          (p) => p.type === 'text' && (p as TextPart).synthetic,
-        )
+        const isSyntheticUser = userParts.some((p) => isTextPart(p) && p.synthetic)
         const isLast = idx === turns.length - 1
         const lastAssistant = turn.assistants[turn.assistants.length - 1]
+        const assistantDone = !isLast
+          ? true
+          : lastAssistant?.time
+            ? 'completed' in lastAssistant.time
+              ? !!lastAssistant.time.completed
+              : false
+            : false
         const working = isLast
           ? (isWorking ??
             !!(
@@ -671,6 +1003,8 @@ export function AgentThread({
         const showPlanning = isLast && !!working && !toolWorking
         const showSending = isLast && userParts.length === 0 && !text && userFiles.length === 0
         const showUser = !isSyntheticUser && (userFiles.length > 0 || !!text || showSending)
+        const showActionsRow =
+          showActions && assistantDone && !showSending && (fileModCount > 0 || onRevert) && lastAssistantId
 
         return (
           <div key={turn.user.id} className="space-y-2 sm:space-y-3">
@@ -699,22 +1033,7 @@ export function AgentThread({
 
             <div className="space-y-1">
               {turn.assistants.map((m) => {
-                const err =
-                  (
-                    m as Message & {
-                      error?: { data?: { message?: string }; message?: string; name?: string }
-                      info?: {
-                        error?: { data?: { message?: string }; message?: string; name?: string }
-                      }
-                    }
-                  ).error ||
-                  (
-                    m as Message & {
-                      info?: {
-                        error?: { data?: { message?: string }; message?: string; name?: string }
-                      }
-                    }
-                  ).info?.error
+                const err = getMessageError(m)
                 if (!err) return null
                 const msg = err.data?.message || err.message || err.name || 'Request failed'
                 if (msg.toLowerCase().includes('abort')) return null
@@ -746,7 +1065,7 @@ export function AgentThread({
               )}
 
               {/* Actions row: diff badge + undo */}
-              {!working && (fileModCount > 0 || onRevert) && lastAssistantId && (
+              {!working && showActionsRow && (
                 <div className="flex items-center gap-2 pt-2">
                   {fileModCount > 0 && (
                     <MessageDiffBadge
