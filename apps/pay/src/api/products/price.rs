@@ -172,6 +172,46 @@ pub async fn create_product_price(
     let product_price_id = Uuid::new_v4();
     let normalized_recurring_interval = req.recurring_interval.as_ref().filter(|s| !s.is_empty());
 
+    // Check if existing prices have a different pricing model (subscription vs one-time)
+    let existing_price = sqlx::query!(
+        r#"
+        SELECT "recurringInterval" as "recurring_interval: RecurringInterval"
+        FROM product_price
+        WHERE "productId" = $1
+        LIMIT 1
+        "#,
+        product.id
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "Database error checking existing prices");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
+
+    if let Some(existing) = existing_price {
+        let existing_is_subscription = existing.recurring_interval.is_some();
+        let new_is_subscription = normalized_recurring_interval.is_some();
+
+        if existing_is_subscription && !new_is_subscription {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Cannot add one-time price to product with existing subscription prices"
+                    .to_string(),
+            ));
+        }
+        if !existing_is_subscription && new_is_subscription {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Cannot add subscription price to product with existing one-time prices"
+                    .to_string(),
+            ));
+        }
+    }
+
     let processor = state.registry.get("stripe").await.ok_or((
         StatusCode::SERVICE_UNAVAILABLE,
         "Payment processor not available".to_string(),
