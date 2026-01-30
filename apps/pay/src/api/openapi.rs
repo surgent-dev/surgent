@@ -90,7 +90,7 @@ use utoipa::{Modify, OpenApi};
         (name = "product", description = "Product and pricing management"),
         (name = "checkout", description = "Checkout session management"),
         (name = "account", description = "Payment processor account management"),
-        (name = "check", description = "Subscription access verification"),
+        (name = "check", description = "Product access verification"),
     ),
     modifiers(&SecurityAddon)
 )]

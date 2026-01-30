@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::core::auth::{AuthenticatedUser, ProjectIdQuery, resolve_project_id};
-use crate::types::SubscriptionStatus;
+use crate::types::{CheckoutMode, CheckoutStatus, SubscriptionStatus};
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -24,14 +24,14 @@ pub struct CheckResponse {
     pub allowed: bool,
 }
 
-/// Check if a customer has an active subscription to a product
+/// Check if a customer has access to a product (active subscription or completed purchase)
 #[utoipa::path(
     post,
     path = "/check",
     tag = "check",
     request_body = CheckRequest,
     responses(
-        (status = 200, description = "Subscription check result", body = CheckResponse),
+        (status = 200, description = "Product access check result", body = CheckResponse),
         (status = 401, description = "Unauthorized - invalid or missing API key"),
         (status = 404, description = "Product not found"),
         (status = 500, description = "Internal server error")
@@ -113,11 +113,47 @@ pub async fn check(
         WHERE "customerId" = $1
           AND "productId" = $2
           AND status = ANY($3::subscription_status[])
+          AND "projectId" = $4
         LIMIT 1
         "#,
         customer.id,
         product.id,
-        &[SubscriptionStatus::Active, SubscriptionStatus::Trialing] as &[SubscriptionStatus]
+        &[SubscriptionStatus::Active, SubscriptionStatus::Trialing] as &[SubscriptionStatus],
+        project_id
+    )
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
+
+    // Short-circuit: if subscription found, return allowed
+    if subscription.is_some() {
+        let response = CheckResponse { allowed: true };
+        tracing::debug!(?response, "Returning check response (subscription)");
+        return Ok(Json(response));
+    }
+
+    // Check for completed one-time purchase
+    let purchase = sqlx::query!(
+        r#"
+        SELECT id
+        FROM checkout_session
+        WHERE "customerId" = $1
+          AND "productId" = $2
+          AND mode = $3
+          AND status = $4
+          AND "projectId" = $5
+        LIMIT 1
+        "#,
+        customer.id,
+        product.id,
+        CheckoutMode::Payment as CheckoutMode,
+        CheckoutStatus::Complete as CheckoutStatus,
+        project_id
     )
     .fetch_optional(&pool)
     .await
@@ -129,7 +165,7 @@ pub async fn check(
     })?;
 
     let response = CheckResponse {
-        allowed: subscription.is_some(),
+        allowed: purchase.is_some(),
     };
     tracing::debug!(?response, "Returning check response");
 
