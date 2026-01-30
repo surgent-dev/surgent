@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { useTheme } from 'next-themes'
 import { toast } from 'react-hot-toast'
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, Sun, Moon } from 'lucide-react'
 import {
   ArrowLeft,
   RocketLaunch,
@@ -98,6 +99,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const router = useRouter()
   const searchParams = useSearchParams()
   const pathname = usePathname()
+  const { setTheme, resolvedTheme } = useTheme()
 
   // User state
   const [user, setUser] = useState<User | null>(null)
@@ -589,6 +591,13 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             <div className="px-3 py-2">
               <div className="text-sm font-medium truncate">{user?.name || 'User'}</div>
               <div className="text-xs text-muted-foreground truncate">{user?.email}</div>
+            </div>
+            <div className="h-px bg-border" />
+            <div className="px-1 py-1">
+              <DropdownMenuItem onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}>
+                {resolvedTheme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                {resolvedTheme === 'dark' ? 'Light' : 'Dark'}
+              </DropdownMenuItem>
             </div>
             <div className="h-px bg-border" />
             <div className="px-1 py-1">
