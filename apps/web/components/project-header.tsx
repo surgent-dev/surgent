@@ -71,7 +71,7 @@ interface ProjectHeaderProps {
 
 // Styles
 const headerBtn =
-  'flex items-center gap-1.5 px-4 text-sm text-muted-foreground hover:bg-muted/50 border-l transition-colors disabled:opacity-50'
+  'flex items-center gap-1.5 px-2 sm:px-4 text-sm text-muted-foreground hover:bg-muted/50 border-l transition-colors disabled:opacity-50'
 const iconBtn = 'p-1 hover:bg-background rounded transition-colors'
 
 // Status labels
@@ -314,31 +314,33 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     <>
       {/* Warning banner */}
       {!bannerDismissed && (
-        <div className="bg-warning/10 border-b border-warning/20 px-4 py-2 flex items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-3 text-sm">
+        <div className="bg-warning/10 border-b border-warning/20 px-2 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-4 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm min-w-0">
             <Warning className="size-4 text-warning shrink-0" weight="fill" />
-            <span>
+            <span className="truncate">
               <span className="font-medium">Heads up!</span> Projects may be deleted after
               inactivity.
             </span>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <Button
               variant="ghost"
               size="sm"
               onClick={handleDownload}
               disabled={downloading}
-              className="h-7 text-xs text-warning hover:bg-warning/20"
+              aria-label="Download project"
+              className="h-7 text-xs text-warning hover:bg-warning/20 px-2 sm:px-3"
             >
               {downloading ? (
-                <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                <Loader2 className="size-3.5 animate-spin sm:mr-1.5" />
               ) : (
-                <DownloadSimple className="size-3.5 mr-1.5" weight="bold" />
+                <DownloadSimple className="size-3.5 sm:mr-1.5" weight="bold" />
               )}
-              Download
+              <span className="hidden sm:inline">Download</span>
             </Button>
             <button
               onClick={() => setBannerDismissed(true)}
+              aria-label="Dismiss warning"
               className="p-1 rounded hover:bg-warning/20 text-warning"
             >
               <X className="size-4" weight="bold" />
@@ -352,7 +354,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         {/* Back */}
         <button
           onClick={() => router.push('/dashboard')}
-          className="flex items-center px-4 text-muted-foreground hover:bg-muted/50"
+          aria-label="Back to dashboard"
+          className="flex items-center px-2 sm:px-4 text-muted-foreground hover:bg-muted/50"
         >
           <ArrowLeft className="size-4" />
         </button>
@@ -360,7 +363,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         {/* Logo + Brand */}
         <button
           onClick={() => router.push('/dashboard')}
-          className="flex items-center gap-2 px-3 border-l hover:bg-muted/50"
+          className="hidden sm:flex items-center gap-2 px-3 border-l hover:bg-muted/50"
         >
           <Image src="/surgent-coin.svg" alt="Surgent" width={20} height={20} className="size-5" />
           <span className="text-sm font-medium">Surgent</span>
@@ -368,7 +371,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
         {/* Project name */}
         {isEditing ? (
-          <div className="flex items-center px-4">
+          <div className="flex items-center px-2 sm:px-4">
             <input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
@@ -377,17 +380,19 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 if (e.key === 'Enter') e.currentTarget.blur()
                 if (e.key === 'Escape') setIsEditing(false)
               }}
-              className="h-7 px-2 text-sm font-medium rounded border bg-background outline-none focus:ring-2 focus:ring-ring/50 w-40"
+              className="h-7 px-2 text-sm font-medium rounded border bg-background outline-none focus:ring-2 focus:ring-ring/50 w-28 sm:w-40"
               autoFocus
             />
           </div>
         ) : (
           <button
             onClick={handleStartEdit}
-            className="group flex items-center gap-1.5 px-4 text-sm font-medium hover:bg-muted/50"
+            className="group flex items-center gap-1.5 px-2 sm:px-4 text-sm font-medium hover:bg-muted/50 min-w-0"
           >
-            {project?.name || 'Untitled'}
-            <PencilSimple className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+            <span className="truncate max-w-[100px] sm:max-w-none">
+              {project?.name || 'Untitled'}
+            </span>
+            <PencilSimple className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
           </button>
         )}
 
@@ -395,32 +400,44 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
         {/* Status indicator */}
         {(isDeployed || isFailed) && (
-          <button onClick={() => setIsDeploymentStatusOpen(true)} className={headerBtn}>
+          <button
+            onClick={() => setIsDeploymentStatusOpen(true)}
+            aria-label={
+              isDeployed ? 'Live - View deployment status' : 'Failed - View deployment status'
+            }
+            className={headerBtn}
+          >
             <span
               className={`size-2 rounded-full ${isDeployed ? 'bg-emerald-500' : 'bg-red-500'}`}
             />
-            {isDeployed ? 'Live' : 'Failed'}
+            <span className="hidden sm:inline">{isDeployed ? 'Live' : 'Failed'}</span>
           </button>
         )}
 
         {/* Download */}
-        <button onClick={handleDownload} disabled={downloading || !projectId} className={headerBtn}>
+        <button
+          onClick={handleDownload}
+          disabled={downloading || !projectId}
+          aria-label="Download project"
+          className={headerBtn}
+        >
           {downloading ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (
             <DownloadSimple className="size-4" />
           )}
-          Download
+          <span className="hidden md:inline">Download</span>
         </button>
 
         {/* GitHub */}
         <button
           onClick={() => setIsGitHubDialogOpen(true)}
           disabled={!projectId}
+          aria-label="GitHub integration"
           className={headerBtn}
         >
           <GithubLogo className="size-4" weight="bold" />
-          GitHub
+          <span className="hidden md:inline">GitHub</span>
         </button>
 
         {/* Publish */}
@@ -428,18 +445,19 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           <DropdownMenuTrigger asChild>
             <button
               disabled={!projectId || isDeploying}
-              className="flex items-center gap-1.5 px-5 text-sm font-medium bg-brand text-brand-foreground hover:bg-brand/90 border-l disabled:opacity-50"
+              aria-label="Publish project"
+              className="flex items-center gap-1.5 px-3 sm:px-5 text-sm font-medium bg-brand text-brand-foreground hover:bg-brand/90 border-l disabled:opacity-50"
             >
               {isDeploying ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <RocketLaunch className="size-4" weight="fill" />
               )}
-              Publish
-              <CaretDown className="size-3" weight="bold" />
+              <span className="hidden sm:inline">Publish</span>
+              <CaretDown className="size-3 hidden sm:block" weight="bold" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72 p-0">
+          <DropdownMenuContent align="end" className="w-[280px] sm:w-72 p-0">
             <div className="px-3 py-2.5 border-b">
               <div className="text-sm font-medium">Publish your app</div>
             </div>
@@ -588,7 +606,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         {/* User menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center px-4 border-l hover:bg-muted/50">
+            <button
+              aria-label="User menu"
+              className="flex items-center px-2 sm:px-4 border-l hover:bg-muted/50"
+            >
               <Avatar className="size-7">
                 <AvatarImage src={user?.image} alt={user?.name || user?.email} />
                 <AvatarFallback className="bg-muted text-foreground text-xs font-medium">
