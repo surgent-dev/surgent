@@ -4,13 +4,14 @@ import { Github, Twitter } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { motion } from 'motion/react'
+import { toast } from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
 import { isWaitlistMode } from '@/lib/waitlist'
 import { WaitlistScreen } from '@/components/waitlist-screen'
 import { ChatComposer } from '@/components/chat/chat-composer'
 import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 
 // Typing placeholder hook
 function useTypingPlaceholder(placeholders: string[], typingSpeed = 50, pauseDuration = 2000) {
@@ -120,7 +121,6 @@ function IndexContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [promptValue, setPromptValue] = useState('')
   const router = useRouter()
-  const searchParams = useSearchParams()
   const typingPlaceholder = useTypingPlaceholder(typingPlaceholders)
 
   if (waitlistMode) return <WaitlistScreen />
@@ -150,14 +150,21 @@ function IndexContent() {
     }
   }
 
-  // Restore pending prompt from URL or sessionStorage after auth
+  // Handle URL params and sessionStorage
   useEffect(() => {
-    // First check URL param
-    const initialFromUrl = searchParams.get('initial')
-    if (initialFromUrl) {
-      setPromptValue(initialFromUrl)
-      // Clean up URL
-      router.replace('/', { scroll: false })
+    const url = new URL(window.location.href)
+    const initialFromUrl = url.searchParams.get('initial')
+    const error = url.searchParams.get('error')
+
+    if (initialFromUrl || error) {
+      // Clear URL immediately (sync) to prevent duplicate handling
+      url.searchParams.delete('initial')
+      url.searchParams.delete('error')
+      const nextUrl = `${url.pathname}${url.search}${url.hash}`
+      window.history.replaceState({}, '', nextUrl)
+
+      if (initialFromUrl) setPromptValue(initialFromUrl)
+      if (error) toast.error(error)
       sessionStorage.removeItem('pendingPrompt')
       return
     }
@@ -170,13 +177,11 @@ function IndexContent() {
     try {
       const { text } = JSON.parse(pending)
       sessionStorage.removeItem('pendingPrompt')
-      if (text) {
-        setPromptValue(text)
-      }
+      if (text) setPromptValue(text)
     } catch {
       sessionStorage.removeItem('pendingPrompt')
     }
-  }, [isLoggedIn, searchParams, router])
+  }, [isLoggedIn])
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">

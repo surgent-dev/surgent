@@ -29,7 +29,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`antialiased ${inter.variable} ${jetbrainsMono.variable}`}>
         <Providers>{children}</Providers>
-        <Toaster position="bottom-left" />
+        <Toaster position="top-right" />
       </body>
     </html>
   )

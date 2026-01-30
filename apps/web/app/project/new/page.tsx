@@ -42,7 +42,8 @@ function NewProjectContent() {
       })
       .catch((err) => {
         console.error('Project creation failed:', err)
-        router.replace('/?error=creation_failed')
+        const message = err?.message || 'Failed to create project'
+        router.replace(`/?error=${encodeURIComponent(message)}`)
       })
   }, [prompt, projectType, mutateAsync, router])
 
