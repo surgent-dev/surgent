@@ -35,6 +35,7 @@ import { useSessionDiff } from '@/queries/chats'
 import { useSandbox } from '@/hooks/use-sandbox'
 
 import DiffView from '@/components/diff/diff-view'
+import { ProductsSection } from '@/components/payments/products-section'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   DropdownMenu,
@@ -50,7 +51,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 
 import { cn } from '@/lib/utils'
@@ -286,8 +286,8 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
   const handleConnect = async () => {
     if (!projectId) return
     const result = await connect.mutateAsync(projectId)
-    if (result.oauth_url) {
-      window.location.href = result.oauth_url
+    if (result.oauthUrl) {
+      window.location.href = result.oauthUrl
     }
   }
 
@@ -312,19 +312,38 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
     )
   }
 
+  const hasConnectedAccount = accounts.some((a) => a.status === 'connected')
+
+  const connectedAccount = accounts.find((a) => a.status === 'connected')
+
+  const handleDisconnect = () => {
+    if (projectId && connectedAccount) {
+      setSelectedAccount(connectedAccount.id)
+      setDisconnectOpen(true)
+    }
+  }
+
   return (
-    <ScrollArea className="h-full">
-      <div className="px-3 py-4 space-y-2">
-        {accounts.map((account) => (
-          <div
-            key={account.id}
-            className="flex items-center justify-between rounded-lg border bg-background/60 px-3 py-2"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className={cn('size-2 rounded-full', getStatusDot(account.status))} />
-              <span className="font-medium text-sm truncate">{account.processor}</span>
-            </div>
-            {account.status === 'pending' ? (
+    <>
+      {hasConnectedAccount && projectId ? (
+        <ProductsSection
+          projectId={projectId}
+          stripeConnected={hasConnectedAccount}
+          stripeProcessor={connectedAccount?.processor}
+          onDisconnect={handleDisconnect}
+          isDisconnecting={disconnect.isPending}
+        />
+      ) : (
+        <div className="px-3 py-4 space-y-2 max-w-xl mx-auto">
+          {accounts.map((account) => (
+            <div
+              key={account.id}
+              className="flex items-center justify-between rounded-lg border bg-background/60 px-3 py-2"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={cn('size-2 rounded-full', getStatusDot(account.status))} />
+                <span className="font-medium text-sm truncate">{account.processor}</span>
+              </div>
               <Button
                 size="sm"
                 variant="outline"
@@ -334,63 +353,46 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
               >
                 {connect.isPending ? 'Connecting...' : 'Continue Setup'}
               </Button>
-            ) : (
-              <div className="flex items-center gap-3">
-                <span
-                  className={cn('text-xs font-medium capitalize', getStatusTone(account.status))}
-                >
-                  {formatStatus(account.status)}
-                </span>
-                <Dialog
-                  open={disconnectOpen && selectedAccount === account.id}
-                  onOpenChange={(open) => {
-                    setDisconnectOpen(open)
-                    if (!open) setSelectedAccount(null)
-                  }}
-                >
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => setSelectedAccount(account.id)}
-                    >
-                      Disconnect
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Disconnect Stripe Account</DialogTitle>
-                      <DialogDescription>
-                        Are you sure you want to disconnect your Stripe account? This will disable
-                        payment processing for this project.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setDisconnectOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() => {
-                          if (projectId) {
-                            disconnect.mutate({ projectId, accountId: account.id })
-                            setDisconnectOpen(false)
-                          }
-                        }}
-                        disabled={disconnect.isPending}
-                      >
-                        {disconnect.isPending ? 'Disconnecting...' : 'Disconnect'}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </ScrollArea>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Dialog
+        open={disconnectOpen}
+        onOpenChange={(open) => {
+          setDisconnectOpen(open)
+          if (!open) setSelectedAccount(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Disconnect Stripe Account</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to disconnect your Stripe account? This will disable payment
+              processing for this project.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisconnectOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (projectId && selectedAccount) {
+                  disconnect.mutate({ projectId, accountId: selectedAccount })
+                  setDisconnectOpen(false)
+                }
+              }}
+              disabled={disconnect.isPending}
+            >
+              {disconnect.isPending ? 'Disconnecting...' : 'Disconnect'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
@@ -596,7 +598,11 @@ export default function PreviewPanel({
           <span className="text-sm leading-none text-muted-foreground">📜︎</span>
           Server Logs
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAddTab('payments')} disabled={hasPayments} className="gap-2">
+        <DropdownMenuItem
+          onClick={() => onAddTab('payments')}
+          disabled={hasPayments}
+          className="gap-2"
+        >
           <CreditCard className="size-4 text-muted-foreground" />
           Payments
         </DropdownMenuItem>

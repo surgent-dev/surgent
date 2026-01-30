@@ -54,13 +54,16 @@ export async function createProjectOnTeam(args: {
   name: string
   deploymentType?: 'dev' | 'prod'
 }): Promise<ConvexProject> {
-  const body = await convexApi<CreateProjectResponse>(`/teams/${config.convex.teamId}/create_project`, {
-    method: 'POST',
-    body: JSON.stringify({
-      projectName: args.name,
-      deploymentType: args.deploymentType ?? 'dev',
-    }),
-  })
+  const body = await convexApi<CreateProjectResponse>(
+    `/teams/${config.convex.teamId}/create_project`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        projectName: args.name,
+        deploymentType: args.deploymentType ?? 'dev',
+      }),
+    },
+  )
 
   return {
     projectId: body.projectId,
@@ -185,7 +188,10 @@ interface ConvexFunctionResponse {
   errorData?: ConvexValue
 }
 
-async function safeConvexFunctionParse(res: Response, operation: string): Promise<ConvexFunctionResult> {
+async function safeConvexFunctionParse(
+  res: Response,
+  operation: string,
+): Promise<ConvexFunctionResult> {
   const text = await res.text()
   let body: ConvexFunctionResponse
   try {
