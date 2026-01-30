@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { toast } from 'react-hot-toast'
+import Image from 'next/image'
 import { Loader2, CheckCircle2, XCircle, Sun, Moon } from 'lucide-react'
 import {
   ArrowLeft,
@@ -356,6 +357,15 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           <ArrowLeft className="size-4" />
         </button>
 
+        {/* Logo + Brand */}
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="flex items-center gap-2 px-3 border-l hover:bg-muted/50"
+        >
+          <Image src="/surgent-coin.svg" alt="Surgent" width={20} height={20} className="size-5" />
+          <span className="text-sm font-medium">Surgent</span>
+        </button>
+
         {/* Project name */}
         {isEditing ? (
           <div className="flex items-center px-4">
@@ -594,8 +604,14 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             </div>
             <div className="h-px bg-border" />
             <div className="px-1 py-1">
-              <DropdownMenuItem onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}>
-                {resolvedTheme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+              <DropdownMenuItem
+                onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+              >
+                {resolvedTheme === 'dark' ? (
+                  <Sun className="size-4" />
+                ) : (
+                  <Moon className="size-4" />
+                )}
                 {resolvedTheme === 'dark' ? 'Light' : 'Dark'}
               </DropdownMenuItem>
             </div>
