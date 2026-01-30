@@ -136,16 +136,21 @@ fn extract_session_token(parts: &Parts) -> Option<&str> {
 
     for cookie in cookie_header.split(';') {
         let cookie = cookie.trim();
-        if let Some(value) = cookie.strip_prefix("better-auth.session_token=") {
+        // Check both regular and __Secure- prefixed cookie names
+        // Better Auth uses __Secure- prefix when crossSubDomainCookies is enabled on HTTPS
+        if let Some(value) = cookie
+            .strip_prefix("__Secure-better-auth.session_token=")
+            .or_else(|| cookie.strip_prefix("better-auth.session_token="))
+        {
             tracing::debug!(
                 token_length = value.len(),
-                "extract_session_token: Found better-auth.session_token cookie"
+                "extract_session_token: Found session token cookie"
             );
             return Some(value);
         }
     }
 
-    tracing::debug!("extract_session_token: better-auth.session_token cookie not found");
+    tracing::debug!("extract_session_token: session token cookie not found");
     None
 }
 
