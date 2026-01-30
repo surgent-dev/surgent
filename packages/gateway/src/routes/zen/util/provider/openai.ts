@@ -348,7 +348,7 @@ export function toOpenaiRequest(body: CommonRequest) {
 
   const v = body.text?.verbosity ?? body.verbosity
   const override = v === 'low' || v === 'medium' || v === 'high' ? v : undefined
-  const verbosity = override ?? (body.model === 'gpt-5-codex' ? 'medium' : 'low')
+  const verbosity = override ?? 'medium'
   const reasoning = body.reasoning
 
   return {
@@ -405,16 +405,19 @@ export function fromOpenaiResponse(resp: any): CommonResponse {
       return { id: tid, type: 'function' as const, function: { name, arguments: args } }
     })
 
-  const finish = (r: string | null) => {
-    if (r === 'stop') return 'stop'
-    if (r === 'tool_call' || r === 'tool_calls') return 'tool_calls'
-    if (r === 'length' || r === 'max_output_tokens') return 'length'
-    if (r === 'content_filter') return 'content_filter'
+  // Derive finish_reason from OpenAI Responses API fields
+  const hasFunctionCall = tcs.length > 0
+  const incompleteReason = (r as any).incomplete_details?.reason
+  const status = (r as any).status ?? (resp as any).status
+
+  const finishReason = (() => {
+    if (hasFunctionCall) return 'tool_calls'
+    if (incompleteReason === 'content_filter') return 'content_filter'
+    if (incompleteReason === 'max_output_tokens') return 'length'
+    if (status === 'completed') return 'stop'
+    if (status === 'incomplete') return 'length'
     return null
-  }
-  const finishFrom = (reason: string | null | undefined, status: string | undefined) =>
-    finish(reason ?? null) ??
-    (status === 'completed' ? 'stop' : status === 'incomplete' ? 'length' : null)
+  })()
 
   const u = (r as any).usage ?? (resp as any).usage
   const usage = (() => {
@@ -432,7 +435,6 @@ export function fromOpenaiResponse(resp: any): CommonResponse {
     }
   })()
 
-  const status = (r as any).status ?? (resp as any).status
   return {
     id,
     object: 'chat.completion',
@@ -446,7 +448,7 @@ export function fromOpenaiResponse(resp: any): CommonResponse {
           ...(text && text.length > 0 ? { content: text } : {}),
           ...(tcs.length > 0 ? { tool_calls: tcs } : {}),
         },
-        finish_reason: finishFrom((r as any).stop_reason ?? (r as any).incomplete_details?.reason, status),
+        finish_reason: finishReason,
       },
     ],
     ...(usage ? { usage } : {}),
@@ -580,17 +582,20 @@ export function fromOpenaiChunk(chunk: string): CommonChunk | string {
   }
 
   if (e === 'response.completed') {
-    const sr = (respObj as any).stop_reason ?? (json as any).stop_reason
+    // Derive finish_reason from OpenAI Responses API fields
+    const output = (respObj as any).output ?? []
+    const hasFunctionCall = output.some((o: any) => o?.type === 'function_call')
+    const incompleteReason = (respObj as any).incomplete_details?.reason
     const status = (respObj as any).status ?? (json as any).response?.status
-    const fr =
-      (() => {
-        if (sr === 'stop') return 'stop'
-        if (sr === 'tool_call' || sr === 'tool_calls') return 'tool_calls'
-        if (sr === 'length' || sr === 'max_output_tokens') return 'length'
-        if (sr === 'content_filter') return 'content_filter'
-        return null
-      })() ??
-      (status === 'completed' ? 'stop' : status === 'incomplete' ? 'length' : null)
+
+    const fr = (() => {
+      if (hasFunctionCall) return 'tool_calls'
+      if (incompleteReason === 'content_filter') return 'content_filter'
+      if (incompleteReason === 'max_output_tokens') return 'length'
+      if (status === 'completed') return 'stop'
+      if (status === 'incomplete') return 'length'
+      return null
+    })()
     out.choices.push({ index: 0, delta: {}, finish_reason: fr })
 
     const u = (respObj as any).usage ?? (json as any).response?.usage
