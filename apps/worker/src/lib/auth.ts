@@ -130,6 +130,6 @@ export const auth = betterAuth({
 
   advanced: {
     database: { generateId: 'uuid' },
-    crossSubDomainCookies: { enabled: true },
+    crossSubDomainCookies: { enabled: true, domain: '.surgent.dev' },
   },
 })
