@@ -285,7 +285,7 @@ export class SurgentStack extends cdk.Stack {
         DATABASE_MIN_CONNECTIONS: '1',
         SERVICE_PORT: '8090',
         SERVICE_HOST: '0.0.0.0',
-        SURPAY_BASE_URL: 'pay.surgent.dev',
+        SURPAY_BASE_URL: 'https://pay.surgent.dev',
         SQS_WEBHOOKS_QUEUE_URL: webhooksQueue.queueUrl,
         SQS_WEBHOOKS_DLQ_URL: webhooksDlq.queueUrl,
         RUST_LOG: 'warn,surpay=info',
