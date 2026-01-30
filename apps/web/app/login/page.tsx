@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { isWaitlistMode } from '@/lib/waitlist'
 
-export default function LoginPage() {
+function LoginContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const searchParams = useSearchParams()
@@ -106,5 +106,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginContent />
+    </Suspense>
   )
 }
