@@ -12,6 +12,7 @@ use crate::core::auth::{AuthenticatedUser, ProjectIdQuery, resolve_project_id};
 use crate::types::SubscriptionStatus;
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CheckRequest {
     pub customer_id: String,
     /// Product identifier - can be UUID or slug

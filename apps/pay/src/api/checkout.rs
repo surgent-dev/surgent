@@ -20,12 +20,14 @@ use crate::integrations::types::{CheckoutLineItem, CreateCheckoutSessionRequest}
 use crate::types::{CheckoutMode, RecurringInterval, SubscriptionStatus};
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CustomerData {
     pub email: Option<String>,
     pub name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateCheckoutRequest {
     pub customer_id: String,
     /// Product identifier - can be UUID or slug

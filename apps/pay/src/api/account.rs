@@ -210,6 +210,7 @@ pub struct Account {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectAccountRequest {
     pub processor: String,
     pub account_type: Option<String>,
@@ -723,6 +724,7 @@ pub async fn get_account(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ListAccountsQuery {
     pub project_id: Option<Uuid>,
 }
@@ -805,6 +807,7 @@ pub async fn list_accounts(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateAccountRequest {
     pub project_id: Uuid,
 }

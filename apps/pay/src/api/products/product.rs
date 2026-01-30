@@ -38,8 +38,8 @@ pub struct Product {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateProductRequest {
-    #[serde(rename = "productGroup")]
     pub product_group: String,
     pub name: String,
     pub description: Option<String>,
@@ -198,6 +198,7 @@ pub async fn create_product(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateProductRequest {
     pub name: Option<String>,
     pub description: Option<String>,

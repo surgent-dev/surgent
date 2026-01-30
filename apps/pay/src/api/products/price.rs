@@ -14,8 +14,8 @@ use crate::integrations::types::ProcessorPriceRequest;
 use crate::types::RecurringInterval;
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateProductPriceRequest {
-    #[serde(rename = "productGroup")]
     pub product_group: String,
     pub name: Option<String>,
     pub description: Option<String>,
