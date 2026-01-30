@@ -503,32 +503,29 @@ export default function ChatInput({
             </Tooltip>
           </div>
 
-          <Button
-            type="button"
-            disabled={isStopping || (!isWorking && !canSubmit)}
-            onClick={isWorking ? onStop : handleSubmit}
-            variant={isWorking ? 'outline' : 'default'}
-            size="sm"
-            className={cn(
-              'rounded-full transition-all duration-200 shrink-0',
-              isWorking
-                ? 'h-8 px-3 text-danger border-danger/30 hover:bg-danger/10 bg-transparent'
-                : 'size-8 p-0 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm',
-            )}
-          >
-            {isWorking ? (
-              <span className="flex items-center gap-1.5 text-xs">
-                {isStopping ? (
-                  <span className="size-2 rounded-full bg-danger animate-spin" />
-                ) : (
-                  <span className="size-2 rounded-full bg-danger animate-pulse" />
-                )}
-                <span className="sr-only">Stop</span>
-              </span>
-            ) : (
+          {isWorking ? (
+            <Button
+              type="button"
+              disabled={isStopping}
+              onClick={onStop}
+              variant="ghost"
+              size="sm"
+              className="h-8 px-3 rounded-full text-danger hover:bg-danger hover:text-white"
+            >
+              <span className="size-2 rounded-full bg-current animate-pulse" />
+              Stop
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              disabled={!canSubmit}
+              onClick={handleSubmit}
+              size="sm"
+              className="size-8 p-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+            >
               <ArrowUp className="size-4" />
-            )}
-          </Button>
+            </Button>
+          )}
         </div>
       </div>
     </div>
