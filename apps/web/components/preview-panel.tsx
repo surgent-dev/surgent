@@ -18,10 +18,9 @@ import {
   Power,
   RefreshCw,
   CreditCard,
-  Link2,
-  ShieldCheck,
 } from 'lucide-react'
 import Image from 'next/image'
+import { Coins } from '@phosphor-icons/react'
 import type { FileDiff } from '@opencode-ai/sdk'
 import { useQuery } from '@tanstack/react-query'
 
@@ -271,6 +270,33 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
   const disconnect = useSurpayDisconnect()
   const [disconnectOpen, setDisconnectOpen] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
+  const [whopWaitlist, setWhopWaitlist] = useState(false)
+  const [whopLoading, setWhopLoading] = useState(false)
+  const [surgentWaitlist, setSurgentWaitlist] = useState(false)
+  const [surgentLoading, setSurgentLoading] = useState(false)
+
+  useEffect(() => {
+    if (localStorage.getItem('whop-waitlist') === 'true') setWhopWaitlist(true)
+    if (localStorage.getItem('surgent-pay-waitlist') === 'true') setSurgentWaitlist(true)
+  }, [])
+
+  const joinWhopWaitlist = () => {
+    setWhopLoading(true)
+    setTimeout(() => {
+      localStorage.setItem('whop-waitlist', 'true')
+      setWhopWaitlist(true)
+      setWhopLoading(false)
+    }, 1500)
+  }
+
+  const joinSurgentWaitlist = () => {
+    setSurgentLoading(true)
+    setTimeout(() => {
+      localStorage.setItem('surgent-pay-waitlist', 'true')
+      setSurgentWaitlist(true)
+      setSurgentLoading(false)
+    }, 1500)
+  }
 
   if (isLoading) {
     return <LoadingState icon={CreditCard} message="Loading payment accounts..." />
@@ -287,79 +313,106 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
   if (!accounts?.length) {
     return (
       <div className="w-full h-full flex items-center justify-center p-4">
-        <div className="flex flex-col items-center w-full max-w-sm bg-background rounded-2xl border shadow-sm p-6">
-          {/* Overlapping logos */}
-          <div className="flex items-center justify-center mb-6">
-            <div className="relative flex items-center">
-              {/* Surgent logo circle */}
-              <div className="size-14 rounded-full bg-white border-2 border-background shadow-sm flex items-center justify-center z-10">
+        <div className="flex flex-col items-center gap-4 w-72">
+          <div className="flex flex-col items-center gap-3">
+            <div className="rounded-full bg-muted p-3">
+              <Coins className="size-6 text-muted-foreground" weight="duotone" />
+            </div>
+            <div className="text-center space-y-0.5">
+              <p className="font-medium">Start earning</p>
+              <p className="text-xs text-muted-foreground">Connect a payment provider</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 w-full">
+            <button
+              onClick={handleConnect}
+              disabled={connect.isPending}
+              className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              <div className="grid place-items-center size-9 rounded-md overflow-hidden shrink-0">
+                <Image src="/Stripe_icon_-_square.svg" alt="Stripe" width={36} height={36} />
+              </div>
+              <div className="flex flex-col items-start">
+                <span className="text-sm font-medium leading-tight">
+                  {connect.isPending ? 'Connecting...' : 'Stripe'}
+                </span>
+                <span className="text-xs text-muted-foreground leading-tight">
+                  Cards, Apple Pay, Google Pay
+                </span>
+              </div>
+            </button>
+            <button
+              onClick={whopWaitlist || whopLoading ? undefined : joinWhopWaitlist}
+              disabled={whopWaitlist || whopLoading}
+              className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors cursor-pointer disabled:cursor-default disabled:hover:bg-background/60"
+            >
+              <div className="grid place-items-center size-9 rounded-md bg-[#FF6243] shrink-0">
                 <Image
-                  src="/surgent-coin.svg"
-                  alt="Surgent"
-                  width={32}
-                  height={32}
-                  className="size-8"
+                  src="/whop_logo_brandmark_orange.svg"
+                  alt="Whop"
+                  width={22}
+                  height={11}
+                  className="brightness-0 invert"
                 />
               </div>
-              {/* Stripe logo circle */}
-              <div className="size-14 rounded-full bg-[#635BFF] flex items-center justify-center -ml-3 shadow-sm">
-                <span className="text-white font-semibold text-sm tracking-tight">stripe</span>
+              <div className="flex flex-col items-start">
+                <span className="text-sm font-medium leading-tight flex items-center gap-1.5">
+                  {whopLoading ? (
+                    <>
+                      <span className="size-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      Joining...
+                    </>
+                  ) : whopWaitlist ? (
+                    'On waitlist ✓'
+                  ) : (
+                    'Whop'
+                  )}
+                </span>
+                <span className="text-xs text-muted-foreground leading-tight">
+                  {whopLoading
+                    ? 'Adding you to the list'
+                    : whopWaitlist
+                      ? "We'll notify you when ready"
+                      : 'Memberships, courses, downloads'}
+                </span>
               </div>
+            </button>
+            <div className="flex items-center gap-2 py-1">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or</span>
+              <div className="flex-1 h-px bg-border" />
             </div>
-          </div>
-
-          {/* Title */}
-          <h3 className="text-base font-medium text-center mb-5">
-            Surgent uses <span className="text-[#635BFF]">Stripe</span> to connect your account
-          </h3>
-
-          {/* Feature rows */}
-          <div className="w-full space-y-4 mb-6">
-            <div className="flex gap-3">
-              <div className="shrink-0 size-8 rounded-full bg-orange-100 flex items-center justify-center">
-                <Link2 className="size-4 text-orange-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium">Connect effortlessly</p>
-                <p className="text-xs text-muted-foreground">
-                  Stripe lets you securely connect your financial accounts in seconds
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <div className="shrink-0 size-8 rounded-full bg-orange-100 flex items-center justify-center">
-                <ShieldCheck className="size-4 text-orange-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium">Your data belongs to you</p>
-                <p className="text-xs text-muted-foreground">
-                  Stripe doesn't sell personal info, and will only use it with your permission
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer text */}
-          <p className="text-xs text-muted-foreground text-center mb-4">
-            By selecting "Continue" you agree to the{' '}
-            <a
-              href="https://stripe.com/legal/end-users"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-orange-600 hover:underline"
+            <button
+              onClick={surgentWaitlist || surgentLoading ? undefined : joinSurgentWaitlist}
+              disabled={surgentWaitlist || surgentLoading}
+              className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors cursor-pointer disabled:cursor-default disabled:hover:bg-background/60"
             >
-              Stripe End User Privacy Policy
-            </a>
-          </p>
-
-          {/* Continue button */}
-          <Button
-            onClick={handleConnect}
-            disabled={connect.isPending}
-            className="w-full bg-zinc-900 hover:bg-zinc-800 text-white"
-          >
-            {connect.isPending ? 'Connecting...' : 'Continue'}
-          </Button>
+              <div className="grid place-items-center size-9 rounded-md overflow-hidden shrink-0">
+                <Image src="/surgent-coin.svg" alt="Surgent Pay" width={36} height={36} />
+              </div>
+              <div className="flex flex-col items-start">
+                <span className="text-sm font-medium leading-tight flex items-center gap-1.5">
+                  {surgentLoading ? (
+                    <>
+                      <span className="size-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      Joining...
+                    </>
+                  ) : surgentWaitlist ? (
+                    'On waitlist ✓'
+                  ) : (
+                    'Surgent Pay'
+                  )}
+                </span>
+                <span className="text-xs text-muted-foreground leading-tight">
+                  {surgentLoading
+                    ? 'Adding you to the list'
+                    : surgentWaitlist
+                      ? "We'll notify you when ready"
+                      : 'Native payments by Surgent'}
+                </span>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     )
