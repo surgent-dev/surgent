@@ -697,58 +697,73 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       </Dialog>
 
       <Dialog open={isStripeConflictOpen} onOpenChange={setIsStripeConflictOpen}>
-        <DialogContent overlayClassName="backdrop-blur-sm">
-          <DialogHeader>
-            <DialogTitle>Stripe Account Already Connected</DialogTitle>
-            <DialogDescription>
-              This Stripe account is already connected to another project. Would you like to move it
-              to this project instead?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              disabled={surpayConnect.isPending}
-              onClick={() => {
-                if (!projectId) return
-                surpayConnect.mutate(projectId, {
-                  onSuccess: (data) => {
-                    setIsStripeConflictOpen(false)
-                    setConflictAccountId(null)
-                    window.location.href = data.oauthUrl
-                  },
-                  onError: () =>
-                    toast.error('Failed to start Stripe connection', { position: 'top-right' }),
-                })
-              }}
-            >
-              {surpayConnect.isPending && <Loader2 className="size-4 animate-spin mr-1.5" />}
-              Connect different account
-            </Button>
-            <Button
-              disabled={surpayMoveAccount.isPending}
-              onClick={() => {
-                if (!projectId || !conflictAccountId) return
-                surpayMoveAccount.mutate(
-                  { accountId: conflictAccountId, projectId },
-                  {
-                    onSuccess: () => {
+        <DialogContent overlayClassName="backdrop-blur-sm" className="sm:max-w-lg">
+          <div className="flex flex-col items-center text-center pt-12 pb-2">
+            {/* Radiating circles icon */}
+            <div className="relative flex items-center justify-center mb-14">
+              <div className="absolute size-28 rounded-full bg-brand/10" />
+              <div className="absolute size-20 rounded-full bg-brand/20" />
+              <div className="relative size-12 rounded-full bg-brand/30 border-2 border-brand/50 flex items-center justify-center">
+                <span className="text-brand text-xl font-semibold">i</span>
+              </div>
+            </div>
+
+            <h2 className="text-xl font-semibold mb-3">Move this Stripe account?</h2>
+            <p className="text-sm text-muted-foreground mb-10">
+              This Stripe account is currently connected to another project.
+              <br />
+              You can move it here, or use a different account instead.
+            </p>
+
+            <div className="flex gap-3 w-full">
+              <Button
+                variant="outline"
+                className="flex-1 h-10"
+                disabled={surpayConnect.isPending}
+                onClick={() => {
+                  if (!projectId) return
+                  surpayConnect.mutate(projectId, {
+                    onSuccess: (data) => {
                       setIsStripeConflictOpen(false)
                       setConflictAccountId(null)
-                      toast.success('Stripe account moved successfully', { position: 'top-right' })
-                      setPulsePaymentsTab(true)
-                      setTimeout(() => setPulsePaymentsTab(false), 10000)
+                      window.location.href = data.oauthUrl
                     },
                     onError: () =>
-                      toast.error('Failed to move Stripe account', { position: 'top-right' }),
-                  },
-                )
-              }}
-            >
-              {surpayMoveAccount.isPending && <Loader2 className="size-4 animate-spin mr-1.5" />}
-              Move to this project
-            </Button>
-          </DialogFooter>
+                      toast.error('Failed to start Stripe connection', { position: 'top-right' }),
+                  })
+                }}
+              >
+                {surpayConnect.isPending && <Loader2 className="size-4 animate-spin mr-1.5" />}
+                Use Different Account
+              </Button>
+              <Button
+                className="flex-1 h-10 bg-brand hover:bg-brand/90 text-brand-foreground"
+                disabled={surpayMoveAccount.isPending}
+                onClick={() => {
+                  if (!projectId || !conflictAccountId) return
+                  surpayMoveAccount.mutate(
+                    { accountId: conflictAccountId, projectId },
+                    {
+                      onSuccess: () => {
+                        setIsStripeConflictOpen(false)
+                        setConflictAccountId(null)
+                        toast.success('Stripe account moved successfully', {
+                          position: 'top-right',
+                        })
+                        setPulsePaymentsTab(true)
+                        setTimeout(() => setPulsePaymentsTab(false), 10000)
+                      },
+                      onError: () =>
+                        toast.error('Failed to move Stripe account', { position: 'top-right' }),
+                    },
+                  )
+                }}
+              >
+                {surpayMoveAccount.isPending && <Loader2 className="size-4 animate-spin mr-1.5" />}
+                Move Here
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>

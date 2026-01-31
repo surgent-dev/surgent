@@ -18,7 +18,10 @@ import {
   Power,
   RefreshCw,
   CreditCard,
+  Link2,
+  ShieldCheck,
 } from 'lucide-react'
+import Image from 'next/image'
 import type { FileDiff } from '@opencode-ai/sdk'
 import { useQuery } from '@tanstack/react-query'
 
@@ -293,19 +296,79 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
 
   if (!accounts?.length) {
     return (
-      <div className="w-full h-full flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="rounded-full bg-muted p-4">
-            <CreditCard className="size-8 text-muted-foreground" strokeWidth={1.5} />
+      <div className="w-full h-full flex items-center justify-center p-4">
+        <div className="flex flex-col items-center w-full max-w-sm bg-background rounded-2xl border shadow-sm p-6">
+          {/* Overlapping logos */}
+          <div className="flex items-center justify-center mb-6">
+            <div className="relative flex items-center">
+              {/* Surgent logo circle */}
+              <div className="size-14 rounded-full bg-white border-2 border-background shadow-sm flex items-center justify-center z-10">
+                <Image
+                  src="/surgent-coin.svg"
+                  alt="Surgent"
+                  width={32}
+                  height={32}
+                  className="size-8"
+                />
+              </div>
+              {/* Stripe logo circle */}
+              <div className="size-14 rounded-full bg-[#635BFF] flex items-center justify-center -ml-3 shadow-sm">
+                <span className="text-white font-semibold text-sm tracking-tight">stripe</span>
+              </div>
+            </div>
           </div>
-          <div className="space-y-1">
-            <p className="font-medium">Connect Payments</p>
-            <p className="text-sm text-muted-foreground">
-              Connect your Stripe account to accept payments
-            </p>
+
+          {/* Title */}
+          <h3 className="text-base font-medium text-center mb-5">
+            Surgent uses <span className="text-[#635BFF]">Stripe</span> to connect your account
+          </h3>
+
+          {/* Feature rows */}
+          <div className="w-full space-y-4 mb-6">
+            <div className="flex gap-3">
+              <div className="shrink-0 size-8 rounded-full bg-orange-100 flex items-center justify-center">
+                <Link2 className="size-4 text-orange-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Connect effortlessly</p>
+                <p className="text-xs text-muted-foreground">
+                  Stripe lets you securely connect your financial accounts in seconds
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="shrink-0 size-8 rounded-full bg-orange-100 flex items-center justify-center">
+                <ShieldCheck className="size-4 text-orange-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Your data belongs to you</p>
+                <p className="text-xs text-muted-foreground">
+                  Stripe doesn't sell personal info, and will only use it with your permission
+                </p>
+              </div>
+            </div>
           </div>
-          <Button onClick={handleConnect} disabled={connect.isPending}>
-            {connect.isPending ? 'Connecting...' : 'Connect Stripe'}
+
+          {/* Footer text */}
+          <p className="text-xs text-muted-foreground text-center mb-4">
+            By selecting "Continue" you agree to the{' '}
+            <a
+              href="https://stripe.com/legal/end-users"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-orange-600 hover:underline"
+            >
+              Stripe End User Privacy Policy
+            </a>
+          </p>
+
+          {/* Continue button */}
+          <Button
+            onClick={handleConnect}
+            disabled={connect.isPending}
+            className="w-full bg-zinc-900 hover:bg-zinc-800 text-white"
+          >
+            {connect.isPending ? 'Connecting...' : 'Continue'}
           </Button>
         </div>
       </div>
