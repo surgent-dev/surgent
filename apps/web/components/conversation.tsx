@@ -339,6 +339,15 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     } catch {}
   }, [initialPrompt, inputValue, pathname, router, searchParams])
 
+  // Handle pending prompt from error overlay "Fix with AI"
+  const pendingPrompt = useSandbox((s) => s.pendingPrompt)
+  const setPendingPrompt = useSandbox((s) => s.setPendingPrompt)
+  useEffect(() => {
+    if (!pendingPrompt) return
+    setInputValue(pendingPrompt)
+    setPendingPrompt(null)
+  }, [pendingPrompt, setPendingPrompt])
+
   const handleSend = (
     text: string,
     files?: FilePart[],

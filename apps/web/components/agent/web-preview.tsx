@@ -4,16 +4,16 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { useSandbox, type IframeError } from '@/hooks/use-sandbox'
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
-  MonitorIcon,
   RefreshCwIcon,
 } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 
 export type WebPreviewContextValue = {
   url: string
@@ -56,14 +56,46 @@ export const WebPreview = ({
     index: 0,
   }))
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const setIframeError = useSandbox((s) => s.setIframeError)
 
   const url = nav.history[nav.index] ?? ''
+
+  // Listen for error messages from iframe
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Only accept messages from our iframe
+      if (event.source !== iframeRef.current?.contentWindow) return
+      if (event.data?.type !== 'error') return
+
+      const p = event.data.payload
+      if (!p || typeof p.message !== 'string' || typeof p.url !== 'string') return
+
+      setIframeError({
+        message: p.message,
+        url: p.url,
+        stack: typeof p.stack === 'string' ? p.stack : undefined,
+        timestamp: typeof p.timestamp === 'string' ? p.timestamp : new Date().toISOString(),
+        source: ['global', 'promise', 'react', 'react-router'].includes(p.source)
+          ? p.source
+          : 'global',
+      })
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [setIframeError])
+
+  // Clear error on URL change or refresh
+  const clearError = useCallback(() => {
+    setIframeError(null)
+  }, [setIframeError])
 
   useEffect(() => {
     onUrlChange?.(url)
   }, [url, onUrlChange])
 
   const setUrl = (nextUrl: string) => {
+    clearError()
     setNav((prev) => {
       const current = prev.history[prev.index] ?? ''
       if (nextUrl === current) return prev
@@ -77,16 +109,19 @@ export const WebPreview = ({
   const canGoForward = nav.index < nav.history.length - 1
 
   const goBack = () => {
+    clearError()
     setNav((prev) => (prev.index > 0 ? { ...prev, index: prev.index - 1 } : prev))
   }
 
   const goForward = () => {
+    clearError()
     setNav((prev) =>
       prev.index < prev.history.length - 1 ? { ...prev, index: prev.index + 1 } : prev,
     )
   }
 
   const refresh = () => {
+    clearError()
     if (iframeRef.current) {
       iframeRef.current.src = url
     }

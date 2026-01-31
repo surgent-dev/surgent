@@ -57,6 +57,7 @@ import {
 import { cn } from '@/lib/utils'
 import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
 import { FunLoadingState } from '@/components/ui/fun-loading'
+import { PreviewErrorOverlay } from '@/components/agent/preview-error-overlay'
 
 export interface PreviewTab {
   id: string
@@ -744,7 +745,10 @@ export default function PreviewPanel({
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 min-h-0 flex flex-col">{body}</div>
+      <div className="flex-1 min-h-0 flex flex-col relative">
+        {body}
+        {type === 'preview' && <PreviewErrorOverlay />}
+      </div>
     </div>
   )
 
