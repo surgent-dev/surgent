@@ -45,47 +45,7 @@ import {
   useSubagents,
 } from '@/queries/chats'
 import ProviderDialog from '@/components/provider-dialog'
-
-// Fun working placeholders
-const FUN_PLACEHOLDERS = [
-  'Manifesting...',
-  'Conjuring pixels...',
-  'Summoning bits...',
-  'Brewing magic...',
-  'Channeling energy...',
-  'Splitting atoms...',
-  'Launching...',
-  'Phoning home...',
-  'Aligning planets...',
-  'Thinking...',
-  'Having ideas...',
-  'Building blocks...',
-  'Vibing...',
-  'Brewing coffee...',
-  'Sending love...',
-  'Wishing on stars...',
-  'Howling at moon...',
-  'Chasing the sun...',
-  'Cloud surfing...',
-  'Playing with fire...',
-  'Catching butterflies...',
-  'Herding cats...',
-  'Walking the dog...',
-  'Watching birds...',
-  'Gone fishing...',
-  'Planting trees...',
-  'Smelling flowers...',
-  'Mining diamonds...',
-  'Claiming throne...',
-  'Unwrapping gifts...',
-  'Floating away...',
-  'Celebrating...',
-  'Jamming out...',
-  'Gaming...',
-  'Ordering pizza...',
-  'Getting ice cream...',
-  'Baking cookies...',
-]
+import { useFunMessage } from '@/components/ui/fun-loading'
 
 export interface ConversationProps {
   projectId?: string
@@ -283,23 +243,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     return computeWorkingFromParts(timeline)
   }, [status, messages, parts])
 
-  // Rotating fun placeholder when working
-  const [funPlaceholder, setFunPlaceholder] = useState(
-    () => FUN_PLACEHOLDERS[Math.floor(Math.random() * FUN_PLACEHOLDERS.length)]!,
-  )
-
-  useEffect(() => {
-    if (!working) return
-    setFunPlaceholder(FUN_PLACEHOLDERS[Math.floor(Math.random() * FUN_PLACEHOLDERS.length)]!)
-    const interval = setInterval(() => {
-      setFunPlaceholder(FUN_PLACEHOLDERS[Math.floor(Math.random() * FUN_PLACEHOLDERS.length)]!)
-    }, 2000)
-    return () => clearInterval(interval)
-  }, [working])
-
+  const funMessage = useFunMessage()
   const showSkeleton = loading || sessionsQuery.isLoading || !activeId
   const inputDisabled = working || create.isPending || showSkeleton
-  const inputPlaceholder = working ? funPlaceholder : 'Ask anything...'
+  const inputPlaceholder = working ? funMessage : 'Ask anything...'
 
   useEffect(() => {
     if (!projectId || !activeId) return
