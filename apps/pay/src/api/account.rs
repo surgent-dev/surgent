@@ -235,8 +235,10 @@ pub struct OAuthInitResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct OAuthCallbackParams {
-    pub code: String,
+    pub code: Option<String>,
     pub state: String,
+    pub error: Option<String>,
+    pub error_description: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -515,6 +517,24 @@ pub async fn oauth_callback(
             )
         })?;
 
+    // Handle user-denied authorization (Stripe returns error instead of code)
+    if let Some(error) = &params.error {
+        let redirect_url = format!(
+            "{}/project/{}?stripe_error={}",
+            state.config.web_base_url.trim_end_matches('/'),
+            payload.project_id,
+            error
+        );
+        return Ok(Redirect::temporary(&redirect_url));
+    }
+
+    let code = params.code.as_ref().ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Missing authorization code".to_string(),
+        )
+    })?;
+
     let processor = state
         .registry
         .get_connect(&payload.processor)
@@ -522,15 +542,12 @@ pub async fn oauth_callback(
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "Invalid processor".to_string()))?;
 
     // Exchange OAuth code for processor account ID
-    let token_response = processor
-        .exchange_oauth_code(&params.code)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Processor error: {}", e),
-            )
-        })?;
+    let token_response = processor.exchange_oauth_code(code).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Processor error: {}", e),
+        )
+    })?;
 
     // Check if this processor account already exists
     let existing = sqlx::query!(

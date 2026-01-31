@@ -115,6 +115,7 @@ impl PaymentProcessor for StripeProcessor {
             quantity: line_item.quantity,
             mode: req.mode,
             application_fee_amount: req.application_fee_amount,
+            application_fee_percent: req.application_fee_percent,
             destination_account: req.destination_account,
             customer_creation,
         };
@@ -1206,6 +1207,7 @@ pub struct CreateStripeCheckoutSessionRequest {
     pub quantity: u32,
     pub mode: String,
     pub application_fee_amount: Option<i64>,
+    pub application_fee_percent: Option<f64>,
     pub destination_account: Option<String>,
     pub customer_creation: Option<String>,
 }
@@ -1320,6 +1322,20 @@ pub async fn create_stripe_checkout_session(
         if let Some(destination) = req.destination_account {
             form_params.push((
                 String::from("payment_intent_data[transfer_data][destination]"),
+                destination,
+            ));
+        }
+    } else if mode == "subscription" {
+        if let Some(fee_percent) = req.application_fee_percent {
+            form_params.push((
+                String::from("subscription_data[application_fee_percent]"),
+                fee_percent.to_string(),
+            ));
+        }
+
+        if let Some(destination) = req.destination_account {
+            form_params.push((
+                String::from("subscription_data[transfer_data][destination]"),
                 destination,
             ));
         }

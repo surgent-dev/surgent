@@ -315,6 +315,15 @@ pub async fn create_checkout_session(
         None
     };
 
+    let application_fee_percent = if destination_account.is_some() {
+        org_config
+            .as_ref()
+            .and_then(|o| o.platformFeePercent)
+            .map(|p| p as f64)
+    } else {
+        None
+    };
+
     // Proxy URLs redirect through Surpay to trigger eager data sync before merchant redirect
     let proxy_success_url = format!(
         "{}/checkout/success/{{CHECKOUT_SESSION_ID}}",
@@ -349,6 +358,7 @@ pub async fn create_checkout_session(
             // value to preserve the current "new session per request" behavior.
             metadata: HashMap::from([("idempotency_key".to_string(), Uuid::new_v4().to_string())]),
             application_fee_amount,
+            application_fee_percent,
             destination_account,
         })
         .await

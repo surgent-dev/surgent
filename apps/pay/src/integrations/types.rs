@@ -58,6 +58,7 @@ pub struct CreateCheckoutSessionRequest {
     pub customer: Option<String>,
     pub metadata: HashMap<String, String>,
     pub application_fee_amount: Option<i64>,
+    pub application_fee_percent: Option<f64>,
     pub destination_account: Option<String>,
 }
 

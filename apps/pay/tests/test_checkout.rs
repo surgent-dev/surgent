@@ -19,11 +19,11 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 async fn test_create_checkout_missing_auth(pool: PgPool) -> TestResult {
     let mut app = create_router(create_test_state(pool).await);
     let body = json!({
-        "project_id": Uuid::new_v4(),
-        "product_id": Uuid::new_v4(),
-        "price_id": Uuid::new_v4(),
-        "success_url": "https://example.com/success",
-        "cancel_url": "https://example.com/cancel"
+        "projectId": Uuid::new_v4(),
+        "productId": Uuid::new_v4(),
+        "priceId": Uuid::new_v4(),
+        "successUrl": "https://example.com/success",
+        "cancelUrl": "https://example.com/cancel"
     });
 
     let response = app
@@ -54,10 +54,10 @@ async fn test_create_checkout_invalid_product(pool: PgPool) -> TestResult {
         .await;
 
     let body = json!({
-        "customer_id": "test_user",
-        "product_id": "nonexistent-product-slug",
-        "success_url": "https://example.com/success",
-        "cancel_url": "https://example.com/cancel"
+        "customerId": "test_user",
+        "productId": "nonexistent-product-slug",
+        "successUrl": "https://example.com/success",
+        "cancelUrl": "https://example.com/cancel"
     });
 
     let response = app
@@ -86,11 +86,11 @@ async fn test_create_checkout_invalid_price(pool: PgPool) -> TestResult {
     let product = app.create_product(&api_key).await;
 
     let body = json!({
-        "customer_id": "test_user",
-        "product_id": product.slug,
-        "price_id": "nonexistent-price-slug",
-        "success_url": "https://example.com/success",
-        "cancel_url": "https://example.com/cancel"
+        "customerId": "test_user",
+        "productId": product.slug,
+        "priceId": "nonexistent-price-slug",
+        "successUrl": "https://example.com/success",
+        "cancelUrl": "https://example.com/cancel"
     });
 
     let response = app
@@ -128,11 +128,11 @@ async fn test_create_checkout_price_not_for_product(pool: PgPool) -> TestResult 
     // Try to create checkout with product2 but price from product1 (which belongs to product1)
     // Since prices don't have slugs set, any price value will result in "Price not found"
     let body = json!({
-        "customer_id": "test_user",
-        "product_id": product2.slug,
-        "price_id": "price-from-product1",
-        "success_url": "https://example.com/success",
-        "cancel_url": "https://example.com/cancel"
+        "customerId": "test_user",
+        "productId": product2.slug,
+        "priceId": "price-from-product1",
+        "successUrl": "https://example.com/success",
+        "cancelUrl": "https://example.com/cancel"
     });
 
     let response = app
@@ -172,8 +172,8 @@ async fn test_create_checkout_wrong_org(pool: PgPool) -> TestResult {
     // Try to create checkout with org2's API key for org1's product
     // The API key is scoped to project_id2, so it won't find the product in project_id1
     let body = json!({
-        "customer_id": "test_user",
-        "product_id": product1.slug
+        "customerId": "test_user",
+        "productId": product1.slug
     });
 
     let response = app
@@ -218,8 +218,8 @@ async fn test_full_checkout_flow_integration(pool: PgPool) -> TestResult {
         .await;
 
     let body = json!({
-        "customer_id": "test_user",
-        "product_id": product.slug
+        "customerId": "test_user",
+        "productId": product.slug
     });
 
     let response = app
@@ -318,8 +318,8 @@ async fn test_subscription_checkout_with_recurring_price(pool: PgPool) -> TestRe
         .await;
 
     let body = json!({
-        "customer_id": "test_user",
-        "product_id": product.slug
+        "customerId": "test_user",
+        "productId": product.slug
     });
 
     let response = app
@@ -405,10 +405,10 @@ async fn test_create_checkout_minimal_request(pool: PgPool) -> TestResult {
     let _price_id = app
         .create_product_price(&api_key, &product.product_group)
         .await;
-    // Minimal SDK request: customer_id and product (project_id derived from API key)
+    // Minimal SDK request: customerId and product (projectId derived from API key)
     let body = json!({
-        "customer_id": "user_abc123",
-        "product_id": product.slug
+        "customerId": "user_abc123",
+        "productId": product.slug
     });
     let response = app
         .call(
@@ -455,11 +455,11 @@ async fn test_create_checkout_with_customer_data(pool: PgPool) -> TestResult {
     let _price_id = app
         .create_product_price(&api_key, &product.product_group)
         .await;
-    // SDK request with customer_data (project_id derived from API key)
+    // SDK request with customerData (projectId derived from API key)
     let body = json!({
-        "customer_id": "user_abc123",
-        "product_id": product.slug,
-        "customer_data": {
+        "customerId": "user_abc123",
+        "productId": product.slug,
+        "customerData": {
             "email": "john@example.com",
             "name": "John Doe"
         }

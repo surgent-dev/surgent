@@ -29,8 +29,8 @@ async fn test_create_product_price_success(pool: PgPool) -> TestResult {
         "name": "Monthly Plan",
         "description": "Monthly subscription",
         "price": 1999,
-        "price_currency": "USD",
-        "recurring_interval": "month",
+        "priceCurrency": "USD",
+        "recurringInterval": "month",
         "is_default": true
     });
 
@@ -63,7 +63,7 @@ async fn test_create_product_price_minimal(pool: PgPool) -> TestResult {
     let body = json!({
         "productGroup": product.product_group,
         "price": 999,
-        "price_currency": "USD"
+        "priceCurrency": "USD"
     });
 
     let response = app
@@ -93,7 +93,7 @@ async fn test_create_product_price_invalid_product(pool: PgPool) -> TestResult {
     let body = json!({
         "productGroup": Uuid::new_v4(),
         "price": 999,
-        "price_currency": "USD"
+        "priceCurrency": "USD"
     });
 
     let response = app
@@ -128,7 +128,7 @@ async fn test_create_product_price_wrong_project(pool: PgPool) -> TestResult {
     let body = json!({
         "productGroup": product.product_group,
         "price": 999,
-        "price_currency": "USD"
+        "priceCurrency": "USD"
     });
 
     let response = app
@@ -163,7 +163,7 @@ async fn test_create_product_price_cross_org_access(pool: PgPool) -> TestResult 
     let body = json!({
         "productGroup": product.product_group,
         "price": 999,
-        "price_currency": "USD"
+        "priceCurrency": "USD"
     });
 
     let response = app
@@ -189,7 +189,7 @@ async fn test_create_product_price_missing_auth(pool: PgPool) -> TestResult {
     let body = json!({
         "productGroup": Uuid::new_v4(),
         "price": 999,
-        "price_currency": "USD"
+        "priceCurrency": "USD"
     });
 
     let response = app
@@ -254,8 +254,8 @@ async fn test_create_product_price_stripe_integration(pool: PgPool) -> TestResul
         "name": "Monthly Plan",
         "description": "Monthly subscription",
         "price": 1999,
-        "price_currency": "USD",
-        "recurring_interval": "month",
+        "priceCurrency": "USD",
+        "recurringInterval": "month",
         "is_default": true
     });
 
@@ -314,8 +314,8 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
         "productGroup": product.product_group,
         "name": "Monthly",
         "price": 1000,
-        "price_currency": "USD",
-        "recurring_interval": "month"
+        "priceCurrency": "USD",
+        "recurringInterval": "month"
     });
 
     let response = app
@@ -334,12 +334,13 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
         .unwrap()
         .to_string();
 
-    // Create a one-time price at $10 (same amount, no interval)
-    let onetime_body = json!({
+    // Create a yearly price at $10 (same amount, different interval)
+    let yearly_body = json!({
         "productGroup": product.product_group,
-        "name": "One-time",
+        "name": "Yearly",
         "price": 1000,
-        "price_currency": "USD"
+        "priceCurrency": "USD",
+        "recurringInterval": "year"
     });
 
     let response = app
@@ -349,18 +350,18 @@ async fn test_create_product_price_same_amount_different_intervals(pool: PgPool)
                 .uri("/product/price")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json")
-                .body(Body::from(onetime_body.to_string()))?,
+                .body(Body::from(yearly_body.to_string()))?,
         )
         .await?;
     assert_eq!(response.status(), StatusCode::CREATED);
-    let onetime_price_id = read_body(response.into_body()).await["productPriceId"]
+    let yearly_price_id = read_body(response.into_body()).await["productPriceId"]
         .as_str()
         .unwrap()
         .to_string();
 
     // Verify both prices were created and are distinct
     assert_ne!(
-        monthly_price_id, onetime_price_id,
+        monthly_price_id, yearly_price_id,
         "Same amount with different intervals should create distinct prices"
     );
 

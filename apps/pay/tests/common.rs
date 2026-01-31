@@ -731,11 +731,11 @@ impl TestAppExt for Router {
             "productGroup": details.product_group,
             "name": details.name,
             "price": details.price,
-            "price_currency": details.currency
+            "priceCurrency": details.currency
         });
 
         if let Some(interval) = details.recurring_interval {
-            payload["recurring_interval"] = json!(interval);
+            payload["recurringInterval"] = json!(interval);
         }
 
         let response = self
