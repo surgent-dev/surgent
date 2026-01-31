@@ -63,6 +63,45 @@ import {
   Trash2,
   Undo2,
 } from 'lucide-react'
+import {
+  Sparkle,
+  MagicWand,
+  Rocket,
+  Lightning,
+  Atom,
+  Alien,
+  Ghost,
+  Flame,
+  Planet,
+  Brain,
+  Lightbulb,
+  Cube,
+  MusicNote,
+  Coffee,
+  Heart,
+  Star,
+  Moon,
+  Sun,
+  Cloud,
+  Fire,
+  Butterfly,
+  Cat,
+  Dog,
+  Bird,
+  Fish,
+  Tree,
+  Flower,
+  Diamond,
+  Crown,
+  Gift,
+  Balloon,
+  Confetti,
+  Headphones,
+  GameController,
+  Pizza,
+  IceCream,
+  Cookie,
+} from '@phosphor-icons/react'
 import { ShimmeringText } from '@/components/ui/shimmer-text'
 import { Markdown } from '@/components/ui/markdown'
 import { useRespondPermission } from '@/queries/chats'
@@ -73,7 +112,7 @@ import MessageDiffBadge from './message-diff-badge'
 
 type PermissionResponse = 'once' | 'always' | 'reject'
 
-const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: string }> = {
+const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: string | null }> = {
   read: { icon: Eye, done: 'Read', doing: 'Reading...' },
   write: { icon: FileText, done: 'Created', doing: 'Creating...' },
   edit: { icon: FilePenLine, done: 'Edited', doing: 'Editing...' },
@@ -88,6 +127,69 @@ const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: stri
   task: { icon: Terminal, done: 'Task', doing: 'Running...' },
   dev: { icon: Play, done: 'Started', doing: 'Starting...' },
   devLogs: { icon: Terminal, done: 'Logs', doing: 'Loading...' },
+}
+
+// Fun working messages with icons
+const FUN_WORKING_VIBES = [
+  { text: 'Manifesting...', icon: Sparkle },
+  { text: 'Conjuring pixels...', icon: MagicWand },
+  { text: 'Summoning bits...', icon: Ghost },
+  { text: 'Brewing magic...', icon: Flame },
+  { text: 'Channeling energy...', icon: Lightning },
+  { text: 'Splitting atoms...', icon: Atom },
+  { text: 'Launching...', icon: Rocket },
+  { text: 'Phoning home...', icon: Alien },
+  { text: 'Aligning planets...', icon: Planet },
+  { text: 'Thinking...', icon: Brain },
+  { text: 'Having ideas...', icon: Lightbulb },
+  { text: 'Building blocks...', icon: Cube },
+  { text: 'Vibing...', icon: MusicNote },
+  { text: 'Brewing coffee...', icon: Coffee },
+  { text: 'Sending love...', icon: Heart },
+  { text: 'Wishing on stars...', icon: Star },
+  { text: 'Howling at moon...', icon: Moon },
+  { text: 'Chasing the sun...', icon: Sun },
+  { text: 'Cloud surfing...', icon: Cloud },
+  { text: 'Playing with fire...', icon: Fire },
+  { text: 'Catching butterflies...', icon: Butterfly },
+  { text: 'Herding cats...', icon: Cat },
+  { text: 'Walking the dog...', icon: Dog },
+  { text: 'Watching birds...', icon: Bird },
+  { text: 'Gone fishing...', icon: Fish },
+  { text: 'Planting trees...', icon: Tree },
+  { text: 'Smelling flowers...', icon: Flower },
+  { text: 'Mining diamonds...', icon: Diamond },
+  { text: 'Claiming throne...', icon: Crown },
+  { text: 'Unwrapping gifts...', icon: Gift },
+  { text: 'Floating away...', icon: Balloon },
+  { text: 'Celebrating...', icon: Confetti },
+  { text: 'Jamming out...', icon: Headphones },
+  { text: 'Gaming...', icon: GameController },
+  { text: 'Ordering pizza...', icon: Pizza },
+  { text: 'Getting ice cream...', icon: IceCream },
+  { text: 'Baking cookies...', icon: Cookie },
+]
+
+function FunWorkingText({ className, duration = 0.4 }: { className?: string; duration?: number }) {
+  const [vibe, setVibe] = useState(
+    () => FUN_WORKING_VIBES[Math.floor(Math.random() * FUN_WORKING_VIBES.length)]!,
+  )
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVibe(FUN_WORKING_VIBES[Math.floor(Math.random() * FUN_WORKING_VIBES.length)]!)
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const Icon = vibe.icon
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${className || ''}`}>
+      <Icon className="size-3.5 animate-pulse" weight="duotone" />
+      <ShimmeringText text={vibe.text} duration={duration} />
+    </span>
+  )
 }
 
 function getTarget(part: ToolPart): string | undefined {
@@ -136,7 +238,8 @@ function getTaskDescription(part: ToolPart): string | undefined {
   if (part.tool !== 'task') return undefined
   const input = getToolInput(part)
   if (!input) return undefined
-  if (typeof input.description === 'string' && input.description.trim() !== '') return input.description
+  if (typeof input.description === 'string' && input.description.trim() !== '')
+    return input.description
   return undefined
 }
 
@@ -298,7 +401,7 @@ function Tool({
   defaultExpanded?: boolean
   compact?: boolean
 }) {
-  const cfg = TOOLS[part.tool] || { icon: FileText, done: part.tool, doing: 'Working...' }
+  const cfg = TOOLS[part.tool] || { icon: FileText, done: part.tool, doing: null }
   const Icon = cfg.icon
   const target = getTarget(part)
   const subagentName = getSubagentName(part)
@@ -315,7 +418,7 @@ function Tool({
   const [subWorking, setSubWorking] = useState<boolean | undefined>(undefined)
   const [subDiffCount, setSubDiffCount] = useState<number | undefined>(undefined)
   const openChangesTab = useSandbox((s) => s.openChangesTab)
-  const running = isSubagentTask ? subWorking ?? taskRunning : taskRunning
+  const running = isSubagentTask ? (subWorking ?? taskRunning) : taskRunning
   const compactMode = compact === true
 
   // Track expanded state - auto-expand when running
@@ -363,7 +466,11 @@ function Tool({
               <>
                 <span className="text-muted-foreground/40"> — </span>
                 {running ? (
-                  <ShimmeringText text={`@${subagentName}`} duration={0.6} className="text-brand/80" />
+                  <ShimmeringText
+                    text={`@${subagentName}`}
+                    duration={0.6}
+                    className="text-brand/80"
+                  />
                 ) : (
                   <span className="text-brand/70">@{subagentName}</span>
                 )}
@@ -418,7 +525,11 @@ function Tool({
     if (running) {
       return (
         <div className="flex items-center gap-1 sm:gap-1.5 py-0.5 sm:py-1 text-[11px] sm:text-sm text-muted-foreground flex-wrap min-w-0">
-          <ShimmeringText text={cfg.doing} duration={0.4} className="text-[11px] sm:text-sm" />
+          {cfg.doing ? (
+            <ShimmeringText text={cfg.doing} duration={0.4} className="text-[11px] sm:text-sm" />
+          ) : (
+            <FunWorkingText className="text-[11px] sm:text-sm" />
+          )}
           {target && (
             <code className="px-1 py-0.5 bg-muted rounded text-[10px] sm:text-xs truncate max-w-24 sm:max-w-48">
               {target}
@@ -590,11 +701,13 @@ function SubagentStream({
   if (messages.length === 0) {
     return (
       <div className="pl-4 border-l-2 border-border/40 text-sm text-muted-foreground/50 py-1">
-        {!connected
-          ? 'Connecting...'
-          : loading
-            ? 'Loading...'
-            : 'Working...'}
+        {!connected ? (
+          'Connecting...'
+        ) : loading ? (
+          'Loading...'
+        ) : (
+          <FunWorkingText className="text-sm" />
+        )}
       </div>
     )
   }
@@ -865,8 +978,7 @@ export function AgentThread({
     return text
   }
 
-  const getFiles = (m: Message) =>
-    partsMap[m.id]?.filter(isFilePart) ?? []
+  const getFiles = (m: Message) => partsMap[m.id]?.filter(isFilePart) ?? []
 
   const renderPart = (p: Part) => {
     if (p.type === 'subtask') {
@@ -1004,7 +1116,11 @@ export function AgentThread({
         const showSending = isLast && userParts.length === 0 && !text && userFiles.length === 0
         const showUser = !isSyntheticUser && (userFiles.length > 0 || !!text || showSending)
         const showActionsRow =
-          showActions && assistantDone && !showSending && (fileModCount > 0 || onRevert) && lastAssistantId
+          showActions &&
+          assistantDone &&
+          !showSending &&
+          (fileModCount > 0 || onRevert) &&
+          lastAssistantId
 
         return (
           <div key={turn.user.id} className="space-y-2 sm:space-y-3">
@@ -1057,11 +1173,7 @@ export function AgentThread({
                 ))}
 
               {showPlanning && (
-                <ShimmeringText
-                  text="Working..."
-                  duration={0.4}
-                  className="text-xs sm:text-sm text-muted-foreground py-1"
-                />
+                <FunWorkingText className="text-xs sm:text-sm text-muted-foreground py-1" />
               )}
 
               {/* Actions row: diff badge + undo */}
