@@ -64,7 +64,7 @@ import {
   Trash2,
   Undo2,
 } from 'lucide-react'
-import { MagicWand, Code, Rocket, Terminal as TerminalPh } from '@phosphor-icons/react'
+import { MagicWand, Code, Rocket, Terminal as TerminalPh, CheckCircle } from '@phosphor-icons/react'
 import { ShimmeringText } from '@/components/ui/shimmer-text'
 import { FunWorkingText } from '@/components/ui/fun-loading'
 import { Markdown } from '@/components/ui/markdown'
@@ -443,18 +443,26 @@ function Tool({
         {/* Header */}
         <button
           onClick={() => setExpanded((s) => !s)}
-          className="group flex items-center gap-2.5 w-full text-left py-1"
+          className="group flex items-center gap-2 w-full text-left py-1"
         >
           {running ? (
             <span className="size-2 rounded-full bg-brand animate-pulse shrink-0" />
           ) : (
-            <span className="size-2 rounded-full bg-muted-foreground/30 shrink-0" />
+            <CheckCircle weight="fill" className="size-3.5 text-brand shrink-0" />
           )}
-          <span className="text-sm text-foreground truncate">
-            <span>{taskDescription || target || 'Sub-assistant'}</span>
+          <span className="text-sm truncate">
+            {running ? (
+              <span className="text-foreground">
+                {taskDescription || target || 'Sub-assistant'}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">
+                {taskDescription || target || 'Sub-assistant'}
+              </span>
+            )}
             {subagentName && (
               <>
-                <span className="text-muted-foreground/40"> — </span>
+                <span className="text-muted-foreground/50"> · </span>
                 {running ? (
                   <ShimmeringText
                     text={`@${subagentName}`}
@@ -462,7 +470,7 @@ function Tool({
                     className="text-brand/80"
                   />
                 ) : (
-                  <span className="text-brand/70">@{subagentName}</span>
+                  <span className="text-muted-foreground/50">@{subagentName}</span>
                 )}
               </>
             )}
