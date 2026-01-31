@@ -95,8 +95,8 @@ function ProjectCard({
       onClick={onClick}
       className={cn(
         'group relative flex flex-col rounded-xl border bg-card overflow-hidden',
-        'border-border/50 hover:border-border/80 hover:shadow-sm',
-        'cursor-pointer transition-all duration-200',
+        'border-border/50 hover:border-border/70',
+        'cursor-pointer transition-colors',
       )}
     >
       {/* Preview area */}
@@ -113,25 +113,11 @@ function ProjectCard({
 
         {/* Live indicator */}
         {isLive && (
-          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm shadow-sm">
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
             <span className="text-xs font-medium text-neutral-700">Live</span>
           </div>
         )}
-
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
-          <Button
-            size="sm"
-            className="bg-white text-neutral-900 hover:bg-white/90 shadow-lg"
-            onClick={(e) => {
-              e.stopPropagation()
-              onClick()
-            }}
-          >
-            Open project
-          </Button>
-        </div>
       </div>
 
       {/* Content */}
@@ -149,7 +135,7 @@ function ProjectCard({
               <button
                 className={cn(
                   'h-8 w-8 flex items-center justify-center rounded-lg',
-                  'opacity-0 group-hover:opacity-100 hover:bg-muted transition-all',
+                  'hover:bg-muted/80 transition-colors',
                 )}
               >
                 <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
