@@ -119,7 +119,7 @@ export default function ChatInput({
   const [showSubagentDropdown, setShowSubagentDropdown] = useState(false)
   const [subagentFilter, setSubagentFilter] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
-  const [level, setLevel] = useState<number>(0)
+  const [level, setLevel] = useState<number>(1)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dragCounter = useRef(0)
@@ -143,7 +143,9 @@ export default function ChatInput({
   }, [level, reasoning.maxLevel])
 
   useEffect(() => {
-    setLevel(0)
+    // Default to medium (1) for OpenAI, first level for others
+    const provider = detectProvider(currentModel?.id)
+    setLevel(provider === 'openai' ? 1 : 0)
   }, [currentModel?.id])
 
   const handleModelSelect = (modelId: string, providerId: string) => {
