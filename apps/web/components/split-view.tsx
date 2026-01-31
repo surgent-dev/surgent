@@ -28,8 +28,12 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   const lastActivatedId = useRef<string | undefined>(undefined)
   const isMobile = useIsMobile()
 
-  const hasConvex = Boolean((project?.metadata as any)?.convex)
-  const convexTabAdded = useRef(false)
+  const convexDeployments = (
+    project?.integrations?.find((i) => i.provider === 'convex')?.config as any
+  )?.deployments
+  const hasConvexDev = Boolean(convexDeployments?.development?.name)
+  const hasConvexProd = Boolean(convexDeployments?.production?.name)
+  const convexTabsAdded = useRef(false)
 
   const [tabs, setTabs] = useState<PreviewTab[]>([
     { id: 'preview', type: 'preview', title: 'Preview' },
@@ -38,19 +42,34 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   const [activeTabId, setActiveTabId] = useState('preview')
   const tabCounter = useRef(0)
 
-  // Add Convex tab once when project has Convex enabled (insert after Preview, before Payments)
+  // Add Convex database tabs after Preview tab
   useEffect(() => {
-    if (hasConvex && !convexTabAdded.current) {
-      convexTabAdded.current = true
-      setTabs((prev) => {
-        const previewIdx = prev.findIndex((t) => t.id === 'preview')
-        const newTab = { id: 'convex', type: 'convex' as const, title: 'Database' }
-        const result = [...prev]
-        result.splice(previewIdx + 1, 0, newTab)
-        return result
+    if (convexTabsAdded.current || (!hasConvexDev && !hasConvexProd)) return
+    convexTabsAdded.current = true
+
+    const newTabs: PreviewTab[] = []
+    if (hasConvexDev) {
+      newTabs.push({
+        id: 'convex-dev',
+        type: 'convex',
+        title: 'Database',
+        convexEnv: 'development',
       })
     }
-  }, [hasConvex])
+    if (hasConvexProd) {
+      newTabs.push({
+        id: 'convex-prod',
+        type: 'convex',
+        title: 'Database',
+        convexEnv: 'production',
+      })
+    }
+
+    setTabs((prev) => {
+      const idx = prev.findIndex((t) => t.id === 'preview') + 1
+      return [...prev.slice(0, idx), ...newTabs, ...prev.slice(idx)]
+    })
+  }, [hasConvexDev, hasConvexProd])
 
   const handleCloseTab = useCallback((tabId: string) => {
     setTabs((t) => t.filter((tab) => tab.id !== tabId))

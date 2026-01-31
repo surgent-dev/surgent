@@ -1,67 +1,37 @@
 import { Hono } from 'hono'
-import { Configuration, SandboxApi } from '@daytonaio/api-client'
+import { Sandbox as E2BSandbox } from 'e2b'
 import type { AppContext } from '@/types/application'
 import { config } from '@/lib/config'
 
 const preview = new Hono<AppContext>()
 
-function getSandboxIdAndPort(host: string, defaultPort: number) {
+function parseSandboxSubdomain(host: string) {
   const subdomain = host.split(':')[0].split('.')[0]
-  const segments = subdomain.split('-')
-  const first = segments[0]
+  const [first, ...rest] = subdomain.split('-')
 
-  if (/^\d+$/.test(first) && segments.length >= 2) {
-    return {
-      sandboxId: segments.slice(1).join('-'),
-      port: parseInt(first, 10),
-    }
-  }
-
-  return { sandboxId: subdomain, port: defaultPort }
+  return /^\d+$/.test(first) && rest.length
+    ? { sandboxId: rest.join('-'), port: parseInt(first, 10) }
+    : { sandboxId: subdomain, port: Number(config.sandbox.defaultPort) }
 }
 
-function createSandboxApi() {
-  const basePath = config.daytona.apiUrl || 'https://app.daytona.io/api'
-  const apiKey = config.daytona.apiKey
-
-  return new SandboxApi(
-    new Configuration({
-      basePath,
-      baseOptions: { headers: { Authorization: `Bearer ${apiKey}` } },
-    }),
-  )
+async function buildTargetUrl(sandboxId: string, port: number, pathname: string, search: string) {
+  const sbx = await E2BSandbox.connect(sandboxId)
+  const target = new URL(`https://${sbx.getHost(port)}`)
+  target.pathname = pathname
+  target.search = search
+  return target
 }
 
-async function proxyRequest(
-  api: SandboxApi,
-  sandboxId: string,
-  port: number,
-  req: Request,
-  url: URL,
-): Promise<Response> {
-  const { data } = await api.getPortPreviewUrl(sandboxId, port)
-
-  const targetUrl = new URL(data.url as string)
-  targetUrl.pathname = `${targetUrl.pathname.replace(/\/$/, '')}${url.pathname}`
-  targetUrl.search = url.search
-
+async function proxyRequest(req: Request, target: URL, extraHeaders: Record<string, string>) {
   const headers = new Headers(req.headers)
-  headers.set('x-daytona-preview-token', data.token as string)
-  headers.set('x-daytona-skip-preview-warning', 'true')
   headers.delete('host')
+  Object.entries(extraHeaders).forEach(([k, v]) => headers.set(k, v))
 
-  // WebSocket passthrough (Vite HMR)
-  if (req.headers.get('Upgrade') === 'websocket') {
-    return fetch(new Request(targetUrl.toString(), { method: req.method, headers }))
-  }
+  const isWs = req.headers.get('upgrade') === 'websocket'
+  const init = { method: req.method, headers, body: isWs ? undefined : req.body }
+  const resp = await fetch(new Request(target.toString(), init))
 
-  const resp = await fetch(
-    new Request(targetUrl.toString(), {
-      method: req.method,
-      headers,
-      body: req.body,
-    }),
-  )
+  if (isWs) return resp
 
   // Disable caching for dev preview
   const outHeaders = new Headers(resp.headers)
@@ -78,18 +48,18 @@ async function proxyRequest(
 
 preview.all('/*', async (c) => {
   const url = new URL(c.req.url)
-  const defaultPort = Number(config.daytona.defaultPort)
-  const { sandboxId, port } = getSandboxIdAndPort(url.hostname, defaultPort)
-
-  if (!config.daytona.apiUrl || !config.daytona.apiKey) {
-    return c.text('Daytona not configured', 500)
-  }
-
+  const headerHost =
+    c.req.header('x-forwarded-host') ??
+    c.req.header('x-original-host') ??
+    c.req.header('cf-connecting-host') ??
+    url.hostname
+  const host = headerHost.split(',')[0]?.trim() || url.hostname
+  const { sandboxId, port } = parseSandboxSubdomain(host)
   const accept = c.req.header('Accept')
 
   try {
-    const api = createSandboxApi()
-    const resp = await proxyRequest(api, sandboxId, port, c.req.raw, url)
+    const targetUrl = await buildTargetUrl(sandboxId, port, url.pathname, url.search)
+    const resp = await proxyRequest(c.req.raw, targetUrl, {})
 
     if (resp.status >= 502 && accept?.includes('text/html')) {
       // @ts-expect-error - Hono types for status code are strict

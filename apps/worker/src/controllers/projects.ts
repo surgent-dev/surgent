@@ -366,7 +366,9 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       await ProjectService.upsertEnvVars(projectId, 'production', vars, convex.id)
 
       // Update config with prod deployment info
-      const dev = cfg.deployments?.development ?? (cfg.deploymentName ? { name: cfg.deploymentName, url: cfg.deploymentUrl } : undefined)
+      const dev =
+        cfg.deployments?.development ??
+        (cfg.deploymentName ? { name: cfg.deploymentName, url: cfg.deploymentUrl } : undefined)
       const nextConfig: ConvexConfig = {
         ...cfg,
         deployments: {
@@ -396,7 +398,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     const assetPaths = Object.keys(manifest)
     if (!assetPaths.length) throw new Error('No assets found in dist/')
 
-    const localEnv = await readEnvFile(sandbox, `${workingDir}/.env.local`)
+    const localEnv = await readEnvFile(sandbox, `${workingDir}/.env`)
 
     await updateStatus('uploading')
 

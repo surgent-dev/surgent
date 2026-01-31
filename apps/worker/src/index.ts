@@ -23,7 +23,13 @@ const app = new Hono<AppContext>({
   getPath: (req) => {
     const url = new URL(req.url)
     const path = url.pathname
-    const [subdomain] = url.hostname.split('.')
+    const headerHost =
+      req.headers.get('x-forwarded-host') ??
+      req.headers.get('x-original-host') ??
+      req.headers.get('cf-connecting-host') ??
+      url.hostname
+    const host = headerHost.split(',')[0]?.trim() || url.hostname
+    const [subdomain] = host.split(':')[0].split('.')
 
     if (path.startsWith('/server') || path.startsWith('/preview')) {
       return path

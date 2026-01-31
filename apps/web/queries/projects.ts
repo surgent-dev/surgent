@@ -200,14 +200,21 @@ export interface ConvexDashboardCredentials {
   deploymentName: string
 }
 
-async function fetchConvexDashboard(id: string): Promise<ConvexDashboardCredentials> {
-  return http.get(`api/projects/${id}/convex/dashboard`).json()
+async function fetchConvexDashboard(
+  id: string,
+  env: 'development' | 'production' = 'development',
+): Promise<ConvexDashboardCredentials> {
+  return http.get(`api/projects/${id}/convex/dashboard?env=${env}`).json()
 }
 
-export function useConvexDashboardQuery(id?: string, enabled = true) {
+export function useConvexDashboardQuery(
+  id?: string,
+  env: 'development' | 'production' = 'development',
+  enabled = true,
+) {
   return useQuery({
-    queryKey: ['convex-dashboard', id],
-    queryFn: () => fetchConvexDashboard(id!),
+    queryKey: ['convex-dashboard', id, env],
+    queryFn: () => fetchConvexDashboard(id!, env),
     enabled: Boolean(id) && enabled,
     staleTime: 1000 * 60 * 5, // 5 minutes
   })

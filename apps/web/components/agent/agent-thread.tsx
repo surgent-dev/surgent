@@ -51,6 +51,7 @@ import {
   AlertCircle,
   ArrowDown,
   CheckCircle2,
+  Database,
   Eye,
   FilePenLine,
   FileText,
@@ -63,6 +64,7 @@ import {
   Trash2,
   Undo2,
 } from 'lucide-react'
+import { MagicWand, Code, Rocket, Terminal as TerminalPh } from '@phosphor-icons/react'
 import { ShimmeringText } from '@/components/ui/shimmer-text'
 import { FunWorkingText } from '@/components/ui/fun-loading'
 import { Markdown } from '@/components/ui/markdown'
@@ -74,7 +76,9 @@ import MessageDiffBadge from './message-diff-badge'
 
 type PermissionResponse = 'once' | 'always' | 'reject'
 
-const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: string | null }> = {
+type ToolConfig = { icon: React.ElementType; done: string; doing: string | null }
+
+const TOOLS: Record<string, ToolConfig> = {
   read: { icon: Eye, done: 'Read', doing: 'Reading...' },
   write: { icon: FileText, done: 'Created', doing: 'Creating...' },
   edit: { icon: FilePenLine, done: 'Edited', doing: 'Editing...' },
@@ -84,29 +88,116 @@ const TOOLS: Record<string, { icon: React.ElementType; done: string; doing: stri
   glob: { icon: Search, done: 'Searched', doing: 'Searching...' },
   list: { icon: Search, done: 'Listed', doing: 'Listing...' },
   webfetch: { icon: Globe, done: 'Fetched', doing: 'Fetching...' },
+  websearch: { icon: Globe, done: 'Web Search', doing: 'Searching web...' },
+  codesearch: { icon: Code, done: 'Code Search', doing: 'Searching code...' },
+  skill: { icon: MagicWand, done: 'Skill', doing: 'Running skill...' },
   todowrite: { icon: ListTodo, done: 'Todos', doing: 'Updating...' },
   todoread: { icon: ListTodo, done: 'Todos', doing: 'Loading...' },
   task: { icon: Terminal, done: 'Task', doing: 'Running...' },
-  dev: { icon: Play, done: 'Started', doing: 'Starting...' },
-  devLogs: { icon: Terminal, done: 'Logs', doing: 'Loading...' },
+  dev: { icon: Rocket, done: 'Started', doing: 'Starting...' },
+  'dev-run': { icon: Rocket, done: 'Dev Server', doing: 'Running Development Server...' },
+  devLogs: { icon: TerminalPh, done: 'Logs', doing: 'Loading...' },
+}
+
+// MCP server configs for better display
+const MCP_SERVERS: Record<string, { icon: React.ElementType; label: string }> = {
+  convex: { icon: Database, label: 'Convex' },
+  pay: { icon: Database, label: 'Pay' },
+  stripe: { icon: Database, label: 'Stripe' },
+  supabase: { icon: Database, label: 'Supabase' },
+  firebase: { icon: Database, label: 'Firebase' },
+}
+
+function getMcpInfo(tool: string): { server: string; action: string } | undefined {
+  const index = tool.indexOf('_')
+  if (index <= 0) return undefined
+  const server = tool.slice(0, index)
+  const action = tool.slice(index + 1)
+  if (!server || !action) return undefined
+  return { server, action }
+}
+
+function formatActionName(action: string): string {
+  return action
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
+
+function getToolConfig(tool: string): ToolConfig {
+  const cfg = TOOLS[tool]
+  if (cfg) return cfg
+
+  // Check if it's an MCP tool (server_action format)
+  const mcpInfo = getMcpInfo(tool)
+  if (mcpInfo) {
+    const serverCfg = MCP_SERVERS[mcpInfo.server]
+    if (serverCfg) {
+      const actionLabel = formatActionName(mcpInfo.action)
+      return {
+        icon: serverCfg.icon,
+        done: `${serverCfg.label}: ${actionLabel}`,
+        doing: `${serverCfg.label}: ${actionLabel}...`,
+      }
+    }
+    // Unknown MCP server - show generic format
+    const actionLabel = formatActionName(mcpInfo.action)
+    return {
+      icon: Database,
+      done: `${mcpInfo.server}: ${actionLabel}`,
+      doing: `${mcpInfo.server}: ${actionLabel}...`,
+    }
+  }
+
+  return { icon: FileText, done: tool, doing: null }
 }
 
 function getTarget(part: ToolPart): string | undefined {
   const input = getToolInput(part)
   if (!input) return undefined
+
+  // File operations
   if (['read', 'write', 'edit'].includes(part.tool))
     return String(input.filePath || '')
       .split(/[/\\]/)
       .pop()
-  if (['bash', 'dev'].includes(part.tool)) return String(input.command || '')
+
+  // Command tools
+  if (['bash', 'dev', 'dev-run'].includes(part.tool)) return String(input.command || '')
+
+  // Task/subagent
   if (part.tool === 'task') return String(input.description || input.subagent_type || '')
+
+  // Search tools
   if (part.tool === 'grep') return String(input.pattern || '')
   if (part.tool === 'glob') return String(input.pattern || '')
   if (part.tool === 'list') return String(input.path || '/')
+  if (part.tool === 'codesearch' || part.tool === 'websearch')
+    return String(input.query || input.q || '')
+
+  // Web fetch
   if (part.tool === 'webfetch') {
     const url = String(input.url || '')
     if (typeof URL.canParse === 'function' && URL.canParse(url)) return new URL(url).hostname
     return url
+  }
+
+  // Skill - show which skill is being used
+  if (part.tool === 'skill') {
+    const skillName = String(input.skill || input.name || '')
+    return skillName ? `/${skillName}` : undefined
+  }
+
+  // MCP tools (convex_*, pay_*, etc.)
+  const mcpInfo = getMcpInfo(part.tool)
+  if (mcpInfo) {
+    // Try to get a meaningful target from input
+    if (typeof input.name === 'string') return input.name
+    if (typeof input.path === 'string') return input.path
+    if (typeof input.projectId === 'string') return input.projectId
+    if (typeof input.query === 'string') return input.query
+    if (typeof input.id === 'string') return input.id
+    return undefined
   }
 }
 
@@ -300,7 +391,7 @@ function Tool({
   defaultExpanded?: boolean
   compact?: boolean
 }) {
-  const cfg = TOOLS[part.tool] || { icon: FileText, done: part.tool, doing: null }
+  const cfg = getToolConfig(part.tool)
   const Icon = cfg.icon
   const target = getTarget(part)
   const subagentName = getSubagentName(part)

@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { parse as parseDotEnv } from 'dotenv'
 import { Sandbox as E2BSandbox } from 'e2b'
+import type { ProjectMetadata } from '@repo/db'
 import {
   createProjectOnTeam,
   createDeployKey,
@@ -12,10 +13,12 @@ import {
   callMutation,
   type ConvexValue,
 } from '@/apis/convex'
-import { workspacePath, defaultProviderName } from '@/lib/sandbox'
 import * as ProjectService from '@/services/projects'
 
-// Context passed to MCP tools - contains project credentials
+// ============================================
+// Types
+// ============================================
+
 export interface McpContext {
   deploymentUrl: string
   deployKey: string
@@ -26,7 +29,30 @@ export interface McpContext {
   envFile?: string
 }
 
-// Tool input schemas - using objects compatible with MCP SDK
+interface ConvexIntegrationConfig {
+  convexProjectId?: string
+  deployments?: {
+    development?: { name?: string; url?: string }
+    production?: { name?: string; url?: string }
+  }
+}
+
+interface ToolContext {
+  projectId: string
+  integration: Awaited<ReturnType<typeof ProjectService.getIntegrationByProvider>>
+  sandbox: Awaited<ReturnType<typeof ProjectService.getSandboxByProjectId>>
+  deploymentUrl: string
+  deployKey: string
+}
+
+type McpResponse = { content: { type: 'text'; text: string }[]; isError?: boolean }
+
+type EnvWriteResult = { status: 'written'; path: string } | { status: 'failed'; error: string }
+
+// ============================================
+// Schemas
+// ============================================
+
 const createProjectSchema = {
   name: z.string().describe('Name for the new Convex project'),
 }
@@ -46,78 +72,88 @@ const callFunctionSchema = {
   args: z.record(z.string(), z.unknown()).optional().describe('Arguments to pass to the function'),
 }
 
-// Response helpers
-type McpResponse = { content: { type: 'text'; text: string }[]; isError?: boolean }
+// ============================================
+// Helpers
+// ============================================
+
 const ok = (data: Record<string, unknown>): McpResponse => ({
   content: [{ type: 'text', text: JSON.stringify({ success: true, ...data }, null, 2) }],
 })
+
 const err = (error: string): McpResponse => ({
   content: [{ type: 'text', text: JSON.stringify({ success: false, error }) }],
   isError: true,
 })
+
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
-function getContext(extra: unknown): McpContext | undefined {
-  if (!extra || typeof extra !== 'object') return undefined
-  const meta = (extra as Record<string, unknown>)._meta
-  if (!meta || typeof meta !== 'object') return undefined
-  const ctx = (meta as Record<string, unknown>).context
-  if (!ctx || typeof ctx !== 'object') return undefined
-  return ctx as McpContext
+function toEnvFileContent(vars: Record<string, string>): string {
+  return Object.entries(vars)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('\n')
 }
 
-function resolveEnvPath(ctx: McpContext): string | undefined {
-  const dir = ctx.workingDirectory ?? (ctx.projectId ? workspacePath(ctx.projectId) : undefined)
-  if (!dir) return undefined
-  const root = dir.replace(/\/$/, '') || '/'
-  if (!ctx.envFile) return `${root}/.env.local`
-  if (ctx.envFile.startsWith('/')) return ctx.envFile
-  return `${root}/${ctx.envFile}`
-}
-
-function formatEnv(vars: Record<string, string>): string {
+function formatEnvWithQuotes(vars: Record<string, string>): string {
   const lines = Object.entries(vars).map(
     ([k, v]) => `${k}=${/^[A-Za-z0-9_./:@-]+$/.test(v) ? v : JSON.stringify(v)}`,
   )
   return lines.length ? `${lines.join('\n')}\n` : ''
 }
 
-type EnvWriteResult =
-  | { status: 'written'; path: string }
-  | { status: 'skipped'; reason: string }
-  | { status: 'failed'; error: string }
+function extractProjectId(extra: unknown): string | undefined {
+  return (extra as Record<string, any> | undefined)?._meta?.context?.projectId
+}
+
+async function getToolContext(extra: unknown): Promise<ToolContext | null> {
+  const projectId = extractProjectId(extra)
+  if (!projectId) return null
+
+  const [integration, sandbox] = await Promise.all([
+    ProjectService.getIntegrationByProvider(projectId, 'convex'),
+    ProjectService.getSandboxByProjectId(projectId),
+  ])
+  if (!integration?.id) return null
+
+  const config = integration.config as ConvexIntegrationConfig | null
+  const deploymentUrl = config?.deployments?.development?.url
+  if (!deploymentUrl) return null
+
+  const vars = await ProjectService.getEnvVarsByProjectId(projectId, 'development', integration.id)
+  const deployKey = vars.find((v) => v.key === 'CONVEX_DEPLOY_KEY')?.value
+  if (!deployKey) return null
+
+  return { projectId, integration, sandbox, deploymentUrl, deployKey }
+}
 
 async function writeEnvToSandbox(
-  ctx: McpContext | undefined,
+  projectId: string,
+  sandbox: ToolContext['sandbox'],
   vars: Record<string, string>,
 ): Promise<EnvWriteResult> {
-  if (!ctx?.sandboxId) return { status: 'skipped', reason: 'Missing sandboxId' }
-  const provider = ctx.sandboxProvider ?? defaultProviderName
-  if (provider !== 'e2b') return { status: 'skipped', reason: `Provider ${provider} not supported` }
-  const path = resolveEnvPath(ctx)
-  if (!path) return { status: 'skipped', reason: 'Missing workingDirectory or projectId' }
+  if (!sandbox?.id) return { status: 'failed', error: 'No sandbox available' }
 
   try {
-    const sandbox = await E2BSandbox.connect(ctx.sandboxId)
-    const existing = await sandbox.files.read(path).catch(() => '') // file may not exist
-    const merged = { ...parseDotEnv(existing), ...vars }
-    await sandbox.files.write(path, formatEnv(merged))
+    const project = await ProjectService.getProjectById(projectId)
+    const metadata = project?.metadata as ProjectMetadata | undefined
+    if (!metadata?.workingDirectory) return { status: 'failed', error: 'No working directory' }
+
+    const path = `${metadata.workingDirectory.replace(/\/$/, '')}/.env`
+    const sb = await E2BSandbox.connect(sandbox.id)
+    const existing = await sb.files.read(path).catch(() => '')
+    await sb.files.write(path, formatEnvWithQuotes({ ...parseDotEnv(existing), ...vars }))
     return { status: 'written', path }
   } catch (e) {
     return { status: 'failed', error: errMsg(e) }
   }
 }
 
-/**
- * Create the Convex MCP server with all tools registered
- */
-export function createConvexMcpServer(): McpServer {
-  const server = new McpServer({
-    name: 'convex-mcp',
-    version: '1.0.0',
-  })
+// ============================================
+// MCP Server
+// ============================================
 
-  // Tool: Create Project
+export function createConvexMcpServer(): McpServer {
+  const server = new McpServer({ name: 'convex-mcp', version: '1.0.0' })
+
   server.registerTool(
     'create_project',
     {
@@ -132,80 +168,63 @@ Returns:
 - envFileContent: Complete .env file content as a string
 - integration: The integration record (id, provider, status)
 
-If Convex integration already exists, returns existing integration and env vars.
-
-IMPORTANT: Save deploymentUrl and deployKey - you'll need them in _meta.context for subsequent operations.`,
+If Convex integration already exists, returns existing. Subsequent tools auto-resolve credentials from projectId.`,
       inputSchema: createProjectSchema,
     },
     async (args, extra) => {
-      const ctx = getContext(extra)
-      if (!ctx?.projectId) return err('Missing projectId in context - required to link Convex integration')
-
-      // Hardcoded to development for now
-      const environment = 'development'
+      const projectId = extractProjectId(extra)
+      if (!projectId) return err('Missing projectId')
 
       try {
-        // Check if Convex integration already exists for this project
-        const existingIntegration = await ProjectService.getIntegrationByProvider(ctx.projectId, 'convex')
-        if (existingIntegration) {
-          const config = existingIntegration.config as {
-            convexProjectId?: string
-            deploymentName?: string
-            deploymentUrl?: string
-            deployments?: { development?: { name?: string; url?: string } }
-          } | null
-          const dev = config?.deployments?.development
-          const name = dev?.name ?? config?.deploymentName
-          const url = dev?.url ?? config?.deploymentUrl
+        const existingIntegration = await ProjectService.getIntegrationByProvider(
+          projectId,
+          'convex',
+        )
 
-          // Fetch existing env vars for this integration only
-          const envVarRows = await ProjectService.getEnvVarsByProjectId(ctx.projectId, environment, existingIntegration.id ?? undefined)
+        if (existingIntegration) {
+          const config = existingIntegration.config as ConvexIntegrationConfig | null
+          const dev = config?.deployments?.development
+          const envVarRows = await ProjectService.getEnvVarsByProjectId(
+            projectId,
+            'development',
+            existingIntegration.id ?? undefined,
+          )
           const envVars = Object.fromEntries(
-            envVarRows.filter((row) => row.value).map((row) => [row.key, row.value as string])
+            envVarRows.filter((row) => row.value).map((row) => [row.key, row.value as string]),
           )
 
           return ok({
-            message: 'Convex integration already exists for this project. Returning existing integration and env vars.',
+            message:
+              'Convex integration already exists. Returning existing integration and env vars.',
             alreadyExists: true,
             integration: {
               id: existingIntegration.id,
               provider: 'convex',
               status: existingIntegration.status,
               convexProjectId: config?.convexProjectId,
-              deploymentName: name,
-              deploymentUrl: url,
+              deploymentName: dev?.name,
+              deploymentUrl: dev?.url,
             },
             envVars,
-            envFileContent: Object.entries(envVars)
-              .map(([k, v]) => `${k}=${v}`)
-              .join('\n'),
+            envFileContent: toEnvFileContent(envVars),
           })
         }
 
-        // Create Convex project (dev deployment only)
-        const project = await createProjectOnTeam({
-          name: args.name,
-          deploymentType: 'dev',
-        })
+        const project = await createProjectOnTeam({ name: args.name, deploymentType: 'dev' })
         const deployKey = await createDeployKey(project.deploymentName)
 
-        // Create integration record
         const integration = await ProjectService.createIntegration({
-          projectId: ctx.projectId,
+          projectId,
           provider: 'convex',
           config: {
             convexProjectId: project.projectId,
             deployments: {
-              development: {
-                name: project.deploymentName,
-                url: project.deploymentUrl,
-              },
+              development: { name: project.deploymentName, url: project.deploymentUrl },
             },
           },
           status: 'connected',
         })
 
-        // Define env vars for development
         const envVars = {
           CONVEX_DEPLOYMENT: `dev:${project.deploymentName}`,
           CONVEX_URL: project.deploymentUrl,
@@ -213,16 +232,15 @@ IMPORTANT: Save deploymentUrl and deployKey - you'll need them in _meta.context 
           VITE_CONVEX_URL: project.deploymentUrl,
         }
 
-        // Save env vars to database linked to integration
-        await ProjectService.upsertEnvVars(ctx.projectId, environment, envVars, integration.id)
+        await ProjectService.upsertEnvVars(projectId, 'development', envVars, integration.id)
 
-        // Also write to sandbox if available
-        const envFileWrite = await writeEnvToSandbox(ctx, envVars)
+        const sandbox = await ProjectService.getSandboxByProjectId(projectId)
+        const envFileWrite = await writeEnvToSandbox(projectId, sandbox, envVars)
 
         const message =
           envFileWrite.status === 'written'
-            ? `Convex project created and env variables saved. Also written to ${envFileWrite.path}. No manual setup needed - continue building your app.`
-            : 'Convex project created and env variables saved to database. Write envFileContent to .env.local to configure your app.'
+            ? `Convex project created and env variables saved. Also written to ${envFileWrite.path}.`
+            : 'Convex project created and env variables saved. Write envFileContent to .env to configure your app.'
 
         return ok({
           message,
@@ -230,9 +248,7 @@ IMPORTANT: Save deploymentUrl and deployKey - you'll need them in _meta.context 
           project: { ...project, deployKey },
           integration: { id: integration.id, provider: 'convex', status: 'connected' },
           envVars,
-          envFileContent: Object.entries(envVars)
-            .map(([k, v]) => `${k}=${v}`)
-            .join('\n'),
+          envFileContent: toEnvFileContent(envVars),
           envFileWrite,
         })
       } catch (e) {
@@ -241,7 +257,6 @@ IMPORTANT: Save deploymentUrl and deployKey - you'll need them in _meta.context 
     },
   )
 
-  // Tool: Delete Project
   server.registerTool(
     'delete_project',
     {
@@ -250,7 +265,7 @@ IMPORTANT: Save deploymentUrl and deployKey - you'll need them in _meta.context 
 
 WARNING: This is irreversible! All data, functions, and deployments will be destroyed.
 
-Use the projectId returned from create_project. Does not require _meta.context.`,
+Use the projectId returned from create_project.`,
       inputSchema: deleteProjectSchema,
     },
     async (args) => {
@@ -263,7 +278,6 @@ Use the projectId returned from create_project. Does not require _meta.context.`
     },
   )
 
-  // Tool: Set Environment Variables
   server.registerTool(
     'set_env_vars',
     {
@@ -273,23 +287,16 @@ Use the projectId returned from create_project. Does not require _meta.context.`
 Use this to configure API keys, secrets, or any runtime configuration your Convex functions need.
 Variables are passed as key-value pairs: {"OPENAI_API_KEY": "sk-...", "DEBUG": "true"}
 
-Existing variables with the same name will be overwritten. Other variables are preserved.
-
-REQUIRES _meta.context with deploymentUrl and deployKey from create_project.
-
-Optional sandbox write-through:
-- If _meta.context includes sandboxId and either workingDirectory or projectId,
-  the tool will write env vars directly to .env.local in the sandbox repo.
-- You can override the target file with _meta.context.envFile.`,
+Existing variables with the same name will be overwritten. Other variables are preserved.`,
       inputSchema: setEnvVarsSchema,
     },
     async (args, extra) => {
-      const ctx = getContext(extra)
-      if (!ctx?.deploymentUrl || !ctx?.deployKey) return err('Missing deployment context')
+      const ctx = await getToolContext(extra)
+      if (!ctx) return err('Convex not provisioned')
 
       try {
         await setDeploymentEnvVars(ctx.deploymentUrl, ctx.deployKey, args.vars)
-        const envFileWrite = await writeEnvToSandbox(ctx, args.vars)
+        const envFileWrite = await writeEnvToSandbox(ctx.projectId, ctx.sandbox, args.vars)
         return ok({
           message: `Set ${Object.keys(args.vars).length} environment variable(s)`,
           envFileWrite,
@@ -300,21 +307,18 @@ Optional sandbox write-through:
     },
   )
 
-  // Tool: List Environment Variables
   server.registerTool(
     'list_env_vars',
     {
       title: 'List Environment Variables',
       description: `List all environment variables currently set on a Convex deployment.
 
-Returns an array of variable names and values. Use this to verify configuration or debug issues.
-
-REQUIRES _meta.context with deploymentUrl and deployKey from create_project.`,
+Returns an array of variable names and values.`,
       inputSchema: {},
     },
     async (_args, extra) => {
-      const ctx = getContext(extra)
-      if (!ctx?.deploymentUrl || !ctx?.deployKey) return err('Missing deployment context')
+      const ctx = await getToolContext(extra)
+      if (!ctx) return err('Convex not provisioned')
 
       try {
         const vars = await listDeploymentEnvVars(ctx.deploymentUrl, ctx.deployKey)
@@ -325,7 +329,6 @@ REQUIRES _meta.context with deploymentUrl and deployKey from create_project.`,
     },
   )
 
-  // Tool: Call Query
   server.registerTool(
     'call_query',
     {
@@ -338,16 +341,12 @@ The 'path' format is "filename:functionName":
 - "messages:list" → calls the 'list' query in convex/messages.ts
 - "users:getById" → calls the 'getById' query in convex/users.ts
 
-Pass arguments as a JSON object matching the function's expected args.
-
-Returns the query result (can be any JSON-serializable value).
-
-REQUIRES _meta.context with deploymentUrl and deployKey from create_project.`,
+Pass arguments as a JSON object matching the function's expected args.`,
       inputSchema: callFunctionSchema,
     },
     async (args, extra) => {
-      const ctx = getContext(extra)
-      if (!ctx?.deploymentUrl || !ctx?.deployKey) return err('Missing deployment context')
+      const ctx = await getToolContext(extra)
+      if (!ctx) return err('Convex not provisioned')
 
       try {
         const funcArgs = (args.args ?? {}) as Record<string, ConvexValue>
@@ -360,7 +359,6 @@ REQUIRES _meta.context with deploymentUrl and deployKey from create_project.`,
     },
   )
 
-  // Tool: Call Mutation
   server.registerTool(
     'call_mutation',
     {
@@ -374,16 +372,12 @@ The 'path' format is "filename:functionName":
 - "users:create" → calls the 'create' mutation in convex/users.ts
 - "tasks:delete" → calls the 'delete' mutation in convex/tasks.ts
 
-Pass arguments as a JSON object matching the function's expected args.
-
-Returns the mutation result (often the ID of created/modified document, or null).
-
-REQUIRES _meta.context with deploymentUrl and deployKey from create_project.`,
+Pass arguments as a JSON object matching the function's expected args.`,
       inputSchema: callFunctionSchema,
     },
     async (args, extra) => {
-      const ctx = getContext(extra)
-      if (!ctx?.deploymentUrl || !ctx?.deployKey) return err('Missing deployment context')
+      const ctx = await getToolContext(extra)
+      if (!ctx) return err('Convex not provisioned')
 
       try {
         const funcArgs = (args.args ?? {}) as Record<string, ConvexValue>

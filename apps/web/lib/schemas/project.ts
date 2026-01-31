@@ -16,6 +16,12 @@ export const WorkerSchema = z
   })
   .nullable()
 
+export const IntegrationSchema = z.object({
+  provider: z.string(),
+  status: z.string(),
+  config: z.any().nullable(),
+})
+
 export const ProjectSchema = z.object({
   id: z.string(),
   userId: z.string(),
@@ -28,6 +34,7 @@ export const ProjectSchema = z.object({
   updatedAt: z.string(),
   sandbox: SandboxSchema,
   worker: WorkerSchema,
+  integrations: z.array(IntegrationSchema).optional(),
 })
 
 export const ProjectsSchema = z.array(ProjectSchema)
@@ -35,3 +42,4 @@ export const ProjectsSchema = z.array(ProjectSchema)
 export const CreateProjectResponseSchema = z.object({ id: z.string() })
 
 export type Project = z.infer<typeof ProjectSchema>
+export type Integration = z.infer<typeof IntegrationSchema>

@@ -24,6 +24,7 @@ export const config = {
   sandbox: {
     provider: (env.SANDBOX_PROVIDER || 'e2b') as 'e2b' | 'daytona',
     defaultPort: '3000',
+    previewDomain: env.SANDBOX_PREVIEW_DOMAIN || 'surgent.dev',
   },
   e2b: {
     apiKey: env.E2B_API_KEY,

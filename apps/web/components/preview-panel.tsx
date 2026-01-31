@@ -66,6 +66,7 @@ export interface PreviewTab {
   messageId?: string
   sessionId?: string
   convexPath?: string
+  convexEnv?: 'development' | 'production'
 }
 
 const DEFAULT_TABS: PreviewTab[] = [{ id: 'preview', type: 'preview', title: 'Preview' }]
@@ -522,6 +523,7 @@ function TabButton({
 }) {
   const closable = tab.type !== 'preview' && tab.type !== 'convex' && tab.type !== 'payments'
   const Icon = getTabIcon(tab.type)
+  const isProd = tab.convexEnv === 'production'
 
   return (
     <button
@@ -534,6 +536,18 @@ function TabButton({
     >
       {Icon && <Icon className="size-4" />}
       <span className="truncate max-w-32">{tab.title}</span>
+      {tab.convexEnv && (
+        <span
+          className={cn(
+            'px-1.5 py-0.5 text-[10px] font-medium rounded-full leading-none',
+            isProd
+              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+              : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+          )}
+        >
+          {isProd ? 'Prod' : 'Dev'}
+        </span>
+      )}
       {closable && onClose && (
         <span
           role="button"
@@ -588,13 +602,15 @@ export default function PreviewPanel({
     diffMessageId,
   )
 
-  const hasConvex = Boolean((project?.metadata as any)?.convex)
   const hasLogs = tabs.some((tab) => tab.type === 'logs')
   const hasPayments = tabs.some((tab) => tab.type === 'payments')
 
+  // Get convex environment from active tab
+  const convexEnv = tab?.convexEnv ?? 'development'
   const { data: convexCredentials, isLoading: convexLoading } = useConvexDashboardQuery(
     projectId,
-    hasConvex && type === 'convex',
+    convexEnv,
+    type === 'convex',
   )
 
   const { data: sandboxLogs, isLoading: logsLoading } = useSandboxLogsQuery(

@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../middleware/auth'
 import { config } from '@/lib/config'
-import { sanitizeHostname } from '@/lib/utils'
+import { sanitizeHostname, getSandboxPreviewUrl } from '@/lib/utils'
 import {
   deployProject,
   createDeploymentRecord,
@@ -27,7 +27,12 @@ import {
   buildDashboardCredentials,
 } from '@/apis/convex'
 import { createGitHubApp, GitHubService, getValidUserToken } from '@/apis/github'
-import { isHostnameAvailable, getProjectWithAuth } from '@/services/projects'
+import {
+  isHostnameAvailable,
+  getProjectWithAuth,
+  getIntegrationByProvider,
+  getEnvVarsByProjectId,
+} from '@/services/projects'
 import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
 
 const projects = new Hono<AppContext>()
@@ -98,7 +103,17 @@ projects.get('/', requireAuth, async (c) => {
       metadata: r.metadata,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
-      sandbox: r.sandboxId ? { id: r.sandboxId, status: r.sandboxStatus, url: r.sandboxUrl } : null,
+      sandbox: r.sandboxId
+        ? {
+            id: r.sandboxId,
+            status: r.sandboxStatus,
+            url: getSandboxPreviewUrl(
+              r.sandboxId,
+              Number(config.sandbox.defaultPort),
+              r.sandboxUrl,
+            ),
+          }
+        : null,
       worker: r.workerName
         ? { name: r.workerName, status: r.workerStatus, hostname: r.workerHostname }
         : null,
@@ -244,14 +259,34 @@ projects.get('/:id', zValidator('param', idParam), async (c) => {
     .where('project.id', '=', id)
     .executeTakeFirst()
 
+  // Fetch integrations for this project
+  const integrations = await db
+    .selectFrom('integration')
+    .select(['provider', 'status', 'config'])
+    .where('projectId', '=', id)
+    .execute()
+
   return c.json({
     ...result.project,
     sandbox: row?.sandboxId
-      ? { id: row.sandboxId, status: row.sandboxStatus, url: row.sandboxUrl }
+      ? {
+          id: row.sandboxId,
+          status: row.sandboxStatus,
+          url: getSandboxPreviewUrl(
+            row.sandboxId,
+            Number(config.sandbox.defaultPort),
+            row.sandboxUrl,
+          ),
+        }
       : null,
     worker: row?.workerName
       ? { name: row.workerName, status: row.workerStatus, hostname: row.workerHostname }
       : null,
+    integrations: integrations.map((i) => ({
+      provider: i.provider,
+      status: i.status,
+      config: i.config,
+    })),
   })
 })
 
@@ -672,7 +707,41 @@ projects.get('/:id/download', zValidator('param', idParam), async (c) => {
   }
 })
 
-// Convex prod deploy (promote)
+// ============================================
+// Convex Integration Endpoints
+// ============================================
+
+type ConvexEnv = 'development' | 'production'
+
+interface ConvexCredentials {
+  deploymentName: string
+  deploymentUrl: string
+  deployKey: string
+}
+
+async function getConvexCredentials(
+  projectId: string,
+  env: ConvexEnv,
+): Promise<ConvexCredentials | null> {
+  const integration = await getIntegrationByProvider(projectId, 'convex')
+  if (!integration?.id) return null
+
+  const config = integration.config as Record<string, any> | null
+  const deployment = config?.deployments?.[env]
+  if (!deployment?.name || !deployment?.url) return null
+
+  const envVars = await getEnvVarsByProjectId(projectId, env, integration.id)
+  const deployKey = envVars.find((v) => v.key === 'CONVEX_DEPLOY_KEY')?.value
+  if (!deployKey) return null
+
+  return {
+    deploymentName: deployment.name,
+    deploymentUrl: deployment.url,
+    deployKey,
+  }
+}
+
+// POST /projects/:id/convex/deploy/prod - Promote to production
 projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const result = await getProjectWithAuth(id, c.get('user')!.id)
@@ -682,23 +751,20 @@ projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c)
   return c.json({ deployed: true })
 })
 
-// GET /projects/:id/convex/env - List all environment variables
+// GET /projects/:id/convex/env - List deployment environment variables
 projects.get('/:id/convex/env', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const result = await getProjectWithAuth(id, c.get('user')!.id)
   if ('error' in result) return c.json({ error: result.error }, result.status)
-  const row = result.project
 
-  const convex = (row.metadata as any)?.convex
-  if (!convex?.deploymentUrl || !convex?.deployKey) {
-    return c.json({ error: 'Convex not provisioned' }, 400)
-  }
+  const creds = await getConvexCredentials(id, 'development')
+  if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
 
-  const vars = await listDeploymentEnvVars(convex.deploymentUrl, convex.deployKey)
+  const vars = await listDeploymentEnvVars(creds.deploymentUrl, creds.deployKey)
   return c.json({ environmentVariables: vars })
 })
 
-// POST /projects/:id/convex/env - Update environment variables
+// POST /projects/:id/convex/env - Update deployment environment variables
 projects.post(
   '/:id/convex/env',
   zValidator('param', idParam),
@@ -709,37 +775,33 @@ projects.post(
 
     const result = await getProjectWithAuth(id, c.get('user')!.id)
     if ('error' in result) return c.json({ error: result.error }, result.status)
-    const row = result.project
 
-    const convex = (row.metadata as any)?.convex
-    if (!convex?.deploymentUrl || !convex?.deployKey) {
-      return c.json({ error: 'Convex not provisioned' }, 400)
-    }
+    const creds = await getConvexCredentials(id, 'development')
+    if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
 
-    await setDeploymentEnvVars(convex.deploymentUrl, convex.deployKey, vars)
+    await setDeploymentEnvVars(creds.deploymentUrl, creds.deployKey, vars)
     return c.json({ updated: true })
   },
 )
 
 // GET /projects/:id/convex/dashboard - Get dashboard embed credentials
-projects.get('/:id/convex/dashboard', zValidator('param', idParam), async (c) => {
-  const { id } = c.req.valid('param')
-  const result = await getProjectWithAuth(id, c.get('user')!.id)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
-  const row = result.project
+projects.get(
+  '/:id/convex/dashboard',
+  zValidator('param', idParam),
+  zValidator('query', z.object({ env: z.enum(['development', 'production']).optional() })),
+  async (c) => {
+    const { id } = c.req.valid('param')
+    const { env = 'development' } = c.req.valid('query')
 
-  const convex = (row.metadata as any)?.convex
-  if (!convex?.deploymentName || !convex?.deploymentUrl || !convex?.deployKey) {
-    return c.json({ error: 'Convex not provisioned' }, 400)
-  }
+    const result = await getProjectWithAuth(id, c.get('user')!.id)
+    if ('error' in result) return c.json({ error: result.error }, result.status)
 
-  const credentials = buildDashboardCredentials({
-    deploymentName: convex.deploymentName,
-    deploymentUrl: convex.deploymentUrl,
-    deployKey: convex.deployKey,
-  })
-  return c.json(credentials)
-})
+    const creds = await getConvexCredentials(id, env)
+    if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
+
+    return c.json(buildDashboardCredentials(creds))
+  },
+)
 
 function isOriginTrusted(origin: string, trustedOrigins: string[]): boolean {
   try {

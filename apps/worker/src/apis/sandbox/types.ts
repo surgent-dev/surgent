@@ -7,7 +7,6 @@ export interface Sandbox {
     opts?: { timeout?: number; cwd?: string; env?: Record<string, string> },
   ): Promise<{ code: number; output: string }>
   read(path: string): Promise<Buffer>
-  write(path: string, content: string | Buffer): Promise<void>
   list(path: string): Promise<FileInfo[]>
   stat(path: string): Promise<FileInfo>
   clone(url: string, dir: string): Promise<void>

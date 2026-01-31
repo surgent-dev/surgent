@@ -1,7 +1,9 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
-import { ArrowUp, Paperclip, X, Loader2, FileText } from 'lucide-react'
+import { ArrowUp, X, Loader2, FileText } from 'lucide-react'
+import { Sliders, Paperclip, Plug } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import {
   fileToDataUrl,
@@ -10,6 +12,7 @@ import {
   type UploadingAttachment,
   type FilePart,
 } from '@/lib/upload'
+import { useMcpStatusQuery } from '@/queries/mcp'
 import ModelSelectorDropdown, { type ProviderModel } from './model-selector-dropdown'
 import type { Agent } from '@opencode-ai/sdk'
 
@@ -93,6 +96,97 @@ function getReasoningConfig(modelId?: string) {
   }
 }
 
+type InputMenuProps = {
+  onUploadClick: () => void
+  uploadDisabled?: boolean
+  mcpStates?: Record<string, boolean>
+  onMcpToggle?: (name: string, enabled: boolean) => void
+}
+
+function InputMenu({ onUploadClick, uploadDisabled, mcpStates = {}, onMcpToggle }: InputMenuProps) {
+  const { data: mcpStatus, isLoading } = useMcpStatusQuery()
+  const totalCount = mcpStatus ? Object.keys(mcpStatus).length : 0
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="size-8 shrink-0 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60"
+        >
+          <Sliders className="size-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="start" className="w-52 p-0">
+        {/* Upload file */}
+        <button
+          type="button"
+          onClick={onUploadClick}
+          disabled={uploadDisabled}
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Paperclip className="size-4 text-muted-foreground" />
+          <span>Upload file</span>
+        </button>
+
+        {/* MCP Servers */}
+        <div className="border-t">
+          <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+            <Plug className="size-3.5" />
+            <span>MCP</span>
+          </div>
+          {isLoading ? (
+            <div className="px-3 pb-2 text-xs text-muted-foreground">Loading...</div>
+          ) : mcpStatus && totalCount > 0 ? (
+            <div className="px-3 pb-2 space-y-1.5">
+              {Object.entries(mcpStatus).map(([name, status]) => {
+                const isEnabled = mcpStates[name] ?? true
+                const isConnected = status.status === 'connected'
+                return (
+                  <div key={name} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span
+                        className={cn(
+                          'size-1.5 rounded-full',
+                          !isEnabled
+                            ? 'bg-muted-foreground/40'
+                            : isConnected
+                              ? 'bg-emerald-500'
+                              : 'bg-red-500',
+                        )}
+                      />
+                      <span className={cn('capitalize', !isEnabled && 'text-muted-foreground')}>
+                        {name}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onMcpToggle?.(name, !isEnabled)}
+                      className={cn(
+                        'relative w-6 h-3.5 rounded-full transition-colors',
+                        isEnabled ? 'bg-emerald-500' : 'bg-muted-foreground/30',
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'absolute top-0.5 size-2.5 rounded-full bg-white shadow-sm transition-transform',
+                          isEnabled ? 'translate-x-[11px]' : 'translate-x-0.5',
+                        )}
+                      />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="px-3 pb-2 text-xs text-muted-foreground">No servers</div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export default function ChatInput({
   onSubmit,
   disabled,
@@ -120,6 +214,7 @@ export default function ChatInput({
   const [subagentFilter, setSubagentFilter] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [level, setLevel] = useState<number>(1)
+  const [mcpStates, setMcpStates] = useState<Record<string, boolean>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dragCounter = useRef(0)
@@ -438,7 +533,7 @@ export default function ChatInput({
         </div>
         <div className="flex items-center justify-between gap-2 px-2 py-2">
           <div className="flex items-center gap-1 sm:gap-2 flex-wrap min-w-0">
-            {/* File attach button */}
+            {/* Hidden file input */}
             <input
               ref={fileInputRef}
               type="file"
@@ -447,16 +542,13 @@ export default function ChatInput({
               onChange={handleFileSelect}
               className="hidden"
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={attachments.length >= MAX_FILES}
-              className="size-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              <Paperclip className="size-4" />
-            </Button>
+
+            <InputMenu
+              onUploadClick={() => fileInputRef.current?.click()}
+              uploadDisabled={attachments.length >= MAX_FILES}
+              mcpStates={mcpStates}
+              onMcpToggle={(name, enabled) => setMcpStates((s) => ({ ...s, [name]: enabled }))}
+            />
 
             <Tooltip>
               <TooltipTrigger asChild>

@@ -559,115 +559,109 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   return (
     <div className="flex flex-col h-full w-full min-w-0 @container/conversation">
       {/* Header */}
-      <header className="flex flex-col border-b bg-muted/30 shrink-0">
-        <div className="flex h-10 items-center px-3 gap-2 min-w-0 text-xs">
-          <span
-            className={cn(
-              'size-2 rounded-full',
-              !connected && 'bg-muted-foreground/40',
-              connected && isRetrying && 'bg-warning',
-              connected && !isRetrying && 'bg-success',
-            )}
-          />
-          <span className="font-medium truncate max-w-40 @md/conversation:max-w-72">
-            {sessionName}
-          </span>
-
-          {connected && isRetrying && retryInfo && (
-            <>
-              <span className="text-muted-foreground">·</span>
-              <RetryCountdown retryInfo={retryInfo} />
-            </>
+      <header className="flex h-10 items-center border-b bg-muted/30 shrink-0 px-3 gap-2 min-w-0 text-xs">
+        <span
+          className={cn(
+            'size-2 rounded-full',
+            !connected && 'bg-muted-foreground/40',
+            connected && isRetrying && 'bg-warning',
+            connected && !isRetrying && 'bg-success',
           )}
+        />
+        <span className="font-medium truncate max-w-40 @md/conversation:max-w-72">
+          {sessionName}
+        </span>
 
-          {connected && !isRetrying && (compacting || session?.time?.compacting) && (
-            <>
-              <span className="text-muted-foreground">·</span>
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <Loader2 className="size-2.5 animate-spin" />
-                Compacting
-              </span>
-            </>
-          )}
+        {connected && isRetrying && retryInfo && (
+          <>
+            <span className="text-muted-foreground">·</span>
+            <RetryCountdown retryInfo={retryInfo} />
+          </>
+        )}
 
-          {connected && !isRetrying && !compacting && !session?.time?.compacting && (
-            <>
-              <span className="text-muted-foreground">·</span>
-              <span className="text-muted-foreground tabular-nums">
-                {shownTokens?.toLocaleString() ?? '—'} tokens
-                {shownPct !== undefined && !contextExceeded && (
-                  <span className="hidden @md/conversation:inline"> / {shownPct}%</span>
-                )}
-              </span>
-              {contextExceeded && (
-                <>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="text-destructive font-medium">Context exceeded</span>
-                </>
+        {connected && !isRetrying && (compacting || session?.time?.compacting) && (
+          <>
+            <span className="text-muted-foreground">·</span>
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <Loader2 className="size-2.5 animate-spin" />
+              Compacting
+            </span>
+          </>
+        )}
+
+        {connected && !isRetrying && !compacting && !session?.time?.compacting && (
+          <>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-foreground tabular-nums">
+              {shownTokens?.toLocaleString() ?? '—'} tokens
+              {shownPct !== undefined && !contextExceeded && (
+                <span className="hidden @md/conversation:inline"> / {shownPct}%</span>
               )}
-              <span className="text-muted-foreground">·</span>
-              <button
-                onClick={() => openChangesTab?.(undefined, activeId)}
-                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <GitCompare className="size-3" />
-                <span>Changes</span>
-              </button>
-            </>
-          )}
+            </span>
+            {contextExceeded && (
+              <>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-destructive font-medium">Context exceeded</span>
+              </>
+            )}
+            <span className="text-muted-foreground">·</span>
+            <button
+              onClick={() => openChangesTab?.(undefined, activeId)}
+              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <GitCompare className="size-3" />
+              <span>Changes</span>
+            </button>
+          </>
+        )}
 
-          <div className="flex-1" />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex items-center justify-center size-7 rounded-md text-muted-foreground hover:bg-muted/50"
-                aria-label="Session menu"
-              >
-                <MoreHorizontal className="size-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuItem
-                onClick={handleCreate}
-                disabled={create.isPending}
-                className="gap-2"
-              >
-                {create.isPending ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Plus className="size-4" />
-                )}
-                <span>New session</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {sessionTree.map((s) => (
-                <div key={s.id}>
+        <div className="flex-1" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex items-center justify-center size-7 rounded-md text-muted-foreground hover:bg-muted/50"
+              aria-label="Session menu"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuItem onClick={handleCreate} disabled={create.isPending} className="gap-2">
+              {create.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
+              <span>New session</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {sessionTree.map((s) => (
+              <div key={s.id}>
+                <DropdownMenuItem
+                  onClick={() => projectId && setActiveSession(projectId, s.id)}
+                  className={cn('gap-2', s.id === activeId && 'bg-accent')}
+                >
+                  <Chat weight={s.id === activeId ? 'fill' : 'regular'} className="size-4" />
+                  <span className="truncate">{formatTitle(s.title || 'Untitled')}</span>
+                </DropdownMenuItem>
+
+                {s.subs.map((sub) => (
                   <DropdownMenuItem
-                    onClick={() => projectId && setActiveSession(projectId, s.id)}
-                    className={cn('gap-2', s.id === activeId && 'bg-accent')}
+                    key={sub.id}
+                    onClick={() => projectId && setActiveSession(projectId, sub.id)}
+                    className={cn(
+                      'gap-1.5 pl-5',
+                      sub.id === activeId ? 'bg-accent' : 'text-muted-foreground',
+                    )}
                   >
-                    <Chat weight={s.id === activeId ? 'fill' : 'regular'} className="size-4" />
-                    <span className="truncate">{formatTitle(s.title || 'Untitled')}</span>
+                    <ArrowElbowDownRight className="size-3" />
+                    <span className="truncate text-xs">{formatTitle(sub.title || 'Task')}</span>
                   </DropdownMenuItem>
-
-                  {s.subs.map((sub) => (
-                    <DropdownMenuItem
-                      key={sub.id}
-                      onClick={() => projectId && setActiveSession(projectId, sub.id)}
-                      className={cn(
-                        'gap-1.5 pl-5',
-                        sub.id === activeId ? 'bg-accent' : 'text-muted-foreground',
-                      )}
-                    >
-                      <ArrowElbowDownRight className="size-3" />
-                      <span className="truncate text-xs">{formatTitle(sub.title || 'Task')}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </div>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                ))}
+              </div>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
 
       {/* Chat */}
