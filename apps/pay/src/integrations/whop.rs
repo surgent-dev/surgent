@@ -1,11 +1,12 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 pub struct WhopClient {
     client: Client,
     api_key: String,
     platform_company_id: String,
+    base_url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -25,19 +26,26 @@ pub struct WhopCompany {
 }
 
 impl WhopClient {
-    pub fn new(api_key: String, platform_company_id: String) -> Self {
+    pub fn new(
+        api_key: String,
+        platform_company_id: String,
+        base_url: String,
+    ) -> Result<Self, String> {
         debug!(
             platform_company_id = %platform_company_id,
+            base_url = %base_url,
             "Creating WhopClient"
         );
-        Self {
-            client: Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
-                .build()
-                .expect("Failed to create HTTP client"),
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        Ok(Self {
+            client,
             api_key,
             platform_company_id,
-        }
+            base_url,
+        })
     }
 
     pub async fn create_company(
@@ -64,11 +72,10 @@ impl WhopClient {
             project_id = %project_id,
             "Whop: Creating company"
         );
-        debug!("Whop request body: {:?}", req);
 
         let response = self
             .client
-            .post("https://api.whop.com/api/v1/companies")
+            .post(format!("{}/companies", self.base_url))
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&req)
             .send()
@@ -79,29 +86,25 @@ impl WhopClient {
             })?;
 
         let status = response.status();
-        let body = response.text().await.unwrap_or_default();
+        let body = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read Whop response: {}", e))?;
 
         debug!(status = %status, "Whop API response status");
-        debug!("Whop API response body: {}", body);
 
         if !status.is_success() {
-            error!(
-                status = %status,
-                body = %body,
-                "Whop API error"
-            );
-            return Err(format!("Whop API error {}: {}", status, body));
+            error!(status = %status, body = %body, "Whop API error");
+            return Err(format!("Whop API error: {}", body));
         }
 
-        info!("Whop: Company created successfully");
+        let company = serde_json::from_str::<WhopCompany>(&body).map_err(|e| {
+            warn!(error = %e, "Failed to parse Whop response");
+            "Failed to parse Whop response".to_string()
+        })?;
 
-        serde_json::from_str::<WhopCompany>(&body).map_err(|e| {
-            error!(
-                error = %e,
-                body = %body,
-                "Failed to parse Whop response"
-            );
-            format!("Failed to parse Whop response: {} - body: {}", e, body)
-        })
+        info!(company_id = %company.id, "Whop: Company created successfully");
+
+        Ok(company)
     }
 }

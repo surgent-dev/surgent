@@ -4,7 +4,7 @@
 
 
 -- Dumped from database version 18.1 (Debian 18.1-1.pgdg13+2)
--- Dumped by pg_dump version 18.1 (Homebrew)
+-- Dumped by pg_dump version 18.1
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -264,7 +264,8 @@ CREATE TABLE public.connect_account (
     "businessType" text,
     data jsonb DEFAULT '{}'::jsonb NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "userId" uuid
 );
 
 
@@ -1493,6 +1494,13 @@ CREATE INDEX idx_connect_account_project ON public.connect_account USING btree (
 
 
 --
+-- Name: idx_connect_account_user_processor; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_connect_account_user_processor ON public.connect_account USING btree ("userId", processor);
+
+
+--
 -- Name: idx_connect_payout_account; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1906,6 +1914,14 @@ ALTER TABLE ONLY public.checkout_session
 
 ALTER TABLE ONLY public.connect_account
     ADD CONSTRAINT "connect_account_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: connect_account connect_account_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.connect_account
+    ADD CONSTRAINT "connect_account_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
 
 
 --

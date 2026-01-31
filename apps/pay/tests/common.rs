@@ -485,6 +485,9 @@ pub async fn create_test_state(pool: PgPool) -> AppState {
         better_auth_secret: "test-secret".to_string(),
         trusted_origins: "http://localhost:3000".to_string(),
         web_base_url: "http://localhost:3000".to_string(),
+        whop_api_key: "test_whop_api_key".to_string(),
+        whop_platform_company_id: "test_whop_platform_company_id".to_string(),
+        whop_base_url: "https://api.whop.com/api/v1".to_string(),
     };
 
     // Register Stripe processor
@@ -543,6 +546,9 @@ pub async fn create_test_state_real_stripe(pool: PgPool) -> AppState {
         better_auth_secret: "test-secret".to_string(),
         trusted_origins: "http://localhost:3000".to_string(),
         web_base_url: "http://localhost:3000".to_string(),
+        whop_api_key: "test_whop_api_key".to_string(),
+        whop_platform_company_id: "test_whop_platform_company_id".to_string(),
+        whop_base_url: "https://api.whop.com/api/v1".to_string(),
     };
 
     // Register Stripe processor as BOTH PaymentProcessor AND ConnectProcessor

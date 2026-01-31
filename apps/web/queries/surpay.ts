@@ -19,6 +19,17 @@ export interface SurpayConnectResponse {
   oauthUrl: string
 }
 
+export interface UserSurpayAccount {
+  id: string
+  processor: string
+  processorAccountId: string | null
+  status: string
+  projectId: string | null
+  email: string | null
+  title: string | null
+  country: string | null
+}
+
 // Extracts error message from ky HTTPError response
 async function extractError(error: any, fallback: string): Promise<never> {
   if (error.response) {
@@ -63,14 +74,23 @@ export interface WhopConnectResponse {
   status: string
 }
 
+async function fetchUserWhopAccounts(): Promise<UserSurpayAccount[]> {
+  return payHttp.get('accounts/user', { searchParams: { processor: 'whop' } }).json()
+}
+
 async function connectWhop(
   projectId: string,
   data: WhopConnectRequest,
+  accountId?: string,
 ): Promise<WhopConnectResponse> {
   try {
+    const searchParams: Record<string, string> = { projectId }
+    if (accountId) {
+      searchParams.accountId = accountId
+    }
     return await payHttp
       .post('accounts/connect/whop', {
-        searchParams: { projectId },
+        searchParams,
         json: data,
       })
       .json()
@@ -120,13 +140,29 @@ export function useSurpayConnect() {
   })
 }
 
+export function useUserWhopAccounts() {
+  return useQuery({
+    queryKey: ['user-whop-accounts'],
+    queryFn: fetchUserWhopAccounts,
+    staleTime: 1000 * 30,
+  })
+}
+
 export function useWhopConnect() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ projectId, data }: { projectId: string; data: WhopConnectRequest }) =>
-      connectWhop(projectId, data),
+    mutationFn: ({
+      projectId,
+      data,
+      accountId,
+    }: {
+      projectId: string
+      data: WhopConnectRequest
+      accountId?: string
+    }) => connectWhop(projectId, data, accountId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['surpay-accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['user-whop-accounts'] })
     },
   })
 }

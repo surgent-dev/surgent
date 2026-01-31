@@ -12,7 +12,7 @@ use utoipa_swagger_ui::SwaggerUi;
 use crate::AppState;
 use crate::api::account::{
     connect_callback, connect_refresh, create_connect_account, create_whop_connect, disconnect,
-    get_account, list_accounts, oauth_callback, update_account,
+    get_account, list_accounts, list_user_accounts, oauth_callback, update_account,
 };
 use crate::api::check::check;
 use crate::api::checkout::{checkout_cancel, checkout_success, create_checkout_session};
@@ -46,6 +46,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/connect/callback", get(connect_callback))
         .route("/connect/refresh", get(connect_refresh))
         .route("/connect/oauth/callback", get(oauth_callback))
+        .route("/user", get(list_user_accounts))
         .route(
             "/{id}",
             get(get_account).patch(update_account).delete(disconnect),
