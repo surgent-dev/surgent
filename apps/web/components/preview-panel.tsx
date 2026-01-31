@@ -6,14 +6,14 @@ import {
   WebPreviewUrl,
   WebPreviewBody,
 } from '@/components/agent/web-preview'
-import { useEffect, useMemo, useState, type ElementType } from 'react'
+import { useEffect, useState, type ElementType } from 'react'
 import {
   X,
   Database,
   Monitor,
   GitCompare,
-  Terminal,
   ScrollText,
+  Terminal,
   Plus,
   Power,
   RefreshCw,
@@ -22,7 +22,6 @@ import {
 import Image from 'next/image'
 import { Coins } from '@phosphor-icons/react'
 import type { FileDiff } from '@opencode-ai/sdk'
-import { useQuery } from '@tanstack/react-query'
 
 import {
   useConvexDashboardQuery,
@@ -56,13 +55,12 @@ import {
 } from '@/components/ui/dialog'
 
 import { cn } from '@/lib/utils'
-import { http } from '@/lib/http'
 import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
 import { FunLoadingState } from '@/components/ui/fun-loading'
 
 export interface PreviewTab {
   id: string
-  type: 'preview' | 'changes' | 'convex' | 'mcp' | 'logs' | 'payments'
+  type: 'preview' | 'changes' | 'convex' | 'logs' | 'payments'
   title: string
   diffs?: FileDiff[]
   messageId?: string
@@ -71,10 +69,6 @@ export interface PreviewTab {
 }
 
 const DEFAULT_TABS: PreviewTab[] = [{ id: 'preview', type: 'preview', title: 'Preview' }]
-
-type McpStatusValue = { status?: string } | string
-
-type McpStatus = Record<string, McpStatusValue>
 
 function EmptyState({
   title,
@@ -221,49 +215,6 @@ function LogsContent({
   )
 }
 
-function McpContent({
-  entries,
-  isLoading,
-}: {
-  entries: Array<{ name: string; status: string }>
-  isLoading: boolean
-}) {
-  if (isLoading) {
-    return <LoadingState icon={Terminal} message="Loading MCP status..." />
-  }
-
-  if (!entries.length) {
-    return (
-      <EmptyState
-        title="No MCP servers"
-        description="Connect an MCP server to see status"
-        icon={Terminal}
-      />
-    )
-  }
-
-  return (
-    <ScrollArea className="h-full">
-      <div className="px-3 py-4 space-y-2">
-        {entries.map((entry) => (
-          <div
-            key={entry.name}
-            className="flex items-center justify-between rounded-lg border bg-background/60 px-3 py-2"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className={cn('size-2 rounded-full', getStatusDot(entry.status))} />
-              <span className="font-medium text-sm truncate">{entry.name}</span>
-            </div>
-            <span className={cn('text-xs font-medium capitalize', getStatusTone(entry.status))}>
-              {formatStatus(entry.status)}
-            </span>
-          </div>
-        ))}
-      </div>
-    </ScrollArea>
-  )
-}
-
 function PaymentsContent({ projectId }: { projectId?: string }) {
   const { data: accounts, isLoading } = useSurpayAccounts(projectId)
   const connect = useSurpayConnect()
@@ -388,7 +339,7 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
               className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors cursor-pointer disabled:cursor-default disabled:hover:bg-background/60"
             >
               <div className="grid place-items-center size-9 rounded-md overflow-hidden shrink-0">
-                <Image src="/surgent-coin.svg" alt="Surgent Pay" width={36} height={36} />
+                <Image src="/surpay-coin.svg" alt="Surgent Pay" width={36} height={36} />
               </div>
               <div className="flex flex-col items-start">
                 <span className="text-sm font-medium leading-tight flex items-center gap-1.5">
@@ -548,8 +499,6 @@ function getTabIcon(type: PreviewTab['type']) {
       return Database
     case 'changes':
       return GitCompare
-    case 'mcp':
-      return Terminal
     case 'logs':
       return ScrollText
     case 'payments':
@@ -571,7 +520,7 @@ function TabButton({
   onClose?: () => void
   isPulsing?: boolean
 }) {
-  const closable = tab.type !== 'preview' && tab.type !== 'convex'
+  const closable = tab.type !== 'preview' && tab.type !== 'convex' && tab.type !== 'payments'
   const Icon = getTabIcon(tab.type)
 
   return (
@@ -592,7 +541,7 @@ function TabButton({
             e.stopPropagation()
             onClose()
           }}
-          className="hidden group-hover:block p-0.5 rounded hover:bg-muted-foreground/20"
+          className="p-0.5 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted-foreground/20 transition-colors"
         >
           <X className="size-3" />
         </span>
@@ -640,7 +589,6 @@ export default function PreviewPanel({
   )
 
   const hasConvex = Boolean((project?.metadata as any)?.convex)
-  const hasMcp = tabs.some((tab) => tab.type === 'mcp')
   const hasLogs = tabs.some((tab) => tab.type === 'logs')
   const hasPayments = tabs.some((tab) => tab.type === 'payments')
 
@@ -649,26 +597,10 @@ export default function PreviewPanel({
     hasConvex && type === 'convex',
   )
 
-  const { data: mcpStatus, isLoading: mcpLoading } = useQuery<McpStatus>({
-    queryKey: ['mcp-status'],
-    enabled: type === 'mcp',
-    queryFn: async () => (await http.get('mcp').json()) as McpStatus,
-  })
-
   const { data: sandboxLogs, isLoading: logsLoading } = useSandboxLogsQuery(
     projectId,
     type === 'logs',
   )
-
-  const mcpEntries = useMemo(() => {
-    if (!mcpStatus) return []
-    return Object.entries(mcpStatus).map((entry) => {
-      const name = entry[0]
-      const value = entry[1]
-      const status = typeof value === 'string' ? value : value?.status || 'unknown'
-      return { name, status }
-    })
-  }, [mcpStatus])
 
   const url = project?.sandbox?.url
   const ready = Boolean(url)
@@ -695,13 +627,9 @@ export default function PreviewPanel({
           <Plus className="size-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        <DropdownMenuItem onClick={() => onAddTab('mcp')} disabled={hasMcp} className="gap-2">
-          <span className="text-base leading-none font-mono text-muted-foreground">&gt;_</span>
-          MCP
-        </DropdownMenuItem>
+      <DropdownMenuContent align="start" className="min-w-40">
         <DropdownMenuItem onClick={() => onAddTab('logs')} disabled={hasLogs} className="gap-2">
-          <span className="text-sm leading-none text-muted-foreground">📜︎</span>
+          <ScrollText className="size-4 text-muted-foreground" />
           Server Logs
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -758,8 +686,6 @@ export default function PreviewPanel({
           <EmptyState title="No changes" description="No file changes" icon={GitCompare} />
         )
       }
-      case 'mcp':
-        return <McpContent entries={mcpEntries} isLoading={mcpLoading} />
       case 'logs':
         return (
           <LogsContent
