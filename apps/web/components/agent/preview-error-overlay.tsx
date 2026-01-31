@@ -106,10 +106,6 @@ export function PreviewErrorOverlay() {
             {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
             {copied ? 'Copied' : 'Copy'}
           </Button>
-          <div className="flex-1" />
-          <Button onClick={() => setError(null)} variant="ghost" size="sm">
-            Dismiss
-          </Button>
         </div>
       </div>
     </div>
