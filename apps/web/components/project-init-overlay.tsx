@@ -1,7 +1,8 @@
 'use client'
 
 import { motion, AnimatePresence } from 'motion/react'
-import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useFunVibe } from '@/components/ui/fun-loading'
 
 import type { SandboxStage } from '@/hooks/use-sandbox-ready'
 
@@ -12,15 +13,11 @@ interface ProjectInitOverlayProps {
   stage: InitStage
 }
 
-const stageMessages: Record<InitStage, string> = {
-  creating: 'Creating project...',
-  loading: 'Loading project...',
-  activating: 'Activating sandbox...',
-  starting: 'Starting environment...',
-  ready: 'Ready!',
-}
-
 export function ProjectInitOverlay({ show, stage }: ProjectInitOverlayProps) {
+  const vibe = useFunVibe(2000)
+  const Icon = vibe.icon
+  const isReady = stage === 'ready'
+
   return (
     <AnimatePresence>
       {show && (
@@ -30,21 +27,137 @@ export function ProjectInitOverlay({ show, stage }: ProjectInitOverlayProps) {
           transition={{ duration: 0.4, ease: 'easeOut' }}
           className="fixed inset-0 z-50 bg-background flex items-center justify-center"
         >
+          <style jsx>{`
+            @keyframes wiggle {
+              0%,
+              100% {
+                transform: rotate(-12deg);
+              }
+              50% {
+                transform: rotate(12deg);
+              }
+            }
+            @keyframes float {
+              0%,
+              100% {
+                transform: translateY(0) scale(1);
+                opacity: 0.8;
+              }
+              50% {
+                transform: translateY(-8px) scale(1.1);
+                opacity: 1;
+              }
+            }
+            @keyframes flicker {
+              0%,
+              100% {
+                opacity: 1;
+                transform: scale(1);
+              }
+              50% {
+                opacity: 0.7;
+                transform: scale(0.95);
+              }
+            }
+            @keyframes zap {
+              0%,
+              100% {
+                transform: translateX(0);
+              }
+              25% {
+                transform: translateX(-3px);
+              }
+              75% {
+                transform: translateX(3px);
+              }
+            }
+            @keyframes rocket {
+              0%,
+              100% {
+                transform: translateY(0) rotate(-45deg);
+              }
+              50% {
+                transform: translateY(-8px) rotate(-45deg);
+              }
+            }
+            @keyframes wobble {
+              0%,
+              100% {
+                transform: rotate(0) scale(1);
+              }
+              25% {
+                transform: rotate(-5deg) scale(1.05);
+              }
+              75% {
+                transform: rotate(5deg) scale(1.05);
+              }
+            }
+            @keyframes orbit {
+              from {
+                transform: rotate(0deg);
+              }
+              to {
+                transform: rotate(360deg);
+              }
+            }
+            @keyframes throb {
+              0%,
+              100% {
+                transform: scale(1);
+              }
+              50% {
+                transform: scale(1.15);
+              }
+            }
+            @keyframes glow {
+              0%,
+              100% {
+                opacity: 0.6;
+                transform: scale(0.95);
+              }
+              50% {
+                opacity: 1;
+                transform: scale(1.1);
+              }
+            }
+            @keyframes spin3d {
+              0% {
+                transform: perspective(100px) rotateY(0deg);
+              }
+              100% {
+                transform: perspective(100px) rotateY(360deg);
+              }
+            }
+            @keyframes rainbow {
+              0%,
+              100% {
+                filter: hue-rotate(0deg);
+                transform: scale(1);
+              }
+              50% {
+                filter: hue-rotate(180deg);
+                transform: scale(1.1);
+              }
+            }
+          `}</style>
           <div className="flex flex-col items-center gap-4">
             <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+              key={vibe.message}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className={cn('text-brand', vibe.animation)}
             >
-              <Loader2 className="h-8 w-8 text-brand" />
+              <Icon className="h-10 w-10" weight="duotone" />
             </motion.div>
             <motion.p
-              key={stage}
+              key={vibe.message + '-text'}
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
               className="text-sm text-muted-foreground"
             >
-              {stageMessages[stage]}
+              {isReady ? 'Ready!' : vibe.message}
             </motion.p>
           </div>
         </motion.div>
