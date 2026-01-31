@@ -116,18 +116,7 @@ pub async fn webhook_handler(
         WebhookError::VerificationFailed
     })?;
 
-    let signature = get_signature_header(&headers, &processor).map_err(|e| {
-        tracing::error!(
-            "Failed to get signature header for processor {}: {}",
-            processor,
-            e
-        );
-        if e.starts_with("Missing") {
-            WebhookError::MissingHeader
-        } else {
-            WebhookError::VerificationFailed
-        }
-    })?;
+    let signature = get_signature_header(&headers, &processor)?;
 
     let is_valid = p.verify_webhook(&body, &signature).map_err(|e| {
         tracing::error!(
@@ -203,17 +192,34 @@ pub async fn webhook_handler(
     Ok(StatusCode::OK)
 }
 
-fn get_signature_header(headers: &HeaderMap, processor: &str) -> Result<String, String> {
-    let header_name = match processor {
-        "stripe" => "stripe-signature",
-        _ => return Err(format!("Unknown processor: {}", processor)),
-    };
-
-    headers
-        .get(header_name)
-        .and_then(|h| h.to_str().ok())
-        .map(String::from)
-        .ok_or_else(|| format!("Missing {} header", header_name))
+fn get_signature_header(headers: &HeaderMap, processor: &str) -> Result<String, WebhookError> {
+    match processor {
+        "stripe" => headers
+            .get("stripe-signature")
+            .and_then(|h| h.to_str().ok())
+            .map(String::from)
+            .ok_or(WebhookError::MissingHeader),
+        "whop" => {
+            // Whop uses Standard Webhooks v1.0.0 spec with 3 headers
+            let webhook_id = headers
+                .get("webhook-id")
+                .and_then(|h| h.to_str().ok())
+                .ok_or(WebhookError::MissingHeader)?;
+            let webhook_timestamp = headers
+                .get("webhook-timestamp")
+                .and_then(|h| h.to_str().ok())
+                .ok_or(WebhookError::MissingHeader)?;
+            let webhook_signature = headers
+                .get("webhook-signature")
+                .and_then(|h| h.to_str().ok())
+                .ok_or(WebhookError::MissingHeader)?;
+            Ok(format!(
+                "{};{};{}",
+                webhook_id, webhook_timestamp, webhook_signature
+            ))
+        }
+        _ => Err(WebhookError::VerificationFailed),
+    }
 }
 
 fn extract_event_id(payload: &Value, processor: &str) -> Result<String, String> {
@@ -441,27 +447,47 @@ async fn handle_normalized_event(
         | NormalizedEvent::SubscriptionUpdated { customer_id: _, .. }
         | NormalizedEvent::SubscriptionCanceled { .. } => {
             // Extract customer_id from raw payload for sync
-            if let Ok(cust_id) = extract_customer_id_from_payload(raw_payload) {
-                sync_stripe_customer_data(pool, config, cust_id).await
+            if processor == "stripe" {
+                if let Ok(cust_id) = extract_customer_id_from_payload(raw_payload) {
+                    sync_stripe_customer_data(pool, config, cust_id).await
+                } else {
+                    tracing::warn!("Could not extract customer_id for subscription event");
+                    Ok(())
+                }
             } else {
-                tracing::warn!("Could not extract customer_id for subscription event");
+                tracing::debug!("Skipping Stripe sync for processor: {}", processor);
                 Ok(())
             }
         }
         NormalizedEvent::InvoicePaid { customer_id, .. } => {
             // First handle invoice-specific logic, then sync customer data
             handle_invoice_paid(pool, processor, raw_payload).await?;
-            sync_stripe_customer_data(pool, config, customer_id).await
+            if processor == "stripe" {
+                sync_stripe_customer_data(pool, config, customer_id).await
+            } else {
+                tracing::debug!("Skipping Stripe sync for processor: {}", processor);
+                Ok(())
+            }
         }
         NormalizedEvent::InvoicePaymentFailed { customer_id, .. } => {
-            sync_stripe_customer_data(pool, config, customer_id).await
+            if processor == "stripe" {
+                sync_stripe_customer_data(pool, config, customer_id).await
+            } else {
+                tracing::debug!("Skipping Stripe sync for processor: {}", processor);
+                Ok(())
+            }
         }
         NormalizedEvent::PaymentSucceeded { .. } | NormalizedEvent::PaymentFailed { .. } => {
             // Extract customer_id from raw payload for sync
-            if let Ok(cust_id) = extract_customer_id_from_payload(raw_payload) {
-                sync_stripe_customer_data(pool, config, cust_id).await
+            if processor == "stripe" {
+                if let Ok(cust_id) = extract_customer_id_from_payload(raw_payload) {
+                    sync_stripe_customer_data(pool, config, cust_id).await
+                } else {
+                    tracing::debug!("No customer_id in payment event, skipping sync");
+                    Ok(())
+                }
             } else {
-                tracing::debug!("No customer_id in payment event, skipping sync");
+                tracing::debug!("Skipping Stripe sync for processor: {}", processor);
                 Ok(())
             }
         }
@@ -636,9 +662,10 @@ async fn handle_normalized_event(
         NormalizedEvent::Unknown { event_type } => {
             // Catch-all for Stripe subscription/invoice/payment events not explicitly mapped
             // These trigger a full customer data sync from Stripe (legacy behavior)
-            if (event_type.starts_with("customer.subscription.")
-                || event_type.starts_with("invoice.")
-                || event_type.starts_with("payment_intent."))
+            if processor == "stripe"
+                && (event_type.starts_with("customer.subscription.")
+                    || event_type.starts_with("invoice.")
+                    || event_type.starts_with("payment_intent."))
                 && let Ok(cust_id) = extract_customer_id_from_payload(raw_payload)
             {
                 tracing::info!(

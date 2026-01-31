@@ -7,4 +7,4 @@ pub mod whop;
 pub use registry::ProcessorRegistry;
 pub use stripe::StripeProcessor;
 pub use traits::{ConnectProcessor, PaymentProcessor};
-pub use whop::WhopClient;
+pub use whop::{WhopClient, WhopProcessor};

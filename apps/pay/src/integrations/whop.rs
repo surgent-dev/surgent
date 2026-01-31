@@ -1,6 +1,20 @@
+use async_trait::async_trait;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use hmac::{Hmac, Mac};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
+use std::time::SystemTime;
+use subtle::ConstantTimeEq;
 use tracing::{debug, error, info, warn};
+
+use crate::integrations::traits::PaymentProcessor;
+use crate::integrations::types::{
+    CreateCheckoutSessionRequest, NormalizedEvent, ProcessorCheckout, ProcessorPrice,
+    ProcessorPriceRequest, ProcessorProduct, ProcessorProductRequest,
+};
+
+type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Serialize)]
 struct CheckoutPlan {
@@ -203,6 +217,169 @@ impl WhopClient {
     }
 }
 
+/// Whop webhook processor implementing PaymentProcessor trait.
+/// Uses Standard Webhooks v1.0.0 spec for signature verification.
+#[derive(Clone)]
+pub struct WhopProcessor {
+    pub webhook_secret: String,
+}
+
+impl WhopProcessor {
+    pub fn new(webhook_secret: String) -> Self {
+        Self { webhook_secret }
+    }
+
+    /// Returns the webhook secret as raw bytes.
+    ///
+    /// # Why raw bytes instead of base64 decode?
+    ///
+    /// Standard Webhooks v1.0.0 typically expects base64-encoded secrets, but Whop's
+    /// implementation has a quirk: their SDK calls `btoa(secret)` before passing it to
+    /// the Standard Webhooks library, which then base64-decodes it back. The net effect
+    /// is that the HMAC key is the literal string bytes of the entire secret (including
+    /// the `ws_` prefix), not any decoded form.
+    ///
+    /// Empirically verified: hex-decoding, base64-decoding, and prefix-stripping all
+    /// produce signature mismatches. Only raw string bytes work correctly.
+    fn decode_secret(&self) -> Result<Vec<u8>, String> {
+        Ok(self.webhook_secret.as_bytes().to_vec())
+    }
+}
+
+#[async_trait]
+impl PaymentProcessor for WhopProcessor {
+    fn name(&self) -> &str {
+        "whop"
+    }
+
+    async fn create_product(
+        &self,
+        _req: ProcessorProductRequest,
+    ) -> Result<ProcessorProduct, String> {
+        Err("Not implemented".to_string())
+    }
+
+    async fn create_price(&self, _req: ProcessorPriceRequest) -> Result<ProcessorPrice, String> {
+        Err("Not implemented".to_string())
+    }
+
+    async fn create_checkout_session(
+        &self,
+        _req: CreateCheckoutSessionRequest,
+    ) -> Result<ProcessorCheckout, String> {
+        Err("Not implemented".to_string())
+    }
+
+    /// Verifies Whop webhook signature using Standard Webhooks v1.0.0 spec.
+    /// Signature param format: "{webhook-id};{webhook-timestamp};{webhook-signature}"
+    fn verify_webhook(&self, payload: &[u8], signature: &str) -> Result<bool, String> {
+        // Parse combined signature header: "id;timestamp;signatures"
+        let parts: Vec<&str> = signature.splitn(3, ';').collect();
+        if parts.len() != 3 {
+            return Err("Invalid signature format: expected 'id;timestamp;signatures'".to_string());
+        }
+
+        let webhook_id = parts[0];
+        let timestamp_str = parts[1];
+        let signatures_header = parts[2];
+
+        tracing::debug!(
+            webhook_id = %webhook_id,
+            timestamp = %timestamp_str,
+            "Whop webhook: parsed headers"
+        );
+
+        let timestamp: u64 = timestamp_str
+            .parse()
+            .map_err(|e| format!("Invalid timestamp: {}", e))?;
+
+        // Check timestamp is within 5 minute tolerance (300 seconds)
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(|e| format!("Failed to get current time: {}", e))?
+            .as_secs();
+
+        const TOLERANCE_SECS: u64 = 300;
+        if timestamp > now + TOLERANCE_SECS || timestamp < now.saturating_sub(TOLERANCE_SECS) {
+            return Err(format!(
+                "Timestamp {} is outside tolerance range (now: {}, tolerance: {}s)",
+                timestamp, now, TOLERANCE_SECS
+            ));
+        }
+
+        let secret = self.decode_secret()?;
+
+        // Signed content: "{webhook-id}.{webhook-timestamp}.{raw_body}"
+        let signed_payload = format!(
+            "{}.{}.{}",
+            webhook_id,
+            timestamp_str,
+            String::from_utf8_lossy(payload)
+        );
+
+        let mut mac = HmacSha256::new_from_slice(&secret)
+            .map_err(|e| format!("Failed to create HMAC: {}", e))?;
+        mac.update(signed_payload.as_bytes());
+        let expected_signature = BASE64.encode(mac.finalize().into_bytes());
+
+        // Signature header format: "v1,{base64_sig}" (may have multiple space-separated)
+        let expected_bytes = expected_signature.as_bytes();
+        let is_valid = signatures_header.split(' ').any(|sig_entry| {
+            let Some(sig) = sig_entry.strip_prefix("v1,") else {
+                return false;
+            };
+            let sig_bytes = sig.as_bytes();
+            if sig_bytes.len() != expected_bytes.len() {
+                return false;
+            }
+            sig_bytes.ct_eq(expected_bytes).into()
+        });
+
+        tracing::debug!(
+            webhook_id = %webhook_id,
+            timestamp = %timestamp_str,
+            valid = %is_valid,
+            "Whop webhook: signature verification complete"
+        );
+
+        Ok(is_valid)
+    }
+
+    fn parse_webhook_event(&self, payload: &serde_json::Value) -> Result<NormalizedEvent, String> {
+        let event_type = payload
+            .get("type")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing event type")?;
+
+        let data = payload.get("data").ok_or("Missing data in payload")?;
+
+        match event_type {
+            "payment.succeeded" => {
+                let payment_id = data
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing payment_id")?;
+                let amount = data.get("amount").and_then(|v| v.as_i64()).unwrap_or(0);
+                let currency = data
+                    .get("currency")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("usd")
+                    .to_string();
+
+                Ok(NormalizedEvent::PaymentSucceeded {
+                    payment_id: payment_id.to_string(),
+                    amount,
+                    currency,
+                    account_id: None,
+                })
+            }
+            _ => Ok(NormalizedEvent::Unknown {
+                event_type: event_type.to_string(),
+            }),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,7 +408,7 @@ mod tests {
             .unwrap_or_else(|_| "https://sandbox-api.whop.com/api/v1".to_string());
 
         let client = WhopClient::new(api_key, platform_company_id.clone(), base_url)
-        .expect("Failed to create WhopClient");
+            .expect("Failed to create WhopClient");
 
         let params = CreateCheckoutParams {
             company_id: &platform_company_id,
