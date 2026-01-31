@@ -13,10 +13,20 @@ interface ProjectInitOverlayProps {
   stage: InitStage
 }
 
+const stages: InitStage[] = ['creating', 'loading', 'activating', 'starting', 'ready']
+const stageLabels: Record<InitStage, string> = {
+  creating: 'Creating',
+  loading: 'Loading',
+  activating: 'Activating',
+  starting: 'Starting',
+  ready: 'Ready',
+}
+
 export function ProjectInitOverlay({ show, stage }: ProjectInitOverlayProps) {
   const vibe = useFunVibe(2000)
   const Icon = vibe.icon
   const isReady = stage === 'ready'
+  const currentIndex = stages.indexOf(stage)
 
   return (
     <AnimatePresence>
@@ -140,7 +150,7 @@ export function ProjectInitOverlay({ show, stage }: ProjectInitOverlayProps) {
               }
             }
           `}</style>
-          <div className="flex flex-col items-center gap-4">
+          <div className="flex flex-col items-center gap-6">
             <motion.div
               key={vibe.message}
               initial={{ opacity: 0, scale: 0.8 }}
@@ -159,6 +169,43 @@ export function ProjectInitOverlay({ show, stage }: ProjectInitOverlayProps) {
             >
               {isReady ? 'Ready!' : vibe.message}
             </motion.p>
+            <div className="flex items-center gap-2">
+              {stages.slice(0, -1).map((s, i) => {
+                const isComplete = i < currentIndex
+                const isCurrent = i === currentIndex
+                return (
+                  <div key={s} className="flex items-center gap-2">
+                    <motion.div
+                      initial={false}
+                      animate={{
+                        scale: isCurrent ? 1.2 : 1,
+                        opacity: isComplete || isCurrent ? 1 : 0.3,
+                      }}
+                      className={cn(
+                        'h-1.5 w-1.5 rounded-full transition-colors',
+                        isComplete ? 'bg-brand' : isCurrent ? 'bg-brand' : 'bg-muted-foreground/30',
+                      )}
+                    />
+                    {i < stages.length - 2 && (
+                      <div
+                        className={cn(
+                          'h-px w-6 transition-colors',
+                          isComplete ? 'bg-brand/50' : 'bg-muted-foreground/20',
+                        )}
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <motion.span
+              key={stage}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-xs text-muted-foreground/60"
+            >
+              {stageLabels[stage]}
+            </motion.span>
           </div>
         </motion.div>
       )}

@@ -59,10 +59,10 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
 
   const handleAddTab = useCallback((type: PreviewTab['type']) => {
     setTabs((prev) => {
-      if (type !== 'mcp' && type !== 'logs' && type !== 'payments') return prev
+      if (type !== 'logs' && type !== 'payments') return prev
       if (prev.some((tab) => tab.type === type)) return prev
       tabCounter.current += 1
-      const title = type === 'mcp' ? 'MCP' : type === 'logs' ? 'Server Logs' : 'Payments'
+      const title = type === 'logs' ? 'Server Logs' : 'Payments'
       const id = `${type}-${tabCounter.current}`
       return [...prev, { id, type, title }]
     })
@@ -71,7 +71,11 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   const handleOpenChangesTab = useCallback(
     (messageId?: string, sessionId?: string, diffs?: FileDiff[]) => {
       const sid = sessionId || activeSessionId
-      const id = messageId ? `changes-${messageId}` : sid ? `changes-session-${sid}` : 'changes-session'
+      const id = messageId
+        ? `changes-${messageId}`
+        : sid
+          ? `changes-session-${sid}`
+          : 'changes-session'
       const title = messageId ? 'Changes' : 'Session Changes'
       setTabs((prev) => {
         const existing = prev.findIndex((t) => t.id === id)
