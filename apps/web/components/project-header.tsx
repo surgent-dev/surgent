@@ -21,6 +21,7 @@ import {
   Copy,
   Clock,
   ArrowSquareOut,
+  DiscordLogo,
 } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import {
@@ -439,6 +440,18 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           <GithubLogo className="size-4" weight="bold" />
           <span className="hidden md:inline">GitHub</span>
         </button>
+
+        {/* Discord */}
+        <a
+          href="https://discord.gg/DRWbFEtY"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Join Discord"
+          className="flex items-center gap-1.5 px-2 sm:px-4 text-sm text-[#5865F2] hover:bg-muted/50 border-l transition-colors"
+        >
+          <DiscordLogo className="size-4" weight="bold" />
+          <span className="hidden md:inline">Discord</span>
+        </a>
 
         {/* Publish */}
         <DropdownMenu open={isPublishOpen} onOpenChange={handlePublishOpenChange}>
