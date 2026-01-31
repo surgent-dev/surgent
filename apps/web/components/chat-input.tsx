@@ -156,17 +156,30 @@ export default function ChatInput({
   }, [subagents, subagentFilter])
 
   // Detect @ mention in input
+  const atMatch = useMemo(() => value.match(/(?:^|\s)@(\w*)$/), [value])
+
   useEffect(() => {
-    const atMatch = value.match(/(?:^|\s)@(\w*)$/)
     if (atMatch && subagents.length > 0) {
       setSubagentFilter(atMatch[1] || '')
       setShowSubagentDropdown(true)
       setHighlightedIndex(0)
-    } else {
+    } else if (showSubagentDropdown) {
       setShowSubagentDropdown(false)
       setSubagentFilter('')
     }
-  }, [value, subagents.length])
+  }, [atMatch, subagents.length, showSubagentDropdown])
+
+  // Auto-resize textarea
+  const resizeTextarea = useCallback(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.style.height = 'auto'
+    textarea.style.height = `${textarea.scrollHeight}px`
+  }, [])
+
+  useEffect(() => {
+    resizeTextarea()
+  }, [value, resizeTextarea])
 
   const handleSubagentSelect = useCallback(
     (agent: Agent) => {
@@ -249,8 +262,9 @@ export default function ChatInput({
     setAttachments((prev) => prev.filter((a) => a.id !== id))
   }
 
+  const hasUploading = attachments.some((a) => a.status === 'uploading')
+
   const handleSubmit = async () => {
-    const hasUploading = attachments.some((a) => a.status === 'uploading')
     if ((!value.trim() && !attachments.length) || disabled || hasUploading) return
 
     const fileParts = attachmentsToParts(attachments)
@@ -311,7 +325,6 @@ export default function ChatInput({
     }
   }
 
-  const hasUploading = attachments.some((a) => a.status === 'uploading')
   const canSubmit = !hasUploading && !disabled && (value.trim() || attachments.length)
 
   return (
@@ -322,17 +335,14 @@ export default function ChatInput({
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
     >
+      {isDragging && (
+        <div className="absolute inset-0 z-10 rounded-2xl border-2 border-dashed border-brand bg-brand/10 flex items-center justify-center pointer-events-none">
+          <span className="text-sm font-medium text-brand">Drop files here</span>
+        </div>
+      )}
       <div
         className={cn(
-          'absolute inset-0 z-10 rounded-2xl border-2 border-dashed border-brand bg-brand/10 flex items-center justify-center pointer-events-none transition-opacity duration-150',
-          isDragging ? 'opacity-100' : 'opacity-0',
-        )}
-      >
-        <span className="text-sm font-medium text-brand">Drop files here</span>
-      </div>
-      <div
-        className={cn(
-          'rounded-2xl border bg-background shadow-lg overflow-hidden transition-colors',
+          'rounded-2xl border bg-background shadow-lg overflow-hidden',
           isDragging ? 'border-brand' : 'border-border',
         )}
       >
@@ -366,7 +376,7 @@ export default function ChatInput({
                 </div>
                 <button
                   onClick={() => removeAttachment(a.id)}
-                  className="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-800 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all shadow-md border border-background"
+                  className="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-800 flex items-center justify-center shadow-md border border-background"
                 >
                   <X className="size-3" strokeWidth={2.5} />
                 </button>
@@ -377,48 +387,45 @@ export default function ChatInput({
 
         {/* Subagent dropdown */}
         {showSubagentDropdown && filteredSubagents.length > 0 && (
-          <div className="absolute bottom-full left-3 mb-1.5 w-56 max-h-44 overflow-y-auto rounded-md border border-border/60 bg-popover/95 backdrop-blur-sm shadow-md z-50">
-            <div className="py-1">
-              {filteredSubagents.map((agent, index) => (
-                <button
-                  key={agent.name}
-                  type="button"
-                  onClick={() => handleSubagentSelect(agent)}
-                  className={cn(
-                    'w-full flex items-baseline gap-1.5 px-3 py-1.5 text-left transition-colors',
-                    index === highlightedIndex
-                      ? 'bg-accent text-accent-foreground'
-                      : 'hover:bg-accent/50',
-                  )}
-                >
-                  <span className="text-[13px] font-medium text-brand">@{agent.name}</span>
-                  {agent.description && (
-                    <span className="text-xs text-muted-foreground truncate">
-                      {agent.description}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
+          <div className="absolute bottom-full left-3 mb-1 w-48 max-h-40 overflow-y-auto rounded border bg-popover shadow z-50">
+            {filteredSubagents.map((agent, index) => (
+              <button
+                key={agent.name}
+                type="button"
+                onClick={() => handleSubagentSelect(agent)}
+                className={cn(
+                  'w-full px-2 py-1 text-left text-xs',
+                  index === highlightedIndex ? 'bg-accent' : '',
+                )}
+              >
+                <span className="text-brand font-medium">@{agent.name}</span>
+                {agent.description && (
+                  <span className="text-muted-foreground ml-1.5">{agent.description}</span>
+                )}
+              </button>
+            ))}
           </div>
         )}
 
-        {/* Input area with inline mention */}
-        <div className="flex items-start p-3 sm:p-4 gap-1">
-          {/* Selected subagent as glowing inline text */}
-          {selectedSubagent && (
-            <span
-              className="text-sm text-brand font-medium shrink-0"
-              style={{
-                textShadow: '0 0 8px hsl(var(--brand) / 0.5), 0 0 16px hsl(var(--brand) / 0.3)',
-              }}
+        {/* Selected agent chip */}
+        {selectedSubagent && (
+          <div className="px-3 pt-3">
+            <button
+              type="button"
+              onClick={() => setSelectedSubagent(undefined)}
+              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-medium bg-brand text-brand-foreground"
             >
               @{selectedSubagent}
-            </span>
-          )}
+              <X className="size-2.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Input area */}
+        <div className={cn('px-3 pb-1', selectedSubagent ? 'pt-2' : 'pt-4')}>
           <textarea
             ref={textareaRef}
-            className="flex-1 resize-none outline-none text-sm min-h-[20px] sm:min-h-[24px] max-h-48 sm:max-h-72 bg-transparent text-foreground placeholder:text-muted-foreground"
+            className="w-full resize-none outline-none text-sm min-h-[20px] max-h-48 bg-transparent"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onPaste={handlePaste}
@@ -454,18 +461,18 @@ export default function ChatInput({
                 <button
                   type="button"
                   onClick={onToggleMode}
-                  className="h-8 px-2 flex items-center gap-2 rounded-lg text-xs font-medium transition-colors hover:bg-muted/60"
+                  className="h-8 px-2 flex items-center gap-2 rounded-lg text-xs font-medium hover:bg-muted/60"
                 >
                   <span className="text-muted-foreground hidden sm:inline">Chat</span>
                   <div
                     className={cn(
-                      'relative w-7 h-4 rounded-full transition-colors',
+                      'relative w-7 h-4 rounded-full',
                       mode === 'plan' ? 'bg-brand' : 'bg-muted-foreground/30',
                     )}
                   >
                     <div
                       className={cn(
-                        'absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-transform duration-200',
+                        'absolute top-0.5 size-3 rounded-full bg-white shadow-sm',
                         mode === 'plan' ? 'translate-x-[14px]' : 'translate-x-0.5',
                       )}
                     />
@@ -488,10 +495,7 @@ export default function ChatInput({
                 <button
                   type="button"
                   onClick={() => setLevel((v) => (v + 1) % reasoning.variants.length)}
-                  className={cn(
-                    'h-8 px-2.5 text-xs rounded-lg transition-all flex items-center gap-2 outline-none border border-border/50',
-                    'hover:bg-muted/60 active:translate-y-[1px]',
-                  )}
+                  className="h-8 px-2.5 text-xs rounded-lg flex items-center gap-2 outline-none border border-border/50 hover:bg-muted/60"
                 >
                   <span className="text-muted-foreground">Reasoning</span>
                   <span className={cn('font-medium capitalize', levelTone)}>{currentVariant}</span>
