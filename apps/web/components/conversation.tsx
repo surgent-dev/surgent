@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ElementType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +16,6 @@ import {
 import { cn } from '@/lib/utils'
 import { http } from '@/lib/http'
 import {
-  MessageCircle,
   Loader2,
   Plus,
   AlertCircle,
@@ -126,22 +126,48 @@ function RetryCountdown({ retryInfo }: { retryInfo: SessionStatusRetry }) {
   )
 }
 
-function EmptyState({
-  title = 'No messages yet',
-  description = 'Start a conversation',
-  icon: Icon = MessageCircle,
-}: {
-  title?: string
-  description?: string
-  icon?: ElementType
-}) {
+function ConversationSkeleton() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] text-center px-4">
-      <div className="rounded-full bg-muted p-3 sm:p-4 mb-3 sm:mb-4">
-        <Icon className="size-6 sm:size-8 text-muted-foreground" strokeWidth={1.5} />
+    <div className="space-y-8 pt-8 animate-in fade-in duration-300">
+      <div className="flex gap-3">
+        <Skeleton className="size-8 rounded-full shrink-0" />
+        <div className="space-y-2 flex-1">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
       </div>
-      <p className="font-medium text-sm sm:text-base">{title}</p>
-      <p className="text-xs sm:text-sm text-muted-foreground">{description}</p>
+      <div className="flex gap-3">
+        <Skeleton className="size-8 rounded-full shrink-0" />
+        <div className="space-y-2 flex-1">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-4 w-1/3" />
+        </div>
+      </div>
+      <div className="flex gap-3">
+        <Skeleton className="size-8 rounded-full shrink-0" />
+        <div className="space-y-2 flex-1">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function InputSkeleton() {
+  return (
+    <div className="rounded-2xl border bg-muted/30 p-3 animate-pulse">
+      <Skeleton className="h-5 w-32 mb-3" />
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          <Skeleton className="size-8 rounded-lg" />
+          <Skeleton className="size-8 rounded-lg" />
+        </div>
+        <Skeleton className="h-8 w-20 rounded-lg" />
+      </div>
     </div>
   )
 }
@@ -216,7 +242,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     return computeWorkingFromParts(timeline)
   }, [status, messages, parts])
 
-  const inputDisabled = working || create.isPending || !activeId
+  const showSkeleton = loading || sessionsQuery.isLoading || !activeId
+  const inputDisabled = working || create.isPending || showSkeleton
   const inputPlaceholder = working ? 'Working...' : 'Ask anything...'
 
   useEffect(() => {
@@ -649,10 +676,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
               ref={contentRef}
               className="max-w-3xl mx-auto px-2 py-4 @md/conversation:px-4 @md/conversation:py-6 overflow-hidden"
             >
-              {loading ? (
-                <div className="flex items-center justify-center min-h-[300px]">
-                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
-                </div>
+              {showSkeleton ? (
+                <ConversationSkeleton />
               ) : visibleMessages.length ? (
                 <AgentThread
                   projectId={projectId}
@@ -663,9 +688,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                   isWorking={working}
                   onRevert={handleRevert}
                 />
-              ) : (
-                <EmptyState />
-              )}
+              ) : null}
             </div>
           </ScrollArea>
           {/* Scroll to bottom button */}
@@ -767,22 +790,26 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                 })}
               </div>
             )}
-            <ChatInput
-              onSubmit={handleSend}
-              disabled={inputDisabled}
-              placeholder={inputPlaceholder}
-              mode={mode}
-              onToggleMode={() => setMode((m) => (m === 'plan' ? 'orchestrator' : 'plan'))}
-              isWorking={working}
-              onStop={handleAbort}
-              isStopping={abort.isPending}
-              value={inputValue}
-              onValueChange={setInputValue}
-              models={availableModels}
-              selectedModel={selectedModel}
-              onModelChange={handleModelChange}
-              subagents={subagents}
-            />
+            {showSkeleton ? (
+              <InputSkeleton />
+            ) : (
+              <ChatInput
+                onSubmit={handleSend}
+                disabled={inputDisabled}
+                placeholder={inputPlaceholder}
+                mode={mode}
+                onToggleMode={() => setMode((m) => (m === 'plan' ? 'orchestrator' : 'plan'))}
+                isWorking={working}
+                onStop={handleAbort}
+                isStopping={abort.isPending}
+                value={inputValue}
+                onValueChange={setInputValue}
+                models={availableModels}
+                selectedModel={selectedModel}
+                onModelChange={handleModelChange}
+                subagents={subagents}
+              />
+            )}
           </div>
         </div>
       </div>
