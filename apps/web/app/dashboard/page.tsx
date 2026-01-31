@@ -95,8 +95,8 @@ function ProjectCard({
       onClick={onClick}
       className={cn(
         'group relative flex flex-col rounded-xl border bg-card overflow-hidden',
-        'border-border/50 hover:border-border/70 hover:bg-muted/30',
-        'cursor-pointer transition-colors',
+        'border-border/50 hover:border-border hover:shadow-md',
+        'cursor-pointer transition-shadow duration-200',
       )}
     >
       {/* Preview area */}
