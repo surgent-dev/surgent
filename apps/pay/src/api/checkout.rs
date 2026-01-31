@@ -17,6 +17,7 @@ use crate::core::config::Config;
 use crate::integrations::ProcessorRegistry;
 use crate::integrations::stripe::fetch_checkout_session;
 use crate::integrations::types::{CheckoutLineItem, CreateCheckoutSessionRequest};
+use crate::integrations::whop::{CreateCheckoutParams, WhopClient};
 use crate::types::{CheckoutMode, RecurringInterval, SubscriptionStatus};
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -123,7 +124,7 @@ pub async fn create_checkout_session(
     let product_uuid = Uuid::parse_str(&req.product_id).ok();
     let product = sqlx::query!(
         r#"
-        SELECT p.id, p."projectId"
+        SELECT p.id, p."projectId", p.name
         FROM product p
         WHERE p."projectId" = $1
           AND (p.id = $2 OR p.slug = $3)
@@ -257,9 +258,9 @@ pub async fn create_checkout_session(
     }
 
     // Look up project's connected account for destination charges
-    let destination_account = sqlx::query_scalar!(
+    let connect_account = sqlx::query!(
         r#"
-        SELECT "processorAccountId"
+        SELECT processor, "processorAccountId"
         FROM connect_account
         WHERE "projectId" = $1 AND "processorAccountId" IS NOT NULL
         LIMIT 1
@@ -273,8 +274,11 @@ pub async fn create_checkout_session(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Database error: {}", e),
         )
-    })?
-    .flatten();
+    })?;
+
+    let destination_account = connect_account
+        .as_ref()
+        .and_then(|a| a.processorAccountId.clone());
 
     // Fetch org config for platform fee calculation (get org_id from project)
     let org_config = sqlx::query!(
@@ -334,44 +338,106 @@ pub async fn create_checkout_session(
         config.surpay_base_url.trim_end_matches('/')
     );
 
-    let processor = registry.get("stripe").await.ok_or((
-        StatusCode::SERVICE_UNAVAILABLE,
-        "Payment processor not available".to_string(),
-    ))?;
+    let is_whop = connect_account
+        .as_ref()
+        .map(|a| a.processor == "whop")
+        .unwrap_or(false);
 
-    let processor_session = processor
-        .create_checkout_session(CreateCheckoutSessionRequest {
-            line_items: vec![CheckoutLineItem {
-                price: processor_price_id.to_string(),
-                quantity: 1,
-            }],
-            success_url: proxy_success_url,
-            cancel_url: proxy_cancel_url,
-            mode: match mode {
-                CheckoutMode::Payment => "payment",
-                CheckoutMode::Subscription => "subscription",
-                CheckoutMode::Setup => "setup",
-            }
-            .to_string(),
-            customer: processor_customer_id,
-            // Stripe's current implementation derives idempotency from metadata. Use a random
-            // value to preserve the current "new session per request" behavior.
-            metadata: HashMap::from([("idempotency_key".to_string(), Uuid::new_v4().to_string())]),
-            application_fee_amount,
-            application_fee_percent,
-            destination_account,
-        })
-        .await
-        .map_err(|e| {
-            tracing::error!(
-                processor_price_id = %processor_price_id,
-                product_id = %req.product_id,
-                price_id = ?req.price_id,
-                error = %e,
-                "Failed to create checkout session"
-            );
-            (StatusCode::BAD_GATEWAY, e)
-        })?;
+    let (processor_checkout_id, checkout_url) = if is_whop {
+        let whop_company_id = destination_account.as_ref().ok_or((
+            StatusCode::BAD_REQUEST,
+            "Whop connect account missing processorAccountId".to_string(),
+        ))?;
+
+        let whop_client = WhopClient::new(
+            config.whop_api_key.clone(),
+            config.whop_platform_company_id.clone(),
+            config.whop_base_url.clone(),
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+        let plan_type = if price.recurring_interval.is_some() {
+            "renewal"
+        } else {
+            "one_time"
+        };
+
+        // Convert cents to dollars for Whop
+        let price_dollars = price.priceAmount as f64 / 100.0;
+        let fee_dollars = application_fee_amount.map(|f| f as f64 / 100.0);
+
+        let whop_checkout = whop_client
+            .create_checkout_configuration(CreateCheckoutParams {
+                company_id: whop_company_id,
+                currency: "usd",
+                price_amount: price_dollars,
+                plan_type,
+                application_fee_amount: fee_dollars,
+                redirect_url: req.success_url.as_deref(),
+                title: &product.name,
+            })
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    product_id = %req.product_id,
+                    price_id = ?req.price_id,
+                    error = %e,
+                    "Failed to create Whop checkout"
+                );
+                (StatusCode::BAD_GATEWAY, e)
+            })?;
+
+        (whop_checkout.id, whop_checkout.purchase_url)
+    } else {
+        let processor = registry.get("stripe").await.ok_or((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Payment processor not available".to_string(),
+        ))?;
+
+        let processor_session = processor
+            .create_checkout_session(CreateCheckoutSessionRequest {
+                line_items: vec![CheckoutLineItem {
+                    price: processor_price_id.to_string(),
+                    quantity: 1,
+                }],
+                success_url: proxy_success_url,
+                cancel_url: proxy_cancel_url,
+                mode: match mode {
+                    CheckoutMode::Payment => "payment",
+                    CheckoutMode::Subscription => "subscription",
+                    CheckoutMode::Setup => "setup",
+                }
+                .to_string(),
+                customer: processor_customer_id,
+                // Stripe's current implementation derives idempotency from metadata. Use a random
+                // value to preserve the current "new session per request" behavior.
+                metadata: HashMap::from([(
+                    "idempotency_key".to_string(),
+                    Uuid::new_v4().to_string(),
+                )]),
+                application_fee_amount,
+                application_fee_percent,
+                destination_account,
+            })
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    processor_price_id = %processor_price_id,
+                    product_id = %req.product_id,
+                    price_id = ?req.price_id,
+                    error = %e,
+                    "Failed to create checkout session"
+                );
+                (StatusCode::BAD_GATEWAY, e)
+            })?;
+
+        let url = processor_session.url.ok_or((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Processor did not return a checkout URL".to_string(),
+        ))?;
+
+        (processor_session.id, url)
+    };
 
     // Use merchant-provided redirect URLs if provided
     let final_success_url = req.success_url.clone();
@@ -394,7 +460,7 @@ pub async fn create_checkout_session(
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
         session_id,
-        &processor_session.id,
+        &processor_checkout_id,
         project_id,
         product_id,
         price_id,
@@ -412,13 +478,8 @@ pub async fn create_checkout_session(
         )
     })?;
 
-    let url = processor_session.url.ok_or((
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "Processor did not return a checkout URL".to_string(),
-    ))?;
-
     let response = CreateCheckoutResponse {
-        checkout_url: url,
+        checkout_url,
         customer_id: req.customer_id,
     };
     tracing::debug!(?response, "Returning checkout response");
