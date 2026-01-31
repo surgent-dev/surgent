@@ -27,6 +27,9 @@ pub struct Config {
     pub trusted_origins: String,
 
     pub web_base_url: String,
+
+    pub whop_api_key: Option<String>,
+    pub whop_platform_company_id: Option<String>,
 }
 
 impl Config {
@@ -69,6 +72,9 @@ impl Config {
             trusted_origins: env::var("TRUSTED_ORIGINS").expect("TRUSTED_ORIGINS must be set"),
 
             web_base_url: env::var("WEB_BASE_URL").expect("WEB_BASE_URL must be set"),
+
+            whop_api_key: env::var("WHOP_API_KEY").ok(),
+            whop_platform_company_id: env::var("WHOP_PLATFORM_COMPANY_ID").ok(),
         })
     }
 }

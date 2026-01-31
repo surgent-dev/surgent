@@ -269,6 +269,132 @@ pub struct ConnectedAccountResponse {
     pub payouts_enabled: bool,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WhopConnectRequest {
+    pub email: String,
+    pub title: String,
+    pub country: String,
+    pub business_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WhopConnectResponse {
+    pub account_id: Uuid,
+    pub processor_account_id: String,
+    pub status: String,
+}
+
+/// Create a Whop connected account (direct creation, no OAuth)
+#[utoipa::path(
+    post,
+    path = "/accounts/connect/whop",
+    tag = "account",
+    request_body = WhopConnectRequest,
+    responses(
+        (status = 200, description = "Whop account connected", body = WhopConnectResponse),
+        (status = 400, description = "Bad request or Whop not configured"),
+        (status = 401, description = "Unauthorized"),
+        (status = 409, description = "Account already connected"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("project_key" = []))
+)]
+pub async fn create_whop_connect(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<ProjectIdQuery>,
+    Json(req): Json<WhopConnectRequest>,
+) -> Result<Json<WhopConnectResponse>, (StatusCode, String)> {
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
+
+    let (api_key, platform_id) = match (
+        &state.config.whop_api_key,
+        &state.config.whop_platform_company_id,
+    ) {
+        (Some(key), Some(id)) => (key.clone(), id.clone()),
+        _ => return Err((StatusCode::BAD_REQUEST, "Whop not configured".to_string())),
+    };
+
+    let existing = sqlx::query!(
+        r#"SELECT id, processor FROM connect_account WHERE "projectId" = $1"#,
+        project_id
+    )
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
+
+    if let Some(existing) = existing {
+        return Err((
+            StatusCode::CONFLICT,
+            format!("PROCESSOR_ALREADY_CONNECTED:{}", existing.processor),
+        ));
+    }
+
+    let whop = crate::integrations::WhopClient::new(api_key, platform_id);
+    let company = whop
+        .create_company(
+            &req.title,
+            &req.email,
+            &auth.user_id.to_string(),
+            &project_id.to_string(),
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Whop API error: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, e)
+        })?;
+
+    let currency = match req.country.to_lowercase().as_str() {
+        "us" => "usd",
+        "gb" => "gbp",
+        _ => "usd",
+    };
+
+    let account_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO connect_account (
+            id, "projectId", country, currency, "isPayoutsEnabled",
+            processor, "processorAccountId", status, "detailsSubmitted",
+            "chargesEnabled", "businessType", data
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        "#,
+        account_id,
+        project_id,
+        &req.country,
+        currency,
+        true,
+        "whop",
+        &company.id,
+        "connected",
+        true,
+        true,
+        req.business_type,
+        serde_json::json!({})
+    )
+    .execute(&state.pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
+
+    Ok(Json(WhopConnectResponse {
+        account_id,
+        processor_account_id: company.id,
+        status: "connected".to_string(),
+    }))
+}
+
 /// Create a new connect account
 #[utoipa::path(
     post,
@@ -309,15 +435,14 @@ pub async fn create_connect_account(
         })?;
     tracing::debug!("processor found: {}", req.processor);
 
-    // Check if project already has a connected account for this processor
+    // Check if project already has a connected account (any processor)
     let existing = sqlx::query!(
         r#"
-        SELECT id, "processorAccountId"
+        SELECT id, processor, "processorAccountId"
         FROM connect_account
-        WHERE "projectId" = $1 AND processor = $2
+        WHERE "projectId" = $1
         "#,
-        project_id,
-        &req.processor
+        project_id
     )
     .fetch_optional(&state.pool)
     .await
@@ -333,7 +458,7 @@ pub async fn create_connect_account(
         if existing.processorAccountId.is_some() {
             return Err((
                 StatusCode::CONFLICT,
-                "Account already connected".to_string(),
+                format!("PROCESSOR_ALREADY_CONNECTED:{}", existing.processor),
             ));
         }
     }

@@ -31,7 +31,12 @@ import {
   type ConvexDashboardCredentials,
 } from '@/queries/projects'
 
-import { useSurpayAccounts, useSurpayConnect, useSurpayDisconnect } from '@/queries/surpay'
+import {
+  useSurpayAccounts,
+  useSurpayConnect,
+  useSurpayDisconnect,
+  useWhopConnect,
+} from '@/queries/surpay'
 import { useSessionDiff } from '@/queries/chats'
 import { useSandbox } from '@/hooks/use-sandbox'
 
@@ -54,7 +59,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
+import { toast } from 'react-hot-toast'
 import { cn } from '@/lib/utils'
+import { authClient } from '@/lib/auth-client'
 import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
 import { FunLoadingState } from '@/components/ui/fun-loading'
 
@@ -219,27 +226,16 @@ function LogsContent({
 function PaymentsContent({ projectId }: { projectId?: string }) {
   const { data: accounts, isLoading } = useSurpayAccounts(projectId)
   const connect = useSurpayConnect()
+  const whopConnect = useWhopConnect()
   const disconnect = useSurpayDisconnect()
   const [disconnectOpen, setDisconnectOpen] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
-  const [whopWaitlist, setWhopWaitlist] = useState(false)
-  const [whopLoading, setWhopLoading] = useState(false)
   const [surgentWaitlist, setSurgentWaitlist] = useState(false)
   const [surgentLoading, setSurgentLoading] = useState(false)
 
   useEffect(() => {
-    if (localStorage.getItem('whop-waitlist') === 'true') setWhopWaitlist(true)
     if (localStorage.getItem('surgent-pay-waitlist') === 'true') setSurgentWaitlist(true)
   }, [])
-
-  const joinWhopWaitlist = () => {
-    setWhopLoading(true)
-    setTimeout(() => {
-      localStorage.setItem('whop-waitlist', 'true')
-      setWhopWaitlist(true)
-      setWhopLoading(false)
-    }, 1500)
-  }
 
   const joinSurgentWaitlist = () => {
     setSurgentLoading(true)
@@ -254,119 +250,142 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
     return <LoadingState icon={CreditCard} message="Loading payment accounts..." />
   }
 
+  const showConnectError = (err: Error, fallback: string) => {
+    const msg = err?.message || ''
+    const match = msg.match(/PROCESSOR_ALREADY_CONNECTED:(\w+)/)
+    if (match) {
+      toast.error(`Already connected to ${match[1]}. Disconnect it first.`)
+    } else {
+      toast.error(fallback)
+    }
+  }
+
   const handleConnect = async () => {
     if (!projectId) return
-    const result = await connect.mutateAsync(projectId)
-    if (result.oauthUrl) {
-      window.location.href = result.oauthUrl
+    try {
+      const result = await connect.mutateAsync(projectId)
+      if (result.oauthUrl) {
+        window.location.href = result.oauthUrl
+      }
+    } catch (err: any) {
+      showConnectError(err, 'Failed to connect Stripe')
+    }
+  }
+
+  const handleConnectWhop = async () => {
+    if (!projectId) return
+    const session = await authClient.getSession()
+    const email = session.data?.user?.email
+    const name = session.data?.user?.name || 'My Company'
+    if (!email) {
+      toast.error('Unable to get user email')
+      return
+    }
+    try {
+      await whopConnect.mutateAsync({
+        projectId,
+        data: { email, title: name, country: 'us' },
+      })
+      toast.success('Whop connected successfully')
+    } catch (err: any) {
+      showConnectError(err, 'Failed to connect Whop')
     }
   }
 
   if (!accounts?.length) {
     return (
-      <div className="w-full h-full flex items-center justify-center p-4">
-        <div className="flex flex-col items-center gap-4 w-72">
-          <div className="flex flex-col items-center gap-3">
-            <div className="rounded-full bg-muted p-3">
-              <Coins className="size-6 text-muted-foreground" weight="duotone" />
+      <>
+        <div className="w-full h-full flex items-center justify-center p-4">
+          <div className="flex flex-col items-center gap-4 w-72">
+            <div className="flex flex-col items-center gap-3">
+              <div className="rounded-full bg-muted p-3">
+                <Coins className="size-6 text-muted-foreground" weight="duotone" />
+              </div>
+              <div className="text-center space-y-0.5">
+                <p className="font-medium">Start earning</p>
+                <p className="text-xs text-muted-foreground">Connect a payment provider</p>
+              </div>
             </div>
-            <div className="text-center space-y-0.5">
-              <p className="font-medium">Start earning</p>
-              <p className="text-xs text-muted-foreground">Connect a payment provider</p>
+            <div className="flex flex-col gap-2 w-full">
+              <button
+                onClick={handleConnect}
+                disabled={connect.isPending}
+                className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <div className="grid place-items-center size-9 rounded-md overflow-hidden shrink-0">
+                  <Image src="/Stripe_icon_-_square.svg" alt="Stripe" width={36} height={36} />
+                </div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-medium leading-tight">
+                    {connect.isPending ? 'Connecting...' : 'Stripe'}
+                  </span>
+                  <span className="text-xs text-muted-foreground leading-tight">
+                    Cards, Apple Pay, Google Pay
+                  </span>
+                </div>
+              </button>
+              <button
+                onClick={handleConnectWhop}
+                disabled={whopConnect.isPending}
+                className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <div className="grid place-items-center size-9 rounded-md bg-[#FF6243] shrink-0">
+                  <Image
+                    src="/whop_logo_brandmark_orange.svg"
+                    alt="Whop"
+                    width={22}
+                    height={11}
+                    className="brightness-0 invert"
+                  />
+                </div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-medium leading-tight">
+                    {whopConnect.isPending ? 'Connecting...' : 'Whop'}
+                  </span>
+                  <span className="text-xs text-muted-foreground leading-tight">
+                    Memberships, courses, downloads
+                  </span>
+                </div>
+              </button>
+              <div className="flex items-center gap-2 py-1">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted-foreground">or</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              <button
+                onClick={surgentWaitlist || surgentLoading ? undefined : joinSurgentWaitlist}
+                disabled={surgentWaitlist || surgentLoading}
+                className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors cursor-pointer disabled:cursor-default disabled:hover:bg-background/60"
+              >
+                <div className="grid place-items-center size-9 rounded-md overflow-hidden shrink-0">
+                  <Image src="/surpay-coin.svg" alt="Surgent Pay" width={36} height={36} />
+                </div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-medium leading-tight flex items-center gap-1.5">
+                    {surgentLoading ? (
+                      <>
+                        <span className="size-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        Joining...
+                      </>
+                    ) : surgentWaitlist ? (
+                      'On waitlist ✓'
+                    ) : (
+                      'Surgent Pay'
+                    )}
+                  </span>
+                  <span className="text-xs text-muted-foreground leading-tight">
+                    {surgentLoading
+                      ? 'Adding you to the list'
+                      : surgentWaitlist
+                        ? "We'll notify you when ready"
+                        : 'Native payments by Surgent'}
+                  </span>
+                </div>
+              </button>
             </div>
-          </div>
-          <div className="flex flex-col gap-2 w-full">
-            <button
-              onClick={handleConnect}
-              disabled={connect.isPending}
-              className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors disabled:opacity-50 cursor-pointer"
-            >
-              <div className="grid place-items-center size-9 rounded-md overflow-hidden shrink-0">
-                <Image src="/Stripe_icon_-_square.svg" alt="Stripe" width={36} height={36} />
-              </div>
-              <div className="flex flex-col items-start">
-                <span className="text-sm font-medium leading-tight">
-                  {connect.isPending ? 'Connecting...' : 'Stripe'}
-                </span>
-                <span className="text-xs text-muted-foreground leading-tight">
-                  Cards, Apple Pay, Google Pay
-                </span>
-              </div>
-            </button>
-            <button
-              onClick={whopWaitlist || whopLoading ? undefined : joinWhopWaitlist}
-              disabled={whopWaitlist || whopLoading}
-              className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors cursor-pointer disabled:cursor-default disabled:hover:bg-background/60"
-            >
-              <div className="grid place-items-center size-9 rounded-md bg-[#FF6243] shrink-0">
-                <Image
-                  src="/whop_logo_brandmark_orange.svg"
-                  alt="Whop"
-                  width={22}
-                  height={11}
-                  className="brightness-0 invert"
-                />
-              </div>
-              <div className="flex flex-col items-start">
-                <span className="text-sm font-medium leading-tight flex items-center gap-1.5">
-                  {whopLoading ? (
-                    <>
-                      <span className="size-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      Joining...
-                    </>
-                  ) : whopWaitlist ? (
-                    'On waitlist ✓'
-                  ) : (
-                    'Whop'
-                  )}
-                </span>
-                <span className="text-xs text-muted-foreground leading-tight">
-                  {whopLoading
-                    ? 'Adding you to the list'
-                    : whopWaitlist
-                      ? "We'll notify you when ready"
-                      : 'Memberships, courses, downloads'}
-                </span>
-              </div>
-            </button>
-            <div className="flex items-center gap-2 py-1">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground">or</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-            <button
-              onClick={surgentWaitlist || surgentLoading ? undefined : joinSurgentWaitlist}
-              disabled={surgentWaitlist || surgentLoading}
-              className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors cursor-pointer disabled:cursor-default disabled:hover:bg-background/60"
-            >
-              <div className="grid place-items-center size-9 rounded-md overflow-hidden shrink-0">
-                <Image src="/surpay-coin.svg" alt="Surgent Pay" width={36} height={36} />
-              </div>
-              <div className="flex flex-col items-start">
-                <span className="text-sm font-medium leading-tight flex items-center gap-1.5">
-                  {surgentLoading ? (
-                    <>
-                      <span className="size-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      Joining...
-                    </>
-                  ) : surgentWaitlist ? (
-                    'On waitlist ✓'
-                  ) : (
-                    'Surgent Pay'
-                  )}
-                </span>
-                <span className="text-xs text-muted-foreground leading-tight">
-                  {surgentLoading
-                    ? 'Adding you to the list'
-                    : surgentWaitlist
-                      ? "We'll notify you when ready"
-                      : 'Native payments by Surgent'}
-                </span>
-              </div>
-            </button>
           </div>
         </div>
-      </div>
+      </>
     )
   }
 
@@ -425,10 +444,10 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Disconnect Stripe Account</DialogTitle>
+            <DialogTitle>Disconnect {connectedAccount?.processor || 'Payment'} Account</DialogTitle>
             <DialogDescription>
-              Are you sure you want to disconnect your Stripe account? This will disable payment
-              processing for this project.
+              Are you sure you want to disconnect your {connectedAccount?.processor || 'payment'}{' '}
+              account? This will disable payment processing for this project.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
