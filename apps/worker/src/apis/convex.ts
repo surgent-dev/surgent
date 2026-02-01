@@ -114,7 +114,7 @@ export interface AuthKeys {
 }
 
 export async function generateAuthKeys(): Promise<AuthKeys> {
-  const keys = await generateKeyPair('RS256')
+  const keys = await generateKeyPair('RS256', { extractable: true })
   const privateKey = await exportPKCS8(keys.privateKey)
   const publicKey = await exportJWK(keys.publicKey)
   const jwks = JSON.stringify({ keys: [{ use: 'sig', ...publicKey }] })
