@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Archive, Loader2, Package, Pencil, Plus, Settings } from 'lucide-react'
+import Image from 'next/image'
+import { Archive, Loader2, MoreHorizontal, Package, Pencil, Plus, Settings } from 'lucide-react'
 import {
   useProducts,
   type Product,
@@ -9,6 +10,13 @@ import {
   type ProductPrice,
 } from '@/queries/products'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { payHttp } from '@/lib/http'
 import { CreateProductDialog } from './create-product-dialog'
 import { CreatePriceDialog } from './create-price-dialog'
 import { EditProductDialog } from './edit-product-dialog'
@@ -84,15 +92,52 @@ function PricePill({ price }: { price: ProductPrice }) {
 
 function ProductCard({
   item,
+  projectId,
   onEdit,
   onAddPrice,
 }: {
   item: ProductWithPrices
+  projectId: string
   onEdit: (product: Product) => void
   onAddPrice: (item: ProductWithPrices) => void
 }) {
   const { product, prices } = item
   const canAddPrice = prices.length === 0
+
+  const handleTestCheckout = async () => {
+    const priceId = prices[0]?.id
+    if (!priceId) return
+
+    const confirmed = window.confirm('This will create a real checkout session. Continue?')
+    if (!confirmed) return
+
+    try {
+      // Whop requires HTTPS URLs - use current URL if HTTPS, otherwise use placeholder
+      const redirectUrl =
+        window.location.protocol === 'https:'
+          ? window.location.href
+          : 'https://example.com/checkout-complete'
+
+      const response = await payHttp
+        .post('checkout', {
+          searchParams: { projectId },
+          json: {
+            customerId: 'test-customer-123',
+            productId: product.id,
+            priceId: priceId,
+            successUrl: redirectUrl,
+            cancelUrl: redirectUrl,
+          },
+        })
+        .json<{ checkoutUrl: string }>()
+
+      window.open(response.checkoutUrl, '_blank')
+    } catch (error) {
+      alert(
+        'Failed to create checkout: ' + (error instanceof Error ? error.message : 'Unknown error'),
+      )
+    }
+  }
 
   return (
     <div
@@ -121,13 +166,22 @@ function ProductCard({
               <span>Add Price</span>
             </button>
           )}
-          <button
-            onClick={() => onEdit(product)}
-            className="group flex items-center gap-1 px-2 py-1.5 text-xs rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
-          >
-            <Pencil className="size-3" />
-            <span className="hidden group-hover:inline">Settings</span>
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-muted transition-colors">
+                <MoreHorizontal className="size-4 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              {prices.length > 0 && (
+                <DropdownMenuItem onClick={handleTestCheckout}>Test Checkout</DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => onEdit(product)}>
+                <Pencil className="mr-2 size-3" />
+                Settings
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -224,15 +278,26 @@ function StripeStatusCard({
           className={cn(
             'size-8 rounded-md flex items-center justify-center',
             isConnected ? 'bg-success/10' : 'bg-muted',
+            processor === 'whop' && 'bg-[#FF6243]',
           )}
         >
-          <svg
-            className={cn('size-5', isConnected ? 'text-success' : 'text-muted-foreground')}
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
-            <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" />
-          </svg>
+          {processor === 'whop' ? (
+            <Image
+              src="/whop_logo_brandmark_orange.svg"
+              alt="Whop"
+              width={20}
+              height={10}
+              className="brightness-0 invert"
+            />
+          ) : (
+            <Image
+              src="/Stripe_icon_-_square.svg"
+              alt="Stripe"
+              width={20}
+              height={20}
+              className="size-5"
+            />
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
@@ -374,6 +439,7 @@ export function ProductsSection({
                 <ProductCard
                   key={item.product.id}
                   item={item}
+                  projectId={projectId}
                   onEdit={handleEdit}
                   onAddPrice={handleAddPrice}
                 />

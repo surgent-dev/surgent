@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE connect_account\n            SET \"projectId\" = $1, status = 'connected'\n            WHERE id = $2 AND \"userId\" = $3 AND processor = 'whop' AND \"projectId\" IS NULL\n            RETURNING \"processorAccountId\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "processorAccountId",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "4ad7b71ed16439918e91649829a68a7a007bb016d8d38c2a64c7b12b15afea41"
+}

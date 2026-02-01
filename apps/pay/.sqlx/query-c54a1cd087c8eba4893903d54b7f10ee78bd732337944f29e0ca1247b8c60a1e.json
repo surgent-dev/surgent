@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO connect_account (\n            id, \"projectId\", \"userId\", country, currency, \"isPayoutsEnabled\",\n            processor, \"processorAccountId\", status, \"detailsSubmitted\",\n            \"chargesEnabled\", \"businessType\", data\n        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Bool",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c54a1cd087c8eba4893903d54b7f10ee78bd732337944f29e0ca1247b8c60a1e"
+}

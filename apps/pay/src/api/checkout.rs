@@ -19,6 +19,15 @@ use crate::integrations::stripe::fetch_checkout_session;
 use crate::integrations::types::{CheckoutLineItem, CreateCheckoutSessionRequest};
 use crate::types::{CheckoutMode, RecurringInterval, SubscriptionStatus};
 
+fn recurring_interval_to_days(interval: &RecurringInterval) -> i32 {
+    match interval {
+        RecurringInterval::Day => 1,
+        RecurringInterval::Week => 7,
+        RecurringInterval::Month => 30,
+        RecurringInterval::Year => 365,
+    }
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CustomerData {
@@ -123,7 +132,7 @@ pub async fn create_checkout_session(
     let product_uuid = Uuid::parse_str(&req.product_id).ok();
     let product = sqlx::query!(
         r#"
-        SELECT p.id, p."projectId"
+        SELECT p.id, p."projectId", p.name
         FROM product p
         WHERE p."projectId" = $1
           AND (p.id = $2 OR p.slug = $3)
@@ -257,9 +266,9 @@ pub async fn create_checkout_session(
     }
 
     // Look up project's connected account for destination charges
-    let destination_account = sqlx::query_scalar!(
+    let connect_account = sqlx::query!(
         r#"
-        SELECT "processorAccountId"
+        SELECT processor, "processorAccountId"
         FROM connect_account
         WHERE "projectId" = $1 AND "processorAccountId" IS NOT NULL
         LIMIT 1
@@ -273,8 +282,11 @@ pub async fn create_checkout_session(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Database error: {}", e),
         )
-    })?
-    .flatten();
+    })?;
+
+    let destination_account = connect_account
+        .as_ref()
+        .and_then(|a| a.processorAccountId.clone());
 
     // Fetch org config for platform fee calculation (get org_id from project)
     let org_config = sqlx::query!(
@@ -334,10 +346,47 @@ pub async fn create_checkout_session(
         config.surpay_base_url.trim_end_matches('/')
     );
 
-    let processor = registry.get("stripe").await.ok_or((
+    // Determine processor from connect account, default to "stripe"
+    let processor_name = connect_account
+        .as_ref()
+        .map(|a| a.processor.as_str())
+        .unwrap_or("stripe");
+
+    let processor = registry.get(processor_name).await.ok_or((
         StatusCode::SERVICE_UNAVAILABLE,
-        "Payment processor not available".to_string(),
+        format!("Payment processor '{}' not available", processor_name),
     ))?;
+
+    // Generate session_id BEFORE processor call so we can pass it as metadata (for Whop webhook linking)
+    let session_id = Uuid::new_v4();
+
+    // Whop requires explicit success/cancel URLs
+    if processor_name == "whop" && (req.success_url.is_none() || req.cancel_url.is_none()) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "successUrl and cancelUrl are required for Whop checkout".to_string(),
+        ));
+    }
+
+    // Whop uses success_url directly, Stripe uses proxy URLs for eager sync
+    let (success_url, cancel_url) = if processor_name == "whop" {
+        (
+            req.success_url.clone().unwrap_or_default(),
+            req.cancel_url.clone().unwrap_or_default(),
+        )
+    } else {
+        (proxy_success_url, proxy_cancel_url)
+    };
+
+    // Build metadata - include session_id for Whop to link payment.succeeded webhooks back to checkout
+    let metadata = if processor_name == "whop" {
+        HashMap::from([
+            ("idempotency_key".to_string(), Uuid::new_v4().to_string()),
+            ("session_id".to_string(), session_id.to_string()),
+        ])
+    } else {
+        HashMap::from([("idempotency_key".to_string(), Uuid::new_v4().to_string())])
+    };
 
     let processor_session = processor
         .create_checkout_session(CreateCheckoutSessionRequest {
@@ -345,8 +394,8 @@ pub async fn create_checkout_session(
                 price: processor_price_id.to_string(),
                 quantity: 1,
             }],
-            success_url: proxy_success_url,
-            cancel_url: proxy_cancel_url,
+            success_url,
+            cancel_url,
             mode: match mode {
                 CheckoutMode::Payment => "payment",
                 CheckoutMode::Subscription => "subscription",
@@ -354,16 +403,22 @@ pub async fn create_checkout_session(
             }
             .to_string(),
             customer: processor_customer_id,
-            // Stripe's current implementation derives idempotency from metadata. Use a random
-            // value to preserve the current "new session per request" behavior.
-            metadata: HashMap::from([("idempotency_key".to_string(), Uuid::new_v4().to_string())]),
+            metadata,
             application_fee_amount,
             application_fee_percent,
             destination_account,
+            product_name: Some(product.name.clone()),
+            unit_amount: Some(price.priceAmount as i64),
+            product_id: Some(product_id.to_string()),
+            billing_period_days: price
+                .recurring_interval
+                .flatten()
+                .map(|i| recurring_interval_to_days(&i)),
         })
         .await
         .map_err(|e| {
             tracing::error!(
+                processor = %processor_name,
                 processor_price_id = %processor_price_id,
                 product_id = %req.product_id,
                 price_id = ?req.price_id,
@@ -373,11 +428,17 @@ pub async fn create_checkout_session(
             (StatusCode::BAD_GATEWAY, e)
         })?;
 
+    let checkout_url = processor_session.url.ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Processor did not return a checkout URL".to_string(),
+    ))?;
+
+    let processor_checkout_id = processor_session.id;
+
     // Use merchant-provided redirect URLs if provided
     let final_success_url = req.success_url.clone();
     let final_cancel_url = req.cancel_url.clone();
 
-    let session_id = Uuid::new_v4();
     sqlx::query!(
         r#"
         INSERT INTO checkout_session (
@@ -394,7 +455,7 @@ pub async fn create_checkout_session(
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
         session_id,
-        &processor_session.id,
+        &processor_checkout_id,
         project_id,
         product_id,
         price_id,
@@ -412,13 +473,8 @@ pub async fn create_checkout_session(
         )
     })?;
 
-    let url = processor_session.url.ok_or((
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "Processor did not return a checkout URL".to_string(),
-    ))?;
-
     let response = CreateCheckoutResponse {
-        checkout_url: url,
+        checkout_url,
         customer_id: req.customer_id,
     };
     tracing::debug!(?response, "Returning checkout response");

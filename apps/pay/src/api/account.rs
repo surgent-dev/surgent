@@ -82,9 +82,10 @@ async fn fetch_account_by_id(pool: &PgPool, id: Uuid) -> Result<AccountRow, (Sta
     .fetch_optional(pool)
     .await
     .map_err(|e| {
+        tracing::error!("Database error fetching account {}: {}", id, e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
+            "Internal server error".to_string(),
         )
     })?
     .map(|row| AccountRow {
@@ -142,17 +143,19 @@ fn sign_oauth_state(
     secret: &str,
 ) -> Result<String, (StatusCode, String)> {
     let json = serde_json::to_string(payload).map_err(|e| {
+        tracing::error!("Failed to serialize oauth state: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to serialize oauth state: {}", e),
+            "Internal server error".to_string(),
         )
     })?;
     let payload_b64 = URL_SAFE_NO_PAD.encode(json.as_bytes());
 
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|e| {
+        tracing::error!("Failed to create HMAC: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to create HMAC: {}", e),
+            "Internal server error".to_string(),
         )
     })?;
     mac.update(payload_b64.as_bytes());
@@ -269,6 +272,318 @@ pub struct ConnectedAccountResponse {
     pub payouts_enabled: bool,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WhopConnectRequest {
+    pub email: String,
+    pub title: String,
+    pub country: String,
+    pub business_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WhopConnectResponse {
+    pub account_id: Uuid,
+    pub processor_account_id: String,
+    pub status: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListUserAccountsQuery {
+    pub processor: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserAccountResponse {
+    pub id: Uuid,
+    pub processor: String,
+    pub processor_account_id: Option<String>,
+    pub status: String,
+    pub project_id: Option<Uuid>,
+    pub email: Option<String>,
+    pub title: Option<String>,
+    pub country: Option<String>,
+}
+
+/// List connected accounts for the authenticated user
+#[utoipa::path(
+    get,
+    path = "/accounts/user",
+    tag = "account",
+    params(
+        ("processor" = Option<String>, Query, description = "Filter by processor (stripe, whop)")
+    ),
+    responses(
+        (status = 200, description = "List of accounts", body = Vec<UserAccountResponse>),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_token" = []))
+)]
+pub async fn list_user_accounts(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<ListUserAccountsQuery>,
+) -> Result<Json<Vec<UserAccountResponse>>, (StatusCode, String)> {
+    let accounts = sqlx::query!(
+        r#"
+        SELECT id, processor, "processorAccountId", status, "projectId", data
+        FROM connect_account
+        WHERE "userId" = $1
+        AND ($2::text IS NULL OR processor = $2)
+        ORDER BY "createdAt" DESC
+        "#,
+        auth.user_id,
+        query.processor
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| {
+        tracing::error!("Database error listing user accounts: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    let response: Vec<UserAccountResponse> = accounts
+        .into_iter()
+        .map(|acc| {
+            let data = acc.data;
+            UserAccountResponse {
+                id: acc.id,
+                processor: acc.processor,
+                processor_account_id: acc.processorAccountId,
+                status: acc.status,
+                project_id: acc.projectId,
+                email: data.get("email").and_then(|v| v.as_str()).map(String::from),
+                title: data.get("title").and_then(|v| v.as_str()).map(String::from),
+                country: data
+                    .get("country")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+            }
+        })
+        .collect();
+
+    Ok(Json(response))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WhopConnectQuery {
+    pub project_id: Option<Uuid>,
+    pub account_id: Option<Uuid>,
+}
+
+/// Create a Whop connected account (direct creation, no OAuth)
+#[utoipa::path(
+    post,
+    path = "/accounts/connect/whop",
+    tag = "account",
+    request_body = WhopConnectRequest,
+    responses(
+        (status = 200, description = "Whop account connected", body = WhopConnectResponse),
+        (status = 400, description = "Bad request or Whop not configured"),
+        (status = 401, description = "Unauthorized"),
+        (status = 409, description = "Account already connected"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("project_key" = []))
+)]
+pub async fn create_whop_connect(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<WhopConnectQuery>,
+    Json(req): Json<WhopConnectRequest>,
+) -> Result<Json<WhopConnectResponse>, (StatusCode, String)> {
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
+
+    // If account_id provided, reconnect existing account
+    if let Some(account_id) = query.account_id {
+        tracing::debug!(
+            account_id = %account_id,
+            user_id = %auth.user_id,
+            project_id = %project_id,
+            "Attempting to reconnect Whop account"
+        );
+        let result = sqlx::query!(
+            r#"
+            UPDATE connect_account
+            SET "projectId" = $1, status = 'connected'
+            WHERE id = $2 AND "userId" = $3 AND processor = 'whop' AND "projectId" IS NULL
+            RETURNING "processorAccountId"
+            "#,
+            project_id,
+            account_id,
+            auth.user_id
+        )
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error reconnecting: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            )
+        })?;
+
+        let row = match result {
+            Some(r) => r,
+            None => {
+                tracing::warn!(
+                    account_id = %account_id,
+                    user_id = %auth.user_id,
+                    "Reconnect failed: account not found or userId mismatch or already connected"
+                );
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    "Account not found or already connected".to_string(),
+                ));
+            }
+        };
+
+        let processor_account_id = match row.processorAccountId {
+            Some(id) => id,
+            None => {
+                tracing::error!(account_id = %account_id, "Account has NULL processorAccountId");
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "Account missing processor account ID".to_string(),
+                ));
+            }
+        };
+
+        return Ok(Json(WhopConnectResponse {
+            account_id,
+            processor_account_id,
+            status: "connected".to_string(),
+        }));
+    }
+
+    let whop = crate::integrations::WhopClient::new(
+        state.config.whop_api_key.clone(),
+        state.config.whop_platform_company_id.clone(),
+        state.config.whop_base_url.clone(),
+    )
+    .map_err(|e| {
+        tracing::error!("Failed to create WhopClient: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+    let company = whop
+        .create_company(
+            &req.title,
+            &req.email,
+            &auth.user_id.to_string(),
+            &project_id.to_string(),
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Whop API error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            )
+        })?;
+
+    let currency = match req.country.to_lowercase().as_str() {
+        "us" => "usd",
+        "gb" => "gbp",
+        _ => "usd",
+    };
+
+    // Use transaction to check + insert atomically
+    let account_id = Uuid::new_v4();
+    let mut tx = state.pool.begin().await.map_err(|e| {
+        tracing::error!("Failed to begin transaction: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    let existing = sqlx::query!(
+        r#"SELECT id, processor FROM connect_account WHERE "projectId" = $1 FOR UPDATE"#,
+        project_id
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| {
+        tracing::error!("Database error checking existing account: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    if let Some(existing) = existing {
+        return Err((
+            StatusCode::CONFLICT,
+            format!("PROCESSOR_ALREADY_CONNECTED:{}", existing.processor),
+        ));
+    }
+
+    let insert_result = sqlx::query!(
+        r#"
+        INSERT INTO connect_account (
+            id, "projectId", "userId", country, currency, "isPayoutsEnabled",
+            processor, "processorAccountId", status, "detailsSubmitted",
+            "chargesEnabled", "businessType", data
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        "#,
+        account_id,
+        project_id,
+        auth.user_id,
+        &req.country,
+        currency,
+        true,
+        "whop",
+        &company.id,
+        "connected",
+        true,
+        true,
+        req.business_type,
+        serde_json::json!({ "email": req.email, "title": req.title, "country": req.country })
+    )
+    .execute(&mut *tx)
+    .await;
+
+    match insert_result {
+        Ok(_) => {}
+        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            return Err((
+                StatusCode::CONFLICT,
+                "PROCESSOR_ALREADY_CONNECTED:whop".to_string(),
+            ));
+        }
+        Err(e) => {
+            tracing::error!("Database error inserting account: {}", e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            ));
+        }
+    }
+
+    tx.commit().await.map_err(|e| {
+        tracing::error!("Failed to commit transaction: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    Ok(Json(WhopConnectResponse {
+        account_id,
+        processor_account_id: company.id,
+        status: "connected".to_string(),
+    }))
+}
+
 /// Create a new connect account
 #[utoipa::path(
     post,
@@ -309,15 +624,14 @@ pub async fn create_connect_account(
         })?;
     tracing::debug!("processor found: {}", req.processor);
 
-    // Check if project already has a connected account for this processor
+    // Check if project already has a connected account (any processor)
     let existing = sqlx::query!(
         r#"
-        SELECT id, "processorAccountId"
+        SELECT id, processor, "processorAccountId"
         FROM connect_account
-        WHERE "projectId" = $1 AND processor = $2
+        WHERE "projectId" = $1
         "#,
-        project_id,
-        &req.processor
+        project_id
     )
     .fetch_optional(&state.pool)
     .await
@@ -325,7 +639,7 @@ pub async fn create_connect_account(
         tracing::error!("Database error checking existing account: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
+            "Internal server error".to_string(),
         )
     })?;
 
@@ -333,7 +647,7 @@ pub async fn create_connect_account(
         if existing.processorAccountId.is_some() {
             return Err((
                 StatusCode::CONFLICT,
-                "Account already connected".to_string(),
+                format!("PROCESSOR_ALREADY_CONNECTED:{}", existing.processor),
             ));
         }
     }
@@ -381,9 +695,10 @@ pub async fn connect_callback(
     .fetch_optional(&pool)
     .await
     .map_err(|e| {
+        tracing::error!("Database error fetching account: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
+            "Internal server error".to_string(),
         )
     })?
     .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
@@ -404,9 +719,10 @@ pub async fn connect_callback(
     .execute(&pool)
     .await
     .map_err(|e| {
+        tracing::error!("Database error updating account status: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
+            "Internal server error".to_string(),
         )
     })?;
 
@@ -435,9 +751,10 @@ pub async fn connect_refresh(
     .fetch_optional(&state.pool)
     .await
     .map_err(|e| {
+        tracing::error!("Database error fetching account: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
+            "Internal server error".to_string(),
         )
     })?
     .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
@@ -485,9 +802,10 @@ pub async fn connect_refresh(
     .execute(&state.pool)
     .await
     .map_err(|e| {
+        tracing::error!("Database error updating account data: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
+            "Internal server error".to_string(),
         )
     })?;
 
@@ -495,9 +813,10 @@ pub async fn connect_refresh(
         .create_account_link(processor_account_id, &refresh_url, &return_url)
         .await
         .map_err(|e| {
+            tracing::error!("Processor error creating account link: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Processor error: {}", e),
+                "Internal server error".to_string(),
             )
         })?;
 
@@ -543,9 +862,10 @@ pub async fn oauth_callback(
 
     // Exchange OAuth code for processor account ID
     let token_response = processor.exchange_oauth_code(code).await.map_err(|e| {
+        tracing::error!("Processor error exchanging OAuth code: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Processor error: {}", e),
+            "Internal server error".to_string(),
         )
     })?;
 
@@ -561,9 +881,10 @@ pub async fn oauth_callback(
     .fetch_optional(&state.pool)
     .await
     .map_err(|e| {
+        tracing::error!("Database error checking existing processor account: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
+            "Internal server error".to_string(),
         )
     })?;
 
@@ -578,7 +899,10 @@ pub async fn oauth_callback(
             )
             .execute(&state.pool)
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+            .map_err(|e| {
+                tracing::error!("Database error reconnecting account: {}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+            })?;
 
             // Another request reconnected this account first
             if result.rows_affected() == 0 {
@@ -661,6 +985,7 @@ pub async fn oauth_callback(
         INSERT INTO connect_account (
             id,
             "projectId",
+            "userId",
             country,
             currency,
             "isPayoutsEnabled",
@@ -672,10 +997,11 @@ pub async fn oauth_callback(
             "businessType",
             data
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         "#,
         account_id,
         payload.project_id,
+        payload.user_id,
         &payload.country,
         currency,
         payouts_enabled,
@@ -690,9 +1016,10 @@ pub async fn oauth_callback(
     .execute(&state.pool)
     .await
     .map_err(|e| {
+        tracing::error!("Database error creating account: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
+            "Internal server error".to_string(),
         )
     })?;
 
@@ -794,9 +1121,10 @@ pub async fn list_accounts(
     .fetch_all(&state.pool)
     .await
     .map_err(|e| {
+        tracing::error!("Database error listing accounts: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
+            "Internal server error".to_string(),
         )
     })?;
 
@@ -901,7 +1229,7 @@ pub async fn update_account(
         tracing::error!(error = %e, account_id = %id, project_id = %req.project_id, "Failed to update account");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
+            "Internal server error".to_string(),
         )
     })?
     .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
@@ -968,9 +1296,10 @@ pub async fn disconnect(
     .execute(&state.pool)
     .await
     .map_err(|e| {
+        tracing::error!("Database error disconnecting account: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {}", e),
+            "Internal server error".to_string(),
         )
     })?;
 

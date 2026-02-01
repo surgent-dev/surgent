@@ -19,6 +19,26 @@ export interface SurpayConnectResponse {
   oauthUrl: string
 }
 
+export interface UserSurpayAccount {
+  id: string
+  processor: string
+  processorAccountId: string | null
+  status: string
+  projectId: string | null
+  email: string | null
+  title: string | null
+  country: string | null
+}
+
+// Extracts error message from ky HTTPError response
+async function extractError(error: any, fallback: string): Promise<never> {
+  if (error.response) {
+    const text = await error.response.text()
+    throw new Error(text || fallback)
+  }
+  throw error
+}
+
 // API functions
 async function fetchSurpayAccounts(projectId: string): Promise<SurpayAccount[]> {
   return payHttp.get('accounts', { searchParams: { projectId } }).json()
@@ -29,12 +49,54 @@ async function fetchSurpayAccount(projectId: string, accountId: string): Promise
 }
 
 async function connectSurpay(projectId: string): Promise<SurpayConnectResponse> {
-  return payHttp
-    .post('accounts/connect', {
-      searchParams: { projectId },
-      json: { processor: 'stripe', country: 'us' },
-    })
-    .json()
+  try {
+    return await payHttp
+      .post('accounts/connect', {
+        searchParams: { projectId },
+        json: { processor: 'stripe', country: 'us' },
+      })
+      .json()
+  } catch (e) {
+    return extractError(e, 'Failed to connect Stripe')
+  }
+}
+
+export interface WhopConnectRequest {
+  email: string
+  title: string
+  country: string
+  businessType?: string
+}
+
+export interface WhopConnectResponse {
+  accountId: string
+  processorAccountId: string
+  status: string
+}
+
+async function fetchUserWhopAccounts(): Promise<UserSurpayAccount[]> {
+  return payHttp.get('accounts/user', { searchParams: { processor: 'whop' } }).json()
+}
+
+async function connectWhop(
+  projectId: string,
+  data: WhopConnectRequest,
+  accountId?: string,
+): Promise<WhopConnectResponse> {
+  try {
+    const searchParams: Record<string, string> = { projectId }
+    if (accountId) {
+      searchParams.accountId = accountId
+    }
+    return await payHttp
+      .post('accounts/connect/whop', {
+        searchParams,
+        json: data,
+      })
+      .json()
+  } catch (e) {
+    return extractError(e, 'Failed to connect Whop')
+  }
 }
 
 async function disconnectSurpay(accountId: string): Promise<{ disconnected: boolean }> {
@@ -74,6 +136,33 @@ export function useSurpayConnect() {
     mutationFn: connectSurpay,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['surpay-accounts'] })
+    },
+  })
+}
+
+export function useUserWhopAccounts() {
+  return useQuery({
+    queryKey: ['user-whop-accounts'],
+    queryFn: fetchUserWhopAccounts,
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useWhopConnect() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      data,
+      accountId,
+    }: {
+      projectId: string
+      data: WhopConnectRequest
+      accountId?: string
+    }) => connectWhop(projectId, data, accountId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['surpay-accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['user-whop-accounts'] })
     },
   })
 }

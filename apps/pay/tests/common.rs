@@ -16,7 +16,7 @@ use std::sync::Arc;
 use surpay::AppState;
 use surpay::core::config::Config;
 use surpay::integrations::{
-    ConnectProcessor, PaymentProcessor, ProcessorRegistry, StripeProcessor,
+    ConnectProcessor, PaymentProcessor, ProcessorRegistry, StripeProcessor, WhopProcessor,
     types::{
         AccountDetails, AccountLink, CreateCheckoutSessionRequest, NormalizedEvent,
         PaymentIntentRequest, PayoutRequest, ProcessorCheckout, ProcessorPayment, ProcessorPayout,
@@ -485,6 +485,10 @@ pub async fn create_test_state(pool: PgPool) -> AppState {
         better_auth_secret: "test-secret".to_string(),
         trusted_origins: "http://localhost:3000".to_string(),
         web_base_url: "http://localhost:3000".to_string(),
+        whop_api_key: "test_whop_api_key".to_string(),
+        whop_platform_company_id: "test_whop_platform_company_id".to_string(),
+        whop_base_url: "https://api.whop.com/api/v1".to_string(),
+        whop_webhook_secret: "whsec_dGVzdF93aG9wX3dlYmhvb2tfc2VjcmV0".to_string(),
     };
 
     // Register Stripe processor
@@ -498,6 +502,17 @@ pub async fn create_test_state(pool: PgPool) -> AppState {
         .register(Arc::new(stripe_processor))
         .await
         .expect("Failed to register Stripe processor");
+
+    let whop_processor = WhopProcessor::new(
+        config.whop_webhook_secret.clone(),
+        config.whop_api_key.clone(),
+        config.whop_platform_company_id.clone(),
+        config.whop_base_url.clone(),
+    );
+    registry
+        .register(Arc::new(whop_processor))
+        .await
+        .expect("Failed to register Whop processor");
 
     // Register Mock Connect processor for testing account endpoints
     let mock_connect = MockConnectProcessor::new();
@@ -543,6 +558,10 @@ pub async fn create_test_state_real_stripe(pool: PgPool) -> AppState {
         better_auth_secret: "test-secret".to_string(),
         trusted_origins: "http://localhost:3000".to_string(),
         web_base_url: "http://localhost:3000".to_string(),
+        whop_api_key: "test_whop_api_key".to_string(),
+        whop_platform_company_id: "test_whop_platform_company_id".to_string(),
+        whop_base_url: "https://api.whop.com/api/v1".to_string(),
+        whop_webhook_secret: "whsec_dGVzdF93aG9wX3dlYmhvb2tfc2VjcmV0".to_string(),
     };
 
     // Register Stripe processor as BOTH PaymentProcessor AND ConnectProcessor

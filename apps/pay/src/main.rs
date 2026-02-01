@@ -11,7 +11,7 @@ use surpay::{
     api::webhook::WebhookWorker,
     core::config::Config,
     core::sqs::create_client,
-    integrations::{ProcessorRegistry, StripeProcessor},
+    integrations::{ProcessorRegistry, StripeProcessor, WhopProcessor},
 };
 
 #[tokio::main]
@@ -83,6 +83,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .register_connect(Arc::new(stripe_processor))
         .await
         .expect("Failed to register Stripe connect processor");
+
+    let whop_processor = WhopProcessor::new(
+        config.whop_webhook_secret.clone(),
+        config.whop_api_key.clone(),
+        config.whop_platform_company_id.clone(),
+        config.whop_base_url.clone(),
+    );
+    registry
+        .register(Arc::new(whop_processor))
+        .await
+        .expect("Failed to register Whop processor");
 
     let state = AppState {
         pool,

@@ -4,6 +4,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use serde_json::json;
@@ -32,6 +33,27 @@ fn generate_stripe_signature(payload: &str, secret: &str) -> String {
     let signature = hex::encode(mac.finalize().into_bytes());
 
     format!("t={},v1={}", timestamp, signature)
+}
+
+/// Helper to generate valid Whop webhook headers (Standard Webhooks format)
+/// Returns (webhook-id, webhook-timestamp, webhook-signature)
+fn generate_whop_signature(payload: &str, secret: &str) -> (String, String, String) {
+    let webhook_id = format!(
+        "msg_{}",
+        Uuid::new_v4().to_string().replace("-", "")[..24].to_string()
+    );
+    let timestamp = Utc::now().timestamp();
+    let timestamp_str = timestamp.to_string();
+
+    // Signed content: "{webhook-id}.{webhook-timestamp}.{raw_body}"
+    let signed_payload = format!("{}.{}.{}", webhook_id, timestamp_str, payload);
+
+    // HMAC-SHA256 with secret as raw bytes, then base64 encode
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+    mac.update(signed_payload.as_bytes());
+    let signature = BASE64.encode(mac.finalize().into_bytes());
+
+    (webhook_id, timestamp_str, format!("v1,{}", signature))
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -343,5 +365,88 @@ async fn test_checkout_expired_updates_status(pool: PgPool) -> TestResult {
 
     assert_eq!(session.status, CheckoutStatus::Expired);
 
+    Ok(())
+}
+
+// ============================================================================
+// Whop webhook tests
+// ============================================================================
+
+#[sqlx::test(migrations = "./migrations")]
+async fn test_whop_webhook_missing_signature(pool: PgPool) -> TestResult {
+    let mut app = create_router(create_test_state(pool).await);
+
+    let payload = json!({"id": "evt_test", "type": "payment.succeeded", "data": {}});
+
+    let response = app
+        .call(
+            Request::builder()
+                .method("POST")
+                .uri("/webhooks/whop")
+                .header("Content-Type", "application/json")
+                .body(Body::from(payload.to_string()))?,
+        )
+        .await?;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    Ok(())
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn test_whop_webhook_invalid_signature(pool: PgPool) -> TestResult {
+    let mut app = create_router(create_test_state(pool).await);
+
+    let payload = json!({"id": "evt_test", "type": "payment.succeeded", "data": {}});
+
+    let response = app
+        .call(
+            Request::builder()
+                .method("POST")
+                .uri("/webhooks/whop")
+                .header("Content-Type", "application/json")
+                .header("webhook-id", "msg_test123")
+                .header("webhook-timestamp", "1234567890")
+                .header("webhook-signature", "v1,invalid_signature")
+                .body(Body::from(payload.to_string()))?,
+        )
+        .await?;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    Ok(())
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn test_whop_webhook_valid_signature(pool: PgPool) -> TestResult {
+    let state = create_test_state(pool.clone()).await;
+    let mut app = create_router(state.clone());
+
+    let payload = json!({
+        "id": "evt_whop_test_123",
+        "type": "payment.succeeded",
+        "data": {
+            "id": "pay_test123",
+            "amount": 1000,
+            "currency": "usd"
+        }
+    });
+
+    let payload_str = payload.to_string();
+    let (webhook_id, timestamp, signature) =
+        generate_whop_signature(&payload_str, &state.config.whop_webhook_secret);
+
+    let response = app
+        .call(
+            Request::builder()
+                .method("POST")
+                .uri("/webhooks/whop")
+                .header("Content-Type", "application/json")
+                .header("webhook-id", webhook_id)
+                .header("webhook-timestamp", timestamp)
+                .header("webhook-signature", signature)
+                .body(Body::from(payload_str))?,
+        )
+        .await?;
+
+    assert_eq!(response.status(), StatusCode::OK);
     Ok(())
 }

@@ -60,6 +60,14 @@ pub struct CreateCheckoutSessionRequest {
     pub application_fee_amount: Option<i64>,
     pub application_fee_percent: Option<f64>,
     pub destination_account: Option<String>,
+    /// Product name for processors that need it (e.g., Whop). Stripe ignores this.
+    pub product_name: Option<String>,
+    /// Unit amount in cents for processors that need it (e.g., Whop). Stripe uses line_items.
+    pub unit_amount: Option<i64>,
+    /// Product ID for processors that need it (e.g., Whop external_identifier).
+    pub product_id: Option<String>,
+    /// Billing period in days for subscription checkouts (e.g., 30 for month, 365 for year).
+    pub billing_period_days: Option<i32>,
 }
 
 /// Checkout session representation returned by payment processor
@@ -269,6 +277,30 @@ pub enum NormalizedEvent {
         status: RefundStatus,
         reason: Option<String>,
         customer_id: Option<String>,
+    },
+
+    // Membership events (Whop)
+    MembershipActivated {
+        membership_id: String,
+        status: String,
+        user_id: String,
+        plan_id: Option<String>,
+        product_id: Option<String>,
+        renewal_period_start: Option<String>,
+        renewal_period_end: Option<String>,
+        cancel_at_period_end: bool,
+        session_id: Option<String>,
+    },
+    MembershipDeactivated {
+        membership_id: String,
+        status: String,
+        canceled_at: Option<String>,
+        session_id: Option<String>,
+    },
+    MembershipCancelAtPeriodEndChanged {
+        membership_id: String,
+        cancel_at_period_end: bool,
+        session_id: Option<String>,
     },
 
     // Unknown/unhandled events (for forward compatibility)

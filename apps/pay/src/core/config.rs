@@ -27,6 +27,11 @@ pub struct Config {
     pub trusted_origins: String,
 
     pub web_base_url: String,
+
+    pub whop_api_key: String,
+    pub whop_platform_company_id: String,
+    pub whop_base_url: String,
+    pub whop_webhook_secret: String,
 }
 
 impl Config {
@@ -69,6 +74,14 @@ impl Config {
             trusted_origins: env::var("TRUSTED_ORIGINS").expect("TRUSTED_ORIGINS must be set"),
 
             web_base_url: env::var("WEB_BASE_URL").expect("WEB_BASE_URL must be set"),
+
+            whop_api_key: env::var("WHOP_API_KEY").expect("WHOP_API_KEY must be set"),
+            whop_platform_company_id: env::var("WHOP_PLATFORM_COMPANY_ID")
+                .expect("WHOP_PLATFORM_COMPANY_ID must be set"),
+            whop_base_url: env::var("WHOP_BASE_URL")
+                .unwrap_or_else(|_| "https://api.whop.com/api/v1".to_string()),
+            whop_webhook_secret: env::var("WHOP_WEBHOOK_SECRET")
+                .expect("WHOP_WEBHOOK_SECRET must be set"),
         })
     }
 }

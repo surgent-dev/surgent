@@ -116,18 +116,7 @@ pub async fn webhook_handler(
         WebhookError::VerificationFailed
     })?;
 
-    let signature = get_signature_header(&headers, &processor).map_err(|e| {
-        tracing::error!(
-            "Failed to get signature header for processor {}: {}",
-            processor,
-            e
-        );
-        if e.starts_with("Missing") {
-            WebhookError::MissingHeader
-        } else {
-            WebhookError::VerificationFailed
-        }
-    })?;
+    let signature = get_signature_header(&headers, &processor)?;
 
     let is_valid = p.verify_webhook(&body, &signature).map_err(|e| {
         tracing::error!(
@@ -203,17 +192,34 @@ pub async fn webhook_handler(
     Ok(StatusCode::OK)
 }
 
-fn get_signature_header(headers: &HeaderMap, processor: &str) -> Result<String, String> {
-    let header_name = match processor {
-        "stripe" => "stripe-signature",
-        _ => return Err(format!("Unknown processor: {}", processor)),
-    };
-
-    headers
-        .get(header_name)
-        .and_then(|h| h.to_str().ok())
-        .map(String::from)
-        .ok_or_else(|| format!("Missing {} header", header_name))
+fn get_signature_header(headers: &HeaderMap, processor: &str) -> Result<String, WebhookError> {
+    match processor {
+        "stripe" => headers
+            .get("stripe-signature")
+            .and_then(|h| h.to_str().ok())
+            .map(String::from)
+            .ok_or(WebhookError::MissingHeader),
+        "whop" => {
+            // Whop uses Standard Webhooks v1.0.0 spec with 3 headers
+            let webhook_id = headers
+                .get("webhook-id")
+                .and_then(|h| h.to_str().ok())
+                .ok_or(WebhookError::MissingHeader)?;
+            let webhook_timestamp = headers
+                .get("webhook-timestamp")
+                .and_then(|h| h.to_str().ok())
+                .ok_or(WebhookError::MissingHeader)?;
+            let webhook_signature = headers
+                .get("webhook-signature")
+                .and_then(|h| h.to_str().ok())
+                .ok_or(WebhookError::MissingHeader)?;
+            Ok(format!(
+                "{};{};{}",
+                webhook_id, webhook_timestamp, webhook_signature
+            ))
+        }
+        _ => Err(WebhookError::VerificationFailed),
+    }
 }
 
 fn extract_event_id(payload: &Value, processor: &str) -> Result<String, String> {
@@ -244,6 +250,11 @@ fn get_event_type_name(event: &NormalizedEvent) -> String {
         NormalizedEvent::TransferPaid { .. } => "transfer_paid".to_string(),
         NormalizedEvent::TransferReversed { .. } => "transfer_reversed".to_string(),
         NormalizedEvent::ChargeRefunded { .. } => "charge_refunded".to_string(),
+        NormalizedEvent::MembershipActivated { .. } => "membership_activated".to_string(),
+        NormalizedEvent::MembershipDeactivated { .. } => "membership_deactivated".to_string(),
+        NormalizedEvent::MembershipCancelAtPeriodEndChanged { .. } => {
+            "membership_cancel_at_period_end_changed".to_string()
+        }
         NormalizedEvent::Unknown { event_type } => event_type.clone(),
     }
 }
@@ -441,27 +452,68 @@ async fn handle_normalized_event(
         | NormalizedEvent::SubscriptionUpdated { customer_id: _, .. }
         | NormalizedEvent::SubscriptionCanceled { .. } => {
             // Extract customer_id from raw payload for sync
-            if let Ok(cust_id) = extract_customer_id_from_payload(raw_payload) {
-                sync_stripe_customer_data(pool, config, cust_id).await
+            if processor == "stripe" {
+                if let Ok(cust_id) = extract_customer_id_from_payload(raw_payload) {
+                    sync_stripe_customer_data(pool, config, cust_id).await
+                } else {
+                    tracing::warn!("Could not extract customer_id for subscription event");
+                    Ok(())
+                }
             } else {
-                tracing::warn!("Could not extract customer_id for subscription event");
+                tracing::debug!("Skipping Stripe sync for processor: {}", processor);
                 Ok(())
             }
         }
         NormalizedEvent::InvoicePaid { customer_id, .. } => {
             // First handle invoice-specific logic, then sync customer data
             handle_invoice_paid(pool, processor, raw_payload).await?;
-            sync_stripe_customer_data(pool, config, customer_id).await
+            if processor == "stripe" {
+                sync_stripe_customer_data(pool, config, customer_id).await
+            } else {
+                tracing::debug!("Skipping Stripe sync for processor: {}", processor);
+                Ok(())
+            }
         }
         NormalizedEvent::InvoicePaymentFailed { customer_id, .. } => {
-            sync_stripe_customer_data(pool, config, customer_id).await
-        }
-        NormalizedEvent::PaymentSucceeded { .. } | NormalizedEvent::PaymentFailed { .. } => {
-            // Extract customer_id from raw payload for sync
-            if let Ok(cust_id) = extract_customer_id_from_payload(raw_payload) {
-                sync_stripe_customer_data(pool, config, cust_id).await
+            if processor == "stripe" {
+                sync_stripe_customer_data(pool, config, customer_id).await
             } else {
-                tracing::debug!("No customer_id in payment event, skipping sync");
+                tracing::debug!("Skipping Stripe sync for processor: {}", processor);
+                Ok(())
+            }
+        }
+        NormalizedEvent::PaymentSucceeded {
+            payment_id,
+            amount,
+            currency,
+            ..
+        } => {
+            if processor == "whop" {
+                handle_whop_payment_succeeded(pool, raw_payload, payment_id, *amount, currency)
+                    .await
+            } else if processor == "stripe" {
+                if let Ok(cust_id) = extract_customer_id_from_payload(raw_payload) {
+                    sync_stripe_customer_data(pool, config, cust_id).await
+                } else {
+                    tracing::debug!("No customer_id in payment event, skipping sync");
+                    Ok(())
+                }
+            } else {
+                tracing::debug!("Skipping payment sync for processor: {}", processor);
+                Ok(())
+            }
+        }
+        NormalizedEvent::PaymentFailed { .. } => {
+            // Extract customer_id from raw payload for sync
+            if processor == "stripe" {
+                if let Ok(cust_id) = extract_customer_id_from_payload(raw_payload) {
+                    sync_stripe_customer_data(pool, config, cust_id).await
+                } else {
+                    tracing::debug!("No customer_id in payment event, skipping sync");
+                    Ok(())
+                }
+            } else {
+                tracing::debug!("Skipping Stripe sync for processor: {}", processor);
                 Ok(())
             }
         }
@@ -633,12 +685,53 @@ async fn handle_normalized_event(
         NormalizedEvent::ChargeRefunded { .. } => {
             handle_charge_refunded(pool, processor, event).await
         }
+        NormalizedEvent::MembershipActivated {
+            membership_id,
+            status,
+            renewal_period_start,
+            renewal_period_end,
+            cancel_at_period_end,
+            session_id,
+            ..
+        } => {
+            handle_membership_activated(
+                pool,
+                membership_id,
+                status,
+                renewal_period_start.as_deref(),
+                renewal_period_end.as_deref(),
+                *cancel_at_period_end,
+                session_id.as_deref(),
+            )
+            .await
+        }
+        NormalizedEvent::MembershipDeactivated {
+            membership_id,
+            status,
+            canceled_at,
+            ..
+        } => {
+            handle_membership_deactivated(pool, membership_id, status, canceled_at.as_deref()).await
+        }
+        NormalizedEvent::MembershipCancelAtPeriodEndChanged {
+            membership_id,
+            cancel_at_period_end,
+            ..
+        } => {
+            handle_membership_cancel_at_period_end_changed(
+                pool,
+                membership_id,
+                *cancel_at_period_end,
+            )
+            .await
+        }
         NormalizedEvent::Unknown { event_type } => {
             // Catch-all for Stripe subscription/invoice/payment events not explicitly mapped
             // These trigger a full customer data sync from Stripe (legacy behavior)
-            if (event_type.starts_with("customer.subscription.")
-                || event_type.starts_with("invoice.")
-                || event_type.starts_with("payment_intent."))
+            if processor == "stripe"
+                && (event_type.starts_with("customer.subscription.")
+                    || event_type.starts_with("invoice.")
+                    || event_type.starts_with("payment_intent."))
                 && let Ok(cust_id) = extract_customer_id_from_payload(raw_payload)
             {
                 tracing::info!(
@@ -865,6 +958,313 @@ async fn handle_charge_refunded(
     Ok(())
 }
 
+/// Handle Whop payment.succeeded webhook by linking back to checkout_session via metadata
+async fn handle_whop_payment_succeeded(
+    pool: &PgPool,
+    raw_payload: &Value,
+    payment_id: &str,
+    amount: i64,
+    currency: &str,
+) -> Result<(), String> {
+    // Debug: log the metadata we received
+    tracing::debug!(
+        payment_id = %payment_id,
+        metadata = %raw_payload["data"]["metadata"],
+        "Whop payment.succeeded: processing"
+    );
+
+    // Extract session_id from metadata (passed during checkout creation)
+    let Some(session_id_str) = raw_payload["data"]["metadata"]["session_id"].as_str() else {
+        tracing::warn!(
+            "Whop payment.succeeded missing session_id in metadata, payment_id: {}",
+            payment_id
+        );
+        return Ok(());
+    };
+
+    let session_id = Uuid::parse_str(session_id_str).map_err(|e| {
+        tracing::error!(
+            session_id_str = %session_id_str,
+            "Invalid session_id UUID in Whop metadata: {}", e
+        );
+        format!("Invalid session_id: {}", e)
+    })?;
+
+    // Look up checkout_session by our internal ID (not processorCheckoutId)
+    let checkout = sqlx::query!(
+        r#"
+        SELECT id, "projectId", "productId", "priceId", "customerId"
+        FROM checkout_session
+        WHERE id = $1
+        "#,
+        session_id
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Failed to fetch checkout session: {}", e))?;
+
+    let checkout = match checkout {
+        Some(row) => row,
+        None => {
+            tracing::warn!(
+                "Checkout session {} not found for Whop payment {}",
+                session_id,
+                payment_id
+            );
+            return Ok(());
+        }
+    };
+
+    let customer_id = checkout.customerId.ok_or_else(|| {
+        tracing::error!("Checkout session {} missing customerId", session_id);
+        "Checkout session missing customerId".to_string()
+    })?;
+
+    // Create transaction record
+    let tx_id = create_payment_transaction(
+        pool,
+        PaymentTransactionParams {
+            project_id: checkout.projectId,
+            customer_id,
+            product_id: Some(checkout.productId),
+            price_id: Some(checkout.priceId),
+            checkout_id: checkout.id,
+            charge_id: payment_id,
+            amount,
+            currency,
+            processor: "whop",
+        },
+    )
+    .await?;
+
+    // Update checkout_session status to complete
+    sqlx::query!(
+        r#"
+        UPDATE checkout_session
+        SET status = 'complete', "completedAt" = NOW()
+        WHERE id = $1 AND status != 'complete'
+        "#,
+        session_id
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to update checkout session status: {}", e))?;
+
+    tracing::info!(
+        "Whop payment.succeeded: created transaction {} for checkout session {}",
+        tx_id,
+        session_id
+    );
+
+    Ok(())
+}
+
+/// Handle Whop membership.activated webhook - creates subscription record
+async fn handle_membership_activated(
+    pool: &PgPool,
+    membership_id: &str,
+    status: &str,
+    renewal_period_start: Option<&str>,
+    renewal_period_end: Option<&str>,
+    cancel_at_period_end: bool,
+    session_id: Option<&str>,
+) -> Result<(), String> {
+    let Some(session_id_str) = session_id else {
+        tracing::warn!(
+            "Whop membership.activated missing session_id in metadata, membership_id: {}",
+            membership_id
+        );
+        return Ok(());
+    };
+
+    let session_uuid = Uuid::parse_str(session_id_str).map_err(|e| {
+        tracing::error!(
+            session_id_str = %session_id_str,
+            "Invalid session_id UUID in Whop metadata: {}", e
+        );
+        format!("Invalid session_id: {}", e)
+    })?;
+
+    let checkout = sqlx::query!(
+        r#"
+        SELECT id, "projectId", "productId", "priceId", "customerId"
+        FROM checkout_session
+        WHERE id = $1
+        "#,
+        session_uuid
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Failed to fetch checkout session: {}", e))?;
+
+    let checkout = match checkout {
+        Some(row) => row,
+        None => {
+            tracing::warn!(
+                "Checkout session {} not found for Whop membership {}",
+                session_uuid,
+                membership_id
+            );
+            return Ok(());
+        }
+    };
+
+    let customer_id = checkout.customerId.ok_or_else(|| {
+        tracing::error!("Checkout session {} missing customerId", session_uuid);
+        "Checkout session missing customerId".to_string()
+    })?;
+
+    // Map Whop status to our subscription status
+    let sub_status: SubscriptionStatus = match status {
+        "trialing" => SubscriptionStatus::Trialing,
+        "active" => SubscriptionStatus::Active,
+        "past_due" => SubscriptionStatus::PastDue,
+        "canceled" | "expired" | "completed" => SubscriptionStatus::Canceled,
+        "unpaid" | "unresolved" => SubscriptionStatus::Unpaid,
+        unknown => {
+            tracing::warn!(
+                "Unknown Whop membership status '{}', defaulting to Unpaid",
+                unknown
+            );
+            SubscriptionStatus::Unpaid
+        }
+    };
+
+    let period_start = renewal_period_start
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc));
+    let period_end = renewal_period_end
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc));
+
+    let new_subscription_id = Uuid::new_v4();
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO subscription (id, "projectId", "productId", "productPriceId", "customerId",
+            processor, "processorSubscriptionId", "createdAt", status,
+            "currentPeriodStart", "currentPeriodEnd", "cancelAtPeriodEnd")
+        VALUES ($1, $2, $3, $4, $5, 'whop', $6, NOW(), $7,
+            $8, $9, $10)
+        ON CONFLICT (processor, "processorSubscriptionId") DO UPDATE
+        SET status = $7,
+            "currentPeriodStart" = $8,
+            "currentPeriodEnd" = $9,
+            "cancelAtPeriodEnd" = $10
+        "#,
+        new_subscription_id,
+        checkout.projectId,
+        checkout.productId,
+        checkout.priceId,
+        customer_id,
+        membership_id,
+        sub_status as SubscriptionStatus,
+        period_start,
+        period_end,
+        cancel_at_period_end
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to create/update subscription: {}", e))?;
+
+    tracing::info!(
+        "Whop membership.activated: {} subscription for membership {} (rows: {})",
+        if result.rows_affected() > 0 {
+            "created/updated"
+        } else {
+            "no change to"
+        },
+        membership_id,
+        result.rows_affected()
+    );
+
+    Ok(())
+}
+
+/// Handle Whop membership.deactivated webhook - updates subscription status
+async fn handle_membership_deactivated(
+    pool: &PgPool,
+    membership_id: &str,
+    status: &str,
+    canceled_at: Option<&str>,
+) -> Result<(), String> {
+    // Map Whop status to our subscription status
+    let sub_status: SubscriptionStatus = match status {
+        "expired" | "completed" => SubscriptionStatus::Canceled,
+        "canceled" => SubscriptionStatus::Canceled,
+        _ => SubscriptionStatus::Canceled,
+    };
+
+    let canceled_at_dt = canceled_at
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc));
+
+    let result = sqlx::query!(
+        r#"
+        UPDATE subscription
+        SET status = $1,
+            "canceledAt" = COALESCE($2, NOW()),
+            "endedAt" = NOW()
+        WHERE "processorSubscriptionId" = $3 AND processor = 'whop'
+        "#,
+        sub_status as SubscriptionStatus,
+        canceled_at_dt,
+        membership_id
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to update subscription: {}", e))?;
+
+    if result.rows_affected() == 0 {
+        tracing::warn!(
+            "Subscription not found for Whop membership {} deactivation",
+            membership_id
+        );
+    } else {
+        tracing::info!(
+            "Whop membership.deactivated: updated subscription for membership {} to status {}",
+            membership_id,
+            status
+        );
+    }
+
+    Ok(())
+}
+
+/// Handle Whop membership.cancel_at_period_end_changed webhook
+async fn handle_membership_cancel_at_period_end_changed(
+    pool: &PgPool,
+    membership_id: &str,
+    cancel_at_period_end: bool,
+) -> Result<(), String> {
+    let result = sqlx::query!(
+        r#"
+        UPDATE subscription
+        SET "cancelAtPeriodEnd" = $1
+        WHERE "processorSubscriptionId" = $2 AND processor = 'whop'
+        "#,
+        cancel_at_period_end,
+        membership_id
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to update subscription cancelAtPeriodEnd: {}", e))?;
+
+    if result.rows_affected() == 0 {
+        tracing::warn!(
+            "Subscription not found for Whop membership {} cancel_at_period_end change",
+            membership_id
+        );
+    } else {
+        tracing::info!(
+            "Whop membership.cancel_at_period_end_changed: updated subscription {} to cancelAtPeriodEnd={}",
+            membership_id,
+            cancel_at_period_end
+        );
+    }
+
+    Ok(())
+}
+
 async fn handle_checkout_expired(pool: &PgPool, payload: &Value) -> Result<(), String> {
     let session_id = payload["data"]["object"]["id"]
         .as_str()
@@ -924,13 +1324,15 @@ async fn create_payment_transaction(
     params: PaymentTransactionParams<'_>,
 ) -> Result<Uuid, String> {
     let transaction_id = Uuid::new_v4();
-    sqlx::query!(
+    let result = sqlx::query_scalar!(
         r#"
         INSERT INTO transaction (id, "createdAt", type, amount, currency, processor,
             "projectId", "customerId", "productId", "productPriceId",
             "checkoutSessionId", "chargeId", "succeededAt")
         VALUES ($1, NOW(), 'payment', $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-        ON CONFLICT ("chargeId") WHERE ("chargeId" IS NOT NULL AND type = 'payment') DO NOTHING
+        ON CONFLICT ("chargeId") WHERE ("chargeId" IS NOT NULL AND type = 'payment')
+        DO UPDATE SET "chargeId" = EXCLUDED."chargeId"
+        RETURNING id
         "#,
         transaction_id,
         params.amount,
@@ -943,11 +1345,11 @@ async fn create_payment_transaction(
         params.checkout_id,
         params.charge_id
     )
-    .execute(pool)
+    .fetch_one(pool)
     .await
     .map_err(|e| format!("Failed to create transaction: {}", e))?;
 
-    Ok(transaction_id)
+    Ok(result)
 }
 
 async fn create_subscription_record(
