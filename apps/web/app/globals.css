@@ -196,21 +196,21 @@ body {
 }
 
 [data-streamdown="code-block"] {
-  font-size: clamp(10px, 2vw, 13px);
-  line-height: 1.5;
-  border-radius: 0.5rem;
+  font-size: clamp(10px, 2vw, 12px);
+  line-height: 1.4;
+  border-radius: 0.375rem;
   overflow: hidden;
 }
 
 [data-streamdown="code-block"] pre {
   margin: 0;
-  padding: 0.75rem;
+  padding: 0.5rem 0.75rem;
   overflow-x: auto;
 }
 
 [data-streamdown="inline-code"] {
-  font-size: 0.85em;
-  padding: 0.125rem 0.25rem;
+  font-size: 0.8em;
+  padding: 0.1rem 0.25rem;
   border-radius: 0.25rem;
 }
 
@@ -222,4 +222,81 @@ body {
 .scrollbar-none::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+/* Prose typography - compact & elegant */
+.prose {
+  --prose-body: var(--foreground);
+  --prose-headings: var(--foreground);
+  --prose-links: var(--brand);
+  --prose-code: var(--foreground);
+  --prose-hr: var(--border);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.prose :where(h1, h2, h3, h4, h5, h6) {
+  color: var(--prose-headings);
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 1em 0 0.25em;
+  line-height: 1.4;
+}
+
+.prose :where(h1, h2):first-child,
+.prose :where(h3, h4, h5, h6):first-child {
+  margin-top: 0;
+}
+
+.prose :where(p) {
+  margin: 0.5em 0;
+}
+
+.prose :where(strong) {
+  font-weight: 600;
+  color: var(--prose-headings);
+}
+
+.prose :where(a) {
+  color: var(--prose-links);
+  text-decoration: none;
+}
+
+.prose :where(a):hover {
+  text-decoration: underline;
+}
+
+.prose :where(ul, ol) {
+  margin: 0.5em 0;
+  padding-left: 1.25em;
+}
+
+.prose :where(li) {
+  margin: 0.2em 0;
+  padding-left: 0.25em;
+}
+
+.prose :where(li)::marker {
+  color: var(--muted-foreground);
+}
+
+.prose :where(blockquote) {
+  margin: 0.75em 0;
+  padding-left: 1em;
+  border-left: 2px solid var(--border);
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+.prose :where(hr) {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid var(--prose-hr);
+}
+
+.prose :where(code):not(pre code) {
+  font-size: 0.85em;
+  padding: 0.125em 0.375em;
+  border-radius: 0.25rem;
+  background: var(--muted);
 }
