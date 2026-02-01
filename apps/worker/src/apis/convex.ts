@@ -1,4 +1,5 @@
 import { config } from '@/lib/config'
+import { generateKeyPair, exportPKCS8, exportJWK } from 'jose'
 
 async function safeJsonParse<T>(res: Response): Promise<T> {
   const text = await res.text()
@@ -107,6 +108,23 @@ export async function createDeployKey(deploymentName: string): Promise<string> {
   return body.deployKey
 }
 
+export interface AuthKeys {
+  privateKey: string
+  jwks: string
+}
+
+export async function generateAuthKeys(): Promise<AuthKeys> {
+  const keys = await generateKeyPair('RS256')
+  const privateKey = await exportPKCS8(keys.privateKey)
+  const publicKey = await exportJWK(keys.publicKey)
+  const jwks = JSON.stringify({ keys: [{ use: 'sig', ...publicKey }] })
+
+  return {
+    privateKey: privateKey.trimEnd().replace(/\n/g, ' '),
+    jwks,
+  }
+}
+
 export async function setDeploymentEnvVars(
   deploymentUrl: string,
   deployKey: string,
@@ -146,7 +164,7 @@ export async function listDeploymentEnvVars(
     throw new Error(text || `List env vars failed: ${res.status}`)
   }
 
-  const body = await res.json() as { environmentVariables: Record<string, string> }
+  const body = (await res.json()) as { environmentVariables: Record<string, string> }
   return body.environmentVariables
 }
 
@@ -209,32 +227,6 @@ interface ConvexFunctionResponse {
   message?: string
   errorMessage?: string
   errorData?: ConvexValue
-}
-
-async function safeConvexFunctionParse(
-  res: Response,
-  operation: string,
-): Promise<ConvexFunctionResult> {
-  const text = await res.text()
-  let body: ConvexFunctionResponse
-  try {
-    body = JSON.parse(text) as ConvexFunctionResponse
-  } catch {
-    return {
-      status: 'error',
-      errorMessage: text || `${operation} failed: ${res.status} (non-JSON response)`,
-    }
-  }
-
-  if (!res.ok) {
-    return {
-      status: 'error',
-      errorMessage: body.message || body.errorMessage || `${operation} failed: ${res.status}`,
-      errorData: body.errorData,
-    }
-  }
-
-  return { status: 'success', value: body.value ?? null }
 }
 
 /**

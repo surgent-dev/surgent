@@ -12,4 +12,5 @@ export type {
   ChatsTable,
   GitHubInstallationsTable,
   DeploymentTable,
+  EnvDestination,
 } from './src/types'

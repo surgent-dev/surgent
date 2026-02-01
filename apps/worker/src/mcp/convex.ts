@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { parse as parseDotEnv } from 'dotenv'
 import { Sandbox as E2BSandbox } from 'e2b'
-import type { ProjectMetadata } from '@repo/db'
+import type { ProjectMetadata, EnvDestination } from '@repo/db'
 import {
   createProjectOnTeam,
   createDeployKey,
@@ -11,9 +11,38 @@ import {
   listDeploymentEnvVars,
   callQuery,
   callMutation,
+  generateAuthKeys,
   type ConvexValue,
 } from '@/apis/convex'
 import * as ProjectService from '@/services/projects'
+
+interface EnvVarConfig {
+  value: string
+  destination: EnvDestination
+}
+
+interface EnvVarWithDestination {
+  value: string
+  destination: EnvDestination
+}
+
+function splitEnvVars(vars: Record<string, EnvVarConfig>): {
+  server: Record<string, string> // Push to Convex deployment
+  client: Record<string, string> // Write to sandbox .env
+  forDb: Record<string, EnvVarWithDestination> // Store in Surgent DB with destination
+} {
+  const server: Record<string, string> = {}
+  const client: Record<string, string> = {}
+  const forDb: Record<string, EnvVarWithDestination> = {}
+
+  for (const [key, { value, destination }] of Object.entries(vars)) {
+    forDb[key] = { value, destination }
+    if (destination === 'server' || destination === 'both') server[key] = value
+    if (destination === 'client' || destination === 'both') client[key] = value
+  }
+
+  return { server, client, forDb }
+}
 
 // ============================================
 // Types
@@ -65,6 +94,10 @@ const setEnvVarsSchema = {
   vars: z
     .record(z.string(), z.string())
     .describe('Key-value pairs of environment variables to set'),
+  destination: z
+    .enum(['server', 'client', 'both'])
+    .optional()
+    .describe('Where these vars should be stored (server, client, or both)'),
 }
 
 const callFunctionSchema = {
@@ -101,7 +134,8 @@ function formatEnvWithQuotes(vars: Record<string, string>): string {
 }
 
 function extractProjectId(extra: unknown): string | undefined {
-  return (extra as Record<string, any> | undefined)?._meta?.context?.projectId
+  const meta = extra as { _meta?: { context?: { projectId?: string } } } | undefined
+  return meta?._meta?.context?.projectId
 }
 
 async function getToolContext(extra: unknown): Promise<ToolContext | null> {
@@ -164,7 +198,7 @@ Use this when starting a new backend - it provisions a fresh Convex database ins
 
 Returns:
 - project: Object with projectId, deploymentName, deploymentUrl, deployKey
-- envVars: Environment variables (CONVEX_DEPLOYMENT, CONVEX_URL, CONVEX_DEPLOY_KEY, VITE_CONVEX_URL)
+- envVars: Environment variables (CONVEX_DEPLOYMENT, CONVEX_URL, CONVEX_DEPLOY_KEY, VITE_CONVEX_URL, SITE_URL)
 - envFileContent: Complete .env file content as a string
 - integration: The integration record (id, provider, status)
 
@@ -176,6 +210,9 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
       if (!projectId) return err('Missing projectId')
 
       try {
+        const sandbox = await ProjectService.getSandboxByProjectId(projectId)
+        const siteUrl = sandbox?.host ?? 'http://localhost:5173'
+
         const existingIntegration = await ProjectService.getIntegrationByProvider(
           projectId,
           'convex',
@@ -190,7 +227,9 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
             existingIntegration.id ?? undefined,
           )
           const envVars = Object.fromEntries(
-            envVarRows.filter((row) => row.value).map((row) => [row.key, row.value as string]),
+            envVarRows
+              .filter((row) => row.value && row.destination !== 'server')
+              .map((row) => [row.key, row.value as string]),
           )
 
           return ok({
@@ -212,6 +251,25 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
 
         const project = await createProjectOnTeam({ name: args.name, deploymentType: 'dev' })
         const deployKey = await createDeployKey(project.deploymentName)
+        const authKeys = await generateAuthKeys()
+
+        // Define all env vars with their destinations
+        const allEnvVars: Record<string, EnvVarConfig> = {
+          // Convex CLI/SDK - client only (dev tooling)
+          CONVEX_DEPLOYMENT: { value: `dev:${project.deploymentName}`, destination: 'client' },
+          CONVEX_URL: { value: project.deploymentUrl, destination: 'client' },
+          CONVEX_DEPLOY_KEY: { value: deployKey, destination: 'client' },
+          VITE_CONVEX_URL: { value: project.deploymentUrl, destination: 'client' },
+          // Auth - SITE_URL needed both places, keys are secrets (server only)
+          SITE_URL: { value: siteUrl, destination: 'both' },
+          JWT_PRIVATE_KEY: { value: authKeys.privateKey, destination: 'server' },
+          JWKS: { value: authKeys.jwks, destination: 'server' },
+        }
+
+        const { server: serverVars, client: clientVars, forDb: dbVars } = splitEnvVars(allEnvVars)
+
+        // Push server vars to Convex deployment
+        await setDeploymentEnvVars(project.deploymentUrl, deployKey, serverVars)
 
         const integration = await ProjectService.createIntegration({
           projectId,
@@ -225,17 +283,10 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
           status: 'connected',
         })
 
-        const envVars = {
-          CONVEX_DEPLOYMENT: `dev:${project.deploymentName}`,
-          CONVEX_URL: project.deploymentUrl,
-          CONVEX_DEPLOY_KEY: deployKey,
-          VITE_CONVEX_URL: project.deploymentUrl,
-        }
+        // Save ALL vars to Surgent DB (with destination), but only CLIENT vars to sandbox .env
+        await ProjectService.upsertEnvVars(projectId, 'development', dbVars, integration.id)
 
-        await ProjectService.upsertEnvVars(projectId, 'development', envVars, integration.id)
-
-        const sandbox = await ProjectService.getSandboxByProjectId(projectId)
-        const envFileWrite = await writeEnvToSandbox(projectId, sandbox, envVars)
+        const envFileWrite = await writeEnvToSandbox(projectId, sandbox, clientVars)
 
         const message =
           envFileWrite.status === 'written'
@@ -247,8 +298,8 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
           alreadyExists: false,
           project: { ...project, deployKey },
           integration: { id: integration.id, provider: 'convex', status: 'connected' },
-          envVars,
-          envFileContent: toEnvFileContent(envVars),
+          envVars: clientVars,
+          envFileContent: toEnvFileContent(clientVars),
           envFileWrite,
         })
       } catch (e) {
@@ -286,6 +337,7 @@ Use the projectId returned from create_project.`,
 
 Use this to configure API keys, secrets, or any runtime configuration your Convex functions need.
 Variables are passed as key-value pairs: {"OPENAI_API_KEY": "sk-...", "DEBUG": "true"}
+Optional "destination" controls where vars are stored: server (default), client, or both.
 
 Existing variables with the same name will be overwritten. Other variables are preserved.`,
       inputSchema: setEnvVarsSchema,
@@ -295,8 +347,27 @@ Existing variables with the same name will be overwritten. Other variables are p
       if (!ctx) return err('Convex not provisioned')
 
       try {
-        await setDeploymentEnvVars(ctx.deploymentUrl, ctx.deployKey, args.vars)
-        const envFileWrite = await writeEnvToSandbox(ctx.projectId, ctx.sandbox, args.vars)
+        const destination = args.destination ?? 'server'
+        const dbVars = Object.fromEntries(
+          Object.entries(args.vars).map(([key, value]) => [key, { value, destination }]),
+        )
+        const shouldSetServer = destination === 'server' || destination === 'both'
+        const shouldWriteClient = destination === 'client' || destination === 'both'
+
+        if (shouldSetServer) {
+          await setDeploymentEnvVars(ctx.deploymentUrl, ctx.deployKey, args.vars)
+        }
+
+        await ProjectService.upsertEnvVars(
+          ctx.projectId,
+          'development',
+          dbVars,
+          ctx.integration?.id,
+        )
+
+        const envFileWrite = shouldWriteClient
+          ? await writeEnvToSandbox(ctx.projectId, ctx.sandbox, args.vars)
+          : { status: 'failed', error: 'Skipped writing .env for server-only vars' }
         return ok({
           message: `Set ${Object.keys(args.vars).length} environment variable(s)`,
           envFileWrite,

@@ -153,10 +153,17 @@ function validateDevScript(command: string): void {
   }
 }
 
-async function getProjectEnvVars(projectId: string, environment: string) {
+async function getProjectEnvVars(
+  projectId: string,
+  environment: string,
+  options?: { includeServer?: boolean },
+) {
   const rows = await ProjectService.getEnvVarsByProjectId(projectId, environment)
+  const includeServer = options?.includeServer ?? true
   return Object.fromEntries(
-    rows.filter((row) => row.value).map((row) => [row.key, row.value as string]),
+    rows
+      .filter((row) => row.value && (includeServer || row.destination !== 'server'))
+      .map((row) => [row.key, row.value as string]),
   )
 }
 
@@ -619,7 +626,7 @@ export async function initializeProject(
   if (!config.surgent.baseUrl || !config.opencode.baseUrl) {
     throw new Error('SURGENT_BASE_URL and OPENCODE_BASE_URL are not set')
   }
-  const devEnv = await getProjectEnvVars(projectId, 'development')
+  const devEnv = await getProjectEnvVars(projectId, 'development', { includeServer: false })
   const opencodeConfigDir = config.opencode.configDir
   const opencodeEnv = {
     ...devEnv,
@@ -692,7 +699,7 @@ export async function resumeProject(
   args: ResumeProjectArgs,
 ): Promise<{ sandboxId: string; previewUrl: string }> {
   const workingDirectory = workspacePath(args.projectId)
-  const devEnv = await getProjectEnvVars(args.projectId, 'development')
+  const devEnv = await getProjectEnvVars(args.projectId, 'development', { includeServer: false })
   const opencodeConfigDir = config.opencode.configDir
   const opencodeKey = devEnv.OPENCODE_API_KEY || devEnv.SURGENT_API_KEY
   const opencodeEnv = {

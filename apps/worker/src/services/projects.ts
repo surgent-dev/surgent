@@ -1,4 +1,5 @@
 import { db } from '@/lib/db'
+import type { EnvDestination, ProjectMetadata } from '@repo/db'
 
 export async function getProjectWithAuth(id: string, userId: string) {
   const row = await db
@@ -51,10 +52,14 @@ export function getWorkerByProjectId(projectId: string) {
   return db.selectFrom('worker').selectAll().where('projectId', '=', projectId).executeTakeFirst()
 }
 
-export function getEnvVarsByProjectId(projectId: string, environment: string, integrationId?: string) {
+export function getEnvVarsByProjectId(
+  projectId: string,
+  environment: string,
+  integrationId?: string,
+) {
   let query = db
     .selectFrom('env_var')
-    .select(['key', 'value'])
+    .select(['key', 'value', 'destination'])
     .where('projectId', '=', projectId)
     .where('environment', '=', environment)
   if (integrationId) query = query.where('integrationId', '=', integrationId)
@@ -99,7 +104,7 @@ export async function createProject(args: {
   return { id: row.id as string }
 }
 
-export async function updateProject(id: string, data: { metadata?: any }) {
+export async function updateProject(id: string, data: { metadata?: ProjectMetadata }) {
   await db
     .updateTable('project')
     .set({ ...data, updatedAt: new Date() })
@@ -327,6 +332,7 @@ export async function upsertEnvVar(args: {
   environment: string
   key: string
   value: string | null
+  destination?: EnvDestination | null
   integrationId?: string | null
 }) {
   const now = new Date()
@@ -334,6 +340,7 @@ export async function upsertEnvVar(args: {
     .updateTable('env_var')
     .set({
       value: args.value,
+      destination: args.destination ?? null,
       integrationId: args.integrationId ?? null,
       updatedAt: now,
     })
@@ -351,6 +358,7 @@ export async function upsertEnvVar(args: {
       environment: args.environment,
       key: args.key,
       value: args.value,
+      destination: args.destination ?? null,
       integrationId: args.integrationId ?? null,
       createdAt: now,
       updatedAt: now,
@@ -358,14 +366,22 @@ export async function upsertEnvVar(args: {
     .execute()
 }
 
+interface EnvVarWithDestination {
+  value: string
+  destination: EnvDestination
+}
+
 export async function upsertEnvVars(
   projectId: string,
   environment: string,
-  vars: Record<string, string>,
+  vars: Record<string, string | EnvVarWithDestination>,
   integrationId?: string | null,
 ) {
-  for (const [key, value] of Object.entries(vars)) {
-    await upsertEnvVar({ projectId, environment, key, value, integrationId })
+  for (const [key, val] of Object.entries(vars)) {
+    const isWithDestination = typeof val === 'object' && 'destination' in val
+    const value = isWithDestination ? val.value : val
+    const destination = isWithDestination ? val.destination : null
+    await upsertEnvVar({ projectId, environment, key, value, destination, integrationId })
   }
 }
 

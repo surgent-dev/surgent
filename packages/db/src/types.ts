@@ -262,12 +262,15 @@ export interface IntegrationTable {
   createdAt?: Date
 }
 
+export type EnvDestination = 'server' | 'client' | 'both'
+
 export interface EnvVarTable {
   id: string | null
   projectId: string
   environment: string
   key: string
   value: string | null
+  destination: EnvDestination | null
   integrationId: string | null
   createdAt?: Date
   updatedAt?: Date
