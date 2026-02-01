@@ -16,15 +16,31 @@ use crate::integrations::types::{
 
 type HmacSha256 = Hmac<Sha256>;
 
+/// Inline product details for renewal plans (required when no product_id)
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InlineProduct {
+    title: String,
+    external_identifier: String,
+}
+
 #[derive(Debug, Serialize)]
 struct CheckoutPlan {
     company_id: String,
     currency: String,
-    initial_price: f64,
     plan_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    initial_price: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    renewal_price: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    billing_period: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     application_fee_amount: Option<f64>,
-    title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    product: Option<InlineProduct>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -33,6 +49,8 @@ struct CreateCheckoutConfigurationRequest {
     plan: CheckoutPlan,
     #[serde(skip_serializing_if = "Option::is_none")]
     redirect_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,9 +64,12 @@ pub struct CreateCheckoutParams<'a> {
     pub currency: &'a str,
     pub price_amount: f64,
     pub plan_type: &'a str,
+    pub billing_period: Option<i32>,
     pub application_fee_amount: Option<f64>,
     pub redirect_url: Option<&'a str>,
     pub title: &'a str,
+    pub metadata: Option<serde_json::Value>,
+    pub product_id: Option<&'a str>,
 }
 
 pub struct WhopClient {
@@ -161,17 +182,42 @@ impl WhopClient {
         &self,
         params: CreateCheckoutParams<'_>,
     ) -> Result<CheckoutConfiguration, String> {
-        let req = CreateCheckoutConfigurationRequest {
-            mode: "payment".to_string(),
-            plan: CheckoutPlan {
+        let is_renewal = params.plan_type == "renewal";
+
+        let plan = if is_renewal {
+            CheckoutPlan {
                 company_id: params.company_id.to_string(),
                 currency: params.currency.to_lowercase(),
-                initial_price: params.price_amount,
                 plan_type: params.plan_type.to_string(),
+                initial_price: None,
+                renewal_price: Some(params.price_amount),
+                billing_period: params.billing_period,
                 application_fee_amount: params.application_fee_amount,
-                title: params.title.to_string(),
-            },
+                product: Some(InlineProduct {
+                    title: params.title.to_string(),
+                    external_identifier: params.product_id.unwrap_or("unknown").to_string(),
+                }),
+                title: None,
+            }
+        } else {
+            CheckoutPlan {
+                company_id: params.company_id.to_string(),
+                currency: params.currency.to_lowercase(),
+                plan_type: params.plan_type.to_string(),
+                initial_price: Some(params.price_amount),
+                renewal_price: None,
+                billing_period: None,
+                application_fee_amount: params.application_fee_amount,
+                product: None,
+                title: Some(params.title.to_string()),
+            }
+        };
+
+        let req = CreateCheckoutConfigurationRequest {
+            mode: "payment".to_string(),
+            plan,
             redirect_url: params.redirect_url.map(String::from),
+            metadata: params.metadata,
         };
 
         debug!(
@@ -295,10 +341,17 @@ impl PaymentProcessor for WhopProcessor {
             .ok_or("Whop checkout requires unit_amount")?;
 
         // Whop uses "renewal" for subscriptions, "one_time" for payments
-        let plan_type = if req.mode == "subscription" {
+        let is_subscription = req.mode == "subscription";
+        let plan_type = if is_subscription {
             "renewal"
         } else {
             "one_time"
+        };
+
+        let billing_period = if is_subscription {
+            req.billing_period_days
+        } else {
+            None
         };
 
         // Convert cents to dollars for Whop API
@@ -311,15 +364,25 @@ impl PaymentProcessor for WhopProcessor {
             self.base_url.clone(),
         )?;
 
+        // Convert HashMap metadata to serde_json::Value
+        let metadata = if req.metadata.is_empty() {
+            None
+        } else {
+            Some(serde_json::to_value(&req.metadata).unwrap_or_default())
+        };
+
         let checkout = whop_client
             .create_checkout_configuration(CreateCheckoutParams {
                 company_id,
                 currency: "usd",
                 price_amount: price_dollars,
                 plan_type,
+                billing_period,
                 application_fee_amount: fee_dollars,
                 redirect_url: Some(&req.success_url),
                 title: product_name,
+                metadata,
+                product_id: req.product_id.as_deref(),
             })
             .await?;
 
@@ -371,16 +434,17 @@ impl PaymentProcessor for WhopProcessor {
         let secret = self.decode_secret()?;
 
         // Signed content: "{webhook-id}.{webhook-timestamp}.{raw_body}"
-        let signed_payload = format!(
-            "{}.{}.{}",
-            webhook_id,
-            timestamp_str,
-            String::from_utf8_lossy(payload)
-        );
+        let mut signed_payload =
+            Vec::with_capacity(webhook_id.len() + timestamp_str.len() + payload.len() + 2);
+        signed_payload.extend_from_slice(webhook_id.as_bytes());
+        signed_payload.push(b'.');
+        signed_payload.extend_from_slice(timestamp_str.as_bytes());
+        signed_payload.push(b'.');
+        signed_payload.extend_from_slice(payload);
 
         let mut mac = HmacSha256::new_from_slice(&secret)
             .map_err(|e| format!("Failed to create HMAC: {}", e))?;
-        mac.update(signed_payload.as_bytes());
+        mac.update(&signed_payload);
         let expected_signature = BASE64.encode(mac.finalize().into_bytes());
 
         // Signature header format: "v1,{base64_sig}" (may have multiple space-separated)
@@ -420,7 +484,23 @@ impl PaymentProcessor for WhopProcessor {
                     .get("id")
                     .and_then(|v| v.as_str())
                     .ok_or("Missing payment_id")?;
-                let amount = data.get("amount").and_then(|v| v.as_i64()).unwrap_or(0);
+                // Whop sends `total` in dollars - convert to cents safely
+                let amount = if let Some(total) = data.get("total") {
+                    if let Some(n) = total.as_f64() {
+                        // Use string intermediary to avoid float precision issues
+                        let cents_str = format!("{:.0}", n * 100.0);
+                        cents_str.parse::<i64>().unwrap_or(0)
+                    } else if let Some(s) = total.as_str() {
+                        // Parse string amount
+                        s.parse::<f64>()
+                            .map(|n| format!("{:.0}", n * 100.0).parse::<i64>().unwrap_or(0))
+                            .unwrap_or(0)
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                };
                 let currency = data
                     .get("currency")
                     .and_then(|v| v.as_str())
@@ -432,6 +512,113 @@ impl PaymentProcessor for WhopProcessor {
                     amount,
                     currency,
                     account_id: None,
+                })
+            }
+            "membership.activated" => {
+                let membership_id = data
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing membership id")?
+                    .to_string();
+                let status = data
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("active")
+                    .to_string();
+                let user_id = data
+                    .get("user")
+                    .and_then(|u| u.get("id"))
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing user.id")?
+                    .to_string();
+                let plan_id = data
+                    .get("plan")
+                    .and_then(|p| p.get("id"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let product_id = data
+                    .get("product")
+                    .and_then(|p| p.get("id"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let renewal_period_start = data
+                    .get("renewal_period_start")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let renewal_period_end = data
+                    .get("renewal_period_end")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let cancel_at_period_end = data
+                    .get("cancel_at_period_end")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let session_id = data
+                    .get("metadata")
+                    .and_then(|m| m.get("session_id"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+
+                Ok(NormalizedEvent::MembershipActivated {
+                    membership_id,
+                    status,
+                    user_id,
+                    plan_id,
+                    product_id,
+                    renewal_period_start,
+                    renewal_period_end,
+                    cancel_at_period_end,
+                    session_id,
+                })
+            }
+            "membership.deactivated" => {
+                let membership_id = data
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing membership id")?
+                    .to_string();
+                let status = data
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("canceled")
+                    .to_string();
+                let canceled_at = data
+                    .get("canceled_at")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let session_id = data
+                    .get("metadata")
+                    .and_then(|m| m.get("session_id"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+
+                Ok(NormalizedEvent::MembershipDeactivated {
+                    membership_id,
+                    status,
+                    canceled_at,
+                    session_id,
+                })
+            }
+            "membership.cancel_at_period_end_changed" => {
+                let membership_id = data
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing membership id")?
+                    .to_string();
+                let cancel_at_period_end = data
+                    .get("cancel_at_period_end")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let session_id = data
+                    .get("metadata")
+                    .and_then(|m| m.get("session_id"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+
+                Ok(NormalizedEvent::MembershipCancelAtPeriodEndChanged {
+                    membership_id,
+                    cancel_at_period_end,
+                    session_id,
                 })
             }
             _ => Ok(NormalizedEvent::Unknown {

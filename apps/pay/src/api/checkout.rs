@@ -19,6 +19,15 @@ use crate::integrations::stripe::fetch_checkout_session;
 use crate::integrations::types::{CheckoutLineItem, CreateCheckoutSessionRequest};
 use crate::types::{CheckoutMode, RecurringInterval, SubscriptionStatus};
 
+fn recurring_interval_to_days(interval: &RecurringInterval) -> i32 {
+    match interval {
+        RecurringInterval::Day => 1,
+        RecurringInterval::Week => 7,
+        RecurringInterval::Month => 30,
+        RecurringInterval::Year => 365,
+    }
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CustomerData {
@@ -348,6 +357,17 @@ pub async fn create_checkout_session(
         format!("Payment processor '{}' not available", processor_name),
     ))?;
 
+    // Generate session_id BEFORE processor call so we can pass it as metadata (for Whop webhook linking)
+    let session_id = Uuid::new_v4();
+
+    // Whop requires explicit success/cancel URLs
+    if processor_name == "whop" && (req.success_url.is_none() || req.cancel_url.is_none()) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "successUrl and cancelUrl are required for Whop checkout".to_string(),
+        ));
+    }
+
     // Whop uses success_url directly, Stripe uses proxy URLs for eager sync
     let (success_url, cancel_url) = if processor_name == "whop" {
         (
@@ -356,6 +376,16 @@ pub async fn create_checkout_session(
         )
     } else {
         (proxy_success_url, proxy_cancel_url)
+    };
+
+    // Build metadata - include session_id for Whop to link payment.succeeded webhooks back to checkout
+    let metadata = if processor_name == "whop" {
+        HashMap::from([
+            ("idempotency_key".to_string(), Uuid::new_v4().to_string()),
+            ("session_id".to_string(), session_id.to_string()),
+        ])
+    } else {
+        HashMap::from([("idempotency_key".to_string(), Uuid::new_v4().to_string())])
     };
 
     let processor_session = processor
@@ -373,12 +403,17 @@ pub async fn create_checkout_session(
             }
             .to_string(),
             customer: processor_customer_id,
-            metadata: HashMap::from([("idempotency_key".to_string(), Uuid::new_v4().to_string())]),
+            metadata,
             application_fee_amount,
             application_fee_percent,
             destination_account,
             product_name: Some(product.name.clone()),
             unit_amount: Some(price.priceAmount as i64),
+            product_id: Some(product_id.to_string()),
+            billing_period_days: price
+                .recurring_interval
+                .flatten()
+                .map(|i| recurring_interval_to_days(&i)),
         })
         .await
         .map_err(|e| {
@@ -404,7 +439,6 @@ pub async fn create_checkout_session(
     let final_success_url = req.success_url.clone();
     let final_cancel_url = req.cancel_url.clone();
 
-    let session_id = Uuid::new_v4();
     sqlx::query!(
         r#"
         INSERT INTO checkout_session (

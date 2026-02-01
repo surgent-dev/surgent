@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { Archive, Loader2, Package, Pencil, Plus, Settings } from 'lucide-react'
+import { Archive, Loader2, MoreHorizontal, Package, Pencil, Plus, Settings } from 'lucide-react'
 import {
   useProducts,
   type Product,
@@ -10,6 +10,13 @@ import {
   type ProductPrice,
 } from '@/queries/products'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { payHttp } from '@/lib/http'
 import { CreateProductDialog } from './create-product-dialog'
 import { CreatePriceDialog } from './create-price-dialog'
 import { EditProductDialog } from './edit-product-dialog'
@@ -85,15 +92,52 @@ function PricePill({ price }: { price: ProductPrice }) {
 
 function ProductCard({
   item,
+  projectId,
   onEdit,
   onAddPrice,
 }: {
   item: ProductWithPrices
+  projectId: string
   onEdit: (product: Product) => void
   onAddPrice: (item: ProductWithPrices) => void
 }) {
   const { product, prices } = item
   const canAddPrice = prices.length === 0
+
+  const handleTestCheckout = async () => {
+    const priceId = prices[0]?.id
+    if (!priceId) return
+
+    const confirmed = window.confirm('This will create a real checkout session. Continue?')
+    if (!confirmed) return
+
+    try {
+      // Whop requires HTTPS URLs - use current URL if HTTPS, otherwise use placeholder
+      const redirectUrl =
+        window.location.protocol === 'https:'
+          ? window.location.href
+          : 'https://example.com/checkout-complete'
+
+      const response = await payHttp
+        .post('checkout', {
+          searchParams: { projectId },
+          json: {
+            customerId: 'test-customer-123',
+            productId: product.id,
+            priceId: priceId,
+            successUrl: redirectUrl,
+            cancelUrl: redirectUrl,
+          },
+        })
+        .json<{ checkoutUrl: string }>()
+
+      window.open(response.checkoutUrl, '_blank')
+    } catch (error) {
+      alert(
+        'Failed to create checkout: ' + (error instanceof Error ? error.message : 'Unknown error'),
+      )
+    }
+  }
 
   return (
     <div
@@ -122,13 +166,22 @@ function ProductCard({
               <span>Add Price</span>
             </button>
           )}
-          <button
-            onClick={() => onEdit(product)}
-            className="group flex items-center gap-1 px-2 py-1.5 text-xs rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
-          >
-            <Pencil className="size-3" />
-            <span className="hidden group-hover:inline">Settings</span>
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-muted transition-colors">
+                <MoreHorizontal className="size-4 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              {prices.length > 0 && (
+                <DropdownMenuItem onClick={handleTestCheckout}>Test Checkout</DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => onEdit(product)}>
+                <Pencil className="mr-2 size-3" />
+                Settings
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -386,6 +439,7 @@ export function ProductsSection({
                 <ProductCard
                   key={item.product.id}
                   item={item}
+                  projectId={projectId}
                   onEdit={handleEdit}
                   onAddPrice={handleAddPrice}
                 />

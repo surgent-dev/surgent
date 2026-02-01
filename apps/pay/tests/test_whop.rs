@@ -31,9 +31,12 @@ async fn test_create_checkout_configuration_real() {
         currency: "USD",
         price_amount: 1.00,
         plan_type: "one_time",
+        billing_period: None,
         application_fee_amount: None,
         redirect_url: Some("https://example.com/success"),
         title: "Test Checkout",
+        metadata: Some(serde_json::json!({ "session_id": "test-session-id" })),
+        product_id: None,
     };
 
     let result = client.create_checkout_configuration(params).await;
