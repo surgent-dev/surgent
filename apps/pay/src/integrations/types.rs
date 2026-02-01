@@ -60,6 +60,10 @@ pub struct CreateCheckoutSessionRequest {
     pub application_fee_amount: Option<i64>,
     pub application_fee_percent: Option<f64>,
     pub destination_account: Option<String>,
+    /// Product name for processors that need it (e.g., Whop). Stripe ignores this.
+    pub product_name: Option<String>,
+    /// Unit amount in cents for processors that need it (e.g., Whop). Stripe uses line_items.
+    pub unit_amount: Option<i64>,
 }
 
 /// Checkout session representation returned by payment processor

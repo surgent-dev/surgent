@@ -503,7 +503,12 @@ pub async fn create_test_state(pool: PgPool) -> AppState {
         .await
         .expect("Failed to register Stripe processor");
 
-    let whop_processor = WhopProcessor::new(config.whop_webhook_secret.clone());
+    let whop_processor = WhopProcessor::new(
+        config.whop_webhook_secret.clone(),
+        config.whop_api_key.clone(),
+        config.whop_platform_company_id.clone(),
+        config.whop_base_url.clone(),
+    );
     registry
         .register(Arc::new(whop_processor))
         .await

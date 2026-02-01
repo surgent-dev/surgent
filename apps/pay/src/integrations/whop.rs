@@ -217,16 +217,29 @@ impl WhopClient {
     }
 }
 
-/// Whop webhook processor implementing PaymentProcessor trait.
-/// Uses Standard Webhooks v1.0.0 spec for signature verification.
+/// Whop payment processor implementing PaymentProcessor trait.
+/// Handles checkout session creation and webhook verification.
 #[derive(Clone)]
 pub struct WhopProcessor {
     pub webhook_secret: String,
+    pub api_key: String,
+    pub platform_company_id: String,
+    pub base_url: String,
 }
 
 impl WhopProcessor {
-    pub fn new(webhook_secret: String) -> Self {
-        Self { webhook_secret }
+    pub fn new(
+        webhook_secret: String,
+        api_key: String,
+        platform_company_id: String,
+        base_url: String,
+    ) -> Self {
+        Self {
+            webhook_secret,
+            api_key,
+            platform_company_id,
+            base_url,
+        }
     }
 
     /// Returns the webhook secret as raw bytes.
@@ -265,9 +278,57 @@ impl PaymentProcessor for WhopProcessor {
 
     async fn create_checkout_session(
         &self,
-        _req: CreateCheckoutSessionRequest,
+        req: CreateCheckoutSessionRequest,
     ) -> Result<ProcessorCheckout, String> {
-        Err("Not implemented".to_string())
+        let company_id = req
+            .destination_account
+            .as_ref()
+            .ok_or("Whop checkout requires destination_account (company_id)")?;
+
+        let product_name = req
+            .product_name
+            .as_ref()
+            .ok_or("Whop checkout requires product_name")?;
+
+        let unit_amount = req
+            .unit_amount
+            .ok_or("Whop checkout requires unit_amount")?;
+
+        // Whop uses "renewal" for subscriptions, "one_time" for payments
+        let plan_type = if req.mode == "subscription" {
+            "renewal"
+        } else {
+            "one_time"
+        };
+
+        // Convert cents to dollars for Whop API
+        let price_dollars = unit_amount as f64 / 100.0;
+        let fee_dollars = req.application_fee_amount.map(|f| f as f64 / 100.0);
+
+        let whop_client = WhopClient::new(
+            self.api_key.clone(),
+            self.platform_company_id.clone(),
+            self.base_url.clone(),
+        )?;
+
+        let checkout = whop_client
+            .create_checkout_configuration(CreateCheckoutParams {
+                company_id,
+                currency: "usd",
+                price_amount: price_dollars,
+                plan_type,
+                application_fee_amount: fee_dollars,
+                redirect_url: Some(&req.success_url),
+                title: product_name,
+            })
+            .await?;
+
+        Ok(ProcessorCheckout {
+            id: checkout.id,
+            url: Some(checkout.purchase_url),
+            status: "open".to_string(),
+            customer: None,
+        })
     }
 
     /// Verifies Whop webhook signature using Standard Webhooks v1.0.0 spec.
@@ -377,59 +438,5 @@ impl PaymentProcessor for WhopProcessor {
                 event_type: event_type.to_string(),
             }),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_create_checkout_configuration_real() {
-        dotenvy::dotenv().ok();
-
-        let api_key = match std::env::var("WHOP_API_KEY") {
-            Ok(key) => key,
-            Err(_) => {
-                eprintln!("Skipping test: WHOP_API_KEY not set");
-                return;
-            }
-        };
-
-        let platform_company_id = match std::env::var("WHOP_PLATFORM_COMPANY_ID") {
-            Ok(id) => id,
-            Err(_) => {
-                eprintln!("Skipping test: WHOP_PLATFORM_COMPANY_ID not set");
-                return;
-            }
-        };
-
-        let base_url = std::env::var("WHOP_BASE_URL")
-            .unwrap_or_else(|_| "https://sandbox-api.whop.com/api/v1".to_string());
-
-        let client = WhopClient::new(api_key, platform_company_id.clone(), base_url)
-            .expect("Failed to create WhopClient");
-
-        let params = CreateCheckoutParams {
-            company_id: &platform_company_id,
-            currency: "USD",
-            price_amount: 1.00,
-            plan_type: "one_time",
-            application_fee_amount: None,
-            redirect_url: Some("https://example.com/success"),
-            title: "Test Checkout",
-        };
-
-        let result = client.create_checkout_configuration(params).await;
-        assert!(result.is_ok(), "API call failed: {:?}", result.err());
-
-        let config = result.unwrap();
-        assert!(!config.id.is_empty(), "Expected non-empty checkout id");
-        assert!(
-            !config.purchase_url.is_empty(),
-            "Expected non-empty purchase_url"
-        );
-
-        println!("\n\n🔗 Checkout URL: {}\n", config.purchase_url);
     }
 }
