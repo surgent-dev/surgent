@@ -38,8 +38,10 @@ function ErrorToast({
   const label = SOURCE_LABELS[error.source] ?? 'Error'
 
   return (
-    <div className="absolute bottom-4 left-4 right-4 z-50 pointer-events-auto animate-in slide-in-from-bottom-4 fade-in duration-200">
-      <div className="mx-auto max-w-md rounded-lg border border-border bg-background shadow-lg">
+    <div className="absolute inset-x-0 bottom-0 z-50 pointer-events-auto animate-in slide-in-from-bottom-4 fade-in duration-200 pb-4 px-4">
+      {/* Background scrim */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent pointer-events-none" />
+      <div className="relative mx-auto max-w-md rounded-lg border border-border/50 bg-background shadow-2xl">
         <div className="flex items-start gap-3 p-3">
           <div className="shrink-0 mt-0.5">
             <AlertCircle className="size-4 text-muted-foreground" />
@@ -69,13 +71,16 @@ function ErrorToast({
             {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
             {copied ? 'Copied' : 'Copy'}
           </Button>
+          <Button onClick={onDismiss} variant="ghost" size="sm" className="h-7 text-xs ml-auto">
+            Dismiss
+          </Button>
         </div>
       </div>
     </div>
   )
 }
 
-// Full overlay for critical errors
+// Floating panel for critical errors (bottom, doesn't block UI)
 function CriticalErrorOverlay({
   error,
   onDismiss,
@@ -93,30 +98,30 @@ function CriticalErrorOverlay({
   const label = SOURCE_LABELS[error.source] ?? 'Error'
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm p-4 pointer-events-auto">
-      <div className="w-full max-w-lg rounded-xl border border-destructive/30 bg-background shadow-xl animate-in zoom-in-95 fade-in duration-200">
+    <div className="absolute inset-x-0 bottom-0 z-50 pointer-events-auto animate-in slide-in-from-bottom-4 fade-in duration-200 pb-4 px-4">
+      {/* Background scrim */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent pointer-events-none" />
+      <div className="relative mx-auto max-w-lg rounded-xl border border-destructive/20 bg-background shadow-2xl">
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-destructive/20 bg-destructive/5">
-          <div className="rounded-full bg-destructive/10 p-2">
-            <AlertTriangle className="size-5 text-destructive" />
-          </div>
+        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-destructive/20 bg-destructive/5 rounded-t-xl">
+          <AlertTriangle className="size-4 text-destructive shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm text-destructive">{label}</p>
-            <p className="text-xs text-muted-foreground">
-              {new Date(error.timestamp).toLocaleTimeString()}
-            </p>
+            <p className="font-medium text-sm text-destructive">{label}</p>
           </div>
+          <p className="text-xs text-muted-foreground shrink-0">
+            {new Date(error.timestamp).toLocaleTimeString()}
+          </p>
           <button
             onClick={onDismiss}
-            className="p-1.5 rounded-md text-muted-foreground hover:bg-muted transition-colors"
+            className="p-1 rounded-md text-muted-foreground hover:bg-muted transition-colors shrink-0"
           >
-            <X className="size-4" />
+            <X className="size-3.5" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-4 space-y-3">
-          <p className="text-sm font-medium break-words">{error.message}</p>
+        <div className="px-4 py-3 space-y-2">
+          <p className="text-sm break-words line-clamp-2">{error.message}</p>
           {error.stack && (
             <div>
               <button
@@ -126,7 +131,7 @@ function CriticalErrorOverlay({
                 {expanded ? 'Hide' : 'Show'} stack trace
               </button>
               {expanded && (
-                <pre className="mt-2 text-xs font-mono bg-muted/50 rounded-lg p-3 overflow-auto max-h-40 text-muted-foreground whitespace-pre-wrap break-words">
+                <pre className="mt-2 text-xs font-mono bg-muted/50 rounded-lg p-2.5 overflow-auto max-h-32 text-muted-foreground whitespace-pre-wrap break-words">
                   {error.stack}
                 </pre>
               )}
@@ -135,14 +140,17 @@ function CriticalErrorOverlay({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 px-4 py-3 border-t bg-muted/30">
-          <Button onClick={onFixWithAI} size="sm" className="gap-2">
-            <Bug className="size-4" />
+        <div className="flex items-center gap-2 px-4 py-2.5 border-t bg-muted/30 rounded-b-xl">
+          <Button onClick={onFixWithAI} size="sm" className="h-7 text-xs gap-1.5">
+            <Bug className="size-3" />
             Fix with AI
           </Button>
-          <Button onClick={onCopy} variant="outline" size="sm" className="gap-2">
-            {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+          <Button onClick={onCopy} variant="outline" size="sm" className="h-7 text-xs gap-1.5">
+            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
             {copied ? 'Copied' : 'Copy'}
+          </Button>
+          <Button onClick={onDismiss} variant="ghost" size="sm" className="h-7 text-xs ml-auto">
+            Dismiss
           </Button>
         </div>
       </div>
