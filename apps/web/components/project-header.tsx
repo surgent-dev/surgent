@@ -22,6 +22,9 @@ import {
   Clock,
   ArrowSquareOut,
   DiscordLogo,
+  Envelope,
+  TelegramLogo,
+  Headset,
 } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import {
@@ -441,17 +444,59 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           <span className="hidden md:inline">GitHub</span>
         </button>
 
-        {/* Discord */}
-        <a
-          href="https://discord.gg/DRWbFEtY"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Join Discord"
-          className="flex items-center gap-1.5 px-2 sm:px-4 text-sm text-[#5865F2] hover:bg-muted/50 border-l transition-colors"
-        >
-          <DiscordLogo className="size-4" weight="bold" />
-          <span className="hidden md:inline">Discord</span>
-        </a>
+        {/* Support */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button aria-label="Contact support" className={headerBtn}>
+              <span className="relative">
+                <Headset className="size-4" weight="bold" />
+                <span className="absolute -top-0.5 -right-0.5 size-2 bg-green-500 rounded-full animate-pulse" />
+              </span>
+              <span className="hidden md:inline">Support</span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52 p-0">
+            <div className="px-2.5 py-2 border-b">
+              <div className="flex items-center gap-1.5">
+                <span className="relative flex size-1.5">
+                  <span className="absolute inline-flex size-full rounded-full bg-green-400 opacity-75 animate-ping" />
+                  <span className="relative inline-flex size-1.5 rounded-full bg-green-500" />
+                </span>
+                <span className="text-xs font-medium">We&apos;re online</span>
+              </div>
+            </div>
+            <div className="p-1">
+              <DropdownMenuItem
+                className="gap-2 px-2 py-1.5"
+                onClick={() => {
+                  navigator.clipboard.writeText('ben@surgent.dev')
+                }}
+              >
+                <div className="flex items-center justify-center size-6 rounded bg-muted">
+                  <Envelope className="size-3.5" weight="duotone" />
+                </div>
+                <span className="text-xs flex-1">ben@surgent.dev</span>
+                <Copy className="size-3 text-muted-foreground" weight="bold" />
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="gap-2 px-2 py-1.5">
+                <a href="https://discord.gg/DRWbFEtY" target="_blank" rel="noopener noreferrer">
+                  <div className="flex items-center justify-center size-6 rounded bg-[#5865F2]/10">
+                    <DiscordLogo className="size-3.5 text-[#5865F2]" weight="fill" />
+                  </div>
+                  <span className="text-xs">Discord</span>
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="gap-2 px-2 py-1.5">
+                <a href="https://t.me/bensurgent" target="_blank" rel="noopener noreferrer">
+                  <div className="flex items-center justify-center size-6 rounded bg-[#26A5E4]/10">
+                    <TelegramLogo className="size-3.5 text-[#26A5E4]" weight="fill" />
+                  </div>
+                  <span className="text-xs">Telegram</span>
+                </a>
+              </DropdownMenuItem>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Publish */}
         <DropdownMenu open={isPublishOpen} onOpenChange={handlePublishOpenChange}>
