@@ -10,9 +10,10 @@ use tracing::{debug, error, info, warn};
 
 use crate::integrations::traits::PaymentProcessor;
 use crate::integrations::types::{
-    CreateCheckoutSessionRequest, NormalizedEvent, ProcessorCheckout, ProcessorPrice,
-    ProcessorPriceRequest, ProcessorProduct, ProcessorProductRequest,
+    CreateCheckoutSessionRequest, DisputeStatus, NormalizedEvent, ProcessorCheckout,
+    ProcessorPrice, ProcessorPriceRequest, ProcessorProduct, ProcessorProductRequest,
 };
+use crate::types::RefundStatus;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -620,6 +621,94 @@ impl PaymentProcessor for WhopProcessor {
                     cancel_at_period_end,
                     session_id,
                 })
+            }
+            "refund.created" | "refund.updated" => {
+                let refund_id = data
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing refund_id")?
+                    .to_string();
+                // Whop sends `total` in dollars - convert to cents
+                let amount = if let Some(total) = data.get("total") {
+                    if let Some(n) = total.as_f64() {
+                        let cents_str = format!("{:.0}", n * 100.0);
+                        cents_str.parse::<i64>().unwrap_or(0)
+                    } else if let Some(s) = total.as_str() {
+                        s.parse::<f64>()
+                            .map(|n| format!("{:.0}", n * 100.0).parse::<i64>().unwrap_or(0))
+                            .unwrap_or(0)
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                };
+                let currency = data
+                    .get("currency")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("usd")
+                    .to_string();
+                let status_str = data
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("pending");
+                let status = RefundStatus::try_from(status_str).unwrap_or(RefundStatus::Pending);
+                let charge_id = data
+                    .get("payment")
+                    .and_then(|p| p.get("id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let reason = data
+                    .get("reason")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+
+                Ok(NormalizedEvent::ChargeRefunded {
+                    charge_id,
+                    refund_id,
+                    amount,
+                    currency,
+                    status,
+                    reason,
+                    customer_id: None,
+                })
+            }
+            "dispute.created" => {
+                let dispute_id = data
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing dispute_id")?
+                    .to_string();
+                let charge_id = data
+                    .get("payment")
+                    .and_then(|p| p.get("id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                Ok(NormalizedEvent::DisputeCreated {
+                    dispute_id,
+                    charge_id,
+                })
+            }
+            "dispute.updated" => {
+                let dispute_id = data
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing dispute_id")?
+                    .to_string();
+                let status_str = data
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("closed");
+                let status = match status_str {
+                    "won" => DisputeStatus::Won,
+                    "lost" => DisputeStatus::Lost,
+                    _ => DisputeStatus::Closed,
+                };
+
+                Ok(NormalizedEvent::DisputeClosed { dispute_id, status })
             }
             _ => Ok(NormalizedEvent::Unknown {
                 event_type: event_type.to_string(),
