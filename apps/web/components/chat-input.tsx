@@ -99,11 +99,9 @@ function getReasoningConfig(modelId?: string) {
 type InputMenuProps = {
   onUploadClick: () => void
   uploadDisabled?: boolean
-  mcpStates?: Record<string, boolean>
-  onMcpToggle?: (name: string, enabled: boolean) => void
 }
 
-function InputMenu({ onUploadClick, uploadDisabled, mcpStates = {}, onMcpToggle }: InputMenuProps) {
+function InputMenu({ onUploadClick, uploadDisabled }: InputMenuProps) {
   const { data: mcpStatus, isLoading } = useMcpStatusQuery()
   const totalCount = mcpStatus ? Object.keys(mcpStatus).length : 0
 
@@ -138,45 +136,18 @@ function InputMenu({ onUploadClick, uploadDisabled, mcpStates = {}, onMcpToggle 
           {isLoading ? (
             <div className="px-3 pb-2 text-xs text-muted-foreground">Loading...</div>
           ) : mcpStatus && totalCount > 0 ? (
-            <div className="px-3 pb-2 space-y-1.5">
-              {Object.entries(mcpStatus).map(([name, status]) => {
-                const isEnabled = mcpStates[name] ?? true
-                const isConnected = status.status === 'connected'
-                return (
-                  <div key={name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span
-                        className={cn(
-                          'size-1.5 rounded-full',
-                          !isEnabled
-                            ? 'bg-muted-foreground/40'
-                            : isConnected
-                              ? 'bg-emerald-500'
-                              : 'bg-red-500',
-                        )}
-                      />
-                      <span className={cn('capitalize', !isEnabled && 'text-muted-foreground')}>
-                        {name}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onMcpToggle?.(name, !isEnabled)}
-                      className={cn(
-                        'relative w-6 h-3.5 rounded-full transition-colors',
-                        isEnabled ? 'bg-emerald-500' : 'bg-muted-foreground/30',
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          'absolute top-0.5 size-2.5 rounded-full bg-white shadow-sm transition-transform',
-                          isEnabled ? 'translate-x-[11px]' : 'translate-x-0.5',
-                        )}
-                      />
-                    </button>
-                  </div>
-                )
-              })}
+            <div className="px-3 pb-2 space-y-1">
+              {Object.entries(mcpStatus).map(([name, status]) => (
+                <div key={name} className="flex items-center gap-2 text-xs">
+                  <span
+                    className={cn(
+                      'size-1.5 rounded-full',
+                      status.status === 'connected' ? 'bg-emerald-500' : 'bg-red-500',
+                    )}
+                  />
+                  <span className="capitalize">{name}</span>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="px-3 pb-2 text-xs text-muted-foreground">No servers</div>
@@ -214,7 +185,6 @@ export default function ChatInput({
   const [subagentFilter, setSubagentFilter] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [level, setLevel] = useState<number>(1)
-  const [mcpStates, setMcpStates] = useState<Record<string, boolean>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dragCounter = useRef(0)
@@ -546,8 +516,6 @@ export default function ChatInput({
             <InputMenu
               onUploadClick={() => fileInputRef.current?.click()}
               uploadDisabled={attachments.length >= MAX_FILES}
-              mcpStates={mcpStates}
-              onMcpToggle={(name, enabled) => setMcpStates((s) => ({ ...s, [name]: enabled }))}
             />
 
             <Tooltip>
