@@ -261,6 +261,9 @@ export class SurgentStack extends cdk.Stack {
       'BETTER_AUTH_SECRET',
       'WEB_BASE_URL',
       'TRUSTED_ORIGINS',
+      'WHOP_API_KEY',
+      'WHOP_PLATFORM_COMPANY_ID',
+      'WHOP_WEBHOOK_SECRET',
     ] as const
     for (const name of surpaySecretNames) {
       surpaySecrets[name] = ecs.Secret.fromSsmParameter(
