@@ -114,13 +114,18 @@ export interface AuthKeys {
 }
 
 export async function generateAuthKeys(): Promise<AuthKeys> {
-  const keys = await generateKeyPair('RS256', { extractable: true })
-  const privateKey = await exportPKCS8(keys.privateKey)
-  const publicKey = await exportJWK(keys.publicKey)
-  const jwks = JSON.stringify({ keys: [{ use: 'sig', ...publicKey }] })
+  // Use EdDSA (Ed25519) - modern, fast, smaller keys, better Bun support
+  const { publicKey, privateKey } = await generateKeyPair('EdDSA', {
+    crv: 'Ed25519',
+    extractable: true,
+  })
+
+  const privatePem = await exportPKCS8(privateKey)
+  const publicJwk = await exportJWK(publicKey)
+  const jwks = JSON.stringify({ keys: [{ use: 'sig', alg: 'EdDSA', ...publicJwk }] })
 
   return {
-    privateKey: privateKey.trimEnd().replace(/\n/g, ' '),
+    privateKey: privatePem.trimEnd().replace(/\n/g, ' '),
     jwks,
   }
 }
