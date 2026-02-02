@@ -39,6 +39,7 @@ struct AccountRow {
     details_submitted: bool,
     charges_enabled: bool,
     payouts_enabled: bool,
+    data: serde_json::Value,
 }
 
 impl From<AccountRow> for ConnectedAccountResponse {
@@ -54,6 +55,7 @@ impl From<AccountRow> for ConnectedAccountResponse {
             details_submitted: row.details_submitted,
             charges_enabled: row.charges_enabled,
             payouts_enabled: row.payouts_enabled,
+            data: row.data,
         }
     }
 }
@@ -73,7 +75,8 @@ async fn fetch_account_by_id(pool: &PgPool, id: Uuid) -> Result<AccountRow, (Sta
             status,
             "detailsSubmitted",
             "chargesEnabled",
-            "businessType"
+            "businessType",
+            data
         FROM connect_account
         WHERE id = $1
         "#,
@@ -100,6 +103,7 @@ async fn fetch_account_by_id(pool: &PgPool, id: Uuid) -> Result<AccountRow, (Sta
         details_submitted: row.detailsSubmitted,
         charges_enabled: row.chargesEnabled,
         payouts_enabled: row.isPayoutsEnabled,
+        data: row.data,
     })
     .ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))
 }
@@ -270,6 +274,7 @@ pub struct ConnectedAccountResponse {
     pub details_submitted: bool,
     pub charges_enabled: bool,
     pub payouts_enabled: bool,
+    pub data: serde_json::Value,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -1111,7 +1116,8 @@ pub async fn list_accounts(
             status,
             "detailsSubmitted",
             "chargesEnabled",
-            "businessType"
+            "businessType",
+            data
         FROM connect_account
         WHERE "projectId" = $1
         ORDER BY "createdAt" DESC
@@ -1143,6 +1149,7 @@ pub async fn list_accounts(
                 details_submitted: acc.detailsSubmitted,
                 charges_enabled: acc.chargesEnabled,
                 payouts_enabled: acc.isPayoutsEnabled,
+                data: acc.data,
             }
             .into()
         })
@@ -1210,7 +1217,8 @@ pub async fn update_account(
             status,
             "detailsSubmitted",
             "chargesEnabled",
-            "businessType"
+            "businessType",
+            data
         "#,
         req.project_id,
         id
@@ -1247,6 +1255,7 @@ pub async fn update_account(
             details_submitted: account.detailsSubmitted,
             charges_enabled: account.chargesEnabled,
             payouts_enabled: account.isPayoutsEnabled,
+            data: account.data,
         }
         .into(),
     ))

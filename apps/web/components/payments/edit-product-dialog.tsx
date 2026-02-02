@@ -4,13 +4,12 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2 } from 'lucide-react'
+import { AlertTriangle, Archive, Check, Loader2, Settings } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -19,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useUpdateProduct, useArchiveProduct, type Product } from '@/queries/products'
+import { cn } from '@/lib/utils'
 
 const schema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
@@ -40,7 +40,7 @@ export function EditProductDialog({
   open,
   onOpenChange,
 }: EditProductDialogProps) {
-  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
+  const [view, setView] = useState<'edit' | 'archive-confirm' | 'success'>('edit')
   const updateProduct = useUpdateProduct(projectId)
   const archiveProduct = useArchiveProduct(projectId)
 
@@ -48,7 +48,7 @@ export function EditProductDialog({
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -57,7 +57,6 @@ export function EditProductDialog({
     },
   })
 
-  // Reset form when product changes or dialog opens
   useEffect(() => {
     reset({
       name: product.name,
@@ -65,10 +64,9 @@ export function EditProductDialog({
     })
   }, [product, reset])
 
-  // Reset archive confirm when dialog closes
   useEffect(() => {
     if (!open) {
-      setShowArchiveConfirm(false)
+      setView('edit')
     }
   }, [open])
 
@@ -83,8 +81,10 @@ export function EditProductDialog({
       },
       {
         onSuccess: () => {
-          toast.success('Product updated successfully')
-          onOpenChange(false)
+          setView('success')
+          setTimeout(() => {
+            onOpenChange(false)
+          }, 1200)
         },
         onError: (error) => {
           toast.error(error.message || 'Failed to update product')
@@ -96,7 +96,7 @@ export function EditProductDialog({
   const handleArchive = () => {
     archiveProduct.mutate(product.id, {
       onSuccess: () => {
-        toast.success('Product archived successfully')
+        toast.success('Product archived')
         onOpenChange(false)
       },
       onError: (error) => {
@@ -105,32 +105,64 @@ export function EditProductDialog({
     })
   }
 
-  // Archive confirmation dialog
-  if (showArchiveConfirm) {
+  if (view === 'success') {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Archive Product?</DialogTitle>
-            <DialogDescription>
+          <div className="flex flex-col items-center justify-center py-8 animate-in fade-in zoom-in-95 duration-300">
+            <div className="rounded-full bg-success/10 p-4 mb-4">
+              <Check className="size-8 text-success" strokeWidth={2.5} />
+            </div>
+            <h3 className="font-semibold text-lg mb-1">Product Updated!</h3>
+            <p className="text-sm text-muted-foreground">Your changes have been saved</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  if (view === 'archive-confirm') {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex flex-col items-center text-center py-4">
+            <div className="rounded-full bg-destructive/10 p-4 mb-4">
+              <AlertTriangle className="size-8 text-destructive" strokeWidth={2} />
+            </div>
+            <h3 className="font-semibold text-lg mb-2">Archive "{product.name}"?</h3>
+            <p className="text-sm text-muted-foreground mb-6 max-w-xs">
               This will hide the product from your catalog. Existing subscriptions won&apos;t be
               affected.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => setShowArchiveConfirm(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleArchive}
-              disabled={archiveProduct.isPending}
-            >
-              {archiveProduct.isPending && <Loader2 className="size-4 mr-2 animate-spin" />}
-              Archive
-            </Button>
-          </DialogFooter>
+            </p>
+            <div className="flex gap-2 w-full">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setView('edit')}
+                disabled={archiveProduct.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={handleArchive}
+                disabled={archiveProduct.isPending}
+              >
+                {archiveProduct.isPending ? (
+                  <>
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                    Archiving...
+                  </>
+                ) : (
+                  <>
+                    <Archive className="size-4 mr-2" />
+                    Archive
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     )
@@ -139,46 +171,76 @@ export function EditProductDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit Product</DialogTitle>
-          <DialogDescription>Update product details</DialogDescription>
+        <DialogHeader className="pb-2">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="rounded-lg bg-muted p-2">
+              <Settings className="size-5 text-muted-foreground" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg">Edit Product</DialogTitle>
+              <DialogDescription className="text-xs">Update product details</DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="name" className="text-sm font-medium">
+              Product Name
+            </Label>
             <Input
               id="name"
               placeholder="e.g. Pro Plan"
               aria-invalid={!!errors.name}
+              className={cn('h-10', errors.name && 'border-destructive')}
               {...register('name')}
             />
             {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">
+          <div className="space-y-1.5">
+            <Label htmlFor="description" className="text-sm font-medium">
               Description <span className="text-muted-foreground font-normal">(optional)</span>
             </Label>
             <Textarea
               id="description"
-              placeholder="Describe your product..."
+              placeholder="A brief description of what's included..."
               rows={3}
+              className="resize-none"
               {...register('description')}
             />
           </div>
 
-          <div className="flex justify-between pt-2">
-            <Button type="button" variant="destructive" onClick={() => setShowArchiveConfirm(true)}>
-              Archive
-            </Button>
+          {/* Slug (read-only) */}
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-muted-foreground">URL Slug</Label>
+            <div className="h-10 px-3 flex items-center rounded-md border bg-muted/30 text-sm text-muted-foreground font-mono">
+              {product.slug}
+            </div>
+            <p className="text-xs text-muted-foreground">Slugs cannot be changed after creation</p>
+          </div>
+
+          <div className="flex items-center justify-between pt-4 border-t">
+            <button
+              type="button"
+              onClick={() => setView('archive-confirm')}
+              className="text-sm text-muted-foreground hover:text-destructive transition-colors"
+            >
+              Archive product
+            </button>
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={updateProduct.isPending}>
-                {updateProduct.isPending && <Loader2 className="size-4 mr-2 animate-spin" />}
-                Save
+              <Button type="submit" disabled={updateProduct.isPending || !isDirty}>
+                {updateProduct.isPending ? (
+                  <>
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
               </Button>
             </div>
           </div>

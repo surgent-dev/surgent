@@ -2,6 +2,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { payHttp } from '@/lib/http'
 
 // Types
+export interface SurpayAccountData {
+  email?: string
+  title?: string
+  country?: string
+  [key: string]: unknown
+}
+
 export interface SurpayAccount {
   id: string
   processor: string
@@ -13,6 +20,7 @@ export interface SurpayAccount {
   payoutsEnabled: boolean
   businessType?: string | null
   processorAccountId?: string | null
+  data: SurpayAccountData
 }
 
 export interface SurpayConnectResponse {
