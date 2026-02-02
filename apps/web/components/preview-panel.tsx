@@ -31,19 +31,13 @@ import {
   type ConvexDashboardCredentials,
 } from '@/queries/projects'
 
-import {
-  useSurpayAccounts,
-  useSurpayConnect,
-  useSurpayDisconnect,
-  useWhopConnect,
-  useUserWhopAccounts,
-  type UserSurpayAccount,
-} from '@/queries/surpay'
+import { useSurpayAccounts, useSurpayConnect, useSurpayDisconnect } from '@/queries/surpay'
 import { useSessionDiff } from '@/queries/chats'
 import { useSandbox } from '@/hooks/use-sandbox'
 
 import DiffView from '@/components/diff/diff-view'
 import { ProductsSection } from '@/components/payments/products-section'
+import { WhopConnectDialog } from '@/components/payments/whop-connect-dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   DropdownMenu,
@@ -60,12 +54,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 
 import { toast } from 'react-hot-toast'
 import { cn } from '@/lib/utils'
-import { authClient } from '@/lib/auth-client'
 import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
 import { FunLoadingState } from '@/components/ui/fun-loading'
 import { PreviewErrorOverlay } from '@/components/agent/preview-error-overlay'
@@ -231,16 +222,12 @@ function LogsContent({
 function PaymentsContent({ projectId }: { projectId?: string }) {
   const { data: accounts, isLoading } = useSurpayAccounts(projectId)
   const connect = useSurpayConnect()
-  const whopConnect = useWhopConnect()
   const disconnect = useSurpayDisconnect()
-  const userWhopAccounts = useUserWhopAccounts()
   const [disconnectOpen, setDisconnectOpen] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
   const [surgentWaitlist, setSurgentWaitlist] = useState(false)
   const [surgentLoading, setSurgentLoading] = useState(false)
-  const [whopDialogOpen, setWhopDialogOpen] = useState(false)
-  const [whopAccountSelectOpen, setWhopAccountSelectOpen] = useState(false)
-  const [companyName, setCompanyName] = useState('')
+  const [whopConnectOpen, setWhopConnectOpen] = useState(false)
 
   useEffect(() => {
     if (localStorage.getItem('surgent-pay-waitlist') === 'true') setSurgentWaitlist(true)
@@ -281,67 +268,7 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
     }
   }
 
-  const handleConnectWhop = async () => {
-    try {
-      const result = await userWhopAccounts.refetch()
-      const disconnected = (result.data ?? []).filter(
-        (a) => a.status === 'disconnected' && a.projectId === null,
-      )
-      if (disconnected.length > 0) {
-        setWhopAccountSelectOpen(true)
-        return
-      }
-    } catch {
-      // API may not be available yet, fall through to create new
-    }
-    setCompanyName('')
-    setWhopDialogOpen(true)
-  }
-
-  const handleReconnectWhop = async (account: UserSurpayAccount) => {
-    if (!projectId) return
-    try {
-      await whopConnect.mutateAsync({
-        projectId,
-        accountId: account.id,
-        data: {
-          email: account.email || '',
-          title: account.title || '',
-          country: account.country || 'us',
-        },
-      })
-      toast.success('Whop reconnected successfully')
-      setWhopAccountSelectOpen(false)
-    } catch (err: any) {
-      showConnectError(err, 'Failed to reconnect Whop')
-    }
-  }
-
-  const handleWhopSubmit = async () => {
-    if (!projectId || !companyName.trim()) return
-    let session
-    try {
-      session = await authClient.getSession()
-    } catch {
-      toast.error('Failed to get session')
-      return
-    }
-    const email = session.data?.user?.email
-    if (!email) {
-      toast.error('Unable to get user email')
-      return
-    }
-    try {
-      await whopConnect.mutateAsync({
-        projectId,
-        data: { email, title: companyName.trim(), country: 'us' },
-      })
-      toast.success('Whop connected successfully')
-      setWhopDialogOpen(false)
-    } catch (err: any) {
-      showConnectError(err, 'Failed to connect Whop')
-    }
-  }
+  const handleConnectWhop = () => setWhopConnectOpen(true)
 
   if (!accounts?.length) {
     return (
@@ -377,8 +304,7 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
               </button>
               <button
                 onClick={handleConnectWhop}
-                disabled={whopConnect.isPending}
-                className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors cursor-pointer"
               >
                 <div className="grid place-items-center size-9 rounded-md bg-[#FF6243] shrink-0">
                   <Image
@@ -390,9 +316,7 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
                   />
                 </div>
                 <div className="flex flex-col items-start">
-                  <span className="text-sm font-medium leading-tight">
-                    {whopConnect.isPending ? 'Connecting...' : 'Whop'}
-                  </span>
+                  <span className="text-sm font-medium leading-tight">Whop</span>
                   <span className="text-xs text-muted-foreground leading-tight">
                     Memberships, courses, downloads
                   </span>
@@ -437,106 +361,11 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
           </div>
         </div>
 
-        <Dialog open={whopDialogOpen} onOpenChange={setWhopDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Connect Whop</DialogTitle>
-              <DialogDescription>
-                Enter your company name to create your Whop account.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              <Label htmlFor="company-name">Company Name</Label>
-              <Input
-                id="company-name"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="My Company"
-                className="mt-2"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && companyName.trim()) {
-                    handleWhopSubmit()
-                  }
-                }}
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setWhopDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleWhopSubmit}
-                disabled={!companyName.trim() || whopConnect.isPending}
-              >
-                {whopConnect.isPending ? 'Connecting...' : 'Connect'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={whopAccountSelectOpen} onOpenChange={setWhopAccountSelectOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Connect Whop Account</DialogTitle>
-              <DialogDescription>
-                Reconnect an existing account or create a new one.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-2 space-y-2">
-              {userWhopAccounts.isLoading ? (
-                <div className="flex items-center justify-center py-4">
-                  <span className="size-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : (
-                <>
-                  {(userWhopAccounts.data ?? [])
-                    .filter((a) => a.status === 'disconnected' && a.projectId === null)
-                    .map((account) => (
-                      <button
-                        key={account.id}
-                        onClick={() => handleReconnectWhop(account)}
-                        disabled={whopConnect.isPending}
-                        className="flex items-center gap-3 w-full p-3 rounded-lg border bg-background/60 hover:bg-muted/50 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        <div className="grid place-items-center size-9 rounded-md bg-[#FF6243] shrink-0">
-                          <Image
-                            src="/whop_logo_brandmark_orange.svg"
-                            alt="Whop"
-                            width={22}
-                            height={11}
-                            className="brightness-0 invert"
-                          />
-                        </div>
-                        <div className="flex flex-col items-start min-w-0">
-                          <span className="text-sm font-medium leading-tight truncate">
-                            {account.title || 'Whop Account'}
-                          </span>
-                          <span className="text-xs text-muted-foreground leading-tight truncate">
-                            {[account.email, account.country?.toUpperCase()]
-                              .filter(Boolean)
-                              .join(' · ') || 'Disconnected'}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  <button
-                    onClick={() => {
-                      setWhopAccountSelectOpen(false)
-                      setCompanyName('')
-                      setWhopDialogOpen(true)
-                    }}
-                    className="flex items-center gap-3 w-full p-3 rounded-lg border border-dashed bg-background/60 hover:bg-muted/50 transition-colors cursor-pointer"
-                  >
-                    <div className="grid place-items-center size-9 rounded-md bg-muted shrink-0">
-                      <Plus className="size-5 text-muted-foreground" />
-                    </div>
-                    <span className="text-sm font-medium leading-tight">Create new account</span>
-                  </button>
-                </>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+        <WhopConnectDialog
+          projectId={projectId}
+          open={whopConnectOpen}
+          onOpenChange={setWhopConnectOpen}
+        />
       </>
     )
   }
@@ -559,6 +388,7 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
           projectId={projectId}
           stripeConnected={hasConnectedAccount}
           stripeProcessor={connectedAccount?.processor}
+          accountData={connectedAccount?.data}
           onDisconnect={handleDisconnect}
           isDisconnecting={disconnect.isPending}
         />
