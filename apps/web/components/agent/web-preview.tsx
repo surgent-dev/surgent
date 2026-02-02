@@ -89,6 +89,7 @@ export const WebPreview = ({
     index: 0,
   }))
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const hiddenAtRef = useRef<number | null>(null)
   const setIframeError = useSandbox((s) => s.setIframeError)
 
   const url = nav.history[nav.index] ?? ''
@@ -97,6 +98,7 @@ export const WebPreview = ({
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return
+      if (document.visibilityState !== 'visible') return
       const msg = parseMessage(event.data)
       if (!msg) return
 
@@ -122,6 +124,45 @@ export const WebPreview = ({
   const clearError = useCallback(() => {
     setIframeError(null)
   }, [setIframeError])
+
+  // Handle iframe recovery from bfcache restore or tab visibility changes.
+  // - pageshow.persisted: browser restored page from bfcache, iframe state is stale
+  // - visibilitychange: tab was hidden >1s and has an error, attempt recovery
+  useEffect(() => {
+    const reloadIframe = () => {
+      setIframeError(null)
+      if (iframeRef.current && url) {
+        iframeRef.current.src = url
+      }
+    }
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) reloadIframe()
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAtRef.current = Date.now()
+        return
+      }
+      if (document.visibilityState !== 'visible') return
+
+      const hiddenAt = hiddenAtRef.current
+      hiddenAtRef.current = null
+      if (!hiddenAt) return
+      if (Date.now() - hiddenAt < 1000) return
+      if (!useSandbox.getState().iframeError) return
+
+      reloadIframe()
+    }
+
+    window.addEventListener('pageshow', handlePageShow)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [setIframeError, url])
 
   useEffect(() => {
     onUrlChange?.(url)
@@ -369,8 +410,20 @@ export type WebPreviewBodyProps = ComponentProps<'iframe'> & {
   overlay?: ReactNode
 }
 
-export const WebPreviewBody = ({ className, overlay, src, ...props }: WebPreviewBodyProps) => {
+export const WebPreviewBody = ({
+  className,
+  overlay,
+  src,
+  onLoad,
+  ...props
+}: WebPreviewBodyProps) => {
   const { url, iframeRef } = useWebPreview()
+  const setIframeError = useSandbox((s) => s.setIframeError)
+
+  const handleLoad: ComponentProps<'iframe'>['onLoad'] = (event) => {
+    setIframeError(null)
+    onLoad?.(event)
+  }
 
   return (
     <div className="relative flex-1">
@@ -381,6 +434,7 @@ export const WebPreviewBody = ({ className, overlay, src, ...props }: WebPreview
         allow="autoplay; camera; clipboard-read; clipboard-write; geolocation; display-capture; encrypted-media; fullscreen; gamepad; gyroscope; magnetometer; microphone; midi; payment; usb; bluetooth; hid; serial; xr-spatial-tracking; screen-wake-lock; idle-detection; publickey-credentials-get; local-fonts; window-management"
         src={(src ?? url) || undefined}
         title="Preview"
+        onLoad={handleLoad}
         {...props}
       />
       {overlay ? <div className="pointer-events-none absolute inset-0 z-10">{overlay}</div> : null}
