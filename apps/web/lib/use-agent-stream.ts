@@ -2,7 +2,7 @@
 
 import { useEffect, useReducer, useRef, useCallback } from 'react'
 import type { Session, Message, Part, Permission, AssistantMessage } from '@opencode-ai/sdk'
-import { backendBaseUrl, http } from '@/lib/http'
+import { useProjectEvents } from '@/context/project-events'
 import type { QuestionRequest } from './question'
 
 type AgentError = AssistantMessage['error']
@@ -28,6 +28,8 @@ type State = {
 }
 
 type StreamEvent = Event | { type: string; properties?: Record<string, any> }
+
+type SessionScope = { sessionID?: string; sessionId?: string }
 
 const initialState: State = {
   messages: [],
@@ -113,7 +115,9 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
       let messages = state.messages
       const parts: Record<string, Part[]> = { ...state.parts }
       for (const { info, parts: msgParts } of items) {
-        if (info.sessionID !== currentSessionId) continue
+        const sessionID =
+          (info as Message & SessionScope).sessionID || (info as SessionScope).sessionId
+        if (sessionID !== currentSessionId) continue
         messages = upsertMessage(messages, info)
         // Overwrite even if empty to avoid keeping stale parts after resync
         if (msgParts !== undefined) parts[info.id] = msgParts
@@ -121,11 +125,12 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
       return { ...state, messages, parts, lastAt: now, loading: false, compacting: false }
     }
 
+    case 'batch.load.error':
+      return { ...state, loading: false, compacting: false, lastAt: now }
+
     // Session events
-    case 'session.created': {
-      const info = props.info as Session
+    case 'session.created':
       return { ...state, lastAt: now }
-    }
 
     case 'session.updated': {
       const info = props.info as Session
@@ -134,7 +139,7 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
     }
 
     case 'session.deleted': {
-      const sessionID = props.sessionID || props.info?.id
+      const sessionID = props.sessionID || props.sessionId || props.info?.id
       if (sessionID !== currentSessionId) return state
       return {
         ...state,
@@ -150,12 +155,14 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
     }
 
     case 'session.error': {
-      if (props.sessionID && props.sessionID !== currentSessionId) return state
+      const sessionID = props.sessionID || props.sessionId
+      if (sessionID && sessionID !== currentSessionId) return state
       return { ...state, error: props.error, lastAt: now }
     }
 
     case 'session.compacted': {
-      if (props.sessionID !== currentSessionId) return state
+      const sessionID = props.sessionID || props.sessionId
+      if (sessionID !== currentSessionId) return state
       return {
         ...state,
         messages: [],
@@ -169,25 +176,29 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
 
     // Session status events (matching backend SessionStatus.Info types)
     case 'session.status': {
-      if (props.sessionID !== currentSessionId) return state
+      const sessionID = props.sessionID || props.sessionId
+      if (sessionID !== currentSessionId) return state
       const status = props.status as SessionStatus
       return { ...state, status, lastAt: now }
     }
 
     case 'session.idle': {
-      if (props.sessionID !== currentSessionId) return state
+      const sessionID = props.sessionID || props.sessionId
+      if (sessionID !== currentSessionId) return state
       return { ...state, status: { type: 'idle' }, lastAt: now }
     }
 
     // Message events
     case 'message.updated': {
-      const info = props.info as Message
-      if (info.sessionID !== currentSessionId) return state
+      const info = props.info as Message & SessionScope
+      const sessionID = info.sessionID || info.sessionId
+      if (sessionID !== currentSessionId) return state
       return { ...state, messages: upsertMessage(state.messages, info), lastAt: now }
     }
 
     case 'message.removed': {
-      if (props.sessionID && props.sessionID !== currentSessionId) return state
+      const sessionID = props.sessionID || props.sessionId
+      if (sessionID && sessionID !== currentSessionId) return state
       const parts = { ...state.parts }
       delete parts[props.messageID]
       return {
@@ -200,8 +211,9 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
 
     // Part events
     case 'message.part.updated': {
-      const part = props.part as Part
-      if ((part as any).sessionID !== currentSessionId) return state
+      const part = props.part as Part & SessionScope
+      const sessionID = part.sessionID || part.sessionId
+      if (sessionID !== currentSessionId) return state
       return {
         ...state,
         parts: {
@@ -213,7 +225,8 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
     }
 
     case 'message.part.removed': {
-      if (props.sessionID && props.sessionID !== currentSessionId) return state
+      const sessionID = props.sessionID || props.sessionId
+      if (sessionID && sessionID !== currentSessionId) return state
       const parts = { ...state.parts }
       const filtered = parts[props.messageID]?.filter((p) => p.id !== props.partID)
       if (filtered) parts[props.messageID] = filtered
@@ -232,17 +245,22 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
       return { ...state, connected: false, lastAt: now }
 
     // Permission events
-    case 'permission.updated': {
-      const permission = props as Permission
-      if (permission.sessionID !== currentSessionId) return state
+    case 'permission.updated':
+    case 'permission.asked': {
+      const permission = props as Permission & SessionScope
+      const sessionID = permission.sessionID || permission.sessionId
+      if (sessionID !== currentSessionId) return state
       return { ...state, permissions: upsertPermission(state.permissions, permission), lastAt: now }
     }
 
     case 'permission.replied': {
-      if (props.sessionID !== currentSessionId) return state
+      const sessionID = props.sessionID || props.sessionId
+      if (sessionID !== currentSessionId) return state
+      const permissionID = props.permissionID || props.requestID
+      if (!permissionID) return state
       return {
         ...state,
-        permissions: state.permissions.filter((p) => p.id !== props.permissionID),
+        permissions: state.permissions.filter((p) => p.id !== permissionID),
         lastAt: now,
       }
     }
@@ -250,9 +268,11 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
     // Question events
     case 'question.asked': {
       if (!props.questions?.length) return state
+      const sessionID = props.sessionID || props.sessionId || currentSessionId
+      if (!sessionID || sessionID !== currentSessionId) return state
       const req: QuestionRequest = {
         id: props.id || `q_${now}`,
-        sessionID: props.sessionID || currentSessionId || '',
+        sessionID,
         questions: props.questions,
         tool: props.tool,
       }
@@ -261,7 +281,10 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
 
     case 'question.replied':
     case 'question.rejected': {
+      const sessionID = props.sessionID || props.sessionId
+      if (sessionID && sessionID !== currentSessionId) return state
       const id = props.id || props.requestID
+      if (!id) return state
       return { ...state, questions: state.questions.filter((q) => q.id !== id), lastAt: now }
     }
 
@@ -277,6 +300,7 @@ export default function useAgentStream({
   projectId?: string
   sessionId?: string
 }) {
+  const events = useProjectEvents()
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
 
@@ -285,123 +309,53 @@ export default function useAgentStream({
     initialState,
   )
 
-  const esRef = useRef<EventSource | null>(null)
-  const closedRef = useRef(false)
-  const currentSessionRef = useRef(sessionId)
-  const queueRef = useRef<StreamEvent[]>([])
-  const rafRef = useRef<number | null>(null)
-  const attemptRef = useRef(0)
-  const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const currentKeyRef = useRef(projectId && sessionId ? `${projectId}:${sessionId}` : '')
 
-  const resync = useCallback((pid: string, sid: string) => {
-    // Fetch messages
-    http
-      .get(`api/agent/${pid}/session/${sid}/message`, {
-        retry: { limit: 5, statusCodes: [502, 503, 504], delay: () => 1000 },
-      })
-      .json<Array<{ info: Message; parts: Part[] }>>()
-      .then((items) =>
-        dispatch({ type: 'batch.load', properties: { messages: items ?? [] } } as any),
-      )
-      .catch(() => dispatch({ type: 'batch.load', properties: { messages: [] } } as any))
+  const syncSession = useCallback(
+    (sid: string, force = false) => {
+      if (!projectId || !sid) return
+      events.syncSession(sid, force)
+    },
+    [events, projectId],
+  )
 
-    // Fetch status
-    http
-      .get(`api/agent/${pid}/session/status`)
-      .json<Record<string, SessionStatus>>()
-      .then((items) => {
-        const status = items?.[sid]
-        if (status)
-          dispatch({ type: 'session.status', properties: { sessionID: sid, status } } as any)
-        else dispatch({ type: 'session.idle', properties: { sessionID: sid } } as any)
-      })
-      .catch(() => {})
-  }, [])
+  useEffect(() => {
+    if (!projectId || !sessionId) {
+      if (!currentKeyRef.current) return
+      dispatch({ type: 'session.deleted' } as any)
+      currentKeyRef.current = ''
+      return
+    }
 
-  // Clear state and resync on session change
+    const key = `${projectId}:${sessionId}`
+    if (currentKeyRef.current !== key) {
+      dispatch({ type: 'session.deleted' } as any)
+      currentKeyRef.current = key
+      syncSession(sessionId, true)
+      return
+    }
+
+    syncSession(sessionId, false)
+  }, [projectId, sessionId, syncSession])
+
   useEffect(() => {
     if (!projectId || !sessionId) return
-    if (currentSessionRef.current !== sessionId) {
-      dispatch({ type: 'session.deleted' } as any)
-      currentSessionRef.current = sessionId
-      resync(projectId, sessionId)
-    }
-  }, [projectId, sessionId, resync])
+    const unsubscribe = events.subscribe(sessionId, (event) => dispatch(event))
+    syncSession(sessionId, false)
+    return unsubscribe
+  }, [events, projectId, sessionId, syncSession])
 
-  // Subscribe to SSE events
   useEffect(() => {
-    if (!projectId) return
-    closedRef.current = false
-    attemptRef.current = 0
-    const url = backendBaseUrl
-      ? `${backendBaseUrl}/api/agent/${projectId}/event`
-      : `/api/agent/${projectId}/event`
-
-    const connect = () => {
-      if (closedRef.current) return
-      esRef.current?.close()
-      if (disconnectTimerRef.current) clearTimeout(disconnectTimerRef.current)
-
-      const es = new EventSource(url, { withCredentials: true })
-      esRef.current = es
-
-      es.onopen = () => {
-        attemptRef.current = 0
-        if (disconnectTimerRef.current) clearTimeout(disconnectTimerRef.current)
-        dispatch({ type: 'server.connected' })
-        const sid = sessionIdRef.current
-        if (sid) resync(projectId, sid)
-      }
-
-      es.onmessage = (evt) => {
-        try {
-          const event = JSON.parse(evt.data)
-          const sid = sessionIdRef.current
-
-          // Handle compaction by resyncing
-          if (event.type === 'session.compacted' && sid && event.properties?.sessionID === sid) {
-            resync(projectId, sid)
-          }
-
-          // Batch events using requestAnimationFrame for better performance
-          queueRef.current.push(event)
-          if (!rafRef.current) {
-            rafRef.current = requestAnimationFrame(() => {
-              const events = queueRef.current
-              queueRef.current = []
-              rafRef.current = null
-              events.forEach((e) => dispatch(e))
-            })
-          }
-        } catch {}
-      }
-
-      es.onerror = () => {
-        es.close()
-        if (closedRef.current) return
-
-        // Only show "Connecting..." after a 15s grace period to hide brief reconnects
-        if (!disconnectTimerRef.current) {
-          disconnectTimerRef.current = setTimeout(() => {
-            dispatch({ type: 'connection.closed' })
-          }, 15000)
-        }
-
-        // Exponential backoff: 1s, 2s, 4s, 8s... max 30s
-        const delay = Math.min(1000 * Math.pow(2, attemptRef.current), 30000)
-        attemptRef.current++
-        setTimeout(connect, delay)
-      }
+    if (!projectId) {
+      dispatch({ type: 'connection.closed' } as any)
+      return
     }
-
-    connect()
-    return () => {
-      closedRef.current = true
-      if (disconnectTimerRef.current) clearTimeout(disconnectTimerRef.current)
-      dispatch({ type: 'connection.closed' })
-      esRef.current?.close()
+    if (events.connected) {
+      dispatch({ type: 'server.connected' } as any)
+      return
     }
-  }, [projectId, resync])
+    dispatch({ type: 'connection.closed' } as any)
+  }, [events.connected, projectId])
 
   const dismissError = useCallback(() => dispatch({ type: 'error.clear' } as any), [])
 

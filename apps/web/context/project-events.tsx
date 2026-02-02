@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Message, Part } from '@opencode-ai/sdk'
 import { backendBaseUrl, http } from '@/lib/http'
 
-type StreamEvent = { type: string; properties?: Record<string, any> }
+type StreamEvent = { type: string; properties?: Record<string, unknown> }
 type Subscriber = (event: StreamEvent) => void
 
 type ProjectEventContextValue = {
@@ -62,6 +62,14 @@ function getSessionIdFromEvent(event: StreamEvent): string | undefined {
     return getString(props, 'sessionID') || getString(props, 'sessionId')
   }
 
+  if (
+    event.type === 'question.asked' ||
+    event.type === 'question.replied' ||
+    event.type === 'question.rejected'
+  ) {
+    return getString(props, 'sessionID') || getString(props, 'sessionId')
+  }
+
   return getString(props, 'sessionID') || getString(props, 'sessionId')
 }
 
@@ -70,6 +78,72 @@ function getCompactedSessionId(event: StreamEvent): string | undefined {
   const props = asRecord(event.properties)
   if (!props) return undefined
   return getString(props, 'sessionID') || getString(props, 'sessionId')
+}
+
+function normalizeEvent(event: StreamEvent): StreamEvent {
+  const props = asRecord(event.properties)
+  if (!props) return event
+
+  if (event.type === 'permission.asked') {
+    const sessionID = getString(props, 'sessionID') || getString(props, 'sessionId')
+    const tool = asRecord(props.tool)
+    const callID = getString(props, 'callID') || getString(tool, 'callID')
+    const messageID = getString(props, 'messageID') || getString(tool, 'messageID')
+    const next: Record<string, unknown> = { ...props }
+    if (sessionID) next.sessionID = sessionID
+    if (!next.callID && callID) next.callID = callID
+    if (!next.messageID && messageID) next.messageID = messageID
+    if (!next.pattern && next.patterns) next.pattern = next.patterns
+    return { type: 'permission.updated', properties: next }
+  }
+
+  if (event.type === 'permission.replied') {
+    const sessionID = getString(props, 'sessionID') || getString(props, 'sessionId')
+    const permissionID = getString(props, 'permissionID') || getString(props, 'requestID')
+    const response = getString(props, 'response') || getString(props, 'reply')
+    const next: Record<string, unknown> = { ...props }
+    if (sessionID) next.sessionID = sessionID
+    if (!next.permissionID && permissionID) next.permissionID = permissionID
+    if (!next.response && response) next.response = response
+    return { type: event.type, properties: next }
+  }
+
+  if (
+    event.type === 'session.status' ||
+    event.type === 'session.idle' ||
+    event.type === 'session.compacted' ||
+    event.type === 'question.asked' ||
+    event.type === 'question.replied' ||
+    event.type === 'question.rejected'
+  ) {
+    const sessionID = getString(props, 'sessionID') || getString(props, 'sessionId')
+    if (!sessionID || props.sessionID === sessionID) return event
+    return { type: event.type, properties: { ...props, sessionID } }
+  }
+
+  if (event.type === 'message.updated') {
+    const info = asRecord(props.info)
+    if (!info) return event
+    const sessionID = getString(info, 'sessionID') || getString(info, 'sessionId')
+    if (!sessionID || info.sessionID === sessionID) return event
+    return {
+      type: event.type,
+      properties: { ...props, info: { ...info, sessionID } },
+    }
+  }
+
+  if (event.type === 'message.part.updated') {
+    const part = asRecord(props.part)
+    if (!part) return event
+    const sessionID = getString(part, 'sessionID') || getString(part, 'sessionId')
+    if (!sessionID || part.sessionID === sessionID) return event
+    return {
+      type: event.type,
+      properties: { ...props, part: { ...part, sessionID } },
+    }
+  }
+
+  return event
 }
 
 export function ProjectEventProvider({
@@ -165,8 +239,8 @@ export function ProjectEventProvider({
         .catch(() => {
           if (closedRef.current) return
           emitSession(sessionId, {
-            type: 'batch.load',
-            properties: { messages: [] },
+            type: 'batch.load.error',
+            properties: { sessionID: sessionId },
           })
         })
 
@@ -274,7 +348,8 @@ export function ProjectEventProvider({
 
       es.onmessage = (evt) => {
         try {
-          const event = JSON.parse(evt.data) as StreamEvent
+          const raw = JSON.parse(evt.data) as StreamEvent
+          const event = normalizeEvent(raw)
           if (event.type === 'server.heartbeat') {
             attemptRef.current = 0
           }

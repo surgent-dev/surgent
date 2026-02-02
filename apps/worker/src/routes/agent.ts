@@ -110,7 +110,12 @@ agent.all(
       if (!isSSE(headers, path)) return resp
 
       const outHeaders = new Headers(resp.headers)
+      // Essential SSE headers (connection is hop-by-hop and must not be forwarded)
+      if (!outHeaders.has('content-type')) {
+        outHeaders.set('content-type', 'text/event-stream; charset=utf-8')
+      }
       outHeaders.set('cache-control', 'no-cache, no-transform')
+      outHeaders.set('x-accel-buffering', 'no')
       return new Response(resp.body, { status: resp.status, headers: outHeaders })
     } catch {
       return c.text('Upstream unavailable', 502)

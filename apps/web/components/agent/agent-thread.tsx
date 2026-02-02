@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import type {
   Message,
   Part,
@@ -381,6 +381,7 @@ function Tool({
   respondError,
   defaultExpanded,
   compact,
+  onSubagentRunningChange,
 }: {
   part: ToolPart
   projectId?: string
@@ -390,6 +391,7 @@ function Tool({
   respondError?: string
   defaultExpanded?: boolean
   compact?: boolean
+  onSubagentRunningChange?: (partId: string, running?: boolean) => void
 }) {
   const cfg = getToolConfig(part.tool)
   const Icon = cfg.icon
@@ -411,8 +413,8 @@ function Tool({
   const running = isSubagentTask ? (subWorking ?? taskRunning) : taskRunning
   const compactMode = compact === true
 
-  // Track expanded state - auto-expand when running
-  const [expanded, setExpanded] = useState(defaultExpanded ?? true)
+  // Track expanded state - open while running, close when done
+  const [expanded, setExpanded] = useState(isSubagentTask ? running : (defaultExpanded ?? true))
   const [wasRunning, setWasRunning] = useState(running)
   const isExpanded = compactMode ? false : expanded
 
@@ -435,6 +437,16 @@ function Tool({
     setSubWorking(undefined)
     setSubDiffCount(undefined)
   }, [nextSubSessionId, subSessionId])
+
+  useEffect(() => {
+    if (!isSubagentTask || !onSubagentRunningChange) return
+    onSubagentRunningChange(part.id, running)
+  }, [isSubagentTask, onSubagentRunningChange, part.id, running])
+
+  useEffect(() => {
+    if (!isSubagentTask || !onSubagentRunningChange) return
+    return () => onSubagentRunningChange(part.id)
+  }, [isSubagentTask, onSubagentRunningChange, part.id])
 
   // Subagent tasks with sliding window view
   if (isSubagentTask && projectId) {
@@ -492,8 +504,8 @@ function Tool({
           </span>
         </button>
 
-        {/* Sliding window content */}
-        {subSessionId && (
+        {/* Sliding window content - keep mounted while task is running or expanded */}
+        {subSessionId && (expanded || running || taskRunning) && (
           <div className={expanded ? 'block' : 'hidden'}>
             <SubagentStream
               projectId={projectId}
@@ -890,6 +902,7 @@ export function AgentThread({
   permissions,
   isWorking,
   onRevert,
+  onSubagentWorkingChange,
   thoughtsStyle = 'toggle',
   thoughtsDefaultOpen = false,
   showActions = true,
@@ -903,6 +916,7 @@ export function AgentThread({
   permissions?: Permission[]
   isWorking?: boolean
   onRevert?: (messageId: string) => void
+  onSubagentWorkingChange?: (working: boolean) => void
   thoughtsStyle?: 'toggle' | 'inline'
   thoughtsDefaultOpen?: boolean
   showActions?: boolean
@@ -911,7 +925,12 @@ export function AgentThread({
 }) {
   const [openThoughts, setOpenThoughts] = useState<Record<string, boolean>>({})
   const [permissionErrors, setPermissionErrors] = useState<Record<string, string>>({})
+  const [subRunningByPart, setSubRunningByPart] = useState<Record<string, boolean>>({})
   const respondPermission = useRespondPermission(projectId, sessionId)
+  const subagentWorking = useMemo(
+    () => Object.values(subRunningByPart).some((value) => value),
+    [subRunningByPart],
+  )
 
   const turns = useMemo(() => groupTurns(messages), [messages])
 
@@ -939,6 +958,27 @@ export function AgentThread({
     if (!permissions?.length) return []
     return permissions.filter((p) => !p.callID || !toolCallIds.has(p.callID))
   }, [permissions, toolCallIds])
+
+  useEffect(() => {
+    setSubRunningByPart({})
+  }, [sessionId])
+
+  useEffect(() => {
+    onSubagentWorkingChange?.(subagentWorking)
+  }, [onSubagentWorkingChange, subagentWorking])
+
+  const handleSubagentRunningChange = useCallback((partId: string, running?: boolean) => {
+    setSubRunningByPart((state) => {
+      if (running === undefined) {
+        if (!(partId in state)) return state
+        const next = { ...state }
+        delete next[partId]
+        return next
+      }
+      if (state[partId] === running) return state
+      return { ...state, [partId]: running }
+    })
+  }, [])
 
   const respondToPermission = (permission: Permission, response: PermissionResponse) => {
     if (!projectId) return
@@ -1044,6 +1084,7 @@ export function AgentThread({
           respondError={permission ? permissionErrors[permission.id] : undefined}
           defaultExpanded={toolDefaultExpanded}
           compact={toolMode === 'compact'}
+          onSubagentRunningChange={handleSubagentRunningChange}
         />
       )
     }

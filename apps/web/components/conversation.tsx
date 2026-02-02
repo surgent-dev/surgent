@@ -197,6 +197,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const [mode, setMode] = useState<'plan' | 'orchestrator'>('orchestrator')
   const [providerOpen, setProviderOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
+  const [subagentWorking, setSubagentWorking] = useState(false)
   const [selectedModel, setSelectedModel] = useState<
     { modelId: string; providerId: string } | undefined
   >(undefined)
@@ -242,17 +243,22 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     const timeline = messages.flatMap((m) => parts[m.id] || [])
     return computeWorkingFromParts(timeline)
   }, [status, messages, parts])
+  const inputWorking = working || subagentWorking
 
   const funMessage = useFunMessage()
   const showSkeleton = loading || sessionsQuery.isLoading || !activeId
-  const inputDisabled = working || create.isPending || showSkeleton
-  const inputPlaceholder = working ? funMessage : 'Ask anything...'
+  const inputDisabled = inputWorking || create.isPending || showSkeleton
+  const inputPlaceholder = inputWorking ? funMessage : 'Ask anything...'
 
   useEffect(() => {
     if (!projectId || !activeId) return
     if (storedSessionId === activeId) return
     setActiveSession(projectId, activeId)
   }, [activeId, projectId, setActiveSession, storedSessionId])
+
+  useEffect(() => {
+    setSubagentWorking(false)
+  }, [activeId])
 
   // Debounced scroll-to-bottom function
   const scrollToBottom = useCallback((force = false) => {
@@ -356,7 +362,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     variant?: string,
   ) => {
     const trimmed = text.trim()
-    if ((!trimmed && !files?.length) || working || !activeId) return
+    if ((!trimmed && !files?.length) || inputWorking || !activeId) return
 
     lastSentRef.current = trimmed
     setInputValue('')
@@ -691,6 +697,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                   partsMap={parts}
                   permissions={permissions}
                   isWorking={working}
+                  onSubagentWorkingChange={setSubagentWorking}
                   onRevert={handleRevert}
                 />
               ) : null}

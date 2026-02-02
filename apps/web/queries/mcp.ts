@@ -20,7 +20,9 @@ export function useMcpStatusQuery(enabled = true) {
     queryKey: ['mcp-status'],
     queryFn: fetchMcpStatus,
     enabled,
-    staleTime: 30000,
-    refetchInterval: 60000,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: enabled ? 60000 : false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 }

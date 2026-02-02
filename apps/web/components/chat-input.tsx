@@ -102,11 +102,12 @@ type InputMenuProps = {
 }
 
 function InputMenu({ onUploadClick, uploadDisabled }: InputMenuProps) {
-  const { data: mcpStatus, isLoading } = useMcpStatusQuery()
+  const [open, setOpen] = useState(false)
+  const { data: mcpStatus, isLoading } = useMcpStatusQuery(open)
   const totalCount = mcpStatus ? Object.keys(mcpStatus).length : 0
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
