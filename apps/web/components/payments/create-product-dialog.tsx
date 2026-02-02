@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Check, Loader2, Package, Sparkles } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import {
   Dialog,
@@ -122,21 +122,14 @@ export function CreateProductDialog({ projectId, open, onOpenChange }: CreatePro
           </div>
         ) : (
           <>
-            <DialogHeader className="pb-2">
-              <div className="flex items-center gap-3 mb-1">
-                <div className="rounded-lg bg-brand/10 p-2">
-                  <Package className="size-5 text-brand" />
-                </div>
-                <div>
-                  <DialogTitle className="text-lg">New Product</DialogTitle>
-                  <DialogDescription className="text-xs">
-                    Create a product to start accepting payments
-                  </DialogDescription>
-                </div>
-              </div>
+            <DialogHeader className="pb-0">
+              <DialogTitle>New Product</DialogTitle>
+              <DialogDescription className="text-sm">
+                Create a product to start accepting payments
+              </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
               <div className="space-y-1.5">
                 <Label htmlFor="name" className="text-sm font-medium">
                   Product Name
@@ -190,26 +183,20 @@ export function CreateProductDialog({ projectId, open, onOpenChange }: CreatePro
                 />
               </div>
 
-              <div className="flex gap-2 pt-3">
+              <div className="flex gap-2 pt-2">
                 <Button
                   type="button"
                   variant="outline"
-                  className="flex-1"
+                  className="flex-1 h-9"
                   onClick={() => onOpenChange(false)}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createProduct.isPending} className="flex-1">
+                <Button type="submit" disabled={createProduct.isPending} className="flex-1 h-9">
                   {createProduct.isPending ? (
-                    <>
-                      <Loader2 className="size-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
+                    <Loader2 className="size-4 animate-spin" />
                   ) : (
-                    <>
-                      <Sparkles className="size-4 mr-2" />
-                      Create Product
-                    </>
+                    'Create Product'
                   )}
                 </Button>
               </div>

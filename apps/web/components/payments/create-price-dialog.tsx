@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Check, DollarSign, Loader2, RefreshCw, Zap } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import {
   Dialog,
@@ -96,8 +96,6 @@ export function CreatePriceDialog({
   })
 
   const selectedCurrency = watch('priceCurrency')
-  const selectedInterval = watch('recurringInterval')
-  const priceValue = watch('price')
 
   useEffect(() => {
     if (!open) {
@@ -108,12 +106,12 @@ export function CreatePriceDialog({
   }, [open, reset, pricingType])
 
   useEffect(() => {
-    if (isRecurring && !selectedInterval) {
+    if (isRecurring) {
       setValue('recurringInterval', 'month')
-    } else if (!isRecurring) {
+    } else {
       setValue('recurringInterval', undefined)
     }
-  }, [isRecurring, selectedInterval, setValue])
+  }, [isRecurring, setValue])
 
   const onSubmit = (data: FormData) => {
     const cents = Math.round(parseFloat(data.price) * 100)
@@ -155,48 +153,39 @@ export function CreatePriceDialog({
           </div>
         ) : (
           <>
-            <DialogHeader className="pb-2">
-              <div className="flex items-center gap-3 mb-1">
-                <div className="rounded-lg bg-brand/10 p-2">
-                  <DollarSign className="size-5 text-brand" />
-                </div>
-                <div>
-                  <DialogTitle className="text-lg">Add Pricing</DialogTitle>
-                  <DialogDescription className="text-xs">
-                    Set the price for {productName}
-                  </DialogDescription>
-                </div>
-              </div>
+            <DialogHeader className="pb-0">
+              <DialogTitle>Add Pricing</DialogTitle>
+              <DialogDescription className="text-sm">
+                Set the price for {productName}
+              </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pt-2">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
               {/* Price Type Toggle */}
               {pricingType === 'none' && (
-                <div className="grid grid-cols-2 gap-2 p-1 bg-muted/50 rounded-lg">
+                <div className="inline-flex items-center rounded-lg bg-muted dark:bg-background p-1 border border-border/50 shadow-inner">
                   <button
                     type="button"
                     onClick={() => setIsRecurring(false)}
                     className={cn(
-                      'flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all',
+                      'px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
                       !isRecurring
-                        ? 'bg-background shadow-sm text-foreground'
+                        ? 'bg-background dark:bg-muted text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
-                    <Zap className="size-4" />
                     One-time
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsRecurring(true)}
                     className={cn(
-                      'flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all',
+                      'px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
                       isRecurring
-                        ? 'bg-background shadow-sm text-foreground'
+                        ? 'bg-background dark:bg-muted text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
-                    <RefreshCw className="size-4" />
                     Subscription
                   </button>
                 </div>
@@ -207,7 +196,7 @@ export function CreatePriceDialog({
                 <Label className="text-sm font-medium">Price</Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-lg font-medium">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
                       {currencySymbol}
                     </span>
                     <Input
@@ -216,7 +205,7 @@ export function CreatePriceDialog({
                       placeholder="0.00"
                       aria-invalid={!!errors.price}
                       className={cn(
-                        'h-12 pl-8 text-lg font-semibold tabular-nums',
+                        'h-10 pl-7 font-medium tabular-nums',
                         errors.price && 'border-destructive',
                       )}
                       {...register('price')}
@@ -226,17 +215,17 @@ export function CreatePriceDialog({
                     name="priceCurrency"
                     control={control}
                     render={({ field }) => (
-                      <div className="flex rounded-lg border bg-background overflow-hidden">
+                      <div className="inline-flex items-center rounded-lg bg-muted dark:bg-background p-1 border border-border/50 shadow-inner">
                         {currencies.map((currency) => (
                           <button
                             key={currency.value}
                             type="button"
                             onClick={() => field.onChange(currency.value)}
                             className={cn(
-                              'px-3 py-2 text-sm font-medium transition-colors',
+                              'px-2.5 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
                               field.value === currency.value
-                                ? 'bg-brand text-brand-foreground'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                                ? 'bg-background dark:bg-muted text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground',
                             )}
                           >
                             {currency.label}
@@ -257,30 +246,20 @@ export function CreatePriceDialog({
                     name="recurringInterval"
                     control={control}
                     render={({ field }) => (
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="inline-flex items-center rounded-lg bg-muted dark:bg-background p-1 border border-border/50 shadow-inner">
                         {intervals.map((interval) => (
                           <button
                             key={interval.value}
                             type="button"
                             onClick={() => field.onChange(interval.value)}
                             className={cn(
-                              'flex flex-col items-start p-3 rounded-lg border transition-all text-left',
+                              'px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
                               field.value === interval.value
-                                ? 'border-brand bg-brand/5 ring-1 ring-brand'
-                                : 'hover:border-border/80 hover:bg-muted/30',
+                                ? 'bg-background dark:bg-muted text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground',
                             )}
                           >
-                            <span
-                              className={cn(
-                                'text-sm font-medium',
-                                field.value === interval.value ? 'text-brand' : 'text-foreground',
-                              )}
-                            >
-                              {interval.label}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {interval.description}
-                            </span>
+                            {interval.label}
                           </button>
                         ))}
                       </div>
@@ -292,7 +271,7 @@ export function CreatePriceDialog({
               {/* Price Name */}
               <div className="space-y-1.5">
                 <Label htmlFor="name" className="text-sm font-medium">
-                  Price Name <span className="text-muted-foreground font-normal">(optional)</span>
+                  Name <span className="text-muted-foreground font-normal">(optional)</span>
                 </Label>
                 <Input
                   id="name"
@@ -302,42 +281,18 @@ export function CreatePriceDialog({
                 />
               </div>
 
-              {/* Preview */}
-              {priceValue && (
-                <div className="p-3 rounded-lg bg-muted/30 border border-dashed">
-                  <p className="text-xs text-muted-foreground mb-1">Preview</p>
-                  <p className="text-lg font-semibold">
-                    {currencySymbol}
-                    {parseFloat(priceValue || '0').toFixed(2)}
-                    {isRecurring && selectedInterval && (
-                      <span className="text-sm font-normal text-muted-foreground">
-                        /
-                        {selectedInterval === 'month'
-                          ? 'mo'
-                          : selectedInterval === 'year'
-                            ? 'yr'
-                            : selectedInterval}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              )}
-
               <div className="flex gap-2 pt-2">
                 <Button
                   type="button"
                   variant="outline"
-                  className="flex-1"
+                  className="flex-1 h-9"
                   onClick={() => onOpenChange(false)}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createPrice.isPending} className="flex-1">
+                <Button type="submit" disabled={createPrice.isPending} className="flex-1 h-9">
                   {createPrice.isPending ? (
-                    <>
-                      <Loader2 className="size-4 mr-2 animate-spin" />
-                      Adding...
-                    </>
+                    <Loader2 className="size-4 animate-spin" />
                   ) : (
                     'Add Price'
                   )}

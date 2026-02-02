@@ -10,7 +10,6 @@ import {
   Package,
   Plus,
   Receipt,
-  Sparkles,
   TrendingUp,
   Users,
 } from 'lucide-react'
@@ -139,25 +138,20 @@ export function DashboardView({ products, transactions, onCreateProduct }: Dashb
   if (products.length === 0 && transactions.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
-        <div className="text-center max-w-md">
-          <div className="relative inline-block mb-6">
-            <div className="rounded-2xl bg-gradient-to-br from-brand/20 via-brand/10 to-transparent p-6">
-              <BadgeDollarSign className="size-12 text-brand" strokeWidth={1.5} />
-            </div>
-            <div className="absolute -bottom-1 -right-1 rounded-full bg-brand p-2 shadow-lg">
-              <Sparkles className="size-4 text-brand-foreground" />
-            </div>
+        <div className="text-center max-w-sm">
+          <div className="rounded-xl bg-muted/50 p-4 w-fit mx-auto mb-4">
+            <BadgeDollarSign className="size-8 text-muted-foreground" strokeWidth={1.5} />
           </div>
-          <h2 className="text-xl font-semibold mb-2">Welcome to Payments</h2>
-          <p className="text-muted-foreground mb-6">
+          <h2 className="text-lg font-semibold mb-1">Welcome to Payments</h2>
+          <p className="text-sm text-muted-foreground mb-5">
             Create your first product to start accepting payments.
           </p>
           <button
             onClick={onCreateProduct}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand text-brand-foreground font-medium hover:bg-brand/90 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground text-sm font-medium hover:bg-brand/90 transition-colors"
           >
             <Plus className="size-4" />
-            Create Your First Product
+            Create Product
           </button>
         </div>
       </div>
