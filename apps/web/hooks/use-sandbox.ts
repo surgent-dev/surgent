@@ -7,7 +7,7 @@ export type IframeError = {
   stack?: string
   url: string
   timestamp: string
-  source: 'global' | 'promise' | 'react' | 'react-router'
+  source: 'global' | 'promise' | 'react' | 'react-router' | 'preload'
 }
 
 type SandboxState = {

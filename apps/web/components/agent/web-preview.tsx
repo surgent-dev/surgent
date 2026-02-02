@@ -30,13 +30,46 @@ export type WebPreviewContextValue = {
 
 const WebPreviewContext = createContext<WebPreviewContextValue | null>(null)
 
+export const useOptionalWebPreview = () => useContext(WebPreviewContext)
+
 const useWebPreview = () => {
-  const context = useContext(WebPreviewContext)
+  const context = useOptionalWebPreview()
   if (!context) {
     throw new Error('WebPreview components must be used within a WebPreview')
   }
   return context
 }
+
+type ErrorMessage = {
+  type: 'error'
+  payload: {
+    message?: string
+    stack?: string
+    url?: string
+    timestamp?: string
+    source?: string
+  }
+}
+
+const parseMessage = (data: unknown): ErrorMessage | null => {
+  const parsed =
+    typeof data === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(data)
+          } catch {
+            return null
+          }
+        })()
+      : data
+  if (typeof parsed !== 'object' || parsed === null) return null
+  if ((parsed as ErrorMessage).type !== 'error') return null
+  const payload = (parsed as ErrorMessage).payload
+  if (typeof payload !== 'object' || payload === null) return null
+  return parsed as ErrorMessage
+}
+
+const SOURCES: IframeError['source'][] = ['global', 'promise', 'react', 'react-router', 'preload']
 
 export type WebPreviewProps = ComponentProps<'div'> & {
   defaultUrl?: string
@@ -63,27 +96,27 @@ export const WebPreview = ({
   // Listen for error messages from iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Only accept messages from our iframe
       if (event.source !== iframeRef.current?.contentWindow) return
-      if (event.data?.type !== 'error') return
+      const msg = parseMessage(event.data)
+      if (!msg) return
 
-      const p = event.data.payload
-      if (!p || typeof p.message !== 'string' || typeof p.url !== 'string') return
+      const { payload } = msg
+      const source = SOURCES.includes(payload.source as IframeError['source'])
+        ? (payload.source as IframeError['source'])
+        : 'global'
 
       setIframeError({
-        message: p.message,
-        url: p.url,
-        stack: typeof p.stack === 'string' ? p.stack : undefined,
-        timestamp: typeof p.timestamp === 'string' ? p.timestamp : new Date().toISOString(),
-        source: ['global', 'promise', 'react', 'react-router'].includes(p.source)
-          ? p.source
-          : 'global',
+        message: payload.message || 'Unknown error',
+        url: payload.url || iframeRef.current?.src || url,
+        stack: payload.stack,
+        timestamp: payload.timestamp || new Date().toISOString(),
+        source,
       })
     }
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [setIframeError])
+  }, [setIframeError, url])
 
   // Clear error on URL change or refresh
   const clearError = useCallback(() => {

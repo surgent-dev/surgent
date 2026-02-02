@@ -1,15 +1,17 @@
 'use client'
 
 import { useSandbox, type IframeError } from '@/hooks/use-sandbox'
-import { AlertTriangle, Copy, Check, X, Bug, AlertCircle } from 'lucide-react'
+import { AlertTriangle, Copy, Check, X, Bug, AlertCircle, RefreshCw } from 'lucide-react'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
+import { useOptionalWebPreview } from '@/components/agent/web-preview'
 
 const SOURCE_LABELS: Record<string, string> = {
   global: 'Runtime Error',
   promise: 'Unhandled Promise',
   react: 'React Error',
   'react-router': 'Router Error',
+  preload: 'Module Load Error',
 }
 
 // Critical errors that can crash/white-screen the app (show full overlay)
@@ -27,12 +29,14 @@ function ErrorToast({
   onDismiss,
   onFixWithAI,
   onCopy,
+  onRefresh,
   copied,
 }: {
   error: IframeError
   onDismiss: () => void
   onFixWithAI: () => void
   onCopy: () => void
+  onRefresh: () => void
   copied: boolean
 }) {
   const label = SOURCE_LABELS[error.source] ?? 'Error'
@@ -71,6 +75,10 @@ function ErrorToast({
             {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
             {copied ? 'Copied' : 'Copy'}
           </Button>
+          <Button onClick={onRefresh} variant="ghost" size="sm" className="h-7 text-xs gap-1.5">
+            <RefreshCw className="size-3" />
+            Refresh
+          </Button>
           <Button onClick={onDismiss} variant="ghost" size="sm" className="h-7 text-xs ml-auto">
             Dismiss
           </Button>
@@ -86,12 +94,14 @@ function CriticalErrorOverlay({
   onDismiss,
   onFixWithAI,
   onCopy,
+  onRefresh,
   copied,
 }: {
   error: IframeError
   onDismiss: () => void
   onFixWithAI: () => void
   onCopy: () => void
+  onRefresh: () => void
   copied: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -149,6 +159,10 @@ function CriticalErrorOverlay({
             {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
             {copied ? 'Copied' : 'Copy'}
           </Button>
+          <Button onClick={onRefresh} variant="outline" size="sm" className="h-7 text-xs gap-1.5">
+            <RefreshCw className="size-3" />
+            Refresh
+          </Button>
           <Button onClick={onDismiss} variant="ghost" size="sm" className="h-7 text-xs ml-auto">
             Dismiss
           </Button>
@@ -162,6 +176,7 @@ export function PreviewErrorOverlay() {
   const error = useSandbox((s) => s.iframeError)
   const setError = useSandbox((s) => s.setIframeError)
   const setPendingPrompt = useSandbox((s) => s.setPendingPrompt)
+  const preview = useOptionalWebPreview()
   const [copied, setCopied] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null)
 
@@ -199,6 +214,14 @@ export function PreviewErrorOverlay() {
     setError(null)
   }, [setError])
 
+  const handleRefresh = useCallback(() => {
+    if (preview) {
+      preview.refresh()
+      return
+    }
+    window.location.reload()
+  }, [preview])
+
   if (!error) return null
 
   const isCritical = isCriticalError(error)
@@ -210,6 +233,7 @@ export function PreviewErrorOverlay() {
         onDismiss={handleDismiss}
         onFixWithAI={handleFixWithAI}
         onCopy={handleCopy}
+        onRefresh={handleRefresh}
         copied={copied}
       />
     )
@@ -221,6 +245,7 @@ export function PreviewErrorOverlay() {
       onDismiss={handleDismiss}
       onFixWithAI={handleFixWithAI}
       onCopy={handleCopy}
+      onRefresh={handleRefresh}
       copied={copied}
     />
   )
