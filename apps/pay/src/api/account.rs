@@ -382,6 +382,33 @@ pub struct WhopConnectQuery {
     pub account_id: Option<Uuid>,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WhopAccessTokenQuery {
+    pub project_id: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WhopAccessTokenResponse {
+    pub token: String,
+    pub company_id: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WhopPayoutsPortalLinkQuery {
+    #[serde(alias = "account_id")]
+    pub account_id: Uuid,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WhopPayoutsPortalLinkResponse {
+    pub url: String,
+    pub company_id: String,
+}
+
 /// Create a Whop connected account (direct creation, no OAuth)
 #[utoipa::path(
     post,
@@ -587,6 +614,190 @@ pub async fn create_whop_connect(
         processor_account_id: company.id,
         status: "connected".to_string(),
     }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/accounts/whop/token",
+    tag = "account",
+    params(
+        ("project_id" = Option<Uuid>, Query, description = "Project ID (required for session auth)")
+    ),
+    responses(
+        (status = 200, description = "Whop access token created", body = WhopAccessTokenResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Whop account not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("project_key" = []))
+)]
+pub async fn create_whop_access_token(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<WhopAccessTokenQuery>,
+) -> Result<Json<WhopAccessTokenResponse>, (StatusCode, String)> {
+    let project_id = resolve_project_id(&state.pool, &auth, query.project_id).await?;
+
+    let row = sqlx::query!(
+        r#"
+        SELECT "processorAccountId"
+        FROM connect_account
+        WHERE "projectId" = $1
+          AND processor = 'whop'
+          AND status = 'connected'
+        ORDER BY "updatedAt" DESC
+        LIMIT 1
+        "#,
+        project_id
+    )
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(
+            project_id = %project_id,
+            error = %e,
+            "Database error getting Whop account"
+        );
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?
+    .ok_or((StatusCode::NOT_FOUND, "Whop account not found".to_string()))?;
+
+    let company_id = row.processorAccountId.ok_or((
+        StatusCode::BAD_REQUEST,
+        "Whop account missing company ID".to_string(),
+    ))?;
+
+    let whop = crate::integrations::WhopClient::new(
+        state.config.whop_api_key.clone(),
+        state.config.whop_platform_company_id.clone(),
+        state.config.whop_base_url.clone(),
+    )
+    .map_err(|e| {
+        tracing::error!("Failed to create WhopClient: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    let token = whop.create_access_token(&company_id).await.map_err(|e| {
+        tracing::error!(
+            project_id = %project_id,
+            company_id = %company_id,
+            error = %e,
+            "Failed to create Whop access token"
+        );
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to create Whop access token".to_string(),
+        )
+    })?;
+
+    Ok(Json(WhopAccessTokenResponse { token, company_id }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/accounts/whop/payouts-link",
+    tag = "account",
+    params(
+        ("account_id" = Uuid, Query, description = "Connected Whop account ID")
+    ),
+    responses(
+        (status = 200, description = "Whop payouts portal link created", body = WhopPayoutsPortalLinkResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Whop account not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("project_key" = []))
+)]
+pub async fn create_whop_payouts_portal_link(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<WhopPayoutsPortalLinkQuery>,
+) -> Result<Json<WhopPayoutsPortalLinkResponse>, (StatusCode, String)> {
+    let account = fetch_account_by_id(&state.pool, query.account_id).await?;
+    let account_project_id = account.project_id.ok_or((
+        StatusCode::BAD_REQUEST,
+        "Account has no project".to_string(),
+    ))?;
+    verify_account_project_access(&auth, &state.pool, account_project_id).await?;
+
+    if account.processor != "whop" {
+        return Err((StatusCode::BAD_REQUEST, "Account is not Whop".to_string()));
+    }
+
+    if account.status != "connected" {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Whop account is not connected".to_string(),
+        ));
+    }
+
+    let company_id = account.processor_account_id.ok_or((
+        StatusCode::BAD_REQUEST,
+        "Whop account missing company ID".to_string(),
+    ))?;
+
+    let whop = crate::integrations::WhopClient::new(
+        state.config.whop_api_key.clone(),
+        state.config.whop_platform_company_id.clone(),
+        state.config.whop_base_url.clone(),
+    )
+    .map_err(|e| {
+        tracing::error!("Failed to create WhopClient: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    let web_base = state
+        .config
+        .whop_redirect_base_url
+        .as_deref()
+        .unwrap_or(&state.config.web_base_url)
+        .trim_end_matches('/');
+    if !web_base.starts_with("https://") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Whop payouts portal requires an HTTPS redirect base URL. Set WHOP_REDIRECT_BASE_URL to an https URL (for local dev use ngrok/cloudflared).".to_string(),
+        ));
+    }
+    let return_url = format!(
+        "{}/project/{}?payouts=complete",
+        web_base, account_project_id
+    );
+    let refresh_url = format!(
+        "{}/project/{}?payouts=refresh",
+        web_base, account_project_id
+    );
+    let url = whop
+        .create_payouts_portal_link(&company_id, &return_url, &refresh_url)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                account_id = %query.account_id,
+                project_id = %account_project_id,
+                company_id = %company_id,
+                error = %e,
+                "Failed to create Whop payouts portal link"
+            );
+            let status = if e.contains("Whop API error:") {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (status, e)
+        })?;
+
+    Ok(Json(WhopPayoutsPortalLinkResponse { url, company_id }))
 }
 
 /// Create a new connect account

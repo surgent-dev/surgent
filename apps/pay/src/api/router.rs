@@ -11,8 +11,9 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::AppState;
 use crate::api::account::{
-    connect_callback, connect_refresh, create_connect_account, create_whop_connect, disconnect,
-    get_account, list_accounts, list_user_accounts, oauth_callback, update_account,
+    connect_callback, connect_refresh, create_connect_account, create_whop_access_token,
+    create_whop_connect, create_whop_payouts_portal_link, disconnect, get_account, list_accounts,
+    list_user_accounts, oauth_callback, update_account,
 };
 use crate::api::check::check;
 use crate::api::checkout::{checkout_cancel, checkout_success, create_checkout_session};
@@ -43,6 +44,8 @@ pub fn create_router(state: AppState) -> Router {
     let account_routes = Router::new()
         .route("/connect", post(create_connect_account))
         .route("/connect/whop", post(create_whop_connect))
+        .route("/whop/token", get(create_whop_access_token))
+        .route("/whop/payouts-link", get(create_whop_payouts_portal_link))
         .route("/connect/callback", get(connect_callback))
         .route("/connect/refresh", get(connect_refresh))
         .route("/connect/oauth/callback", get(oauth_callback))

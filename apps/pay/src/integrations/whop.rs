@@ -96,6 +96,37 @@ pub struct WhopCompany {
     pub title: String,
 }
 
+#[derive(Debug, Serialize)]
+struct CreateAccessTokenRequest {
+    company_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateAccessTokenResponse {
+    token: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CreateAccountLinkRequest {
+    company_id: String,
+    use_case: String,
+    return_url: String,
+    refresh_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateAccountLinkResponse {
+    url: String,
+}
+
+fn parse_whop_error_message(body: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v.get("error").cloned())
+        .and_then(|v| v.get("message").and_then(|v| v.as_str()).map(String::from))
+        .unwrap_or_else(|| body.to_string())
+}
+
 impl WhopClient {
     pub fn new(
         api_key: String,
@@ -177,6 +208,119 @@ impl WhopClient {
         info!(company_id = %company.id, "Whop: Company created successfully");
 
         Ok(company)
+    }
+
+    pub async fn create_access_token(&self, company_id: &str) -> Result<String, String> {
+        let req = CreateAccessTokenRequest {
+            company_id: company_id.to_string(),
+        };
+
+        debug!(company_id = %company_id, "Whop: Creating embedded access token");
+
+        let response = self
+            .client
+            .post(format!("{}/access_tokens", self.base_url))
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| {
+                error!("Whop access token API request failed: {}", e);
+                format!("Whop API request failed: {}", e)
+            })?;
+
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read Whop response: {}", e))?;
+
+        debug!(status = %status, "Whop access token API response status");
+
+        if !status.is_success() {
+            error!(status = %status, body = %body, "Whop access token API error");
+            return Err(format!("Whop API error: {}", body));
+        }
+
+        let token = if let Ok(parsed) = serde_json::from_str::<CreateAccessTokenResponse>(&body) {
+            parsed.token
+        } else {
+            let value = serde_json::from_str::<serde_json::Value>(&body)
+                .map_err(|_| "Failed to parse Whop access token response".to_string())?;
+            value
+                .get("token")
+                .or_else(|| value.get("access_token"))
+                .and_then(|v| v.as_str())
+                .ok_or("Whop access token response missing token".to_string())?
+                .to_string()
+        };
+
+        info!(company_id = %company_id, "Whop: Embedded access token created");
+        Ok(token)
+    }
+
+    pub async fn create_payouts_portal_link(
+        &self,
+        company_id: &str,
+        return_url: &str,
+        refresh_url: &str,
+    ) -> Result<String, String> {
+        let req = CreateAccountLinkRequest {
+            company_id: company_id.to_string(),
+            use_case: "payouts_portal".to_string(),
+            return_url: return_url.to_string(),
+            refresh_url: refresh_url.to_string(),
+        };
+
+        debug!(
+            company_id = %company_id,
+            return_url = %return_url,
+            refresh_url = %refresh_url,
+            "Whop: Creating payouts portal link"
+        );
+
+        let response = self
+            .client
+            .post(format!("{}/account_links", self.base_url))
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| {
+                error!("Whop payouts portal link API request failed: {}", e);
+                format!("Whop API request failed: {}", e)
+            })?;
+
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read Whop response: {}", e))?;
+
+        debug!(status = %status, "Whop payouts portal link API response status");
+
+        if !status.is_success() {
+            error!(status = %status, body = %body, "Whop payouts portal link API error");
+            return Err(format!(
+                "Whop API error: {}",
+                parse_whop_error_message(&body)
+            ));
+        }
+
+        let url = if let Ok(parsed) = serde_json::from_str::<CreateAccountLinkResponse>(&body) {
+            parsed.url
+        } else {
+            let value = serde_json::from_str::<serde_json::Value>(&body)
+                .map_err(|_| "Failed to parse Whop account link response".to_string())?;
+            value
+                .get("url")
+                .and_then(|v| v.as_str())
+                .ok_or("Whop account link response missing url".to_string())?
+                .to_string()
+        };
+
+        info!(company_id = %company_id, "Whop: Payouts portal link created");
+        Ok(url)
     }
 
     pub async fn create_checkout_configuration(

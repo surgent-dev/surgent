@@ -29,6 +29,9 @@ use utoipa::{Modify, OpenApi};
         crate::api::checkout::checkout_cancel,
         // Account
         crate::api::account::create_connect_account,
+        crate::api::account::create_whop_connect,
+        crate::api::account::create_whop_access_token,
+        crate::api::account::create_whop_payouts_portal_link,
         crate::api::account::get_account,
         crate::api::account::list_accounts,
         crate::api::account::update_account,
@@ -76,6 +79,10 @@ use utoipa::{Modify, OpenApi};
             crate::api::account::OAuthInitResponse,
             crate::api::account::OAuthCallbackResponse,
             crate::api::account::ConnectedAccountResponse,
+            crate::api::account::WhopConnectRequest,
+            crate::api::account::WhopConnectResponse,
+            crate::api::account::WhopAccessTokenResponse,
+            crate::api::account::WhopPayoutsPortalLinkResponse,
             crate::api::account::UpdateAccountRequest,
             // Check DTOs
             crate::api::check::CheckRequest,
