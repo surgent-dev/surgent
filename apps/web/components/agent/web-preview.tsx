@@ -25,6 +25,7 @@ export type WebPreviewContextValue = {
   goBack: () => void
   goForward: () => void
   refresh: () => void
+  reloadTick: number
   iframeRef: React.RefObject<HTMLIFrameElement | null>
 }
 
@@ -84,6 +85,7 @@ export const WebPreview = ({
   ...props
 }: WebPreviewProps) => {
   const [consoleOpen, setConsoleOpen] = useState(false)
+  const [reloadTick, setReloadTick] = useState(0)
   const [nav, setNav] = useState(() => ({
     history: [defaultUrl],
     index: 0,
@@ -133,6 +135,7 @@ export const WebPreview = ({
       setIframeError(null)
       if (iframeRef.current && url) {
         iframeRef.current.src = url
+        setReloadTick((v) => v + 1)
       }
     }
 
@@ -198,6 +201,7 @@ export const WebPreview = ({
     clearError()
     if (iframeRef.current) {
       iframeRef.current.src = url
+      setReloadTick((v) => v + 1)
     }
   }
 
@@ -211,6 +215,7 @@ export const WebPreview = ({
     goBack,
     goForward,
     refresh,
+    reloadTick,
     iframeRef,
   }
 
@@ -410,6 +415,9 @@ export type WebPreviewBodyProps = ComponentProps<'iframe'> & {
   overlay?: ReactNode
 }
 
+type PreviewStatus = 'idle' | 'loading' | 'ready' | 'failed'
+const WATCHDOG_MS = 10000
+
 export const WebPreviewBody = ({
   className,
   overlay,
@@ -417,12 +425,77 @@ export const WebPreviewBody = ({
   onLoad,
   ...props
 }: WebPreviewBodyProps) => {
-  const { url, iframeRef } = useWebPreview()
+  const { url, iframeRef, reloadTick } = useWebPreview()
   const setIframeError = useSandbox((s) => s.setIframeError)
+  const [status, setStatus] = useState<PreviewStatus>('idle')
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const retryRef = useRef(0)
+  const currentUrl = src ?? url
 
+  const clearTimers = useCallback(() => {
+    if (watchdogRef.current) clearTimeout(watchdogRef.current)
+  }, [])
+
+  const markReady = useCallback(() => {
+    clearTimers()
+    setStatus('ready')
+  }, [clearTimers])
+
+  const startWatchdog = useCallback(
+    (nextUrl: string) => {
+      clearTimers()
+      watchdogRef.current = setTimeout(() => {
+        if (retryRef.current === 0) {
+          retryRef.current = 1
+          if (iframeRef.current) iframeRef.current.src = nextUrl
+          startWatchdog(nextUrl)
+          return
+        }
+        setStatus('failed')
+      }, WATCHDOG_MS)
+    },
+    [clearTimers, iframeRef],
+  )
+
+  // Main loading effect - handles URL/reload changes, watchdog, and message listener
+  useEffect(() => {
+    if (!currentUrl) {
+      clearTimers()
+      setStatus('idle')
+      return
+    }
+
+    retryRef.current = 0
+    setStatus('loading')
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return
+      if (event.data?.type === 'preview-ready') markReady()
+    }
+
+    startWatchdog(currentUrl)
+    window.addEventListener('message', handleMessage)
+    return () => {
+      clearTimers()
+      window.removeEventListener('message', handleMessage)
+    }
+  }, [currentUrl, reloadTick, iframeRef, markReady, clearTimers, startWatchdog])
+
+  // onLoad is compatibility fallback when template does not post "preview-ready".
   const handleLoad: ComponentProps<'iframe'>['onLoad'] = (event) => {
-    setIframeError(null)
     onLoad?.(event)
+    markReady()
+  }
+
+  const handleRetry = () => {
+    retryRef.current = 0
+    setStatus('loading')
+    clearTimers()
+    setIframeError(null)
+    if (iframeRef.current && currentUrl) {
+      iframeRef.current.src = currentUrl
+      startWatchdog(currentUrl)
+    }
   }
 
   return (
@@ -432,11 +505,42 @@ export const WebPreviewBody = ({
         className={cn('size-full', className)}
         sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-presentation allow-pointer-lock allow-storage-access-by-user-activation allow-downloads"
         allow="autoplay; camera; clipboard-read; clipboard-write; geolocation; display-capture; encrypted-media; fullscreen; gamepad; gyroscope; magnetometer; microphone; midi; payment; usb; bluetooth; hid; serial; xr-spatial-tracking; screen-wake-lock; idle-detection; publickey-credentials-get; local-fonts; window-management"
-        src={(src ?? url) || undefined}
+        src={currentUrl || undefined}
         title="Preview"
         onLoad={handleLoad}
         {...props}
       />
+      {status === 'loading' && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <RefreshCwIcon className="size-5 animate-spin" />
+            <span className="text-sm">Loading preview...</span>
+          </div>
+        </div>
+      )}
+      {status === 'failed' && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/90 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 text-center px-4">
+            <p className="text-sm text-muted-foreground">Preview is taking longer than expected.</p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={handleRetry}>
+                <RefreshCwIcon className="size-4 mr-1.5" />
+                Retry
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  currentUrl && window.open(currentUrl, '_blank', 'noopener,noreferrer')
+                }
+              >
+                <ExternalLinkIcon className="size-4 mr-1.5" />
+                Open in new tab
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {overlay ? <div className="pointer-events-none absolute inset-0 z-10">{overlay}</div> : null}
     </div>
   )

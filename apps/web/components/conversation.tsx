@@ -201,7 +201,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const [selectedModel, setSelectedModel] = useState<
     { modelId: string; providerId: string } | undefined
   >(undefined)
-  const lastSentRef = useRef<string>('')
 
   const storedSessionId = useSandbox((s) => (projectId ? s.activeSessionId[projectId] : undefined))
   const setActiveSession = useSandbox((s) => s.setActiveSession)
@@ -364,7 +363,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     const trimmed = text.trim()
     if ((!trimmed && !files?.length) || inputWorking || !activeId) return
 
-    lastSentRef.current = trimmed
     setInputValue('')
     send.mutate({
       sessionId: activeId,
@@ -380,11 +378,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const handleAbort = () => {
     if (!activeId || !projectId) return
     abort.mutate({ projectId, sessionId: activeId })
-    // Restore the last sent message back to the input
-    if (lastSentRef.current) {
-      setInputValue(lastSentRef.current)
-      lastSentRef.current = ''
-    }
   }
 
   const handleRevert = (messageId: string) => {
