@@ -400,6 +400,8 @@ pub struct WhopAccessTokenResponse {
 pub struct WhopPayoutsPortalLinkQuery {
     #[serde(alias = "account_id")]
     pub account_id: Uuid,
+    #[serde(alias = "redirect_base_url")]
+    pub redirect_base_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -705,7 +707,8 @@ pub async fn create_whop_access_token(
     path = "/accounts/whop/payouts-link",
     tag = "account",
     params(
-        ("account_id" = Uuid, Query, description = "Connected Whop account ID")
+        ("account_id" = Uuid, Query, description = "Connected Whop account ID"),
+        ("redirectBaseUrl" = Option<String>, Query, description = "Optional base URL for return/refresh redirects")
     ),
     responses(
         (status = 200, description = "Whop payouts portal link created", body = WhopPayoutsPortalLinkResponse),
@@ -758,18 +761,20 @@ pub async fn create_whop_payouts_portal_link(
         )
     })?;
 
-    let web_base = state
-        .config
-        .whop_redirect_base_url
+    let web_base = query
+        .redirect_base_url
         .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .or(state
+            .config
+            .whop_redirect_base_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty()))
         .unwrap_or(&state.config.web_base_url)
+        .trim()
         .trim_end_matches('/');
-    if !web_base.starts_with("https://") {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "Whop payouts portal requires an HTTPS redirect base URL. Set WHOP_REDIRECT_BASE_URL to an https URL (for local dev use ngrok/cloudflared).".to_string(),
-        ));
-    }
     let return_url = format!(
         "{}/project/{}?payouts=complete",
         web_base, account_project_id

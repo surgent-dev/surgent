@@ -389,6 +389,7 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
           stripeConnected={hasConnectedAccount}
           stripeProcessor={connectedAccount?.processor}
           accountData={connectedAccount?.data}
+          accountId={connectedAccount?.id}
           onDisconnect={handleDisconnect}
           isDisconnecting={disconnect.isPending}
         />

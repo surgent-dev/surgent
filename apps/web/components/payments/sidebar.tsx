@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { LayoutDashboard, Package, Users, Receipt, Settings } from 'lucide-react'
+import { LayoutDashboard, Package, Users, Receipt, Settings, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type ViewType = 'dashboard' | 'products' | 'customers' | 'transactions' | 'settings'
@@ -19,17 +19,21 @@ interface NavItemProps {
   active: boolean
   onClick: () => void
   badge?: number | string
+  disabled?: boolean
 }
 
-function NavItem({ icon: Icon, label, active, onClick, badge }: NavItemProps) {
+function NavItem({ icon: Icon, label, active, onClick, badge, disabled }: NavItemProps) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={cn(
         'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all',
         active
           ? 'bg-muted text-foreground'
           : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
+        disabled &&
+          'opacity-50 cursor-not-allowed hover:text-muted-foreground hover:bg-transparent',
       )}
     >
       <Icon className="size-4 shrink-0" strokeWidth={2} />
@@ -57,6 +61,8 @@ interface SidebarProps {
   stripeConnected: boolean
   stripeProcessor?: string
   accountData?: AccountData
+  onOpenPayoutsPortal?: () => void
+  isOpeningPayoutsPortal?: boolean
 }
 
 export function Sidebar({
@@ -68,7 +74,11 @@ export function Sidebar({
   stripeConnected,
   stripeProcessor,
   accountData,
+  onOpenPayoutsPortal,
+  isOpeningPayoutsPortal,
 }: SidebarProps) {
+  const showPayouts = stripeConnected && stripeProcessor === 'whop' && onOpenPayoutsPortal
+
   return (
     <div className="w-52 shrink-0 border-r bg-muted/10 flex flex-col">
       <div className="p-4 border-b">
@@ -124,6 +134,15 @@ export function Sidebar({
           onClick={() => setView('transactions')}
           badge={transactionCount > 0 ? transactionCount : undefined}
         />
+        {showPayouts && (
+          <NavItem
+            icon={Wallet}
+            label="Payout Portal"
+            active={false}
+            onClick={() => onOpenPayoutsPortal?.()}
+            disabled={isOpeningPayoutsPortal}
+          />
+        )}
         <NavItem
           icon={Settings}
           label="Settings"

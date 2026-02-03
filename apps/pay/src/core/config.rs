@@ -32,6 +32,7 @@ pub struct Config {
     pub whop_platform_company_id: String,
     pub whop_base_url: String,
     pub whop_webhook_secret: String,
+    pub whop_redirect_base_url: Option<String>,
 }
 
 impl Config {
@@ -82,6 +83,7 @@ impl Config {
                 .unwrap_or_else(|_| "https://api.whop.com/api/v1".to_string()),
             whop_webhook_secret: env::var("WHOP_WEBHOOK_SECRET")
                 .expect("WHOP_WEBHOOK_SECRET must be set"),
+            whop_redirect_base_url: env::var("WHOP_REDIRECT_BASE_URL").ok(),
         })
     }
 }

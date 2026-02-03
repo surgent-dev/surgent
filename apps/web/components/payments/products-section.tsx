@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
+import { toast } from 'react-hot-toast'
 import {
   useProducts,
   type Product,
@@ -19,12 +20,14 @@ import { ProductsView } from './products-view'
 import { TransactionsView } from './transactions-view'
 import { CustomersView } from './customers-view'
 import { SettingsView } from './settings-view'
+import { payHttp } from '@/lib/http'
 
 export function ProductsSection({
   projectId,
   stripeConnected = false,
   stripeProcessor,
   accountData,
+  accountId,
   onDisconnect,
   isDisconnecting,
 }: {
@@ -32,6 +35,7 @@ export function ProductsSection({
   stripeConnected?: boolean
   stripeProcessor?: string
   accountData?: AccountData
+  accountId?: string
   onDisconnect?: () => void
   isDisconnecting?: boolean
 }) {
@@ -43,6 +47,7 @@ export function ProductsSection({
   const [createProductOpen, setCreateProductOpen] = useState(false)
   const [createPriceOpen, setCreatePriceOpen] = useState(false)
   const [editProductOpen, setEditProductOpen] = useState(false)
+  const [openingPayoutPortal, setOpeningPayoutPortal] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [selectedPrices, setSelectedPrices] = useState<ProductPrice[]>([])
 
@@ -66,6 +71,43 @@ export function ProductsSection({
     setCreateProductOpen(true)
   }
 
+  const openPayoutPortal = () => {
+    if (stripeProcessor !== 'whop' || !accountId) {
+      toast.error('Whop account is not connected')
+      return
+    }
+    setOpeningPayoutPortal(true)
+    payHttp
+      .get('accounts/whop/payouts-link', {
+        searchParams: {
+          accountId,
+          redirectBaseUrl: window.location.origin,
+        },
+      })
+      .json<{ url?: string }>()
+      .then((data) => {
+        if (!data.url) {
+          throw new Error('Missing payouts portal URL')
+        }
+        window.location.href = data.url
+      })
+      .catch((error: unknown) => {
+        const fallback = error instanceof Error ? error.message : 'Failed to open payouts portal'
+        const response = (error as Error & { response?: Response }).response
+        if (!response) {
+          toast.error(fallback)
+          return
+        }
+        response
+          .text()
+          .then((text) => toast.error(text || fallback))
+          .catch(() => toast.error(fallback))
+      })
+      .finally(() => {
+        setOpeningPayoutPortal(false)
+      })
+  }
+
   const viewTitles: Record<ViewType, string> = {
     dashboard: 'Dashboard',
     products: 'Products',
@@ -85,6 +127,8 @@ export function ProductsSection({
         stripeConnected={stripeConnected}
         stripeProcessor={stripeProcessor}
         accountData={accountData}
+        onOpenPayoutsPortal={openPayoutPortal}
+        isOpeningPayoutsPortal={openingPayoutPortal}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
