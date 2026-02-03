@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \"recurringInterval\" as \"recurring_interval: RecurringInterval\"\n        FROM product_price\n        WHERE \"productId\" = $1\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recurring_interval: RecurringInterval",
+        "type_info": {
+          "Custom": {
+            "name": "recurring_interval",
+            "kind": {
+              "Enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "f73d93572f1132edff1db6c6b0b2a456cba4a8074d5948d77790f9fdcff3a2e5"
+}

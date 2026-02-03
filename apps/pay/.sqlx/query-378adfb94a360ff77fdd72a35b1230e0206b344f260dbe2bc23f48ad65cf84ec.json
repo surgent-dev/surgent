@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, \"projectId\", \"productId\", \"priceId\", \"customerId\"\n        FROM checkout_session\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "projectId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "productId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "priceId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "customerId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "378adfb94a360ff77fdd72a35b1230e0206b344f260dbe2bc23f48ad65cf84ec"
+}

@@ -1,0 +1,115 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            s.id,\n            s.\"projectId\",\n            s.\"productId\",\n            s.\"productPriceId\",\n            s.\"customerId\",\n            s.\"processorSubscriptionId\",\n            s.\"processorCustomerId\",\n            s.\"createdAt\",\n            s.\"deletedAt\",\n            s.\"currentPeriodStart\",\n            s.\"currentPeriodEnd\",\n            s.\"canceledAt\",\n            s.\"endedAt\",\n            s.status as \"status: SubscriptionStatus\"\n        FROM subscription s\n        WHERE s.\"customerId\" = $1\n        ORDER BY s.\"createdAt\" DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "projectId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "productId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "productPriceId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "customerId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "processorSubscriptionId",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "processorCustomerId",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "createdAt",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "deletedAt",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "currentPeriodStart",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "currentPeriodEnd",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "canceledAt",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "endedAt",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "status: SubscriptionStatus",
+        "type_info": {
+          "Custom": {
+            "name": "subscription_status",
+            "kind": {
+              "Enum": [
+                "active",
+                "past_due",
+                "canceled",
+                "unpaid",
+                "trialing",
+                "incomplete",
+                "incomplete_expired"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "3ae9d950d0b790baa60a390838fd65d95cdeb0e4dd25100712fc9eae4d66da58"
+}

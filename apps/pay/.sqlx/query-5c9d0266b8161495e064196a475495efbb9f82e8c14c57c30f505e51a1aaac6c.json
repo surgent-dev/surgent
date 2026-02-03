@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE customer\n        SET \"processorCustomerId\" = COALESCE(\"processorCustomerId\", $1),\n            email = COALESCE(email, $2),\n            name = COALESCE(name, $3),\n            \"updatedAt\" = NOW()\n        WHERE id = $4\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Varchar",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5c9d0266b8161495e064196a475495efbb9f82e8c14c57c30f505e51a1aaac6c"
+}

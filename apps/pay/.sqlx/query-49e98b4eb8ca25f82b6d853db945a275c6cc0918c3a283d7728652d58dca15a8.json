@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, processor, \"processorAccountId\"\n        FROM connect_account\n        WHERE \"projectId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "processor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "processorAccountId",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "49e98b4eb8ca25f82b6d853db945a275c6cc0918c3a283d7728652d58dca15a8"
+}

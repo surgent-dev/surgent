@@ -1,0 +1,234 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id,\n            \"createdAt\",\n            type as \"type_!: TransactionType\",\n            amount,\n            currency,\n            \"taxAmount\",\n            \"accountId\",\n            \"accountAmount\",\n            \"accountCurrency\",\n            \"presentmentAmount\",\n            \"presentmentCurrency\",\n            \"presentmentTaxAmount\",\n            \"taxFilingAmount\",\n            \"taxFilingCurrency\",\n            \"taxCountry\",\n            \"taxState\",\n            processor,\n            \"chargeId\",\n            \"transferId\",\n            \"refundId\",\n            \"payoutId\",\n            \"paymentTransactionId\",\n            \"incurredByTransactionId\",\n            \"payoutTransactionId\",\n            \"projectId\",\n            \"customerId\",\n            \"productId\",\n            \"productPriceId\",\n            \"subscriptionId\",\n            \"checkoutSessionId\",\n            \"processorInvoiceId\",\n            metadata,\n            \"succeededAt\",\n            \"refundedAt\"\n        FROM transaction\n        WHERE \"projectId\" = $1 AND type = 'payment'\n        ORDER BY \"createdAt\" DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "createdAt",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "type_!: TransactionType",
+        "type_info": {
+          "Custom": {
+            "name": "transaction_type",
+            "kind": {
+              "Enum": [
+                "payment",
+                "processor_fee",
+                "refund",
+                "dispute",
+                "balance",
+                "payout"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "currency",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "taxAmount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "accountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "accountAmount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "accountCurrency",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "presentmentAmount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "presentmentCurrency",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "presentmentTaxAmount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "taxFilingAmount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "taxFilingCurrency",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 14,
+        "name": "taxCountry",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 15,
+        "name": "taxState",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 16,
+        "name": "processor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "chargeId",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "transferId",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "refundId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 20,
+        "name": "payoutId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 21,
+        "name": "paymentTransactionId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
+        "name": "incurredByTransactionId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 23,
+        "name": "payoutTransactionId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 24,
+        "name": "projectId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 25,
+        "name": "customerId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 26,
+        "name": "productId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 27,
+        "name": "productPriceId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 28,
+        "name": "subscriptionId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 29,
+        "name": "checkoutSessionId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 30,
+        "name": "processorInvoiceId",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 31,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 32,
+        "name": "succeededAt",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 33,
+        "name": "refundedAt",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "d37a6a99a5a518a02fc6fbe8e735a86619a90597f1aca1642a6b7598672eda47"
+}

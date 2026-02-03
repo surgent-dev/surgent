@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE subscription\n        SET \"cancelAtPeriodEnd\" = $1\n        WHERE \"processorSubscriptionId\" = $2 AND processor = 'whop'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d2c7ad9b5e6d7a7213a4bbbce6336207e52d3f24b4819f9fb639d5b0fe2617cd"
+}

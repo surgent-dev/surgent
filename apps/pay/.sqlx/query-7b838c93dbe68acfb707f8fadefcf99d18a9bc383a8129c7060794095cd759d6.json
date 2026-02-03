@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE product\n            SET \"isArchived\" = COALESCE($1, \"isArchived\"),\n                \"isDefault\" = COALESCE($2, \"isDefault\")\n            WHERE id = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b838c93dbe68acfb707f8fadefcf99d18a9bc383a8129c7060794095cd759d6"
+}

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO subscription (\n                id, \"projectId\", \"productId\", \"productPriceId\", \"customerId\",\n                processor, \"processorSubscriptionId\", \"processorCustomerId\", \"createdAt\",\n                \"currentPeriodStart\", \"currentPeriodEnd\", \"cancelAtPeriodEnd\",\n                \"paymentMethodBrand\", \"paymentMethodLast4\", status\n            )\n            VALUES (\n                gen_random_uuid(), $1, $2, $3, $4, 'stripe', $5, $6, NOW(),\n                $7, $8, $9, $10, $11, $12\n            )\n            ON CONFLICT (processor, \"processorSubscriptionId\") DO UPDATE\n            SET\n                status = CASE WHEN $12::text = 'canceled' THEN $12 ELSE EXCLUDED.status END,\n                \"currentPeriodStart\" = EXCLUDED.\"currentPeriodStart\",\n                \"currentPeriodEnd\" = EXCLUDED.\"currentPeriodEnd\",\n                \"cancelAtPeriodEnd\" = EXCLUDED.\"cancelAtPeriodEnd\",\n                \"paymentMethodBrand\" = EXCLUDED.\"paymentMethodBrand\",\n                \"paymentMethodLast4\" = EXCLUDED.\"paymentMethodLast4\",\n                \"productId\" = EXCLUDED.\"productId\",\n                \"productPriceId\" = EXCLUDED.\"productPriceId\"\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool",
+        "Varchar",
+        "Varchar",
+        {
+          "Custom": {
+            "name": "subscription_status",
+            "kind": {
+              "Enum": [
+                "active",
+                "past_due",
+                "canceled",
+                "unpaid",
+                "trialing",
+                "incomplete",
+                "incomplete_expired"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "121960939ef58055e66729c19e60c04228d14063464defdc44ff05e530953bc0"
+}

@@ -489,6 +489,7 @@ pub async fn create_test_state(pool: PgPool) -> AppState {
         whop_platform_company_id: "test_whop_platform_company_id".to_string(),
         whop_base_url: "https://api.whop.com/api/v1".to_string(),
         whop_webhook_secret: "whsec_dGVzdF93aG9wX3dlYmhvb2tfc2VjcmV0".to_string(),
+        whop_redirect_base_url: None,
     };
 
     // Register Stripe processor
@@ -562,6 +563,7 @@ pub async fn create_test_state_real_stripe(pool: PgPool) -> AppState {
         whop_platform_company_id: "test_whop_platform_company_id".to_string(),
         whop_base_url: "https://api.whop.com/api/v1".to_string(),
         whop_webhook_secret: "whsec_dGVzdF93aG9wX3dlYmhvb2tfc2VjcmV0".to_string(),
+        whop_redirect_base_url: None,
     };
 
     // Register Stripe processor as BOTH PaymentProcessor AND ConnectProcessor

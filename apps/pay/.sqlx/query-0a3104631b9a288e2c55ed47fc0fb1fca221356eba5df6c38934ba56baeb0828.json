@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE connect_account\n                SET \"chargesEnabled\" = $1,\n                    \"detailsSubmitted\" = $2,\n                    \"isPayoutsEnabled\" = $3,\n                    status = CASE\n                        WHEN $1 AND $3 AND $4 AND $5 THEN 'active'\n                        ELSE status\n                    END\n                WHERE \"processorAccountId\" = $6\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a3104631b9a288e2c55ed47fc0fb1fca221356eba5df6c38934ba56baeb0828"
+}

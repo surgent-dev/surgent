@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT o.\"platformFeePercent\", o.\"platformFeeFixed\"\n        FROM organization o\n        INNER JOIN project p ON p.\"organizationId\" = o.id\n        WHERE p.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "platformFeePercent",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "platformFeeFixed",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "dd6cdc8973af2bc14726b5aa65232ca0021f7cef7071663f962c95fd47bf342c"
+}

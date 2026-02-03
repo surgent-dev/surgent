@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO processed_webhook_event (processor, \"processorEventId\", \"eventType\", \"processedAt\")\n            VALUES ($1, $2, $3, NOW())\n            ON CONFLICT (processor, \"processorEventId\") DO NOTHING\n            RETURNING \"processorEventId\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "processorEventId",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "80be8d7376a84100a78f9615c1ab36ac3e6b6b166a5b0167bc8eb5fa0d0bbdcf"
+}
