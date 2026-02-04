@@ -69,6 +69,10 @@ type TextPartInput = {
 
 export type SendPartInput = FilePartInput | TextPartInput
 
+type AgentModelOverride = {
+  model?: { providerID: string; modelID: string }
+}
+
 async function sendMessage(
   projectId: string,
   sessionId: string,
@@ -78,6 +82,7 @@ async function sendMessage(
   model?: string,
   providerID?: string,
   variant?: string,
+  agentOverrides?: Record<string, AgentModelOverride>,
 ): Promise<void> {
   const body: Record<string, unknown> = { agent, parts }
 
@@ -89,6 +94,9 @@ async function sendMessage(
   }
   if (variant && variant.trim()) {
     body.variant = variant
+  }
+  if (agentOverrides && Object.keys(agentOverrides).length > 0) {
+    body.agentOverrides = agentOverrides
   }
 
   await http.post(`api/agent/${projectId}/session/${sessionId}/prompt_async`, {
@@ -153,9 +161,19 @@ export function useSendMessage(projectId?: string) {
       model?: string
       providerID?: string
       variant?: string
+      agentOverrides?: Record<string, AgentModelOverride>
     }
   >({
-    mutationFn: ({ sessionId, messageId, agent, parts, model, providerID, variant }) =>
+    mutationFn: ({
+      sessionId,
+      messageId,
+      agent,
+      parts,
+      model,
+      providerID,
+      variant,
+      agentOverrides,
+    }) =>
       sendMessage(
         projectId as string,
         sessionId,
@@ -165,9 +183,12 @@ export function useSendMessage(projectId?: string) {
         model,
         providerID,
         variant,
+        agentOverrides,
       ),
   })
 }
+
+export type { AgentModelOverride }
 
 export function useAbortSession() {
   return useMutation<boolean, unknown, { projectId: string; sessionId: string }>({

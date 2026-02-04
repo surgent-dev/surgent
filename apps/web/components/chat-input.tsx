@@ -25,6 +25,7 @@ type Props = {
     model?: string,
     providerID?: string,
     variant?: string,
+    isMax?: boolean,
   ) => void | Promise<void>
   disabled?: boolean
   placeholder?: string
@@ -351,6 +352,7 @@ export default function ChatInput({
       model.id,
       model.providerId,
       currentVariant,
+      isMax,
     )
   }
 

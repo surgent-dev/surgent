@@ -45,6 +45,7 @@ import {
   useRejectQuestion,
   useSubagents,
   type SendPartInput,
+  type AgentModelOverride,
 } from '@/queries/chats'
 import ProviderDialog from '@/components/provider-dialog'
 import { useFunMessage } from '@/components/ui/fun-loading'
@@ -403,12 +404,23 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     setPendingPrompt(null)
   }, [pendingPrompt, setPendingPrompt])
 
+  // Build agent overrides for non-MAX mode (use flash for subagents)
+  const buildAgentOverrides = (isMax: boolean): Record<string, AgentModelOverride> | undefined => {
+    if (isMax) return undefined // MAX mode: let subagents use their default (higher tier) models
+    // Non-MAX mode: use flash for explore and frontend subagents
+    return {
+      explore: { model: { providerID: 'opencode', modelID: 'gemini-3-flash' } },
+      frontend: { model: { providerID: 'opencode', modelID: 'gemini-3-flash' } },
+    }
+  }
+
   const handleSend = (
     text: string,
     files?: FilePart[],
     model?: string,
     providerID?: string,
     variant?: string,
+    isMax?: boolean,
   ) => {
     const trimmed = text.trim()
     if ((!trimmed && !files?.length) || inputWorking || !activeId) return
@@ -463,6 +475,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       parts: optimisticParts,
     })
 
+    const agentOverrides = buildAgentOverrides(isMax ?? false)
+
     send.mutate(
       {
         sessionId: activeId,
@@ -472,6 +486,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         model,
         providerID,
         variant,
+        agentOverrides,
       },
       {
         onError: () => {
