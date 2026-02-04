@@ -11,10 +11,11 @@ import {
   listDeploymentEnvVars,
   callQuery,
   callMutation,
-  generateAuthKeys,
   type ConvexValue,
+  generateAuthKeys,
 } from '@/apis/convex'
 import * as ProjectService from '@/services/projects'
+import { config } from '@/lib/config'
 
 interface EnvVarConfig {
   value: string
@@ -93,11 +94,7 @@ const deleteProjectSchema = {
 const setEnvVarsSchema = {
   vars: z
     .record(z.string(), z.string())
-    .describe('Key-value pairs of environment variables to set'),
-  destination: z
-    .enum(['server', 'client', 'both'])
-    .optional()
-    .describe('Where these vars should be stored (server, client, or both)'),
+    .describe('Key-value pairs of environment variables to set, e.g. {"OPENAI_API_KEY": "sk-..."}'),
 }
 
 const callFunctionSchema = {
@@ -253,6 +250,14 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
         const deployKey = await createDeployKey(project.deploymentName)
         const authKeys = await generateAuthKeys()
 
+        const oauthClient = await ProjectService.getOAuthClientByProjectId(projectId)
+        if (!oauthClient?.clientId) {
+          throw new Error('OAuth client not configured for project')
+        }
+        if (!config.auth.baseUrl) {
+          throw new Error('BETTER_AUTH_URL is not set')
+        }
+
         // Define all env vars with their destinations
         const allEnvVars: Record<string, EnvVarConfig> = {
           // Convex CLI/SDK - client only (dev tooling)
@@ -260,10 +265,14 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
           CONVEX_URL: { value: project.deploymentUrl, destination: 'client' },
           CONVEX_DEPLOY_KEY: { value: deployKey, destination: 'client' },
           VITE_CONVEX_URL: { value: project.deploymentUrl, destination: 'client' },
-          // Auth - SITE_URL needed both places, keys are secrets (server only)
+          // Auth - SITE_URL needed both places
           SITE_URL: { value: siteUrl, destination: 'both' },
           JWT_PRIVATE_KEY: { value: authKeys.privateKey, destination: 'server' },
           JWKS: { value: authKeys.jwks, destination: 'server' },
+          SURGENT_AUTH_ISSUER: { value: config.auth.baseUrl, destination: 'both' },
+          SURGENT_OAUTH_CLIENT_ID: { value: oauthClient.clientId, destination: 'both' },
+          VITE_SURGENT_AUTH_ISSUER: { value: config.auth.baseUrl, destination: 'client' },
+          VITE_SURGENT_OAUTH_CLIENT_ID: { value: oauthClient.clientId, destination: 'client' },
         }
 
         const { server: serverVars, client: clientVars, forDb: dbVars } = splitEnvVars(allEnvVars)
@@ -333,12 +342,9 @@ Use the projectId returned from create_project.`,
     'set_env_vars',
     {
       title: 'Set Environment Variables',
-      description: `Set environment variables on a Convex deployment.
+      description: `Set environment variables on the Convex deployment.
 
 Use this to configure API keys, secrets, or any runtime configuration your Convex functions need.
-Variables are passed as key-value pairs: {"OPENAI_API_KEY": "sk-...", "DEBUG": "true"}
-Optional "destination" controls where vars are stored: server (default), client, or both.
-
 Existing variables with the same name will be overwritten. Other variables are preserved.`,
       inputSchema: setEnvVarsSchema,
     },
@@ -347,17 +353,14 @@ Existing variables with the same name will be overwritten. Other variables are p
       if (!ctx) return err('Convex not provisioned')
 
       try {
-        const destination = args.destination ?? 'server'
+        await setDeploymentEnvVars(ctx.deploymentUrl, ctx.deployKey, args.vars)
+
         const dbVars = Object.fromEntries(
-          Object.entries(args.vars).map(([key, value]) => [key, { value, destination }]),
+          Object.entries(args.vars).map(([key, value]) => [
+            key,
+            { value, destination: 'server' as const },
+          ]),
         )
-        const shouldSetServer = destination === 'server' || destination === 'both'
-        const shouldWriteClient = destination === 'client' || destination === 'both'
-
-        if (shouldSetServer) {
-          await setDeploymentEnvVars(ctx.deploymentUrl, ctx.deployKey, args.vars)
-        }
-
         await ProjectService.upsertEnvVars(
           ctx.projectId,
           'development',
@@ -365,13 +368,7 @@ Existing variables with the same name will be overwritten. Other variables are p
           ctx.integration?.id,
         )
 
-        const envFileWrite = shouldWriteClient
-          ? await writeEnvToSandbox(ctx.projectId, ctx.sandbox, args.vars)
-          : { status: 'failed', error: 'Skipped writing .env for server-only vars' }
-        return ok({
-          message: `Set ${Object.keys(args.vars).length} environment variable(s)`,
-          envFileWrite,
-        })
+        return ok({ message: `Set ${Object.keys(args.vars).length} environment variable(s)` })
       } catch (e) {
         return err(errMsg(e))
       }
