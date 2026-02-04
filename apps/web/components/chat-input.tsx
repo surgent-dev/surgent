@@ -392,7 +392,7 @@ export default function ChatInput({
 
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      isWorking ? onStop?.() : handleSubmit()
+      if (!isWorking) handleSubmit()
     }
   }
 
