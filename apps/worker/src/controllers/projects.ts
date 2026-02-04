@@ -646,6 +646,7 @@ export async function initializeProject(
       value: apiKeyResult.key,
       createdAt: new Date(),
       updatedAt: new Date(),
+      destination: 'server',
     })
     .execute()
 
