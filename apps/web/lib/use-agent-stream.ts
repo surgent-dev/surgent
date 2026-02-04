@@ -27,6 +27,11 @@ type State = {
   compacting: boolean
 }
 
+type OptimisticMessageInput = {
+  message: Message
+  parts: Part[]
+}
+
 type StreamEvent = Event | { type: string; properties?: Record<string, any> }
 
 type SessionScope = { sessionID?: string; sessionId?: string }
@@ -288,6 +293,31 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
       return { ...state, questions: state.questions.filter((q) => q.id !== id), lastAt: now }
     }
 
+    // Optimistic message handling
+    case 'optimistic.add': {
+      const { messageId, message, parts: msgParts } = props
+      return {
+        ...state,
+        messages: upsertMessage(state.messages, message as Message),
+        parts: { ...state.parts, [messageId]: msgParts },
+        lastAt: now,
+      }
+    }
+
+    case 'optimistic.remove': {
+      const optimisticId = props.messageId as string | undefined
+      if (!optimisticId) return state
+      return {
+        ...state,
+        messages: state.messages.filter((m) => m.id !== optimisticId),
+        parts: (() => {
+          const { [optimisticId]: _, ...rest } = state.parts
+          return rest
+        })(),
+        lastAt: now,
+      }
+    }
+
     default:
       return state
   }
@@ -359,6 +389,24 @@ export default function useAgentStream({
 
   const dismissError = useCallback(() => dispatch({ type: 'error.clear' } as any), [])
 
+  // Add optimistic message for instant UI feedback
+  const addOptimisticMessage = useCallback((input: OptimisticMessageInput) => {
+    const messageId = input.message.id
+    if (!messageId) return
+    dispatch({
+      type: 'optimistic.add',
+      properties: { messageId, message: input.message, parts: input.parts },
+    } as any)
+  }, [])
+
+  // Remove optimistic message when send fails
+  const removeOptimisticMessage = useCallback((messageId: string) => {
+    dispatch({
+      type: 'optimistic.remove',
+      properties: { messageId },
+    } as any)
+  }, [])
+
   // Helper to check if we're in retry state
   const isRetrying = state.status?.type === 'retry'
   const retryInfo = isRetrying ? (state.status as SessionStatusRetry) : null
@@ -366,6 +414,8 @@ export default function useAgentStream({
   return {
     ...state,
     dismissError,
+    addOptimisticMessage,
+    removeOptimisticMessage,
     isRetrying,
     retryInfo,
   }

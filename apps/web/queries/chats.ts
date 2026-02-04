@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { Session, Message, FileDiff, Agent } from '@opencode-ai/sdk'
+import type { Session, FileDiff, Agent } from '@opencode-ai/sdk'
 import { http } from '@/lib/http'
 import type { QuestionAnswer } from '@/lib/question'
 
@@ -53,6 +53,7 @@ async function createSession(projectId: string, options?: CreateSessionOptions):
 }
 
 type FilePartInput = {
+  id?: string
   type: 'file'
   mime: string
   filename: string
@@ -60,58 +61,41 @@ type FilePartInput = {
   size: number
 }
 
+type TextPartInput = {
+  id?: string
+  type: 'text'
+  text: string
+}
+
+export type SendPartInput = FilePartInput | TextPartInput
+
 async function sendMessage(
   projectId: string,
   sessionId: string,
-  text: string,
   agent: 'plan' | 'build' | 'orchestrator',
-  files?: FilePartInput[],
+  parts: SendPartInput[],
+  messageId?: string,
   model?: string,
   providerID?: string,
   variant?: string,
-): Promise<Message> {
-  const parts: Array<{
-    type: string
-    text?: string
-    mime?: string
-    filename?: string
-    url?: string
-    size?: number
-  }> = []
-
-  if (files?.length) {
-    for (const file of files) {
-      parts.push({
-        type: 'file',
-        mime: file.mime,
-        filename: file.filename,
-        url: file.url,
-        size: file.size,
-      })
-    }
-  }
-
-  // Build text with markdown image links for AI
-  const imageLinks = files?.length ? files.map((f) => `![${f.filename}](${f.url})`).join('\n') : ''
-  const fullText = imageLinks ? `${imageLinks}\n\n${text}` : text
-
-  if (fullText) {
-    parts.push({ type: 'text', text: fullText })
-  }
-
+): Promise<void> {
   const body: Record<string, unknown> = { agent, parts }
 
-  if (model && model.trim()) {
+  if (messageId && messageId.trim()) {
+    body.messageID = messageId
+  }
+  if (model && model.trim() && providerID && providerID.trim()) {
     body.model = { providerID, modelID: model }
   }
   if (variant && variant.trim()) {
     body.variant = variant
   }
 
-  const data = await http
-    .post(`api/agent/${projectId}/session/${sessionId}/message`, { json: body })
-    .json()
-  return data as Message
+  await http.post(`api/agent/${projectId}/session/${sessionId}/prompt_async`, {
+    json: body,
+    timeout: false,
+    retry: 0,
+  })
 }
 
 async function abortSession(projectId: string, sessionId: string): Promise<boolean> {
@@ -159,20 +143,29 @@ export function useEnsureSession(projectId?: string) {
 
 export function useSendMessage(projectId?: string) {
   return useMutation<
-    Message,
+    void,
     unknown,
     {
       sessionId: string
-      text: string
+      messageId?: string
       agent: 'plan' | 'build' | 'orchestrator'
-      files?: FilePartInput[]
+      parts: SendPartInput[]
       model?: string
       providerID?: string
       variant?: string
     }
   >({
-    mutationFn: ({ sessionId, text, agent, files, model, providerID, variant }) =>
-      sendMessage(projectId as string, sessionId, text, agent, files, model, providerID, variant),
+    mutationFn: ({ sessionId, messageId, agent, parts, model, providerID, variant }) =>
+      sendMessage(
+        projectId as string,
+        sessionId,
+        agent,
+        parts,
+        messageId,
+        model,
+        providerID,
+        variant,
+      ),
   })
 }
 

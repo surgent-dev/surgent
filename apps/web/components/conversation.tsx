@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
+import type { Message, Part } from '@opencode-ai/sdk'
 import { format, parseISO } from 'date-fns'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -43,6 +44,7 @@ import {
   useReplyQuestion,
   useRejectQuestion,
   useSubagents,
+  type SendPartInput,
 } from '@/queries/chats'
 import ProviderDialog from '@/components/provider-dialog'
 import { useFunMessage } from '@/components/ui/fun-loading'
@@ -100,6 +102,52 @@ const formatTitle = (title: string) => {
   } catch {
     return title
   }
+}
+
+function generateAscendingId(prefix: 'msg' | 'prt'): string {
+  const now = Date.now()
+  if (now !== lastAscendingIdTimestamp) {
+    lastAscendingIdTimestamp = now
+    ascendingIdCounter = 0
+  }
+  ascendingIdCounter += 1
+
+  const value = BigInt(now) * BigInt(0x1000) + BigInt(ascendingIdCounter)
+  const bytes = new Uint8Array(6)
+  for (let i = 0; i < 6; i += 1) {
+    bytes[i] = Number((value >> BigInt(40 - 8 * i)) & BigInt(0xff))
+  }
+  return `${prefix}_${bytesToHex(bytes)}${randomBase62(14)}`
+}
+
+let lastAscendingIdTimestamp = 0
+let ascendingIdCounter = 0
+const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+
+function bytesToHex(bytes: Uint8Array): string {
+  let result = ''
+  for (let i = 0; i < bytes.length; i += 1) {
+    const byte = bytes[i] ?? 0
+    result += byte.toString(16).padStart(2, '0')
+  }
+  return result
+}
+
+function randomBase62(length: number): string {
+  const bytes = new Uint8Array(length)
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes)
+  } else {
+    for (let i = 0; i < length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256)
+    }
+  }
+
+  let result = ''
+  for (const byte of bytes) {
+    result += BASE62[byte % 62]
+  }
+  return result
 }
 
 function RetryCountdown({ retryInfo }: { retryInfo: SessionStatusRetry }) {
@@ -233,6 +281,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     compacting,
     error: sessionError,
     dismissError,
+    addOptimisticMessage,
+    removeOptimisticMessage,
     isRetrying,
     retryInfo,
   } = useAgentStream({ projectId, sessionId: activeId })
@@ -364,15 +414,71 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     if ((!trimmed && !files?.length) || inputWorking || !activeId) return
 
     setInputValue('')
-    send.mutate({
-      sessionId: activeId,
-      text: trimmed,
+    const messageId = generateAscendingId('msg')
+
+    const requestParts: SendPartInput[] = []
+
+    if (trimmed) {
+      requestParts.push({
+        id: generateAscendingId('prt'),
+        type: 'text',
+        text: trimmed,
+      })
+    }
+
+    if (files?.length) {
+      for (const file of files) {
+        requestParts.push({
+          id: generateAscendingId('prt'),
+          type: 'file',
+          mime: file.mime,
+          filename: file.filename,
+          url: file.url,
+          size: file.size,
+        })
+      }
+    }
+
+    const optimisticMessage: Message = {
+      id: messageId,
+      sessionID: activeId,
+      role: 'user',
+      time: { created: Date.now() },
       agent: mode,
-      files,
-      model,
-      providerID,
+      model: model && providerID ? { providerID, modelID: model } : undefined,
       variant,
+    } as Message
+
+    const optimisticParts: Part[] = requestParts
+      .filter((part) => !!part.id)
+      .map((part) => ({
+        ...part,
+        messageID: messageId,
+        sessionID: activeId,
+      }))
+      .sort((a, b) => a.id!.localeCompare(b.id!)) as Part[]
+
+    addOptimisticMessage({
+      message: optimisticMessage,
+      parts: optimisticParts,
     })
+
+    send.mutate(
+      {
+        sessionId: activeId,
+        messageId,
+        agent: mode,
+        parts: requestParts,
+        model,
+        providerID,
+        variant,
+      },
+      {
+        onError: () => {
+          removeOptimisticMessage(messageId)
+        },
+      },
+    )
   }
 
   const handleAbort = () => {

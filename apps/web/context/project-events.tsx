@@ -146,6 +146,85 @@ function normalizeEvent(event: StreamEvent): StreamEvent {
   return event
 }
 
+type SseEventFrame = {
+  id?: string
+  event?: string
+  retry?: number
+  data?: string
+}
+
+function parseSseFrame(chunk: string): SseEventFrame {
+  const lines = chunk.split('\n')
+  const dataLines: string[] = []
+  let id: string | undefined
+  let event: string | undefined
+  let retry: number | undefined
+
+  for (const line of lines) {
+    if (!line || line.startsWith(':')) continue
+    const separator = line.indexOf(':')
+    const field = separator === -1 ? line : line.slice(0, separator)
+    const value = separator === -1 ? '' : line.slice(separator + 1).replace(/^\s/, '')
+
+    if (field === 'data') {
+      dataLines.push(value)
+      continue
+    }
+    if (field === 'id') {
+      id = value
+      continue
+    }
+    if (field === 'event') {
+      event = value
+      continue
+    }
+    if (field === 'retry') {
+      const parsed = Number.parseInt(value, 10)
+      if (!Number.isNaN(parsed)) retry = parsed
+    }
+  }
+
+  return {
+    id,
+    event,
+    retry,
+    data: dataLines.length ? dataLines.join('\n') : undefined,
+  }
+}
+
+async function readSseStream(
+  body: ReadableStream<Uint8Array>,
+  onEvent: (event: SseEventFrame) => void,
+) {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      buffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+
+      const chunks = buffer.split('\n\n')
+      buffer = chunks.pop() ?? ''
+
+      for (const chunk of chunks) {
+        onEvent(parseSseFrame(chunk))
+      }
+    }
+
+    buffer += decoder.decode()
+    buffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    if (buffer.trim()) {
+      onEvent(parseSseFrame(buffer))
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 export function ProjectEventProvider({
   projectId,
   children,
@@ -156,16 +235,25 @@ export function ProjectEventProvider({
   const [connected, setConnected] = useState(false)
   const connectedRef = useRef(false)
   const closedRef = useRef(false)
-  const esRef = useRef<EventSource | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const connectionIdRef = useRef(0)
+  const lastEventIdRef = useRef<string | null>(null)
   const subscribersRef = useRef(new Map<string, Set<Subscriber>>())
   const queueRef = useRef<StreamEvent[]>([])
   const rafRef = useRef<number | null>(null)
   const attemptRef = useRef(0)
   const connectedAtRef = useRef(0)
+  const lastHeartbeatRef = useRef(0)
+  const heartbeatCheckRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const needsResyncRef = useRef(new Set<string>())
-  const syncingRef = useRef(new Set<string>())
+  const inflightRef = useRef(new Map<string, Promise<void>>())
+  const retryIntervalRef = useRef<number | null>(null)
+
+  // Heartbeat timeout - if no heartbeat in 35s, connection is likely dead
+  const HEARTBEAT_TIMEOUT = 35000
+  const HEARTBEAT_CHECK_INTERVAL = 5000
 
   const emitAll = useCallback((event: StreamEvent) => {
     for (const callbacks of subscribersRef.current.values()) {
@@ -216,17 +304,20 @@ export function ProjectEventProvider({
       if (!projectId || !sessionId || closedRef.current) return
       if (!force && !needsResyncRef.current.has(sessionId)) return
 
-      if (syncingRef.current.has(sessionId)) {
+      const key = `${projectId}:${sessionId}`
+
+      // Inflight deduplication - avoid duplicate requests
+      const pending = inflightRef.current.get(key)
+      if (pending) {
         needsResyncRef.current.add(sessionId)
         return
       }
 
       needsResyncRef.current.delete(sessionId)
-      syncingRef.current.add(sessionId)
 
       const syncMessages = http
         .get(`api/agent/${projectId}/session/${sessionId}/message`, {
-          retry: { limit: 5, statusCodes: [502, 503, 504], delay: () => 1000 },
+          retry: { limit: 3, statusCodes: [502, 503, 504], delay: () => 500 },
         })
         .json<Array<{ info: Message; parts: Part[] }>>()
         .then((items) => {
@@ -264,11 +355,13 @@ export function ProjectEventProvider({
         })
         .catch(() => {})
 
-      Promise.allSettled([syncMessages, syncStatus]).finally(() => {
-        syncingRef.current.delete(sessionId)
+      const promise = Promise.allSettled([syncMessages, syncStatus]).then(() => {
+        inflightRef.current.delete(key)
         if (!needsResyncRef.current.has(sessionId) || closedRef.current) return
         syncSession(sessionId, true)
       })
+
+      inflightRef.current.set(key, promise)
     },
     [emitSession, projectId],
   )
@@ -303,8 +396,11 @@ export function ProjectEventProvider({
     if (!projectId) return
 
     closedRef.current = false
+    connectionIdRef.current += 1
     attemptRef.current = 0
     connectedAtRef.current = 0
+    lastHeartbeatRef.current = 0
+    lastEventIdRef.current = null
     markAllSessionsForResync()
 
     const url = backendBaseUrl
@@ -321,6 +417,51 @@ export function ProjectEventProvider({
       })
     }
 
+    const scheduleReconnect = () => {
+      if (closedRef.current) return
+
+      if (heartbeatCheckRef.current) {
+        clearInterval(heartbeatCheckRef.current)
+        heartbeatCheckRef.current = null
+      }
+
+      markAllSessionsForResync()
+
+      // Faster disconnect detection - 5s instead of 15s
+      if (!disconnectTimerRef.current) {
+        disconnectTimerRef.current = setTimeout(() => {
+          disconnectTimerRef.current = null
+          setConnectedState(false)
+          emitAll({ type: 'connection.closed' })
+        }, 5000)
+      }
+
+      const connectedFor = connectedAtRef.current ? Date.now() - connectedAtRef.current : 0
+      if (connectedFor >= 10000) {
+        attemptRef.current = 0
+      }
+
+      if (reconnectTimerRef.current) return
+      const attempt = attemptRef.current
+      // Use server-specified retry interval if available, otherwise exponential backoff
+      const serverRetry = retryIntervalRef.current
+      const baseDelay =
+        serverRetry ?? (attempt === 0 ? 300 : Math.min(1000 * Math.pow(2, attempt - 1), 30000))
+      const jitter = 0.9 + Math.random() * 0.2
+      const delay = Math.round(baseDelay * jitter)
+      attemptRef.current = Math.min(attempt + 1, 10)
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null
+        connect()
+      }, delay)
+    }
+
+    const triggerReconnect = () => {
+      if (closedRef.current) return
+      abortRef.current?.abort()
+      scheduleReconnect()
+    }
+
     const connect = () => {
       if (closedRef.current) return
 
@@ -329,68 +470,98 @@ export function ProjectEventProvider({
         reconnectTimerRef.current = null
       }
 
-      esRef.current?.close()
+      abortRef.current?.abort()
+      const abort = new AbortController()
+      abortRef.current = abort
+      const connectionId = connectionIdRef.current + 1
+      connectionIdRef.current = connectionId
+
       connectedAtRef.current = 0
+      lastHeartbeatRef.current = 0
       clearDisconnectTimer()
 
-      const es = new EventSource(url, { withCredentials: true })
-      esRef.current = es
-
-      es.onopen = () => {
-        connectedAtRef.current = Date.now()
-        clearDisconnectTimer()
-        setConnectedState(true)
-        emitAll({ type: 'server.connected' })
-        for (const sessionId of subscribersRef.current.keys()) {
-          syncSession(sessionId)
-        }
+      // Clear heartbeat check interval
+      if (heartbeatCheckRef.current) {
+        clearInterval(heartbeatCheckRef.current)
+        heartbeatCheckRef.current = null
       }
 
-      es.onmessage = (evt) => {
-        try {
-          const raw = JSON.parse(evt.data) as StreamEvent
-          const event = normalizeEvent(raw)
-          if (event.type === 'server.heartbeat') {
-            attemptRef.current = 0
-          }
-
-          const compactedSessionId = getCompactedSessionId(event)
-          if (compactedSessionId) {
-            needsResyncRef.current.add(compactedSessionId)
-            syncSession(compactedSessionId, true)
-          }
-
-          queueRef.current.push(event)
-          flushQueue()
-        } catch {}
+      const headers = new Headers({ accept: 'text/event-stream' })
+      if (lastEventIdRef.current) {
+        headers.set('Last-Event-ID', lastEventIdRef.current)
       }
 
-      es.onerror = () => {
-        es.close()
-        if (closedRef.current) return
+      fetch(url, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+        cache: 'no-store',
+        signal: abort.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`SSE failed: ${response.status}`)
+          if (!response.body) throw new Error('SSE body missing')
+          if (closedRef.current || connectionId !== connectionIdRef.current) return
 
-        markAllSessionsForResync()
-
-        if (!disconnectTimerRef.current) {
-          disconnectTimerRef.current = setTimeout(() => {
-            disconnectTimerRef.current = null
-            setConnectedState(false)
-            emitAll({ type: 'connection.closed' })
-          }, 15000)
-        }
-
-        const connectedFor = connectedAtRef.current ? Date.now() - connectedAtRef.current : 0
-        if (connectedFor >= 15000) {
+          const now = Date.now()
+          connectedAtRef.current = now
+          lastHeartbeatRef.current = now
           attemptRef.current = 0
-        }
+          clearDisconnectTimer()
+          setConnectedState(true)
+          emitAll({ type: 'server.connected' })
 
-        const attempt = attemptRef.current
-        const baseDelay = Math.min(3000 * Math.pow(2, attempt), 60000)
-        const jitter = 0.8 + Math.random() * 0.4
-        const delay = Math.round(baseDelay * jitter)
-        attemptRef.current = Math.min(attempt + 1, 10)
-        reconnectTimerRef.current = setTimeout(connect, delay)
-      }
+          // Start heartbeat timeout detection
+          heartbeatCheckRef.current = setInterval(() => {
+            if (closedRef.current || connectionId !== connectionIdRef.current) return
+            const timeSinceHeartbeat = Date.now() - lastHeartbeatRef.current
+            if (timeSinceHeartbeat > HEARTBEAT_TIMEOUT) {
+              // Connection likely dead, force reconnect
+              triggerReconnect()
+            }
+          }, HEARTBEAT_CHECK_INTERVAL)
+
+          for (const sessionId of subscribersRef.current.keys()) {
+            syncSession(sessionId)
+          }
+
+          await readSseStream(response.body, ({ id, data, retry }) => {
+            if (closedRef.current || connectionId !== connectionIdRef.current) return
+            if (id !== undefined) lastEventIdRef.current = id
+            if (retry !== undefined) retryIntervalRef.current = retry
+            if (!data) return
+
+            try {
+              const raw = JSON.parse(data) as StreamEvent
+              const event = normalizeEvent(raw)
+
+              // Update heartbeat timestamp on any message (heartbeat or data)
+              lastHeartbeatRef.current = Date.now()
+
+              if (event.type === 'server.heartbeat') {
+                attemptRef.current = 0
+                // Don't emit heartbeat events to subscribers
+                return
+              }
+
+              const compactedSessionId = getCompactedSessionId(event)
+              if (compactedSessionId) {
+                needsResyncRef.current.add(compactedSessionId)
+                syncSession(compactedSessionId, true)
+              }
+
+              queueRef.current.push(event)
+              flushQueue()
+            } catch {}
+          })
+
+          if (closedRef.current || connectionId !== connectionIdRef.current) return
+          scheduleReconnect()
+        })
+        .catch(() => {
+          if (closedRef.current || connectionId !== connectionIdRef.current) return
+          scheduleReconnect()
+        })
     }
 
     connect()
@@ -399,20 +570,28 @@ export function ProjectEventProvider({
       closedRef.current = true
       clearDisconnectTimer()
 
+      if (heartbeatCheckRef.current) {
+        clearInterval(heartbeatCheckRef.current)
+        heartbeatCheckRef.current = null
+      }
+
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null
       }
+
+      abortRef.current?.abort()
+      abortRef.current = null
 
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
       }
       queueRef.current = []
+      inflightRef.current.clear()
 
       setConnectedState(false)
       emitAll({ type: 'connection.closed' })
-      esRef.current?.close()
     }
   }, [
     clearDisconnectTimer,
