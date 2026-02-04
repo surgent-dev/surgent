@@ -3,6 +3,7 @@ import { Sandbox as E2BSandbox } from 'e2b'
 import { Configuration, SandboxApi } from '@daytonaio/api-client'
 import { db } from '@/lib/db'
 import { requireAuth } from '../middleware/auth'
+import { isAdmin } from '../middleware/admin'
 import type { AppContext } from '@/types/application'
 import { config } from '@/lib/config'
 import { z } from 'zod'
@@ -74,13 +75,16 @@ agent.all(
       .executeTakeFirst()
 
     if (!project) return c.json({ error: 'Project not found' }, 404)
-    const membership = await db
-      .selectFrom('member')
-      .select('id')
-      .where('organizationId', '=', project.organizationId)
-      .where('userId', '=', c.get('user')!.id)
-      .executeTakeFirst()
-    if (!membership) return c.json({ error: 'Forbidden' }, 403)
+
+    if (!isAdmin(c.get('user')!)) {
+      const membership = await db
+        .selectFrom('member')
+        .select('id')
+        .where('organizationId', '=', project.organizationId)
+        .where('userId', '=', c.get('user')!.id)
+        .executeTakeFirst()
+      if (!membership) return c.json({ error: 'Forbidden' }, 403)
+    }
 
     const sandboxRow = await db
       .selectFrom('sandbox')

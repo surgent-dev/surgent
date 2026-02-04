@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../middleware/auth'
+import { isAdmin } from '../middleware/admin'
 
 const providers = new Hono<AppContext>()
 
@@ -16,31 +17,35 @@ const providerSchema = z.object({
 
 providers.use('*', requireAuth)
 
-async function getProjectForUser(id: string, userId: string) {
-  const row = await db
+type User = { id: string; role?: string | null }
+
+async function getProjectForUser(id: string, user: User) {
+  const project = await db
     .selectFrom('project')
-    .leftJoin('member', (join) =>
-      join
-        .onRef('member.organizationId', '=', 'project.organizationId')
-        .on('member.userId', '=', userId),
-    )
-    .selectAll('project')
-    .select('member.id as memberId')
-    .where('project.id', '=', id)
-    .where('project.deletedAt', 'is', null)
+    .selectAll()
+    .where('id', '=', id)
+    .where('deletedAt', 'is', null)
     .executeTakeFirst()
 
-  if (!row) return { error: 'Project not found', status: 404 as const }
-  if (!row.memberId) return { error: 'Forbidden', status: 403 as const }
+  if (!project) return { error: 'Project not found', status: 404 as const }
 
-  const { memberId: _, ...project } = row
+  if (!isAdmin(user)) {
+    const member = await db
+      .selectFrom('member')
+      .select('id')
+      .where('organizationId', '=', project.organizationId)
+      .where('userId', '=', user.id)
+      .executeTakeFirst()
+    if (!member) return { error: 'Forbidden', status: 403 as const }
+  }
+
   return { project }
 }
 
 // GET /providers/:id - List BYOK providers for a project
 providers.get('/:id', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProjectForUser(id, c.get('user')!.id)
+  const result = await getProjectForUser(id, c.get('user')!)
   if ('error' in result) return c.json({ error: result.error }, result.status)
 
   const rows = await db
@@ -62,7 +67,7 @@ providers.post(
   async (c) => {
     const { id } = c.req.valid('param')
     const { provider, credentials } = c.req.valid('json')
-    const result = await getProjectForUser(id, c.get('user')!.id)
+    const result = await getProjectForUser(id, c.get('user')!)
     if ('error' in result) return c.json({ error: result.error }, result.status)
 
     const now = new Date()
@@ -93,7 +98,7 @@ providers.post(
 // DELETE /providers/:id/:provider - Remove BYOK provider credentials
 providers.delete('/:id/:provider', zValidator('param', providerParam), async (c) => {
   const { id, provider } = c.req.valid('param')
-  const result = await getProjectForUser(id, c.get('user')!.id)
+  const result = await getProjectForUser(id, c.get('user')!)
   if ('error' in result) return c.json({ error: result.error }, result.status)
 
   await db

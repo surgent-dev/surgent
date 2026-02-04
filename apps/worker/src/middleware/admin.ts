@@ -3,9 +3,20 @@ import type { AppContext } from '@/types/application'
 import { config } from '@/lib/config'
 
 export function isAdmin(user: { id: string; role?: string | null }): boolean {
-  return (
-    config.auth.adminUserIds.includes(user.id) || config.auth.adminRoles.includes(user.role ?? '')
-  )
+  const isAdminById = config.auth.adminUserIds.includes(user.id)
+  const isAdminByRole = config.auth.adminRoles.includes(user.role ?? '')
+
+  console.log('[isAdmin] check:', {
+    userId: user.id,
+    userRole: user.role,
+    configAdminUserIds: config.auth.adminUserIds,
+    configAdminRoles: config.auth.adminRoles,
+    isAdminById,
+    isAdminByRole,
+    result: isAdminById || isAdminByRole,
+  })
+
+  return isAdminById || isAdminByRole
 }
 
 export async function requireAdmin(c: Context<AppContext>, next: Next) {
@@ -13,10 +24,12 @@ export async function requireAdmin(c: Context<AppContext>, next: Next) {
   const session = c.get('session')
 
   if (!user || !session) {
+    console.log('[requireAdmin] no user/session')
     return c.json({ error: 'Unauthorized' }, 401)
   }
 
   if (!isAdmin(user)) {
+    console.log('[requireAdmin] user not admin:', user.id)
     return c.json({ error: 'Forbidden' }, 403)
   }
 
