@@ -658,10 +658,12 @@ export default function PreviewPanel({
   )
 
   const url = project?.sandbox?.url
-  const ready = Boolean(url)
-
   const { data: health } = useSandboxHealthQuery(projectId, type === 'preview')
-  const down = Boolean(health && health.status !== 'running')
+
+  // Ready only when URL exists AND health confirms sandbox is running
+  const ready = Boolean(url) && health?.status === 'running'
+  // Down only when health confirms sandbox is paused (show activate button)
+  const down = health?.status === 'paused'
 
   const { mutate: activate, isPending: activating } = useActivateProject()
 
