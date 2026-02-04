@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { Surpay } from '@surgent-dev/surpay'
+import { Surpay } from '@surgent/pay'
 import { config } from '@/lib/config'
 
 // Context passed to MCP tools - contains Surpay API key (scoped to project)
@@ -42,16 +42,25 @@ export function createPayMcpServer(): McpServer {
       description: `List all products with their prices for a project.
 
 Returns an array of products, each containing:
-- product: Object with id, name, slug, description
-- prices: Array of price objects with amount, currency, interval, etc.
+- product: Object with id, name, slug, description, isArchived
+- prices: Array of price objects with priceAmount, priceCurrency, recurringInterval, etc.
 
-HINTS FOR CHECKOUT:
-- To create a checkout, use the SDK's checkout.create() method
-- product_id: Use the product's UUID or slug
-- price_id: Use the price's UUID or slug (optional - defaults to first price if omitted)
-- customer_id: Your app's user identifier (e.g., user ID from your auth system)
+FOR CONVEX APPS - Use @surgent/pay-convex SDK:
+1. Create convex/pay.ts with Surpay config and identify() function
+2. Use createCheckout action for authenticated users (uses identify() for customerId)
+3. Use guestCheckout action for anonymous users (pass customerId explicitly)
+4. Use check action to verify product access
+5. Use listProducts action to show available products
 
-If the user wants to setup payments (create products, configure Stripe, etc.), refer them to the payment skill.
+CHECKOUT ARGS:
+- productSlug: Human-readable slug (e.g., "pro-plan") - RECOMMENDED
+- productId: UUID (alternative to slug)
+- priceId: Optional - defaults to first/default price
+- successUrl/cancelUrl: Redirect URLs after checkout
+
+GUEST CHECKOUT:
+- Store a random UUID in localStorage as customerId for anonymous users
+- Pass customerEmail/customerName for contact info
 
 REQUIRES _meta.context with apiKey (project-scoped API key).`,
       inputSchema: {},
@@ -64,7 +73,7 @@ REQUIRES _meta.context with apiKey (project-scoped API key).`,
         const client = new Surpay({ apiKey: ctx.apiKey, baseUrl: config.surpay.baseUrl })
         const result = await client.products.listWithPrices()
         if (result.error) return err(result.error.message || 'Failed to list products')
-        const activeProducts = result.data?.filter((p) => !p.product.is_archived) ?? []
+        const activeProducts = result.data?.filter((p) => !p.product.isArchived) ?? []
         return ok({ products: activeProducts })
       } catch (e) {
         return err(errMsg(e))
