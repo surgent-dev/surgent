@@ -207,13 +207,13 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
       if (!projectId) return err('Missing projectId')
 
       try {
-        const sandbox = await ProjectService.getSandboxByProjectId(projectId)
+        const [sandbox, existingIntegration, projectEnvVars] = await Promise.all([
+          ProjectService.getSandboxByProjectId(projectId),
+          ProjectService.getIntegrationByProvider(projectId, 'convex'),
+          ProjectService.getEnvVarsByProjectId(projectId, 'development'),
+        ])
         const siteUrl = sandbox?.host ?? 'http://localhost:5173'
-
-        const existingIntegration = await ProjectService.getIntegrationByProvider(
-          projectId,
-          'convex',
-        )
+        const surgentApiKey = projectEnvVars.find((v) => v.key === 'SURGENT_API_KEY')?.value
 
         if (existingIntegration) {
           const config = existingIntegration.config as ConvexIntegrationConfig | null
@@ -246,17 +246,13 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
           })
         }
 
-        const project = await createProjectOnTeam({ name: args.name, deploymentType: 'dev' })
+        const [project, authKeys] = await Promise.all([
+          createProjectOnTeam({ name: args.name, deploymentType: 'dev' }),
+          generateAuthKeys(),
+        ])
         const deployKey = await createDeployKey(project.deploymentName)
-        const authKeys = await generateAuthKeys()
 
-        const oauthClient = await ProjectService.getOAuthClientByProjectId(projectId)
-        if (!oauthClient?.clientId) {
-          throw new Error('OAuth client not configured for project')
-        }
-        if (!config.auth.baseUrl) {
-          throw new Error('BETTER_AUTH_URL is not set')
-        }
+        if (!surgentApiKey) throw new Error('SURGENT_API_KEY not found for project')
 
         // Define all env vars with their destinations
         const allEnvVars: Record<string, EnvVarConfig> = {
@@ -269,10 +265,7 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
           SITE_URL: { value: siteUrl, destination: 'both' },
           JWT_PRIVATE_KEY: { value: authKeys.privateKey, destination: 'server' },
           JWKS: { value: authKeys.jwks, destination: 'server' },
-          SURGENT_AUTH_ISSUER: { value: config.auth.baseUrl, destination: 'both' },
-          SURGENT_OAUTH_CLIENT_ID: { value: oauthClient.clientId, destination: 'both' },
-          VITE_SURGENT_AUTH_ISSUER: { value: config.auth.baseUrl, destination: 'client' },
-          VITE_SURGENT_OAUTH_CLIENT_ID: { value: oauthClient.clientId, destination: 'client' },
+          SURGENT_API_KEY: { value: surgentApiKey, destination: 'server' },
         }
 
         const { server: serverVars, client: clientVars, forDb: dbVars } = splitEnvVars(allEnvVars)
