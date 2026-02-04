@@ -86,13 +86,19 @@ function detectProvider(modelId?: string): Provider {
   return 'openai'
 }
 
+const PROVIDER_DEFAULTS: Record<Provider, number> = {
+  openai: 2, // 'high'
+  claude: 0, // 'high'
+  gemini: 1, // 'high'
+}
+
 function getReasoningConfig(modelId?: string) {
   const provider = detectProvider(modelId)
   const variants = PROVIDER_VARIANTS[provider]
   return {
     variants,
     maxLevel: variants.length - 1,
-    getVariant: (level: number) => variants[Math.min(level, variants.length - 1)] ?? variants[0],
+    defaultLevel: PROVIDER_DEFAULTS[provider],
   }
 }
 
@@ -185,7 +191,7 @@ export default function ChatInput({
   const [showSubagentDropdown, setShowSubagentDropdown] = useState(false)
   const [subagentFilter, setSubagentFilter] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
-  const [level, setLevel] = useState<number>(1)
+  const [isMax, setIsMax] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dragCounter = useRef(0)
@@ -200,18 +206,13 @@ export default function ChatInput({
     return models[0]
   }, [models, selectedModel])
   const reasoning = useMemo(() => getReasoningConfig(currentModel?.id), [currentModel?.id])
-  const currentVariant = reasoning.getVariant(level)
-  const levelTone = useMemo(() => {
-    const ratio = reasoning.maxLevel > 0 ? level / reasoning.maxLevel : 1
-    if (ratio < 0.5) return 'text-muted-foreground'
-    if (ratio < 1) return 'text-foreground'
-    return 'text-brand'
-  }, [level, reasoning.maxLevel])
+  const currentVariant = isMax
+    ? reasoning.variants[reasoning.maxLevel]
+    : reasoning.variants[reasoning.defaultLevel]
 
   useEffect(() => {
-    // Default to medium (1) for OpenAI, first level for others
-    const provider = detectProvider(currentModel?.id)
-    setLevel(provider === 'openai' ? 1 : 0)
+    // Reset max mode when model changes
+    setIsMax(false)
   }, [currentModel?.id])
 
   const handleModelSelect = (modelId: string, providerId: string) => {
@@ -557,15 +558,34 @@ export default function ChatInput({
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => setLevel((v) => (v + 1) % reasoning.variants.length)}
-                  className="h-8 px-2.5 text-xs rounded-lg flex items-center gap-2 outline-none border border-border/50 hover:bg-muted/60"
+                  onClick={() => setIsMax((v) => !v)}
+                  className="h-8 px-2 flex items-center gap-2 rounded-lg text-xs font-medium hover:bg-muted/60"
                 >
-                  <span className="text-muted-foreground">Reasoning</span>
-                  <span className={cn('font-medium capitalize', levelTone)}>{currentVariant}</span>
+                  <span
+                    className={cn(
+                      'italic font-bold tracking-wide transition-colors',
+                      isMax ? 'text-brand' : 'text-muted-foreground',
+                    )}
+                  >
+                    MAX
+                  </span>
+                  <div
+                    className={cn(
+                      'relative w-7 h-4 rounded-full transition-colors',
+                      isMax ? 'bg-brand' : 'bg-muted-foreground/30',
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-transform duration-200',
+                        isMax ? 'translate-x-[14px]' : 'translate-x-0.5',
+                      )}
+                    />
+                  </div>
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={8}>
-                Click to cycle
+                {isMax ? 'Max reasoning enabled' : 'Enable max reasoning'}
               </TooltipContent>
             </Tooltip>
           </div>
