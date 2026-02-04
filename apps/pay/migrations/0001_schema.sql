@@ -4,7 +4,7 @@
 
 
 -- Dumped from database version 18.1 (Debian 18.1-1.pgdg13+2)
--- Dumped by pg_dump version 18.1
+-- Dumped by pg_dump version 18.1 (Homebrew)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -368,7 +368,8 @@ CREATE TABLE public.env_var (
     value text,
     "integrationId" uuid,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    destination text
 );
 
 
@@ -488,6 +489,19 @@ CREATE TABLE public.ip_rate_limit (
 
 
 --
+-- Name: jwks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.jwks (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "publicKey" text NOT NULL,
+    "privateKey" text NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "expiresAt" timestamp with time zone
+);
+
+
+--
 -- Name: kysely_migration; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -531,6 +545,94 @@ CREATE TABLE public.model (
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone
+);
+
+
+--
+-- Name: oauthAccessToken; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."oauthAccessToken" (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    token text NOT NULL,
+    "clientId" text NOT NULL,
+    "sessionId" uuid,
+    "userId" uuid,
+    "referenceId" text,
+    "refreshId" uuid,
+    scopes jsonb NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "expiresAt" timestamp with time zone NOT NULL
+);
+
+
+--
+-- Name: oauthClient; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."oauthClient" (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "clientId" text NOT NULL,
+    "clientSecret" text,
+    disabled boolean DEFAULT false NOT NULL,
+    "skipConsent" boolean,
+    "enableEndSession" boolean,
+    scopes jsonb,
+    "userId" uuid,
+    "referenceId" text,
+    "projectId" uuid,
+    name text,
+    uri text,
+    icon text,
+    contacts jsonb,
+    tos text,
+    policy text,
+    "softwareId" text,
+    "softwareVersion" text,
+    "softwareStatement" text,
+    "redirectUris" jsonb NOT NULL,
+    "postLogoutRedirectUris" jsonb,
+    "tokenEndpointAuthMethod" text,
+    "grantTypes" jsonb,
+    "responseTypes" jsonb,
+    public boolean,
+    type text,
+    metadata jsonb,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: oauthConsent; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."oauthConsent" (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "clientId" text NOT NULL,
+    "userId" uuid,
+    "referenceId" text,
+    scopes jsonb NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: oauthRefreshToken; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."oauthRefreshToken" (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    token text NOT NULL,
+    "clientId" text NOT NULL,
+    "sessionId" uuid,
+    "userId" uuid NOT NULL,
+    "referenceId" text,
+    scopes jsonb NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "expiresAt" timestamp with time zone NOT NULL,
+    revoked timestamp with time zone
 );
 
 
@@ -1168,6 +1270,14 @@ ALTER TABLE ONLY public.ip_rate_limit
 
 
 --
+-- Name: jwks jwks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jwks
+    ADD CONSTRAINT jwks_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: kysely_migration_lock kysely_migration_lock_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1197,6 +1307,38 @@ ALTER TABLE ONLY public.member
 
 ALTER TABLE ONLY public.model
     ADD CONSTRAINT model_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauthAccessToken oauthAccessToken_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthAccessToken"
+    ADD CONSTRAINT "oauthAccessToken_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: oauthClient oauthClient_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthClient"
+    ADD CONSTRAINT "oauthClient_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: oauthConsent oauthConsent_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthConsent"
+    ADD CONSTRAINT "oauthConsent_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: oauthRefreshToken oauthRefreshToken_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthRefreshToken"
+    ADD CONSTRAINT "oauthRefreshToken_pkey" PRIMARY KEY (id);
 
 
 --
@@ -1760,6 +1902,27 @@ CREATE UNIQUE INDEX model_project_model_uq ON public.model USING btree ("project
 
 
 --
+-- Name: oauthAccessToken_token_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "oauthAccessToken_token_uq" ON public."oauthAccessToken" USING btree (token);
+
+
+--
+-- Name: oauthClient_clientId_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "oauthClient_clientId_uq" ON public."oauthClient" USING btree ("clientId");
+
+
+--
+-- Name: oauthClient_projectId_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "oauthClient_projectId_uq" ON public."oauthClient" USING btree ("projectId");
+
+
+--
 -- Name: organizationRole_organizationId_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2106,6 +2269,94 @@ ALTER TABLE ONLY public.member
 
 ALTER TABLE ONLY public.model
     ADD CONSTRAINT "model_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: oauthAccessToken oauthAccessToken_clientId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthAccessToken"
+    ADD CONSTRAINT "oauthAccessToken_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES public."oauthClient"("clientId");
+
+
+--
+-- Name: oauthAccessToken oauthAccessToken_refreshId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthAccessToken"
+    ADD CONSTRAINT "oauthAccessToken_refreshId_fkey" FOREIGN KEY ("refreshId") REFERENCES public."oauthRefreshToken"(id);
+
+
+--
+-- Name: oauthAccessToken oauthAccessToken_sessionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthAccessToken"
+    ADD CONSTRAINT "oauthAccessToken_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES public.session(id) ON DELETE SET NULL;
+
+
+--
+-- Name: oauthAccessToken oauthAccessToken_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthAccessToken"
+    ADD CONSTRAINT "oauthAccessToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
+
+
+--
+-- Name: oauthClient oauthClient_projectId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthClient"
+    ADD CONSTRAINT "oauthClient_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES public.project(id);
+
+
+--
+-- Name: oauthClient oauthClient_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthClient"
+    ADD CONSTRAINT "oauthClient_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
+
+
+--
+-- Name: oauthConsent oauthConsent_clientId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthConsent"
+    ADD CONSTRAINT "oauthConsent_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES public."oauthClient"("clientId");
+
+
+--
+-- Name: oauthConsent oauthConsent_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthConsent"
+    ADD CONSTRAINT "oauthConsent_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
+
+
+--
+-- Name: oauthRefreshToken oauthRefreshToken_clientId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthRefreshToken"
+    ADD CONSTRAINT "oauthRefreshToken_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES public."oauthClient"("clientId");
+
+
+--
+-- Name: oauthRefreshToken oauthRefreshToken_sessionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthRefreshToken"
+    ADD CONSTRAINT "oauthRefreshToken_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES public.session(id) ON DELETE SET NULL;
+
+
+--
+-- Name: oauthRefreshToken oauthRefreshToken_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."oauthRefreshToken"
+    ADD CONSTRAINT "oauthRefreshToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."user"(id);
 
 
 --

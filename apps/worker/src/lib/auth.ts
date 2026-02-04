@@ -113,7 +113,7 @@ export const auth = betterAuth({
       grantTypes: ['authorization_code', 'refresh_token'],
       idTokenExpiresIn: 60 * 60,
       refreshTokenExpiresIn: 60 * 60 * 24 * 180,
-      clientReference: ({ session }) => session?.activeOrganizationId,
+      clientReference: ({ session }) => session?.activeOrganizationId as string | undefined,
       schema: {
         oauthClient: {
           fields: {
@@ -125,7 +125,7 @@ export const auth = betterAuth({
                 field: 'id',
               },
             },
-          },
+          } as Record<string, unknown>,
         },
       },
       silenceWarnings: {

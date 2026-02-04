@@ -596,6 +596,33 @@ export async function initializeProject(
   const projectId = created.id
   const workingDirectory = workspacePath(projectId)
 
+  const defaultRedirectUri = `https://project-${projectId.slice(0, 8)}.${
+    config.cloudflare.deployDomain
+  }/oauth/callback`
+  const oauthClient = await auth.api.adminCreateOAuthClient({
+    headers: args.headers ?? new Headers(),
+    body: {
+      redirect_uris: [defaultRedirectUri],
+      scope: 'openid profile email offline_access',
+      token_endpoint_auth_method: 'none',
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      skip_consent: true,
+      client_name: args.name || 'app',
+      type: 'user-agent-based',
+    },
+  })
+
+  await db
+    .updateTable('oauthClient')
+    .set({
+      projectId,
+      referenceId: args.organizationId,
+      updatedAt: new Date(),
+    })
+    .where('clientId', '=', oauthClient.client_id)
+    .execute()
+
   const apiKeyResult = await auth.api.createApiKey({
     body: { name: `p-${projectId.slice(0, 8)}` },
     headers: args.headers,
