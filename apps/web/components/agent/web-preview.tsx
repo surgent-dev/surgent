@@ -43,16 +43,23 @@ const useWebPreview = () => {
 
 type ErrorMessage = {
   type: 'error'
-  payload: {
-    message?: string
-    stack?: string
-    url?: string
-    timestamp?: string
-    source?: string
-  }
+  payload?: Record<string, unknown>
 }
 
-const parseMessage = (data: unknown): ErrorMessage | null => {
+type ParsedIframeError = {
+  message: string
+  stack?: string
+  url?: string
+  timestamp?: string
+  source?: IframeError['source']
+}
+
+const SOURCES: IframeError['source'][] = ['global', 'promise', 'react', 'react-router', 'preload']
+
+const nonEmptyString = (value: unknown) =>
+  typeof value === 'string' && value.trim().length > 0 ? value : null
+
+const parseMessage = (data: unknown): ParsedIframeError | null => {
   const parsed =
     typeof data === 'string'
       ? (() => {
@@ -67,10 +74,26 @@ const parseMessage = (data: unknown): ErrorMessage | null => {
   if ((parsed as ErrorMessage).type !== 'error') return null
   const payload = (parsed as ErrorMessage).payload
   if (typeof payload !== 'object' || payload === null) return null
-  return parsed as ErrorMessage
-}
 
-const SOURCES: IframeError['source'][] = ['global', 'promise', 'react', 'react-router', 'preload']
+  const sourceValue = nonEmptyString(payload.source)
+  const source = SOURCES.includes(sourceValue as IframeError['source'])
+    ? (sourceValue as IframeError['source'])
+    : undefined
+  const stack = nonEmptyString(payload.stack) ?? undefined
+  const message = nonEmptyString(payload.message) ?? stack?.split('\n')[0] ?? null
+  const url = nonEmptyString(payload.url) ?? undefined
+
+  if (!source && (!message || !url)) return null
+  if (!message) return null
+
+  return {
+    message,
+    stack,
+    url,
+    timestamp: nonEmptyString(payload.timestamp) ?? undefined,
+    source,
+  }
+}
 
 export type WebPreviewProps = ComponentProps<'div'> & {
   defaultUrl?: string
@@ -104,17 +127,12 @@ export const WebPreview = ({
       const msg = parseMessage(event.data)
       if (!msg) return
 
-      const { payload } = msg
-      const source = SOURCES.includes(payload.source as IframeError['source'])
-        ? (payload.source as IframeError['source'])
-        : 'global'
-
       setIframeError({
-        message: payload.message || 'Unknown error',
-        url: payload.url || iframeRef.current?.src || url,
-        stack: payload.stack,
-        timestamp: payload.timestamp || new Date().toISOString(),
-        source,
+        message: msg.message,
+        url: msg.url || iframeRef.current?.src || url,
+        stack: msg.stack,
+        timestamp: msg.timestamp || new Date().toISOString(),
+        source: msg.source || 'global',
       })
     }
 
