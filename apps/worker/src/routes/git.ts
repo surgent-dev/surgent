@@ -42,8 +42,7 @@ git.get('/:id/git/log', zValidator('param', idParam), async (c) => {
   const userId = c.get('user')!.id
   const shouldFetch = c.req.query('fetch') === 'true'
 
-  const result = await getProjectWithAuth(id, userId)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const project = await getProjectWithAuth(id, c.get('user')!)
 
   const emptyResult: GitLogResult = {
     initialized: false,
@@ -57,7 +56,7 @@ git.get('/:id/git/log', zValidator('param', idParam), async (c) => {
   if (!sandbox) return c.json(emptyResult)
 
   const cwd = workspacePath(id)
-  const gh = result.project.github as ProjectGitHub | null
+  const gh = project.github as ProjectGitHub | null
   const defaultBranch = gh?.defaultBranch || 'main'
 
   // Build auth URL if connected and fetching
@@ -174,14 +173,13 @@ git.get('/:id/git/status', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getProjectWithAuth(id, userId)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const project = await getProjectWithAuth(id, c.get('user')!)
 
   const sandbox = await getSandboxByProjectId(id)
   if (!sandbox) return c.json({ initialized: false })
 
   const cwd = workspacePath(id)
-  const gh = result.project.github as ProjectGitHub | null
+  const gh = project.github as ProjectGitHub | null
   const defaultBranch = gh?.defaultBranch || 'main'
 
   const script = `
@@ -255,8 +253,7 @@ git.post(
     const { message } = c.req.valid('json')
     const userId = c.get('user')!.id
 
-    const result = await getProjectWithAuth(id, userId)
-    if ('error' in result) return c.json({ error: result.error }, result.status)
+    await getProjectWithAuth(id, c.get('user')!)
 
     const sandbox = await getSandboxByProjectId(id)
     if (!sandbox) return c.json({ error: 'Sandbox not running' }, 400)
@@ -298,10 +295,9 @@ git.post('/:id/git/push', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getProjectWithAuth(id, userId)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const project = await getProjectWithAuth(id, c.get('user')!)
 
-  const gh = result.project.github as ProjectGitHub | null
+  const gh = project.github as ProjectGitHub | null
   if (!gh?.repoOwner) return c.json({ error: 'No GitHub repo connected' }, 400)
 
   const githubApp = createGitHubApp()
@@ -375,10 +371,9 @@ git.post('/:id/git/pull', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getProjectWithAuth(id, userId)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const project = await getProjectWithAuth(id, c.get('user')!)
 
-  const gh = result.project.github as ProjectGitHub | null
+  const gh = project.github as ProjectGitHub | null
   if (!gh?.repoOwner) return c.json({ error: 'No GitHub repo connected' }, 400)
 
   const githubApp = createGitHubApp()

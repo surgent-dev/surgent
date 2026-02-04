@@ -1,7 +1,12 @@
 import { Context, Next } from 'hono'
 import type { AppContext } from '@/types/application'
+import { config } from '@/lib/config'
 
-const ADMIN_EMAIL = 'bahodirrajabovb@gmail.com'
+export function isAdmin(user: { id: string; role?: string | null }): boolean {
+  return (
+    config.auth.adminUserIds.includes(user.id) || config.auth.adminRoles.includes(user.role ?? '')
+  )
+}
 
 export async function requireAdmin(c: Context<AppContext>, next: Next) {
   const user = c.get('user')
@@ -11,7 +16,7 @@ export async function requireAdmin(c: Context<AppContext>, next: Next) {
     return c.json({ error: 'Unauthorized' }, 401)
   }
 
-  if (user.email !== ADMIN_EMAIL) {
+  if (!isAdmin(user)) {
     return c.json({ error: 'Forbidden' }, 403)
   }
 

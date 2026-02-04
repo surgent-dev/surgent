@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth'
-import { apiKey, organization } from 'better-auth/plugins'
+import { admin, apiKey, jwt, organization } from 'better-auth/plugins'
+import { oauthProvider } from '@better-auth/oauth-provider'
 import { createAccessControl } from 'better-auth/plugins/access'
 import { db, dialect } from '@/lib/db'
 import { config } from './config'
@@ -86,10 +87,50 @@ export const auth = betterAuth({
       teams: { enabled: true },
       dynamicAccessControl: { enabled: true },
     }),
+    admin({
+      adminUserIds: config.auth.adminUserIds,
+      adminRoles: config.auth.adminRoles,
+    }),
     apiKey({
       rateLimit: { enabled: false },
       enableSessionForAPIKeys: true,
       apiKeyHeaders: ['x-api-key', 'authorization'],
+    }),
+    jwt({
+      jwt: {
+        issuer: config.auth.baseUrl,
+      },
+      jwks: {
+        jwksPath: '/.well-known/jwks.json',
+        keyPairConfig: { alg: 'RS256', modulusLength: 2048 },
+      },
+      disableSettingJwtHeader: true,
+    }),
+    oauthProvider({
+      loginPage: new URL('/login', config.server.clientOrigin).toString(),
+      consentPage: new URL('/oauth/consent', config.server.clientOrigin).toString(),
+      scopes: ['openid', 'profile', 'email', 'offline_access'],
+      grantTypes: ['authorization_code', 'refresh_token'],
+      idTokenExpiresIn: 60 * 60,
+      refreshTokenExpiresIn: 60 * 60 * 24 * 180,
+      clientReference: ({ session }) => session?.activeOrganizationId,
+      schema: {
+        oauthClient: {
+          fields: {
+            projectId: {
+              type: 'string',
+              required: false,
+              references: {
+                model: 'project',
+                field: 'id',
+              },
+            },
+          },
+        },
+      },
+      silenceWarnings: {
+        oauthAuthServerConfig: true,
+      },
     }),
   ],
 
@@ -114,6 +155,7 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24, // 1 day
+    storeSessionInDatabase: true,
   },
 
   databaseHooks: {

@@ -1,4 +1,9 @@
 const env = process.env
+const csv = (value: string | undefined): string[] =>
+  (value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
 
 // Centralized environment variables as a single config object
 export const config = {
@@ -20,6 +25,8 @@ export const config = {
     baseUrl: env.BETTER_AUTH_URL,
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+    adminUserIds: csv(env.BETTER_AUTH_ADMIN_USER_IDS || env.ADMIN_USER_IDS),
+    adminRoles: csv(env.BETTER_AUTH_ADMIN_ROLES || 'admin'),
   },
   sandbox: {
     provider: (env.SANDBOX_PROVIDER || 'e2b') as 'e2b' | 'daytona',

@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { HttpError } from './lib/errors'
 import projects from './routes/projects'
 import git from './routes/git'
 import preview from './routes/preview'
@@ -13,6 +14,10 @@ import { auth } from './lib/auth'
 import { config } from './lib/config'
 import { db } from './lib/db'
 import { migrate } from '@repo/db'
+import {
+  oauthProviderAuthServerMetadata,
+  oauthProviderOpenIdConfigMetadata,
+} from '@better-auth/oauth-provider'
 import type { AppContext } from '@/types/application'
 
 function isPreviewSubdomain(sub: string): boolean {
@@ -42,6 +47,15 @@ const app = new Hono<AppContext>({
     return path
   },
 })
+
+app.onError((err, c) => {
+  if (err instanceof HttpError) {
+    return c.json({ error: err.message }, err.status as 400 | 401 | 403 | 404 | 500)
+  }
+  console.error('[server] unhandled error:', err)
+  return c.json({ error: 'Internal Server Error' }, 500)
+})
+
 app.use(
   '*',
   cors({
@@ -57,6 +71,14 @@ app.use(
     credentials: true,
   }),
 )
+
+// OAuth 2.1 metadata for issuer with path (/api/auth)
+app.get('/.well-known/oauth-authorization-server/api/auth', (c) => {
+  return oauthProviderAuthServerMetadata(auth)(c.req.raw)
+})
+app.get('/api/auth/.well-known/openid-configuration', (c) => {
+  return oauthProviderOpenIdConfigMetadata(auth)(c.req.raw)
+})
 
 // Ensure CORS headers are present even if downstream returns a raw Response (e.g. Better Auth)
 app.use('*', async (c, next) => {

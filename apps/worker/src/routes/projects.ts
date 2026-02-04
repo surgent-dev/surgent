@@ -241,8 +241,7 @@ projects.get('/usage', requireAuth, async (c) => {
 // GET /projects/:id - Get single project
 projects.get('/:id', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProjectWithAuth(id, c.get('user')!.id)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const project = await getProjectWithAuth(id, c.get('user')!)
 
   const row = await db
     .selectFrom('project')
@@ -267,7 +266,7 @@ projects.get('/:id', zValidator('param', idParam), async (c) => {
     .execute()
 
   return c.json({
-    ...result.project,
+    ...project,
     sandbox: row?.sandboxId
       ? {
           id: row.sandboxId,
@@ -299,10 +298,7 @@ projects.patch(
     const { id } = c.req.valid('param')
     const { name } = c.req.valid('json')
 
-    const result = await getProjectWithAuth(id, c.get('user')!.id)
-    if ('error' in result) {
-      return c.json({ error: result.error }, result.status)
-    }
+    const project = await getProjectWithAuth(id, c.get('user')!)
 
     await db
       .updateTable('project')
@@ -318,10 +314,7 @@ projects.patch(
 projects.delete('/:id', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
 
-  const result = await getProjectWithAuth(id, c.get('user')!.id)
-  if ('error' in result) {
-    return c.json({ error: result.error }, result.status)
-  }
+  await getProjectWithAuth(id, c.get('user')!)
 
   // Delete sandbox before soft deleting project
   await deleteSandbox({ projectId: id })
@@ -408,8 +401,7 @@ projects.post(
         deployName,
       })
 
-      const result = await getProjectWithAuth(id, c.get('user')!.id)
-      if ('error' in result) return c.json({ error: result.error }, result.status)
+      const project = await getProjectWithAuth(id, c.get('user')!)
       const name = deployName ? sanitizeHostname(deployName) : undefined
 
       if (name) {
@@ -449,10 +441,7 @@ projects.post(
 // GET /projects/:id/deployments - Get deployment history for a project
 projects.get('/:id/deployments', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProjectWithAuth(id, c.get('user')!.id)
-  if ('error' in result) {
-    return c.json({ error: result.error }, result.status)
-  }
+  await getProjectWithAuth(id, c.get('user')!)
 
   const deployments = await db
     .selectFrom('deployment')
@@ -498,9 +487,7 @@ projects.post('/:id/undeploy', zValidator('param', idParam), async (c) => {
       userId: c.get('user')?.id,
     })
 
-    const result = await getProjectWithAuth(id, c.get('user')!.id)
-    if ('error' in result) return c.json({ error: result.error }, result.status)
-    const row = result.project
+    const project = await getProjectWithAuth(id, c.get('user')!)
 
     undeployProject({ projectId: id }).catch((err) => {
       console.error('[undeploy] background failed', {
@@ -528,10 +515,7 @@ projects.post(
   async (c) => {
     const { id } = c.req.valid('param')
     const { versionId } = c.req.valid('json')
-    const result = await getProjectWithAuth(id, c.get('user')!.id)
-    if ('error' in result) {
-      return c.json({ error: result.error }, result.status)
-    }
+    const project = await getProjectWithAuth(id, c.get('user')!)
 
     try {
       await redeployVersion({ projectId: id, versionId })
@@ -561,8 +545,7 @@ projects.post(
         name,
       })
 
-      const result = await getProjectWithAuth(id, c.get('user')!.id)
-      if ('error' in result) return c.json({ error: result.error }, result.status)
+      const project = await getProjectWithAuth(id, c.get('user')!)
 
       const sanitized = sanitizeHostname(name)
 
@@ -620,9 +603,7 @@ projects.post(
 // POST /projects/:id/activate - Resume project sandbox (alias)
 projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProjectWithAuth(id, c.get('user')!.id)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
-  const row = result.project
+  const project = await getProjectWithAuth(id, c.get('user')!)
 
   const sandboxRow = await db
     .selectFrom('sandbox')
@@ -640,8 +621,7 @@ projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
 // GET /projects/:id/logs - Get PM2 logs from sandbox
 projects.get('/:id/logs', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProjectWithAuth(id, c.get('user')!.id)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const project = await getProjectWithAuth(id, c.get('user')!)
 
   try {
     const logs = await getSandboxLogs({ projectId: id })
@@ -656,10 +636,7 @@ projects.get('/:id/logs', zValidator('param', idParam), async (c) => {
 // GET /projects/:id/health - Check if sandbox preview is reachable
 projects.get('/:id/health', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProjectWithAuth(id, c.get('user')!.id)
-  if ('error' in result)
-    return c.json({ status: result.status === 404 ? 'not_found' : 'forbidden' }, result.status)
-  const row = result.project
+  await getProjectWithAuth(id, c.get('user')!)
 
   const sandboxRow = await db
     .selectFrom('sandbox')
@@ -684,10 +661,7 @@ projects.get('/:id/health', zValidator('param', idParam), async (c) => {
 projects.get('/:id/download', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
 
-  const result = await getProjectWithAuth(id, c.get('user')!.id)
-  if ('error' in result) {
-    return c.json({ error: result.error }, result.status)
-  }
+  await getProjectWithAuth(id, c.get('user')!)
 
   try {
     const { buffer, filename } = await downloadProject({ projectId: id })
@@ -744,8 +718,7 @@ async function getConvexCredentials(
 // POST /projects/:id/convex/deploy/prod - Promote to production
 projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProjectWithAuth(id, c.get('user')!.id)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const project = await getProjectWithAuth(id, c.get('user')!)
 
   await deployConvexProd({ projectId: id })
   return c.json({ deployed: true })
@@ -754,8 +727,7 @@ projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c)
 // GET /projects/:id/convex/env - List deployment environment variables
 projects.get('/:id/convex/env', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const result = await getProjectWithAuth(id, c.get('user')!.id)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const project = await getProjectWithAuth(id, c.get('user')!)
 
   const creds = await getConvexCredentials(id, 'development')
   if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
@@ -773,8 +745,7 @@ projects.post(
     const { id } = c.req.valid('param')
     const { vars } = c.req.valid('json')
 
-    const result = await getProjectWithAuth(id, c.get('user')!.id)
-    if ('error' in result) return c.json({ error: result.error }, result.status)
+    const project = await getProjectWithAuth(id, c.get('user')!)
 
     const creds = await getConvexCredentials(id, 'development')
     if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
@@ -793,8 +764,7 @@ projects.get(
     const { id } = c.req.valid('param')
     const { env = 'development' } = c.req.valid('query')
 
-    const result = await getProjectWithAuth(id, c.get('user')!.id)
-    if ('error' in result) return c.json({ error: result.error }, result.status)
+    const project = await getProjectWithAuth(id, c.get('user')!)
 
     const creds = await getConvexCredentials(id, env)
     if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
@@ -830,10 +800,7 @@ projects.get('/:id/github/status', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getProjectWithAuth(id, userId)
-  if ('error' in result) {
-    return c.json({ error: result.error }, result.status)
-  }
+  const project = await getProjectWithAuth(id, c.get('user')!)
 
   const installations = await db
     .selectFrom('github_installations')
@@ -848,7 +815,7 @@ projects.get('/:id/github/status', zValidator('param', idParam), async (c) => {
     accountType: item.accountType,
   }))
 
-  const projectGithub = result.project.github as ProjectGitHub | null
+  const projectGithub = project.github as ProjectGitHub | null
 
   if (!projectGithub?.repoOwner) {
     return c.json({
@@ -880,8 +847,7 @@ projects.get('/:id/github/install-url', zValidator('param', idParam), async (c) 
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getProjectWithAuth(id, userId)
-  if ('error' in result) return c.json({ error: result.error }, result.status)
+  const project = await getProjectWithAuth(id, c.get('user')!)
 
   const githubApp = createGitHubApp()
   if (!githubApp) return c.json({ error: 'GitHub App not configured' }, 500)
@@ -895,10 +861,7 @@ projects.get('/:id/github/repos', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getProjectWithAuth(id, userId)
-  if ('error' in result) {
-    return c.json({ error: result.error }, result.status)
-  }
+  await getProjectWithAuth(id, c.get('user')!)
 
   const installation = await db
     .selectFrom('github_installations')
@@ -942,10 +905,7 @@ projects.post(
     const { owner, repo, repoId, defaultBranch } = c.req.valid('json')
     const userId = c.get('user')!.id
 
-    const result = await getProjectWithAuth(id, userId)
-    if ('error' in result) {
-      return c.json({ error: result.error }, result.status)
-    }
+    const project = await getProjectWithAuth(id, c.get('user')!)
 
     const installation = await db
       .selectFrom('github_installations')
@@ -1014,10 +974,7 @@ projects.post('/:id/github/disconnect', zValidator('param', idParam), async (c) 
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const result = await getProjectWithAuth(id, userId)
-  if ('error' in result) {
-    return c.json({ error: result.error }, result.status)
-  }
+  await getProjectWithAuth(id, c.get('user')!)
 
   await db
     .updateTable('project')
@@ -1050,10 +1007,7 @@ projects.post(
     const { name, description, private: isPrivate, installationId } = c.req.valid('json')
     const userId = c.get('user')!.id
 
-    const result = await getProjectWithAuth(id, userId)
-    if ('error' in result) {
-      return c.json({ error: result.error }, result.status)
-    }
+    const project = await getProjectWithAuth(id, c.get('user')!)
 
     const installation = installationId
       ? await db

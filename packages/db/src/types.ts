@@ -3,6 +3,11 @@ export interface Database {
   session: SessionTable
   account: AccountTable
   verification: VerificationTable
+  oauthClient: OAuthClientTable
+  oauthAccessToken: OAuthAccessTokenTable
+  oauthRefreshToken: OAuthRefreshTokenTable
+  oauthConsent: OAuthConsentTable
+  jwks: JwksTable
   organization: OrganizationTable
   member: MemberTable
   organizationRole: OrganizationRoleTable
@@ -32,6 +37,10 @@ export interface UserTable {
   email: string
   emailVerified: boolean
   image: string | null
+  role: string | null
+  banned: boolean | null
+  banReason: string | null
+  banExpires: Date | null
   createdAt?: Date
   updatedAt?: Date
 }
@@ -45,6 +54,7 @@ export interface SessionTable {
   userAgent: string | null
   activeOrganizationId: string | null
   activeTeamId: string | null
+  impersonatedBy: string | null
   createdAt?: Date
   updatedAt: Date
 }
@@ -72,6 +82,82 @@ export interface VerificationTable {
   expiresAt: Date
   createdAt?: Date
   updatedAt?: Date
+}
+
+export interface OAuthClientTable {
+  id: string
+  clientId: string
+  clientSecret: string | null
+  disabled: boolean | null
+  skipConsent: boolean | null
+  enableEndSession: boolean | null
+  scopes: string[] | null
+  userId: string | null
+  referenceId: string | null
+  projectId: string | null
+  name: string | null
+  uri: string | null
+  icon: string | null
+  contacts: string[] | null
+  tos: string | null
+  policy: string | null
+  softwareId: string | null
+  softwareVersion: string | null
+  softwareStatement: string | null
+  redirectUris: string[]
+  postLogoutRedirectUris: string[] | null
+  tokenEndpointAuthMethod: string | null
+  grantTypes: string[] | null
+  responseTypes: string[] | null
+  public: boolean | null
+  type: string | null
+  metadata: Record<string, unknown> | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface OAuthRefreshTokenTable {
+  id: string
+  token: string
+  clientId: string
+  sessionId: string | null
+  userId: string
+  referenceId: string | null
+  scopes: string[]
+  revoked: Date | null
+  createdAt?: Date
+  expiresAt: Date
+}
+
+export interface OAuthAccessTokenTable {
+  id: string
+  token: string
+  clientId: string
+  sessionId: string | null
+  userId: string | null
+  referenceId: string | null
+  refreshId: string | null
+  scopes: string[]
+  createdAt?: Date
+  expiresAt: Date
+}
+
+export interface OAuthConsentTable {
+  id: string
+  clientId: string
+  userId: string | null
+  referenceId: string | null
+  scopes: string[]
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface JwksTable {
+  id: string
+  publicKey: string
+  privateKey: string
+  createdAt: Date
+  expiresAt: Date | null
 }
 
 export interface OrganizationTable {

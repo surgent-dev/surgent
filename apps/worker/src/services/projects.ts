@@ -1,25 +1,32 @@
 import { db } from '@/lib/db'
 import type { EnvDestination, ProjectMetadata } from '@repo/db'
+import { isAdmin } from '@/middleware/admin'
+import { HttpError } from '@/lib/errors'
 
-export async function getProjectWithAuth(id: string, userId: string) {
-  const row = await db
+type User = { id: string; role?: string | null }
+
+export async function getProjectWithAuth(id: string, user: User) {
+  const project = await db
     .selectFrom('project')
-    .leftJoin('member', (join) =>
-      join
-        .onRef('member.organizationId', '=', 'project.organizationId')
-        .on('member.userId', '=', userId),
-    )
-    .selectAll('project')
-    .select('member.id as memberId')
-    .where('project.id', '=', id)
-    .where('project.deletedAt', 'is', null)
+    .selectAll()
+    .where('id', '=', id)
+    .where('deletedAt', 'is', null)
     .executeTakeFirst()
 
-  if (!row) return { error: 'Project not found', status: 404 as const }
-  if (!row.memberId) return { error: 'Forbidden', status: 403 as const }
+  if (!project) throw new HttpError(404, 'Project not found')
 
-  const { memberId: _, ...project } = row
-  return { project }
+  if (!isAdmin(user)) {
+    const member = await db
+      .selectFrom('member')
+      .select('id')
+      .where('userId', '=', user.id)
+      .where('organizationId', '=', project.organizationId)
+      .executeTakeFirst()
+
+    if (!member) throw new HttpError(403, 'Forbidden')
+  }
+
+  return project
 }
 
 export async function attachApiKeyToProject(
@@ -41,6 +48,14 @@ export function getProjectById(id: string) {
     .selectAll()
     .where('id', '=', id)
     .where('deletedAt', 'is', null)
+    .executeTakeFirst()
+}
+
+export function getOAuthClientByProjectId(projectId: string) {
+  return db
+    .selectFrom('oauthClient')
+    .select(['clientId'])
+    .where('projectId', '=', projectId)
     .executeTakeFirst()
 }
 
