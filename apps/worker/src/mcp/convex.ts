@@ -94,7 +94,7 @@ const deleteProjectSchema = {
 const setEnvVarsSchema = {
   vars: z
     .record(z.string(), z.string())
-    .describe('Key-value pairs of environment variables to set, e.g. {"OPENAI_API_KEY": "sk-..."}'),
+    .describe('Required. Object containing key-value pairs to set'),
 }
 
 const callFunctionSchema = {
@@ -336,6 +336,8 @@ Use the projectId returned from create_project.`,
     {
       title: 'Set Environment Variables',
       description: `Set environment variables on the Convex deployment.
+
+Input: { "vars": { "KEY": "value", "ANOTHER_KEY": "value2" } }
 
 Use this to configure API keys, secrets, or any runtime configuration your Convex functions need.
 Existing variables with the same name will be overwritten. Other variables are preserved.`,
