@@ -327,23 +327,35 @@ impl WebhookWorker {
         let payload: WebhookMessage = serde_json::from_str(msg.body().unwrap_or_default())
             .map_err(|e| format!("Failed to parse message body: {}", e))?;
 
-        // Atomic idempotency check: INSERT returns row only if we won the race
-        let inserted = sqlx::query!(
+        // Acquire advisory lock to prevent concurrent processing of same event
+        let lock_key = format!("{}:{}", payload.processor, payload.event_id);
+        let mut conn = self
+            .pool
+            .acquire()
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+
+        sqlx::query("SELECT pg_advisory_lock(hashtextextended($1, 0))")
+            .bind(&lock_key)
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+
+        // Check if already processed
+        let already_processed = sqlx::query!(
             r#"
-            INSERT INTO processed_webhook_event (processor, "processorEventId", "eventType", "processedAt")
-            VALUES ($1, $2, $3, NOW())
-            ON CONFLICT (processor, "processorEventId") DO NOTHING
-            RETURNING "processorEventId"
+            SELECT 1 as "exists!"
+            FROM processed_webhook_event
+            WHERE processor = $1 AND "processorEventId" = $2
             "#,
             &payload.processor,
-            &payload.event_id,
-            &get_event_type_name(&payload.event)
+            &payload.event_id
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *conn)
         .await
         .map_err(|e| format!("Database error: {}", e))?;
 
-        if inserted.is_none() {
+        if already_processed.is_some() {
             tracing::info!("Event {} already processed, skipping", payload.event_id);
             let receipt_handle = msg.receipt_handle().ok_or("Missing receipt handle")?;
             self.delete_message(receipt_handle).await;
@@ -351,19 +363,37 @@ impl WebhookWorker {
         }
 
         // Process the normalized event (we won the race)
-        handle_normalized_event(
+        let result = handle_normalized_event(
             &self.pool,
             &self.config,
             &payload.processor,
             &payload.event,
             &payload.raw_payload,
         )
-        .await?;
+        .await;
 
-        tracing::debug!("Successfully processed webhook event {}", payload.event_id);
-        let receipt_handle = msg.receipt_handle().ok_or("Missing receipt handle")?;
-        self.delete_message(receipt_handle).await;
-        Ok(())
+        // Only mark as processed if handler succeeded
+        if result.is_ok() {
+            sqlx::query!(
+                r#"
+                INSERT INTO processed_webhook_event (processor, "processorEventId", "eventType", "processedAt")
+                VALUES ($1, $2, $3, NOW())
+                ON CONFLICT (processor, "processorEventId") DO NOTHING
+                "#,
+                &payload.processor,
+                &payload.event_id,
+                &get_event_type_name(&payload.event)
+            )
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?;
+
+            tracing::debug!("Successfully processed webhook event {}", payload.event_id);
+            let receipt_handle = msg.receipt_handle().ok_or("Missing receipt handle")?;
+            self.delete_message(receipt_handle).await;
+        }
+
+        result
     }
 
     async fn delete_message(&self, receipt_handle: &str) {
@@ -403,28 +433,59 @@ pub async fn process_webhook_message_directly(
     config: &Config,
     msg: WebhookMessage,
 ) -> Result<(), String> {
-    // Atomic idempotency check: INSERT returns row only if we won the race
-    let inserted = sqlx::query!(
+    // Acquire advisory lock to prevent concurrent processing of same event
+    let lock_key = format!("{}:{}", msg.processor, msg.event_id);
+    let mut conn = pool
+        .acquire()
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    sqlx::query("SELECT pg_advisory_lock(hashtextextended($1, 0))")
+        .bind(&lock_key)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    // Check if already processed
+    let already_processed = sqlx::query!(
         r#"
-        INSERT INTO processed_webhook_event (processor, "processorEventId", "eventType", "processedAt")
-        VALUES ($1, $2, $3, NOW())
-        ON CONFLICT (processor, "processorEventId") DO NOTHING
-        RETURNING "processorEventId"
+        SELECT 1 as "exists!"
+        FROM processed_webhook_event
+        WHERE processor = $1 AND "processorEventId" = $2
         "#,
         &msg.processor,
-        &msg.event_id,
-        &get_event_type_name(&msg.event)
+        &msg.event_id
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut *conn)
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
-    if inserted.is_none() {
+    if already_processed.is_some() {
         return Ok(());
     }
 
     // Process the normalized event (we won the race)
-    handle_normalized_event(pool, config, &msg.processor, &msg.event, &msg.raw_payload).await
+    let result =
+        handle_normalized_event(pool, config, &msg.processor, &msg.event, &msg.raw_payload).await;
+
+    // Only mark as processed if handler succeeded
+    if result.is_ok() {
+        sqlx::query!(
+            r#"
+            INSERT INTO processed_webhook_event (processor, "processorEventId", "eventType", "processedAt")
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (processor, "processorEventId") DO NOTHING
+            "#,
+            &msg.processor,
+            &msg.event_id,
+            &get_event_type_name(&msg.event)
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+    }
+
+    result
 }
 
 fn extract_customer_id_from_payload(payload: &Value) -> Result<&str, String> {
@@ -688,6 +749,7 @@ async fn handle_normalized_event(
         NormalizedEvent::MembershipActivated {
             membership_id,
             status,
+            user_id,
             renewal_period_start,
             renewal_period_end,
             cancel_at_period_end,
@@ -696,8 +758,10 @@ async fn handle_normalized_event(
         } => {
             handle_membership_activated(
                 pool,
+                raw_payload,
                 membership_id,
                 status,
+                user_id,
                 renewal_period_start.as_deref(),
                 renewal_period_end.as_deref(),
                 *cancel_at_period_end,
@@ -1020,6 +1084,50 @@ async fn handle_whop_payment_succeeded(
         "Checkout session missing customerId".to_string()
     })?;
 
+    // Extract customer info from Whop webhook payload and update customer record
+    let user_data = &raw_payload["data"]["user"];
+    let whop_user_id = user_data["id"].as_str();
+    let user_email = user_data["email"].as_str();
+    let user_name = user_data["username"]
+        .as_str()
+        .or_else(|| user_data["name"].as_str());
+
+    // Update customer with Whop user data
+    if user_email.is_some() || user_name.is_some() || whop_user_id.is_some() {
+        sqlx::query!(
+            r#"
+            UPDATE customer
+            SET
+                email = COALESCE($1, email),
+                name = COALESCE($2, name),
+                "processorCustomerId" = COALESCE($3, "processorCustomerId"),
+                processor = 'whop',
+                "updatedAt" = NOW()
+            WHERE id = $4
+            "#,
+            user_email,
+            user_name,
+            whop_user_id,
+            customer_id
+        )
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to update customer from Whop webhook: {}", e))?;
+
+        tracing::info!(
+            customer_id = %customer_id,
+            whop_user_id = ?whop_user_id,
+            email = ?user_email,
+            "Updated customer from Whop payment.succeeded webhook"
+        );
+    } else {
+        tracing::debug!(
+            customer_id = %customer_id,
+            payment_id = %payment_id,
+            "Whop payment.succeeded: no user data found in payload, skipping customer update"
+        );
+    }
+
     // Create transaction record
     let tx_id = create_payment_transaction(
         pool,
@@ -1062,8 +1170,10 @@ async fn handle_whop_payment_succeeded(
 /// Handle Whop membership.activated webhook - creates subscription record
 async fn handle_membership_activated(
     pool: &PgPool,
+    raw_payload: &Value,
     membership_id: &str,
     status: &str,
+    whop_user_id: &str,
     renewal_period_start: Option<&str>,
     renewal_period_end: Option<&str>,
     cancel_at_period_end: bool,
@@ -1113,6 +1223,42 @@ async fn handle_membership_activated(
         tracing::error!("Checkout session {} missing customerId", session_uuid);
         "Checkout session missing customerId".to_string()
     })?;
+
+    // Extract user email/name from Whop payload (same pattern as payment.succeeded)
+    let user_data = &raw_payload["data"]["user"];
+    let user_email = user_data["email"].as_str();
+    let user_name = user_data["username"]
+        .as_str()
+        .or_else(|| user_data["name"].as_str());
+
+    // Update customer with Whop user data (email, name, processorCustomerId)
+    sqlx::query!(
+        r#"
+        UPDATE customer
+        SET
+            email = COALESCE($1, email),
+            name = COALESCE($2, name),
+            "processorCustomerId" = COALESCE($3, "processorCustomerId"),
+            processor = 'whop',
+            "updatedAt" = NOW()
+        WHERE id = $4
+        "#,
+        user_email,
+        user_name,
+        whop_user_id,
+        customer_id
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to update customer from Whop webhook: {}", e))?;
+
+    tracing::info!(
+        customer_id = %customer_id,
+        whop_user_id = %whop_user_id,
+        email = ?user_email,
+        name = ?user_name,
+        "Updated customer from Whop membership.activated webhook"
+    );
 
     // Map Whop status to our subscription status
     let sub_status: SubscriptionStatus = match status {

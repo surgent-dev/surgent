@@ -15,7 +15,9 @@ use uuid::Uuid;
 use crate::core::auth::{AuthenticatedUser, ProjectIdQuery, resolve_project_id};
 use crate::core::config::Config;
 use crate::integrations::ProcessorRegistry;
-use crate::integrations::stripe::fetch_checkout_session;
+use crate::integrations::stripe::{
+    create_stripe_customer, fetch_checkout_session, CreateStripeCustomerRequest,
+};
 use crate::integrations::types::{CheckoutLineItem, CreateCheckoutSessionRequest};
 use crate::types::{CheckoutMode, RecurringInterval, SubscriptionStatus};
 
@@ -212,8 +214,11 @@ pub async fn create_checkout_session(
         r#"
         INSERT INTO customer (id, "projectId", "externalId", email, name)
         VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT ("projectId", "externalId") DO UPDATE SET "updatedAt" = NOW()
-        RETURNING id, "processorCustomerId"
+        ON CONFLICT ("projectId", "externalId") DO UPDATE SET
+            email = COALESCE(EXCLUDED.email, customer.email),
+            name = COALESCE(EXCLUDED.name, customer.name),
+            "updatedAt" = NOW()
+        RETURNING id, "processorCustomerId", email, name
         "#,
         Uuid::new_v4(),
         project_id,
@@ -229,6 +234,10 @@ pub async fn create_checkout_session(
             format!("Database error: {}", e),
         )
     })?;
+
+    // Use the potentially updated email/name from DB for Stripe customer creation
+    let email = customer.email.clone();
+    let name = customer.name.clone();
 
     let customer_id = customer.id;
     let processor_customer_id = customer.processorCustomerId;
@@ -357,6 +366,54 @@ pub async fn create_checkout_session(
         format!("Payment processor '{}' not available", processor_name),
     ))?;
 
+    // Create processor customer if not exists (best practice: create customer before checkout)
+    let processor_customer_id = if processor_name == "stripe" && processor_customer_id.is_none() {
+        // Create Stripe customer with our internal ID in metadata for reconciliation
+        // Use customer_id as idempotency key to prevent duplicate customers on retries
+        let idempotency_key = format!("create_customer_{}", customer_id);
+        let stripe_customer = create_stripe_customer(
+            &config.stripe_secret_key,
+            CreateStripeCustomerRequest {
+                email: email.clone(),
+                name: name.clone(),
+                metadata: HashMap::from([
+                    ("surgent_customer_id".to_string(), customer_id.to_string()),
+                    ("surgent_project_id".to_string(), project_id.to_string()),
+                    ("external_id".to_string(), req.customer_id.clone()),
+                ]),
+            },
+            &idempotency_key,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to create Stripe customer");
+            (StatusCode::BAD_GATEWAY, format!("Failed to create customer: {}", e))
+        })?;
+
+        // Update local customer with Stripe customer ID
+        sqlx::query!(
+            r#"UPDATE customer SET "processorCustomerId" = $1, processor = 'stripe' WHERE id = $2"#,
+            &stripe_customer.id,
+            customer_id
+        )
+        .execute(&pool)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to update customer processorCustomerId");
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e))
+        })?;
+
+        tracing::info!(
+            customer_id = %customer_id,
+            stripe_customer_id = %stripe_customer.id,
+            "Created Stripe customer"
+        );
+
+        Some(stripe_customer.id)
+    } else {
+        processor_customer_id
+    };
+
     // Generate session_id BEFORE processor call so we can pass it as metadata (for Whop webhook linking)
     let session_id = Uuid::new_v4();
 
@@ -378,15 +435,13 @@ pub async fn create_checkout_session(
         (proxy_success_url, proxy_cancel_url)
     };
 
-    // Build metadata - include session_id for Whop to link payment.succeeded webhooks back to checkout
-    let metadata = if processor_name == "whop" {
-        HashMap::from([
-            ("idempotency_key".to_string(), Uuid::new_v4().to_string()),
-            ("session_id".to_string(), session_id.to_string()),
-        ])
-    } else {
-        HashMap::from([("idempotency_key".to_string(), Uuid::new_v4().to_string())])
-    };
+    // Build metadata - include session_id and customer_id for webhook reconciliation
+    let metadata = HashMap::from([
+        ("idempotency_key".to_string(), Uuid::new_v4().to_string()),
+        ("session_id".to_string(), session_id.to_string()),
+        ("customer_id".to_string(), customer_id.to_string()),
+        ("project_id".to_string(), project_id.to_string()),
+    ]);
 
     let processor_session = processor
         .create_checkout_session(CreateCheckoutSessionRequest {
@@ -450,9 +505,10 @@ pub async fn create_checkout_session(
             "customerId",
             "successUrl",
             "cancelUrl",
-            mode
+            mode,
+            processor
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         "#,
         session_id,
         &processor_checkout_id,
@@ -462,7 +518,8 @@ pub async fn create_checkout_session(
         customer_id,
         final_success_url.as_deref(),
         final_cancel_url.as_deref(),
-        mode as CheckoutMode
+        mode as CheckoutMode,
+        processor_name
     )
     .execute(&pool)
     .await
@@ -525,10 +582,7 @@ pub async fn checkout_success(
     .fetch_optional(&pool)
     .await
     .map_err(|e| {
-        tracing::error!(
-            "Failed to fetch checkout session for customer linking: {}",
-            e
-        );
+        tracing::error!("Failed to fetch checkout session: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Database error: {}", e),

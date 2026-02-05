@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Zap,
 } from 'lucide-react'
+import { toast } from 'react-hot-toast'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   DropdownMenu,
@@ -19,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { payHttp } from '@/lib/http'
 import { cn } from '@/lib/utils'
+import { authClient } from '@/lib/auth-client'
 import { formatPrice, formatInterval } from './utils'
 import type { Product, ProductWithPrices, ProductPrice } from '@/queries/products'
 
@@ -66,25 +68,39 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
     if (!selectedPriceId) return
 
     try {
+      // Get current user session
+      const session = await authClient.getSession()
+      const user = session.data?.user
+
+      if (!user?.id) {
+        toast.error('Please sign in to checkout')
+        return
+      }
+
       const redirectUrl =
         window.location.protocol === 'https:'
           ? window.location.href
           : 'https://example.com/checkout-complete'
+
       const response = await payHttp
         .post('checkout', {
           searchParams: { projectId },
           json: {
-            customerId: 'test-customer-123',
+            customerId: user.id,
             productId: product.id,
             priceId: selectedPriceId,
             successUrl: redirectUrl,
             cancelUrl: redirectUrl,
+            customerData: {
+              email: user.email || undefined,
+              name: user.name || undefined,
+            },
           },
         })
         .json<{ checkoutUrl: string }>()
       window.open(response.checkoutUrl, '_blank')
     } catch (error) {
-      alert(
+      toast.error(
         'Failed to create checkout: ' + (error instanceof Error ? error.message : 'Unknown error'),
       )
     }

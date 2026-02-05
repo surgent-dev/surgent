@@ -103,21 +103,31 @@ impl PaymentProcessor for StripeProcessor {
             return Err("Exactly one line item is required".to_string());
         }
         let line_item = &req.line_items[0];
-        let customer_creation = if req.mode == "payment" {
+
+        // Only set customer_creation if no existing customer is provided
+        let customer_creation = if req.customer.is_none() && req.mode == "payment" {
             Some(String::from("always"))
         } else {
             None
         };
+
         let stripe_req = CreateStripeCheckoutSessionRequest {
             success_url: req.success_url,
             cancel_url: req.cancel_url,
             stripe_price_id: line_item.price.clone(),
             quantity: line_item.quantity,
-            mode: req.mode,
+            mode: req.mode.clone(),
             application_fee_amount: req.application_fee_amount,
             application_fee_percent: req.application_fee_percent,
             destination_account: req.destination_account,
             customer_creation,
+            customer: req.customer,
+            client_reference_id: req.metadata.get("customer_id").cloned(),
+            metadata: if req.metadata.is_empty() {
+                None
+            } else {
+                Some(req.metadata)
+            },
         };
         let response =
             create_stripe_checkout_session(&self.secret_key, stripe_req, &idempotency_key).await?;
@@ -1210,6 +1220,12 @@ pub struct CreateStripeCheckoutSessionRequest {
     pub application_fee_percent: Option<f64>,
     pub destination_account: Option<String>,
     pub customer_creation: Option<String>,
+    /// Existing Stripe customer ID to use for checkout
+    pub customer: Option<String>,
+    /// Your internal reference ID for reconciliation (e.g., internal customer UUID)
+    pub client_reference_id: Option<String>,
+    /// Metadata to attach to the checkout session
+    pub metadata: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1307,8 +1323,23 @@ pub async fn create_stripe_checkout_session(
         ),
     ];
 
-    if let Some(customer_creation) = req.customer_creation {
+    // If we have an existing customer, use it; otherwise set customer_creation
+    if let Some(customer) = req.customer {
+        form_params.push((String::from("customer"), customer));
+    } else if let Some(customer_creation) = req.customer_creation {
         form_params.push((String::from("customer_creation"), customer_creation));
+    }
+
+    // Add client_reference_id for reconciliation
+    if let Some(client_ref) = req.client_reference_id {
+        form_params.push((String::from("client_reference_id"), client_ref));
+    }
+
+    // Add metadata
+    if let Some(metadata) = req.metadata {
+        for (key, value) in metadata {
+            form_params.push((format!("metadata[{}]", key), value));
+        }
     }
 
     if mode == "payment" {
@@ -1388,4 +1419,66 @@ pub async fn fetch_checkout_session(
         .json::<StripeCheckoutSessionResponse>()
         .await
         .map_err(|e| format!("Failed to parse Stripe response: {}", e))
+}
+
+/// Request to create a Stripe customer
+#[derive(Debug, Clone)]
+pub struct CreateStripeCustomerRequest {
+    pub email: Option<String>,
+    pub name: Option<String>,
+    pub metadata: HashMap<String, String>,
+}
+
+/// Response from creating a Stripe customer
+#[derive(Debug, Deserialize)]
+pub struct StripeCustomerResponse {
+    pub id: String,
+    pub email: Option<String>,
+    pub name: Option<String>,
+}
+
+/// Creates a Stripe customer with optional email, name, and metadata
+/// Uses idempotency key to prevent duplicate customer creation on retries
+pub async fn create_stripe_customer(
+    secret_key: &str,
+    req: CreateStripeCustomerRequest,
+    idempotency_key: &str,
+) -> Result<StripeCustomerResponse, String> {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let mut form_params: Vec<(String, String)> = vec![];
+
+    if let Some(email) = req.email {
+        form_params.push((String::from("email"), email));
+    }
+
+    if let Some(name) = req.name {
+        form_params.push((String::from("name"), name));
+    }
+
+    for (key, value) in req.metadata {
+        form_params.push((format!("metadata[{}]", key), value));
+    }
+
+    let response = client
+        .post("https://api.stripe.com/v1/customers")
+        .header("Authorization", format!("Bearer {}", secret_key))
+        .header("Idempotency-Key", idempotency_key)
+        .form(&form_params)
+        .send()
+        .await
+        .map_err(|e| format!("Stripe API error: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("Stripe error creating customer: {}", error_text));
+    }
+
+    response
+        .json::<StripeCustomerResponse>()
+        .await
+        .map_err(|e| format!("Failed to parse Stripe customer response: {}", e))
 }
