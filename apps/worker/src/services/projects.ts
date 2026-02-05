@@ -6,12 +6,6 @@ import { HttpError } from '@/lib/errors'
 type User = { id: string; role?: string | null }
 
 export async function getProjectWithAuth(id: string, user: User) {
-  console.log('[getProjectWithAuth] called:', {
-    projectId: id,
-    userId: user.id,
-    userRole: user.role,
-  })
-
   const project = await db
     .selectFrom('project')
     .selectAll()
@@ -30,11 +24,8 @@ export async function getProjectWithAuth(id: string, user: User) {
       .executeTakeFirst()
 
     if (!member) {
-      console.log('[getProjectWithAuth] no member found, throwing 403')
       throw new HttpError(403, 'Forbidden')
     }
-  } else {
-    console.log('[getProjectWithAuth] admin bypass - skipping member check')
   }
 
   return project

@@ -55,33 +55,97 @@ type ParsedIframeError = {
 }
 
 const SOURCES: IframeError['source'][] = ['global', 'promise', 'react', 'react-router', 'preload']
+const GENERIC_ERROR_MESSAGES = ['unknown error', 'script error', 'script error.', 'error']
 
 const nonEmptyString = (value: unknown) =>
   typeof value === 'string' && value.trim().length > 0 ? value : null
 
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
+
+const parseJson = (value: unknown) => {
+  if (typeof value !== 'string') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
+  }
+}
+
+const extractMessage = (value: unknown, depth = 0): string | null => {
+  if (depth > 4) return null
+  const text = nonEmptyString(value)
+  if (text) return text
+
+  const obj = asRecord(value)
+  if (!obj) return null
+
+  return (
+    extractMessage(obj.message, depth + 1) ??
+    extractMessage(obj.error, depth + 1) ??
+    extractMessage(obj.reason, depth + 1) ??
+    extractMessage(obj.cause, depth + 1) ??
+    extractMessage(obj.detail, depth + 1) ??
+    extractMessage(obj.description, depth + 1) ??
+    extractMessage(obj.data, depth + 1)
+  )
+}
+
+const extractStack = (value: unknown, depth = 0): string | null => {
+  if (depth > 4) return null
+  const obj = asRecord(value)
+  if (!obj) return null
+
+  return (
+    nonEmptyString(obj.stack) ??
+    nonEmptyString(obj.stackTrace) ??
+    extractStack(obj.error, depth + 1) ??
+    extractStack(obj.reason, depth + 1) ??
+    extractStack(obj.cause, depth + 1) ??
+    extractStack(obj.data, depth + 1)
+  )
+}
+
+const getStackHeadline = (stack: string | undefined) =>
+  stack
+    ?.split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0 && !line.startsWith('at ')) ?? null
+
+const isGenericMessage = (message: string | null | undefined) =>
+  !!message && GENERIC_ERROR_MESSAGES.includes(message.trim().toLowerCase())
+
 const parseMessage = (data: unknown): ParsedIframeError | null => {
-  const parsed =
-    typeof data === 'string'
-      ? (() => {
-          try {
-            return JSON.parse(data)
-          } catch {
-            return null
-          }
-        })()
-      : data
+  const parsed = parseJson(data)
   if (typeof parsed !== 'object' || parsed === null) return null
   if ((parsed as ErrorMessage).type !== 'error') return null
-  const payload = (parsed as ErrorMessage).payload
-  if (typeof payload !== 'object' || payload === null) return null
+  const payload = asRecord(parseJson((parsed as ErrorMessage).payload))
+  if (!payload) return null
 
   const sourceValue = nonEmptyString(payload.source)
   const source = SOURCES.includes(sourceValue as IframeError['source'])
     ? (sourceValue as IframeError['source'])
     : undefined
-  const stack = nonEmptyString(payload.stack) ?? undefined
-  const message = nonEmptyString(payload.message) ?? stack?.split('\n')[0] ?? null
-  const url = nonEmptyString(payload.url) ?? undefined
+  const stack = nonEmptyString(payload.stack) ?? extractStack(payload) ?? undefined
+  const stackHeadline = getStackHeadline(stack)
+  const baseMessage =
+    extractMessage(payload.message) ??
+    extractMessage(payload.error) ??
+    extractMessage(payload.reason) ??
+    extractMessage(payload) ??
+    stackHeadline
+  const message =
+    isGenericMessage(baseMessage) && stackHeadline && !isGenericMessage(stackHeadline)
+      ? stackHeadline
+      : isGenericMessage(baseMessage)
+        ? 'Preview runtime error (missing details from app)'
+        : baseMessage
+  const location = asRecord(payload.location)
+  const url =
+    nonEmptyString(payload.url) ??
+    nonEmptyString(payload.href) ??
+    nonEmptyString(location?.href) ??
+    undefined
 
   if (!source && (!message || !url)) return null
   if (!message) return null
