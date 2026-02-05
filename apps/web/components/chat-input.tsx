@@ -46,8 +46,8 @@ type Props = {
 // Fallback models when no providers are connected
 const FALLBACK_MODELS: ProviderModel[] = [
   {
-    id: 'gpt-5.2-codex',
-    name: 'GPT-5.2 Codex',
+    id: 'gpt-5.3-codex',
+    name: 'GPT-5.3 Codex',
     providerId: 'opencode',
     providerName: 'OpenCode',
   },
