@@ -28,7 +28,8 @@ import {
   MoreHorizontal,
 } from 'lucide-react'
 import { Chat, ArrowElbowDownRight } from '@phosphor-icons/react'
-import ChatInput, { type FilePart, type ProviderModel } from './chat-input'
+import { MODELS, FLASH_MODEL, type ProviderModel } from '@/lib/models'
+import ChatInput, { type FilePart } from './chat-input'
 import { useSandbox } from '@/hooks/use-sandbox'
 import useAgentStream, { type SessionStatusRetry } from '@/lib/use-agent-stream'
 import { computeWorkingFromParts } from '@/lib/agent-working'
@@ -63,37 +64,6 @@ type ProviderResponse = {
   }>
   default?: Record<string, string>
 }
-
-const FALLBACK_MODELS: ProviderModel[] = [
-  {
-    id: 'gpt-5.2-codex',
-    name: 'GPT-5.2 Codex',
-    providerId: 'opencode',
-    providerName: 'OpenCode',
-    limit: { context: 400000 },
-  },
-  {
-    id: 'claude-opus-4-5',
-    name: 'Claude Opus 4.5',
-    providerId: 'opencode',
-    providerName: 'OpenCode',
-    limit: { context: 200000 },
-  },
-  {
-    id: 'gemini-3-flash',
-    name: 'Gemini 3 Flash',
-    providerId: 'opencode',
-    providerName: 'OpenCode',
-    limit: { context: 1048576 },
-  },
-  {
-    id: 'gemini-3-pro',
-    name: 'Gemini 3 Pro',
-    providerId: 'opencode',
-    providerName: 'OpenCode',
-    limit: { context: 1048576 },
-  },
-]
 
 const formatTitle = (title: string) => {
   const isoMatch = title.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
@@ -408,10 +378,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const buildAgentOverrides = (isMax: boolean): Record<string, AgentModelOverride> | undefined => {
     if (isMax) return undefined // MAX mode: let subagents use their default (higher tier) models
     // Non-MAX mode: use flash for explore and frontend subagents
-    return {
-      explore: { model: { providerID: 'opencode', modelID: 'gemini-3-flash' } },
-      frontend: { model: { providerID: 'opencode', modelID: 'gemini-3-flash' } },
-    }
+    const flash = { model: { providerID: FLASH_MODEL.providerId, modelID: FLASH_MODEL.id } }
+    return { explore: flash, frontend: flash }
   }
 
   const handleSend = (
@@ -607,10 +575,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   })
 
   const availableModels = useMemo(() => {
-    if (!providerData) return FALLBACK_MODELS
+    if (!providerData) return MODELS
     const provider = providerData.all?.find((item) => item.id === 'opencode')
     if (!provider?.models) return []
-    return FALLBACK_MODELS.filter((model) => Boolean(provider.models[model.id]))
+    return MODELS.filter((model) => Boolean(provider.models[model.id]))
   }, [providerData])
 
   const handleModelChange = (modelId: string, providerId: string) => {

@@ -9,53 +9,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-
-export type ProviderModel = {
-  id: string
-  name?: string
-  providerId: string
-  providerName: string
-  limit?: { context: number }
-}
+import { getModel, type ProviderModel } from '@/lib/models'
 
 type Props = {
   models: ProviderModel[]
   selectedModel?: { modelId: string; providerId: string }
   onSelect: (modelId: string, providerId: string) => void
-}
-
-type ModelInfo = {
-  name: string
-  icon: string
-  badge?: string
-  badgeColor?: string
-}
-
-const MODEL_INFO: Record<string, ModelInfo> = {
-  'gpt-5.2-codex': {
-    name: 'GPT-5.2 Codex',
-    icon: '/OpenAI-logo.svg',
-    badge: 'Best',
-    badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  },
-  'claude-opus-4-5': {
-    name: 'Claude Code',
-    icon: '/claude-logo.svg',
-    badge: 'Smart',
-    badgeColor: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-  },
-  'gemini-3-flash': {
-    name: 'Gemini 3 Flash',
-    icon: '/google-gemini.svg',
-    badge: 'Fast',
-    badgeColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  },
-  'gemini-3-pro': {
-    name: 'Gemini 3 Pro',
-    icon: '/google-gemini.svg',
-    badge: 'Pro',
-    badgeColor: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-  },
 }
 
 export default function ModelSelectorDropdown({ models, selectedModel, onSelect }: Props) {
@@ -65,7 +24,7 @@ export default function ModelSelectorDropdown({ models, selectedModel, onSelect 
       )
     : models[0]
 
-  const currentInfo = currentModel ? MODEL_INFO[currentModel.id] : null
+  const currentInfo = currentModel ? getModel(currentModel.id) : null
 
   return (
     <DropdownMenu>
@@ -86,7 +45,7 @@ export default function ModelSelectorDropdown({ models, selectedModel, onSelect 
         {models.map((model) => {
           const isSelected =
             selectedModel?.modelId === model.id && selectedModel?.providerId === model.providerId
-          const info = MODEL_INFO[model.id]
+          const info = getModel(model.id)
 
           return (
             <DropdownMenuItem

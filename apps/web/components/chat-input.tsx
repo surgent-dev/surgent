@@ -13,10 +13,11 @@ import {
   type FilePart,
 } from '@/lib/upload'
 import { useMcpStatusQuery } from '@/queries/mcp'
-import ModelSelectorDropdown, { type ProviderModel } from './model-selector-dropdown'
+import { MODELS, type ProviderModel } from '@/lib/models'
+import ModelSelectorDropdown from './model-selector-dropdown'
 import type { Agent } from '@opencode-ai/sdk'
 
-export type { FilePart, ProviderModel }
+export type { FilePart }
 
 type Props = {
   onSubmit: (
@@ -42,28 +43,6 @@ type Props = {
   onModelChange?: (modelId: string, providerId: string) => void
   subagents?: Agent[]
 }
-
-// Fallback models when no providers are connected
-const FALLBACK_MODELS: ProviderModel[] = [
-  {
-    id: 'gpt-5.3-codex',
-    name: 'GPT-5.3 Codex',
-    providerId: 'opencode',
-    providerName: 'OpenCode',
-  },
-  {
-    id: 'gemini-3-flash',
-    name: 'Gemini 3 Flash',
-    providerId: 'opencode',
-    providerName: 'OpenCode',
-  },
-  {
-    id: 'gemini-3-pro',
-    name: 'Gemini 3 Pro',
-    providerId: 'opencode',
-    providerName: 'OpenCode',
-  },
-]
 
 const MAX_FILES = 5
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -178,7 +157,7 @@ export default function ChatInput({
   isStopping,
   value: controlledValue,
   onValueChange,
-  models = FALLBACK_MODELS,
+  models = MODELS,
   selectedModel,
   onModelChange,
   subagents = [],
