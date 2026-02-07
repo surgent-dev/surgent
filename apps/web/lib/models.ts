@@ -11,16 +11,6 @@ export type ProviderModel = {
 
 export const MODELS: ProviderModel[] = [
   {
-    id: 'gpt-5.2-codex',
-    name: 'GPT-5.2 Codex',
-    providerId: 'opencode',
-    providerName: 'OpenCode',
-    limit: { context: 400000 },
-    icon: '/OpenAI-logo.svg',
-    badge: 'Best',
-    badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  },
-  {
     id: 'claude-opus-4-6',
     name: 'Claude Code',
     providerId: 'opencode',
@@ -29,6 +19,16 @@ export const MODELS: ProviderModel[] = [
     icon: '/claude-logo.svg',
     badge: 'Smart',
     badgeColor: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+  },
+  {
+    id: 'gpt-5.2-codex',
+    name: 'GPT-5.2 Codex',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+    limit: { context: 400000 },
+    icon: '/OpenAI-logo.svg',
+    badge: 'Best',
+    badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   },
   {
     id: 'gemini-3-flash',
