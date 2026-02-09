@@ -134,12 +134,13 @@ const parseMessage = (data: unknown): ParsedIframeError | null => {
     extractMessage(payload.reason) ??
     extractMessage(payload) ??
     stackHeadline
+  // If the message is generic (e.g. cross-origin "Script error") and there's
+  // no stack headline to fall back on, suppress the error — it's not actionable.
+  if (isGenericMessage(baseMessage) && !stackHeadline) return null
   const message =
     isGenericMessage(baseMessage) && stackHeadline && !isGenericMessage(stackHeadline)
       ? stackHeadline
-      : isGenericMessage(baseMessage)
-        ? 'Preview runtime error (missing details from app)'
-        : baseMessage
+      : baseMessage
   const location = asRecord(payload.location)
   const url =
     nonEmptyString(payload.url) ??
