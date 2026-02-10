@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 
+import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { toast } from 'react-hot-toast'
@@ -25,6 +26,8 @@ import {
   Envelope,
   TelegramLogo,
   Headset,
+  Storefront,
+  UploadSimple,
 } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import {
@@ -50,6 +53,8 @@ import {
   useLatestDeploymentQuery,
   useHostnameAvailability,
 } from '@/queries/projects'
+import { useProjectListingQuery, useUpsertProjectListing } from '@/queries/marketplace'
+import { uploadFile, fileToDataUrl } from '@/lib/upload'
 import { http } from '@/lib/http'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
@@ -162,11 +167,20 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const [downloading, setDownloading] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
+  // Screenshot upload
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   // Queries & mutations
   const deployProject = useDeployProject()
   const renameProject = useRenameProject()
   useGitHubStatus(projectId, { enabled: isGitHubDialogOpen }) // Prefetch for dialog
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
+  const { data: projectListing } = useProjectListingQuery(projectId, isPublishOpen)
+  const upsertListing = useUpsertProjectListing()
   const surpayConnect = useSurpayConnect()
   const surpayMoveAccount = useSurpayMoveAccount()
 
@@ -197,6 +211,15 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const isFailed = workerStatus === 'error'
   const isDeploymentInProgress =
     latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status)
+  const isProjectListed = projectListing?.status === 'active'
+
+  // Sync screenshot from existing listing
+  useEffect(() => {
+    if (projectListing?.imageUrl) {
+      setScreenshotUrl(projectListing.imageUrl)
+      setScreenshotPreview(projectListing.imageUrl)
+    }
+  }, [projectListing])
 
   // Hostname availability check
   const sanitizedHostname = sanitizeHostname(hostnameInput)
@@ -306,13 +329,71 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   }
 
   const submitHostname = () => {
-    // For first deploy or when editing, use input; otherwise use existing workerName
     const name = !workerName || isEditingHostname ? hostnameInput.trim() : workerName
     if (!name) return
     if (isDeploymentInProgress) return
     setPendingHostname(name)
     handleDeploy(name)
   }
+
+  const handleScreenshotUpload = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file', { position: 'top-right' })
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image must be under 10MB', { position: 'top-right' })
+      return
+    }
+
+    setScreenshotPreview(await fileToDataUrl(file))
+    setIsUploading(true)
+
+    try {
+      const { url } = await uploadFile(file)
+      setScreenshotUrl(url)
+    } catch {
+      toast.error('Failed to upload screenshot', { position: 'top-right' })
+      setScreenshotPreview(null)
+      setScreenshotUrl(null)
+    } finally {
+      setIsUploading(false)
+    }
+  }, [])
+
+  const handleListOnMarketplace = () => {
+    if (!projectId || !screenshotUrl) return
+    upsertListing.mutate(
+      {
+        projectId,
+        title: project?.name || 'Untitled',
+        description: `${project?.name || 'Project'} — built and deployed on Surgent`,
+        imageUrl: screenshotUrl,
+      },
+      {
+        onSuccess: () => toast.success('Listed on marketplace', { position: 'top-right' }),
+        onError: () => toast.error('Failed to list', { position: 'top-right' }),
+      },
+    )
+  }
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setIsDragging(false)
+      const file = e.dataTransfer.files[0]
+      if (file) handleScreenshotUpload(file)
+    },
+    [handleScreenshotUpload],
+  )
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (file) handleScreenshotUpload(file)
+    },
+    [handleScreenshotUpload],
+  )
 
   return (
     <>
@@ -511,64 +592,53 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               ) : (
                 <RocketLaunch className="size-4" weight="fill" />
               )}
-              <span className="hidden sm:inline">Publish</span>
+              <span className="hidden sm:inline">{workerName ? 'Republish' : 'Publish'}</span>
               <CaretDown className="size-3 hidden sm:block" weight="bold" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[280px] sm:w-72 p-0">
-            <div className="px-3 py-2.5 border-b">
-              <div className="text-sm font-medium">Publish your app</div>
-            </div>
-
-            {/* Show status only when deploying or failed */}
-            {latestDeployment && !['deployed'].includes(latestDeployment.status) && (
-              <div
-                className={`px-3 py-2 border-b text-sm ${
-                  TERMINAL_STATUSES.includes(latestDeployment.status)
-                    ? 'bg-destructive/10'
-                    : 'bg-brand/5'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  {TERMINAL_STATUSES.includes(latestDeployment.status) ? (
-                    <span className="size-2 rounded-full bg-destructive" />
-                  ) : (
-                    <Loader2 className="size-3 animate-spin text-brand" />
-                  )}
-                  <span
-                    className={
-                      TERMINAL_STATUSES.includes(latestDeployment.status)
-                        ? 'text-destructive'
-                        : 'text-foreground'
-                    }
+          <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
+            {/* Live URL — only when deployed and not editing */}
+            {workerName && !isEditingHostname && (
+              <div className="p-3">
+                <div className="flex items-center gap-1.5 rounded-lg border bg-muted/30 px-3 h-10 font-mono text-[13px]">
+                  <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="flex-1 truncate">{workerName}.surgent.site</span>
+                  <a
+                    href={`https://${workerName}.surgent.site`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={iconBtn}
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
-                  </span>
-                  <span className="text-xs text-muted-foreground font-mono">
-                    {latestDeployment.id.slice(0, 8)}
-                  </span>
+                    <ArrowSquareOut className="size-3.5 text-muted-foreground" />
+                  </a>
+                  <button onClick={copyUrl} className={iconBtn}>
+                    <Copy className="size-3.5 text-muted-foreground" />
+                  </button>
+                  <button onClick={startEditHostname} className={iconBtn}>
+                    <PencilSimple className="size-3.5 text-muted-foreground" />
+                  </button>
                 </div>
-                {latestDeployment.error && (
-                  <div className="mt-1 text-xs text-destructive/80 truncate">
-                    {latestDeployment.error}
-                  </div>
-                )}
               </div>
             )}
 
-            <div className="p-3 space-y-3">
-              {/* URL */}
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{workerName ? 'Published URL' : 'Choose a subdomain'}</span>
-                  {(!workerName || isEditingHostname) && sanitizedHostname && isNewHostname && (
+            {/* Subdomain input — first deploy or editing */}
+            {(!workerName || isEditingHostname) && (
+              <div className="p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {workerName ? 'Change subdomain' : 'Choose a subdomain'}
+                  </span>
+                  {sanitizedHostname && isNewHostname && (
                     <>
-                      {checkingHostname && <Loader2 className="size-3 animate-spin" />}
+                      {checkingHostname && (
+                        <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                      )}
                       {!checkingHostname && availability?.available && (
-                        <CheckCircle2 className="size-3 text-green-600" />
+                        <CheckCircle2 className="size-3 text-emerald-500" />
                       )}
                       {!checkingHostname && hostnameTaken && (
-                        <span className="flex items-center gap-1 text-red-600">
+                        <span className="flex items-center gap-1 text-[11px] text-destructive">
                           <XCircle className="size-3" />
                           Taken
                         </span>
@@ -577,56 +647,35 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   )}
                 </div>
                 <div
-                  className={`flex items-center h-8 px-2.5 rounded-md border text-sm font-mono bg-muted/30 ${hostnameTaken ? 'border-red-500' : ''}`}
+                  className={`flex items-center h-10 px-3 rounded-lg border bg-muted/30 font-mono text-[13px] transition-colors ${hostnameTaken ? 'border-destructive/60' : 'focus-within:border-ring'}`}
                 >
-                  {!workerName || isEditingHostname ? (
-                    <>
-                      <input
-                        value={hostnameInput}
-                        onChange={(e) => setHostnameInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && hostnameInput.trim() && !hostnameTaken)
-                            submitHostname()
-                          if (e.key === 'Escape' && workerName) cancelEditHostname()
-                        }}
-                        placeholder="my-app"
-                        className="flex-1 bg-transparent outline-none min-w-0"
-                        autoFocus
-                      />
-                      <span className="text-muted-foreground shrink-0">.surgent.site</span>
-                      {workerName && (
-                        <button onClick={cancelEditHostname} className={`${iconBtn} ml-1`}>
-                          <X className="size-3.5 text-muted-foreground" />
-                        </button>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <span className="flex-1 truncate">{workerName}.surgent.site</span>
-                      <a
-                        href={`https://${workerName}.surgent.site`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={iconBtn}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <ArrowSquareOut className="size-3.5 text-muted-foreground" />
-                      </a>
-                      <button onClick={copyUrl} className={iconBtn}>
-                        <Copy className="size-3.5 text-muted-foreground" />
-                      </button>
-                      <button onClick={startEditHostname} className={iconBtn}>
-                        <PencilSimple className="size-3.5 text-muted-foreground" />
-                      </button>
-                    </>
+                  <input
+                    value={hostnameInput}
+                    onChange={(e) => setHostnameInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && hostnameInput.trim() && !hostnameTaken)
+                        submitHostname()
+                      if (e.key === 'Escape' && workerName) cancelEditHostname()
+                    }}
+                    placeholder="my-app"
+                    className="flex-1 bg-transparent outline-none min-w-0"
+                    autoFocus
+                  />
+                  <span className="text-muted-foreground/60 shrink-0">.surgent.site</span>
+                  {workerName && (
+                    <button onClick={cancelEditHostname} className={`${iconBtn} ml-1`}>
+                      <X className="size-3.5 text-muted-foreground" />
+                    </button>
                   )}
                 </div>
               </div>
+            )}
 
-              {/* Actions */}
+            {/* Deploy + status */}
+            <div className="px-3 pb-3 space-y-2">
               <div className="flex items-center gap-2">
                 <Button
-                  className="flex-1 h-8 bg-brand hover:bg-brand/90 text-brand-foreground"
+                  className="flex-1 h-10 bg-brand hover:bg-brand/90 text-brand-foreground"
                   onClick={submitHostname}
                   disabled={
                     isDeploying ||
@@ -644,19 +693,149 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   {!workerName
                     ? 'Deploy'
                     : isEditingHostname && hostnameInput.trim() !== workerName
-                      ? 'Save & Publish'
+                      ? 'Save & Deploy'
                       : 'Republish'}
                 </Button>
                 {workerName && (
                   <Button
                     variant="outline"
-                    className="h-8 px-3"
+                    size="icon"
+                    className="h-10 w-10 shrink-0"
                     onClick={() => setIsDeploymentStatusOpen(true)}
                   >
                     <Clock className="size-3.5" />
                   </Button>
                 )}
               </div>
+
+              {/* In-progress status */}
+              {latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status) && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="size-3 animate-spin text-brand" />
+                  {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
+                </div>
+              )}
+
+              {/* Error status */}
+              {latestDeployment &&
+                TERMINAL_STATUSES.includes(latestDeployment.status) &&
+                latestDeployment.status !== 'deployed' && (
+                  <p className="text-xs text-destructive truncate">
+                    {latestDeployment.error || 'Deployment failed'}
+                  </p>
+                )}
+            </div>
+
+            {/* Marketplace */}
+            <div className="border-t px-3 py-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <Storefront className="size-3.5 text-muted-foreground/70" weight="duotone" />
+                <span className="text-xs font-medium text-muted-foreground">Marketplace</span>
+                {isProjectListed && (
+                  <span className="ml-auto text-[10px] font-medium text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
+                    Listed
+                  </span>
+                )}
+              </div>
+
+              {/* Screenshot upload zone */}
+              <div className="relative">
+                {!screenshotPreview ? (
+                  <div
+                    onDragOver={(e) => {
+                      if (!workerName) return
+                      e.preventDefault()
+                      setIsDragging(true)
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={workerName ? handleDrop : undefined}
+                    onClick={() => workerName && fileInputRef.current?.click()}
+                    className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed py-4 transition-colors ${
+                      !workerName
+                        ? 'border-muted-foreground/10 cursor-default'
+                        : isDragging
+                          ? 'border-brand bg-brand/5 cursor-pointer'
+                          : 'border-muted-foreground/20 hover:border-muted-foreground/40 cursor-pointer'
+                    }`}
+                  >
+                    <UploadSimple
+                      className={`size-5 ${!workerName ? 'text-muted-foreground/20' : 'text-muted-foreground/50'}`}
+                      weight="duotone"
+                    />
+                    <span
+                      className={`text-[11px] ${!workerName ? 'text-muted-foreground/30' : 'text-muted-foreground'}`}
+                    >
+                      Drop screenshot or click to upload
+                    </span>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+                  </div>
+                ) : (
+                  <div className="relative group rounded-lg overflow-hidden border bg-muted/30">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={screenshotPreview}
+                      alt="Screenshot preview"
+                      className="w-full h-28 object-cover"
+                    />
+                    {isUploading && (
+                      <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                        <Loader2 className="size-5 animate-spin text-brand" />
+                      </div>
+                    )}
+                    {!isUploading && (
+                      <button
+                        onClick={() => {
+                          setScreenshotPreview(null)
+                          setScreenshotUrl(null)
+                          if (fileInputRef.current) fileInputRef.current.value = ''
+                        }}
+                        className="absolute top-1.5 right-1.5 p-1 rounded-md bg-background/80 hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="size-3" weight="bold" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Deploy first overlay */}
+                {!workerName && !screenshotPreview && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/60">
+                    <span className="text-[11px] font-medium text-muted-foreground">
+                      Deploy your project first
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* List / View button */}
+              {isProjectListed ? (
+                <Button className="w-full h-8 text-xs" variant="outline" asChild>
+                  <Link href={`/marketplace/${projectListing?.id}`}>
+                    <ArrowSquareOut className="size-3 mr-1.5" />
+                    View in Marketplace
+                  </Link>
+                </Button>
+              ) : (
+                <Button
+                  className="w-full h-8 text-xs"
+                  variant="outline"
+                  disabled={!workerName || !screenshotUrl || isUploading || upsertListing.isPending}
+                  onClick={handleListOnMarketplace}
+                >
+                  {upsertListing.isPending ? (
+                    <Loader2 className="size-3 animate-spin mr-1.5" />
+                  ) : (
+                    <Storefront className="size-3 mr-1.5" weight="fill" />
+                  )}
+                  List on Marketplace
+                </Button>
+              )}
             </div>
           </DropdownMenuContent>
         </DropdownMenu>

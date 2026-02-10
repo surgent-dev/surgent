@@ -32,12 +32,140 @@ import {
   getProjectWithAuth,
   getIntegrationByProvider,
   getEnvVarsByProjectId,
+  countProjectsByOrganizationId,
+  createProject,
 } from '@/services/projects'
 import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
-
+import { inngest } from '@/inngest'
 const projects = new Hono<AppContext>()
 
 const idParam = z.object({ id: z.string().uuid() })
+const listingBody = z.object({
+  title: z.string().trim().min(3).max(80).optional(),
+  description: z.string().trim().min(1).max(4000),
+  imageUrl: z.string().url().optional(),
+})
+
+function serializeListing(row: {
+  id: string | null
+  projectId: string
+  title: string
+  description: string
+  imageUrl: string | null
+  status: string
+  createdAt?: Date
+  updatedAt?: Date
+}) {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    description: row.description,
+    imageUrl: row.imageUrl,
+    status: row.status,
+    createdAt: row.createdAt?.toISOString?.() ?? null,
+    updatedAt: row.updatedAt?.toISOString?.() ?? null,
+  }
+}
+
+// ── Public routes (no auth required) ──
+
+// GET /projects/marketplace/listings - List all active marketplace listings
+projects.get(
+  '/marketplace/listings',
+  zValidator('query', z.object({ limit: z.coerce.number().int().min(1).max(100).optional() })),
+  async (c) => {
+    const { limit } = c.req.valid('query')
+
+    const rows = await db
+      .selectFrom('listing')
+      .innerJoin('project', 'project.id', 'listing.projectId')
+      .innerJoin('user', 'user.id', 'project.userId')
+      .leftJoin('worker', 'worker.projectId', 'project.id')
+      .select([
+        'listing.id',
+        'listing.projectId',
+        'listing.title',
+        'listing.description',
+        'listing.imageUrl',
+        'listing.status',
+        'listing.createdAt',
+        'listing.updatedAt',
+        'project.name as projectName',
+        'user.name as sellerName',
+        'user.image as sellerImage',
+        'worker.scriptName as workerScriptName',
+        'worker.status as workerStatus',
+      ])
+      .where('listing.status', '=', 'active')
+      .where('project.deletedAt', 'is', null)
+      .orderBy('listing.updatedAt', 'desc')
+      .limit(limit ?? 48)
+      .execute()
+
+    return c.json(
+      rows.map((row) => ({
+        ...serializeListing(row),
+        projectName: row.projectName,
+        sellerName: row.sellerName,
+        sellerImage: row.sellerImage,
+        liveUrl:
+          row.workerScriptName && row.workerStatus === 'active'
+            ? `https://${row.workerScriptName}.surgent.site`
+            : null,
+      })),
+    )
+  },
+)
+
+// GET /projects/marketplace/listings/:id - Get single marketplace listing
+projects.get(
+  '/marketplace/listings/:id',
+  zValidator('param', z.object({ id: z.string().uuid() })),
+  async (c) => {
+    const { id } = c.req.valid('param')
+
+    const row = await db
+      .selectFrom('listing')
+      .innerJoin('project', 'project.id', 'listing.projectId')
+      .innerJoin('user', 'user.id', 'project.userId')
+      .leftJoin('worker', 'worker.projectId', 'project.id')
+      .select([
+        'listing.id',
+        'listing.projectId',
+        'listing.title',
+        'listing.description',
+        'listing.imageUrl',
+        'listing.status',
+        'listing.createdAt',
+        'listing.updatedAt',
+        'project.name as projectName',
+        'user.name as sellerName',
+        'user.image as sellerImage',
+        'worker.scriptName as workerScriptName',
+        'worker.status as workerStatus',
+      ])
+      .where('listing.id', '=', id)
+      .where('listing.status', '=', 'active')
+      .where('project.deletedAt', 'is', null)
+      .executeTakeFirst()
+
+    if (!row) return c.json({ error: 'Listing not found' }, 404)
+
+    return c.json({
+      ...serializeListing(row),
+      projectName: row.projectName,
+      sellerName: row.sellerName,
+      sellerImage: row.sellerImage,
+      liveUrl:
+        row.workerScriptName && row.workerStatus === 'active'
+          ? `https://${row.workerScriptName}.surgent.site`
+          : null,
+    })
+  },
+)
+
+// ── Auth required from here ──
 
 projects.use('*', async (c, next) => {
   if (!c.get('user')) return c.json({ error: 'Unauthorized' }, 401)
@@ -74,6 +202,8 @@ projects.get('/', requireAuth, async (c) => {
       'project.userId',
       'project.organizationId',
       'project.name',
+      'project.status',
+      'project.failReason',
       'project.github',
       'project.settings',
       'project.metadata',
@@ -98,6 +228,8 @@ projects.get('/', requireAuth, async (c) => {
       userId: r.userId,
       organizationId: r.organizationId,
       name: r.name,
+      status: r.status,
+      failReason: r.failReason ?? null,
       github: r.github,
       settings: r.settings,
       metadata: r.metadata,
@@ -238,6 +370,89 @@ projects.get('/usage', requireAuth, async (c) => {
   })
 })
 
+// GET /projects/:id/listing - Get listing for a project
+projects.get('/:id/listing', zValidator('param', idParam), async (c) => {
+  const { id } = c.req.valid('param')
+  await getProjectWithAuth(id, c.get('user')!)
+
+  const listing = await db
+    .selectFrom('listing')
+    .selectAll()
+    .where('projectId', '=', id)
+    .executeTakeFirst()
+
+  if (!listing) return c.json({ listing: null })
+  return c.json({ listing: serializeListing(listing) })
+})
+
+// POST /projects/:id/listing - Create or update listing
+projects.post(
+  '/:id/listing',
+  zValidator('param', idParam),
+  zValidator('json', listingBody),
+  async (c) => {
+    const { id } = c.req.valid('param')
+    const { title, description, imageUrl } = c.req.valid('json')
+    const project = await getProjectWithAuth(id, c.get('user')!)
+
+    const now = new Date()
+    const nextTitle = title || project.name
+
+    const existing = await db
+      .selectFrom('listing')
+      .select('id')
+      .where('projectId', '=', id)
+      .executeTakeFirst()
+
+    if (existing) {
+      const updated = await db
+        .updateTable('listing')
+        .set({
+          title: nextTitle,
+          description,
+          imageUrl: imageUrl ?? null,
+          status: 'active',
+          updatedAt: now,
+        })
+        .where('projectId', '=', id)
+        .returningAll()
+        .executeTakeFirstOrThrow()
+
+      return c.json({ listing: serializeListing(updated) })
+    }
+
+    const created = await db
+      .insertInto('listing')
+      .values({
+        projectId: id,
+        title: nextTitle,
+        description,
+        imageUrl: imageUrl ?? null,
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow()
+
+    return c.json({ listing: serializeListing(created) })
+  },
+)
+
+// DELETE /projects/:id/listing - Unlist project
+projects.delete('/:id/listing', zValidator('param', idParam), async (c) => {
+  const { id } = c.req.valid('param')
+  await getProjectWithAuth(id, c.get('user')!)
+
+  await db
+    .updateTable('listing')
+    .set({ status: 'inactive', updatedAt: new Date() })
+    .where('projectId', '=', id)
+    .execute()
+
+  return c.json({ unlisted: true })
+})
+
 // GET /projects/:id - Get single project
 projects.get('/:id', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
@@ -335,7 +550,7 @@ projects.delete('/:id', zValidator('param', idParam), async (c) => {
   return c.json({ deleted: true })
 })
 
-// POST /projects - Create + Initialize project (no id provided by client)
+// POST /projects - Create project + fire async initialization via Inngest
 projects.post(
   '/',
   zValidator(
@@ -348,7 +563,7 @@ projects.post(
   ),
   async (c) => {
     try {
-      const { githubUrl, name, initConvex } = c.req.valid('json')
+      const { githubUrl, name } = c.req.valid('json')
       const userId = c.get('user')!.id
       const organizationId = c.get('session')?.activeOrganizationId
       if (!organizationId) return c.json({ error: 'No active organization' }, 400)
@@ -364,16 +579,40 @@ projects.post(
         return c.json({ error: 'Forbidden' }, 403)
       }
 
-      const result = await initializeProject({
-        githubUrl,
+      // Validate project limit (fast, synchronous check)
+      const MAX_PROJECTS_PER_ORG = 2
+      const projectCount = await countProjectsByOrganizationId(organizationId)
+      if (projectCount >= MAX_PROJECTS_PER_ORG) {
+        return c.json(
+          {
+            error: `Project limit reached. Maximum ${MAX_PROJECTS_PER_ORG} projects per organization.`,
+          },
+          400,
+        )
+      }
+
+      // Create DB record synchronously (so we have an ID to return)
+      const projectName = name || 'app'
+      const created = await createProject({
         userId,
         organizationId,
-        name,
-        initConvex,
-        headers: c.req.raw.headers,
+        name: projectName,
+        githubUrl,
       })
 
-      return c.json({ id: result.projectId })
+      // Fire Inngest event — initialization runs in the background
+      await inngest.send({
+        name: 'project/create.requested',
+        data: {
+          projectId: created.id,
+          userId,
+          organizationId,
+          githubUrl,
+          name: projectName,
+        },
+      })
+
+      return c.json({ id: created.id })
     } catch (err) {
       const status = err instanceof HttpError ? err.status : 500
       const message = err instanceof Error ? err.message : 'Failed to create project'

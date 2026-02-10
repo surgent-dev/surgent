@@ -1,6 +1,6 @@
 'use client'
 import { Suspense, useEffect, useState } from 'react'
-import { Github, Twitter } from 'lucide-react'
+import { Github, Twitter, Store } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { motion } from 'motion/react'
@@ -242,25 +242,38 @@ function IndexContent() {
                 priority
               />
             </Link>
-            {isLoggedIn ? (
+            <div className="flex items-center gap-2">
               <Button
                 asChild
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="rounded-full shrink-0 cursor-pointer"
+                className="rounded-full shrink-0 cursor-pointer gap-1.5"
               >
-                <Link href="/dashboard">Go to dashboard</Link>
+                <Link href="/marketplace">
+                  <Store className="h-4 w-4" />
+                  <span className="hidden sm:inline">Marketplace</span>
+                </Link>
               </Button>
-            ) : (
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="rounded-full shrink-0 cursor-pointer"
-              >
-                <Link href="/signup">Sign up</Link>
-              </Button>
-            )}
+              {isLoggedIn ? (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full shrink-0 cursor-pointer"
+                >
+                  <Link href="/dashboard">Go to dashboard</Link>
+                </Button>
+              ) : (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full shrink-0 cursor-pointer"
+                >
+                  <Link href="/signup">Sign up</Link>
+                </Button>
+              )}
+            </div>
           </div>
         </motion.header>
 

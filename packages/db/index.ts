@@ -13,9 +13,11 @@ export type {
   OAuthConsentTable,
   JwksTable,
   ProjectTable,
+  ProjectStatus,
   ProjectMetadata,
   ChatsTable,
   GitHubInstallationsTable,
   DeploymentTable,
+  ListingTable,
   EnvDestination,
 } from './src/types'

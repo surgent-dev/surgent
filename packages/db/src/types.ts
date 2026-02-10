@@ -26,6 +26,7 @@ export interface Database {
   integration: IntegrationTable
   env_var: EnvVarTable
   deployment: DeploymentTable
+  listing: ListingTable
   chats: ChatsTable
   github_installations: GitHubInstallationsTable
   github_oauth_tokens: GitHubOAuthTokensTable
@@ -301,12 +302,16 @@ export interface ProjectMetadata {
   startCommand?: string
 }
 
+export type ProjectStatus = 'provisioning' | 'ready' | 'failed'
+
 export interface ProjectTable {
   id?: string
   userId: string
   organizationId: string
   name: string
   slug: string
+  status: ProjectStatus
+  failReason: string | null
   github: any | null
   settings: any | null
   deployment: any | null
@@ -375,6 +380,17 @@ export interface DeploymentTable {
   rollbackOf: string | null
   hostname: string | null
   createdAt?: Date
+}
+
+export interface ListingTable {
+  id: string | null
+  projectId: string
+  title: string
+  description: string
+  imageUrl: string | null
+  status: string
+  createdAt?: Date
+  updatedAt?: Date
 }
 
 export interface ChatsTable {
