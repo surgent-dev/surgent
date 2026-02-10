@@ -12,7 +12,7 @@ export type ProviderModel = {
 export const MODELS: ProviderModel[] = [
   {
     id: 'claude-opus-4-6',
-    name: 'Claude Code',
+    name: 'Claude Opus 4.6',
     providerId: 'opencode',
     providerName: 'OpenCode',
     limit: { context: 200000 },
@@ -31,16 +31,6 @@ export const MODELS: ProviderModel[] = [
     badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   },
   {
-    id: 'gemini-3-flash',
-    name: 'Gemini 3 Flash',
-    providerId: 'opencode',
-    providerName: 'OpenCode',
-    limit: { context: 1048576 },
-    icon: '/google-gemini.svg',
-    badge: 'Fast',
-    badgeColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  },
-  {
     id: 'gemini-3-pro',
     name: 'Gemini 3 Pro',
     providerId: 'opencode',
@@ -50,9 +40,17 @@ export const MODELS: ProviderModel[] = [
     badge: 'Pro',
     badgeColor: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
   },
+  {
+    id: 'gemini-3-flash',
+    name: 'Gemini 3 Flash',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+    limit: { context: 1048576 },
+    icon: '/google-gemini.svg',
+    badge: 'Fast',
+    badgeColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  },
 ]
-
-export const FLASH_MODEL = MODELS.find((m) => m.id === 'gemini-3-flash')!
 
 export function getModel(id: string) {
   return MODELS.find((m) => m.id === id)

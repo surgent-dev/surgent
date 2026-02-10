@@ -25,8 +25,6 @@ type Props = {
     files?: FilePart[],
     model?: string,
     providerID?: string,
-    variant?: string,
-    isMax?: boolean,
   ) => void | Promise<void>
   disabled?: boolean
   placeholder?: string
@@ -46,41 +44,6 @@ type Props = {
 
 const MAX_FILES = 5
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-
-// Provider reasoning variants (1:1 mapping to UI levels)
-// OpenAI: 1x=low, 2x=medium, 3x=high, 4x=xhigh
-// Claude: 1x=high, 2x=max
-// Gemini: 1x=low, 2x=high
-type Provider = 'openai' | 'claude' | 'gemini'
-
-const PROVIDER_VARIANTS: Record<Provider, readonly string[]> = {
-  openai: ['low', 'medium', 'high', 'xhigh'],
-  claude: ['high', 'max'],
-  gemini: ['low', 'high'],
-}
-
-function detectProvider(modelId?: string): Provider {
-  const id = modelId?.toLowerCase() ?? ''
-  if (id.includes('claude')) return 'claude'
-  if (id.includes('gemini')) return 'gemini'
-  return 'openai'
-}
-
-const PROVIDER_DEFAULTS: Record<Provider, number> = {
-  openai: 2, // 'high'
-  claude: 0, // 'high'
-  gemini: 1, // 'high'
-}
-
-function getReasoningConfig(modelId?: string) {
-  const provider = detectProvider(modelId)
-  const variants = PROVIDER_VARIANTS[provider]
-  return {
-    variants,
-    maxLevel: variants.length - 1,
-    defaultLevel: PROVIDER_DEFAULTS[provider],
-  }
-}
 
 type InputMenuProps = {
   onUploadClick: () => void
@@ -171,7 +134,6 @@ export default function ChatInput({
   const [showSubagentDropdown, setShowSubagentDropdown] = useState(false)
   const [subagentFilter, setSubagentFilter] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
-  const [isMax, setIsMax] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dragCounter = useRef(0)
@@ -185,15 +147,6 @@ export default function ChatInput({
     }
     return models[0]
   }, [models, selectedModel])
-  const reasoning = useMemo(() => getReasoningConfig(currentModel?.id), [currentModel?.id])
-  const currentVariant = isMax
-    ? reasoning.variants[reasoning.maxLevel]
-    : reasoning.variants[reasoning.defaultLevel]
-
-  useEffect(() => {
-    // Reset max mode when model changes
-    setIsMax(false)
-  }, [currentModel?.id])
 
   const handleModelSelect = (modelId: string, providerId: string) => {
     onModelChange?.(modelId, providerId)
@@ -325,14 +278,7 @@ export default function ChatInput({
     setSelectedSubagent(undefined)
     const model = currentModel ?? models[0]
     if (!model) return
-    onSubmit(
-      text,
-      fileParts.length ? fileParts : undefined,
-      model.id,
-      model.providerId,
-      currentVariant,
-      isMax,
-    )
+    onSubmit(text, fileParts.length ? fileParts : undefined, model.id, model.providerId)
   }
 
   // Handle keyboard navigation in subagent dropdown
@@ -534,41 +480,6 @@ export default function ChatInput({
               selectedModel={selectedModel}
               onSelect={handleModelSelect}
             />
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setIsMax((v) => !v)}
-                  className="h-8 px-2 flex items-center gap-2 rounded-lg text-xs font-medium hover:bg-muted/60"
-                >
-                  <span
-                    className={cn(
-                      'italic font-bold tracking-wide transition-colors',
-                      isMax ? 'text-brand' : 'text-muted-foreground',
-                    )}
-                  >
-                    MAX
-                  </span>
-                  <div
-                    className={cn(
-                      'relative w-7 h-4 rounded-full transition-colors',
-                      isMax ? 'bg-brand' : 'bg-muted-foreground/30',
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-transform duration-200',
-                        isMax ? 'translate-x-[14px]' : 'translate-x-0.5',
-                      )}
-                    />
-                  </div>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={8}>
-                {isMax ? 'Max reasoning enabled' : 'Enable max reasoning'}
-              </TooltipContent>
-            </Tooltip>
           </div>
 
           {isWorking ? (

@@ -28,7 +28,7 @@ import {
   MoreHorizontal,
 } from 'lucide-react'
 import { Chat, ArrowElbowDownRight } from '@phosphor-icons/react'
-import { MODELS, FLASH_MODEL, type ProviderModel } from '@/lib/models'
+import { MODELS, type ProviderModel } from '@/lib/models'
 import ChatInput, { type FilePart } from './chat-input'
 import { useSandbox } from '@/hooks/use-sandbox'
 import useAgentStream, { type SessionStatusRetry } from '@/lib/use-agent-stream'
@@ -374,22 +374,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     setPendingPrompt(null)
   }, [pendingPrompt, setPendingPrompt])
 
-  // Build agent overrides for non-MAX mode (use flash for subagents)
-  const buildAgentOverrides = (isMax: boolean): Record<string, AgentModelOverride> | undefined => {
-    if (isMax) return undefined // MAX mode: let subagents use their default (higher tier) models
-    // Non-MAX mode: use flash for explore and frontend subagents
-    const flash = { model: { providerID: FLASH_MODEL.providerId, modelID: FLASH_MODEL.id } }
-    return { explore: flash, frontend: flash }
-  }
-
-  const handleSend = (
-    text: string,
-    files?: FilePart[],
-    model?: string,
-    providerID?: string,
-    variant?: string,
-    isMax?: boolean,
-  ) => {
+  const handleSend = (text: string, files?: FilePart[], model?: string, providerID?: string) => {
     const trimmed = text.trim()
     if ((!trimmed && !files?.length) || inputWorking || !activeId) return
 
@@ -426,7 +411,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       time: { created: Date.now() },
       agent: mode,
       model: model && providerID ? { providerID, modelID: model } : undefined,
-      variant,
     } as Message
 
     const optimisticParts: Part[] = requestParts
@@ -443,7 +427,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       parts: optimisticParts,
     })
 
-    const agentOverrides = buildAgentOverrides(isMax ?? false)
+    const coder = model && providerID ? { model: { providerID, modelID: model } } : undefined
+    const agentOverrides = coder ? { coder } : undefined
 
     send.mutate(
       {
@@ -453,7 +438,6 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         parts: requestParts,
         model,
         providerID,
-        variant,
         agentOverrides,
       },
       {
@@ -577,8 +561,9 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const availableModels = useMemo(() => {
     if (!providerData) return MODELS
     const provider = providerData.all?.find((item) => item.id === 'opencode')
-    if (!provider?.models) return []
-    return MODELS.filter((model) => Boolean(provider.models[model.id]))
+    if (!provider?.models) return MODELS
+    const fromProvider = MODELS.filter((model) => Boolean(provider.models[model.id]))
+    return fromProvider.length ? fromProvider : MODELS
   }, [providerData])
 
   const handleModelChange = (modelId: string, providerId: string) => {
