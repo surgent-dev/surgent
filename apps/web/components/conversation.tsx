@@ -266,8 +266,13 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const inputWorking = working || subagentWorking
 
   const funMessage = useFunMessage()
-  const showSkeleton = loading || sessionsQuery.isLoading || !activeId
-  const inputDisabled = inputWorking || create.isPending || showSkeleton
+  const sessionsErrorMessage = sessionsQuery.error
+    ? sessionsQuery.error instanceof Error
+      ? sessionsQuery.error.message
+      : String(sessionsQuery.error)
+    : null
+  const showSkeleton = loading || sessionsQuery.isLoading || (!activeId && !sessionsQuery.isError)
+  const inputDisabled = inputWorking || create.isPending || showSkeleton || !activeId
   const inputPlaceholder = inputWorking ? funMessage : 'Ask anything...'
 
   useEffect(() => {
@@ -535,6 +540,13 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
   // Unified error display (combines session errors and assistant errors)
   const displayError = useMemo(() => {
+    if (!activeId && sessionsQuery.isError && sessionsErrorMessage) {
+      return {
+        message: sessionsErrorMessage,
+        isContext: false,
+        isDismissible: false,
+      }
+    }
     if (sessionError) {
       const err = sessionError as any
       const msg = err.data?.message || err.message || err.name || String(sessionError)
@@ -551,7 +563,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       return { ...lastAssistantError, isDismissible: false }
     }
     return null
-  }, [sessionError, lastAssistantError])
+  }, [activeId, lastAssistantError, sessionError, sessionsErrorMessage, sessionsQuery.isError])
 
   const { data: providerData } = useQuery<ProviderResponse>({
     queryKey: ['opencode-models', projectId],

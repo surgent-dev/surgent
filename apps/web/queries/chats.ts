@@ -124,6 +124,8 @@ export function useSessionsQuery(projectId?: string) {
     },
     enabled: Boolean(projectId),
     staleTime: 10000,
+    retry: 8,
+    retryDelay: (attempt) => Math.min(500 * Math.pow(2, attempt), 5000),
   })
 }
 
