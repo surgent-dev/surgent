@@ -1,4 +1,5 @@
 import { db } from '@/lib/db'
+import { sql } from 'kysely'
 import type { EnvDestination, ProjectMetadata } from '@repo/db'
 import { isAdmin } from '@/middleware/admin'
 import { HttpError } from '@/lib/errors'
@@ -112,6 +113,7 @@ export async function createProject(args: {
       organizationId: args.organizationId,
       name: args.name,
       slug,
+      status: 'provisioning',
       github: args.githubUrl ? { url: args.githubUrl } : null,
       createdAt: now,
       updatedAt: now,
@@ -125,6 +127,33 @@ export async function updateProject(id: string, data: { metadata?: ProjectMetada
   await db
     .updateTable('project')
     .set({ ...data, updatedAt: new Date() })
+    .where('id', '=', id)
+    .execute()
+}
+
+export async function updateProvisioningStep(id: string, step: string) {
+  await db
+    .updateTable('project')
+    .set({
+      metadata: sql`COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ provisioningStep: step })}::jsonb`,
+      updatedAt: new Date(),
+    } as any)
+    .where('id', '=', id)
+    .execute()
+}
+
+export async function updateProjectStatus(
+  id: string,
+  status: 'provisioning' | 'ready' | 'failed',
+  failReason?: string | null,
+) {
+  await db
+    .updateTable('project')
+    .set({
+      status,
+      failReason: status === 'failed' ? (failReason ?? null) : null,
+      updatedAt: new Date(),
+    })
     .where('id', '=', id)
     .execute()
 }

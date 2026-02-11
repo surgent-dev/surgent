@@ -6,13 +6,12 @@ import { sql } from 'kysely'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../middleware/auth'
+import { auth } from '@/lib/auth'
 import { config } from '@/lib/config'
 import { sanitizeHostname, getSandboxPreviewUrl } from '@/lib/utils'
 import {
-  deployProject,
   createDeploymentRecord,
   undeployProject,
-  initializeProject,
   resumeProject,
   deployConvexProd,
   deleteSandbox,
@@ -34,6 +33,9 @@ import {
   getEnvVarsByProjectId,
   countProjectsByOrganizationId,
   createProject,
+  updateProjectStatus,
+  updateDeployment,
+  attachApiKeyToProject,
 } from '@/services/projects'
 import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
 import { inngest } from '@/inngest'
@@ -562,6 +564,7 @@ projects.post(
     }),
   ),
   async (c) => {
+    let projectId: string | undefined
     try {
       const { githubUrl, name } = c.req.valid('json')
       const userId = c.get('user')!.id
@@ -599,21 +602,60 @@ projects.post(
         name: projectName,
         githubUrl,
       })
+      projectId = created.id
 
-      // Fire Inngest event — initialization runs in the background
-      await inngest.send({
-        name: 'project/create.requested',
-        data: {
-          projectId: created.id,
-          userId,
-          organizationId,
-          githubUrl,
-          name: projectName,
-        },
+      // Setup API key synchronously (needs user session from request headers)
+      const apiKeyResult = await auth.api.createApiKey({
+        body: { name: `p-${projectId.slice(0, 8)}` },
+        headers: c.req.raw.headers,
       })
 
-      return c.json({ id: created.id })
+      const attached = await attachApiKeyToProject(apiKeyResult.id, projectId, organizationId)
+      if (!attached) {
+        throw new Error('Failed to attach API key to project')
+      }
+
+      await db
+        .insertInto('env_var')
+        .values({
+          projectId,
+          environment: 'development',
+          key: 'SURGENT_API_KEY',
+          value: apiKeyResult.key,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          destination: 'server',
+        })
+        .execute()
+
+      // Fire Inngest event — sandbox provisioning runs in the background
+      try {
+        await inngest.send({
+          name: 'project/create.requested',
+          data: {
+            projectId,
+            userId,
+            organizationId,
+            githubUrl,
+            name: projectName,
+          },
+        })
+      } catch (sendErr) {
+        await updateProjectStatus(projectId, 'failed', 'Failed to dispatch creation event').catch(
+          () => {},
+        )
+        throw sendErr
+      }
+
+      return c.json({ id: projectId })
     } catch (err) {
+      if (projectId) {
+        await updateProjectStatus(
+          projectId,
+          'failed',
+          err instanceof Error ? err.message : 'Project creation failed',
+        ).catch(() => {})
+      }
       const status = err instanceof HttpError ? err.status : 500
       const message = err instanceof Error ? err.message : 'Failed to create project'
       console.error('[projects] create failed', {
@@ -655,15 +697,23 @@ projects.post(
 
       const deployment = await createDeploymentRecord(id, name)
 
-      deployProject({ projectId: id, deployName: name, deploymentId: deployment.id }).catch(
-        (err) => {
-          console.error('[deploy] background failed', {
+      try {
+        await inngest.send({
+          name: 'project/deploy.requested',
+          data: {
             projectId: id,
+            deployName: name,
             deploymentId: deployment.id,
-            error: err?.stack ?? err?.message ?? String(err),
-          })
-        },
-      )
+          },
+        })
+      } catch (sendErr) {
+        await updateDeployment(deployment.id, {
+          status: 'deploy_failed',
+          error: 'Failed to dispatch deployment event',
+          finishedAt: new Date(),
+        }).catch(() => {})
+        throw sendErr
+      }
 
       console.log('[deploy] scheduled', { projectId: id, deploymentId: deployment.id })
       return c.json({ deploymentId: deployment.id, status: 'queued' })

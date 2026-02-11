@@ -1,6 +1,6 @@
 import { useProjectQuery, useSandboxHealthQuery } from '@/queries/projects'
 
-export type SandboxStage = 'creating' | 'loading' | 'activating' | 'starting' | 'ready'
+export type SandboxStage = 'creating' | 'loading' | 'activating' | 'starting' | 'ready' | 'failed'
 
 interface UseSandboxReadyResult {
   isReady: boolean
@@ -10,21 +10,29 @@ interface UseSandboxReadyResult {
 
 export function useSandboxReady(projectId: string | undefined): UseSandboxReadyResult {
   const { data: project, isLoading } = useProjectQuery(projectId)
-  const { data: health } = useSandboxHealthQuery(projectId)
+
+  const isProvisioning = project?.status === 'provisioning'
+  const isFailed = project?.status === 'failed'
+
+  // Don't poll sandbox health while project is still provisioning or failed
+  const { data: health } = useSandboxHealthQuery(projectId, !isProvisioning && !isFailed)
 
   const hasSandboxUrl = Boolean(project?.sandbox?.url)
   const isHealthy = health?.status === 'running'
-  const isReady = hasSandboxUrl && isHealthy
+  const isReady = hasSandboxUrl && isHealthy && !isProvisioning && !isFailed
 
-  // Determine current stage
   const stage: SandboxStage =
     isLoading || !project
       ? 'loading'
-      : !hasSandboxUrl
-        ? 'activating'
-        : !isHealthy
-          ? 'starting'
-          : 'ready'
+      : isFailed
+        ? 'failed'
+        : isProvisioning
+          ? 'creating'
+          : !hasSandboxUrl
+            ? 'activating'
+            : !isHealthy
+              ? 'starting'
+              : 'ready'
 
   return { isReady, stage, project }
 }

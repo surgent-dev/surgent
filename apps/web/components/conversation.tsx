@@ -346,14 +346,15 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     }
   }, [activeId, scrollToBottom])
 
-  // Prefill initial prompt into input
+  // Auto-send initial prompt once session is connected and ready
   useEffect(() => {
     if (!initialPrompt || prefilledRef.current) return
     const text = initialPrompt.trim()
     if (!text) return
+    if (!activeId || showSkeleton || !connected) return
 
     prefilledRef.current = true
-    if (!inputValue) setInputValue(text)
+    handleSend(text)
 
     // Clean up URL param
     try {
@@ -363,7 +364,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         router.replace(params.toString() ? `${pathname}?${params}` : pathname, { scroll: false })
       }
     } catch {}
-  }, [initialPrompt, inputValue, pathname, router, searchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt, activeId, showSkeleton, connected])
 
   // Handle pending prompt from error overlay "Fix with AI"
   const pendingPrompt = useSandbox((s) => s.pendingPrompt)

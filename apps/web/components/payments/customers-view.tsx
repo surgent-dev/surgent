@@ -18,9 +18,9 @@ function CustomerRow({ customer }: { customer: Customer }) {
           <p className="font-medium text-sm truncate">{customer.name || 'No name'}</p>
           <p className="text-xs text-muted-foreground truncate">{customer.email || 'No email'}</p>
         </div>
-        <code className="text-[10px] text-muted-foreground font-mono">
-          {customer.id.slice(0, 8)}...
-        </code>
+        {customer.externalId && (
+          <code className="text-[10px] text-muted-foreground font-mono">{customer.externalId}</code>
+        )}
       </div>
     </div>
   )
@@ -41,6 +41,7 @@ export function CustomersView({ customers, isLoading }: CustomersViewProps) {
       (c) =>
         c.name?.toLowerCase().includes(query) ||
         c.email?.toLowerCase().includes(query) ||
+        c.externalId?.toLowerCase().includes(query) ||
         c.id.toLowerCase().includes(query),
     )
   }, [customers, searchQuery])

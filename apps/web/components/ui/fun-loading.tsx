@@ -230,7 +230,7 @@ export const FUN_VIBES: LoadingVibe[] = [
 export const FUN_MESSAGES = FUN_VIBES.map((v) => v.message)
 
 // Custom keyframe styles (inject once)
-const keyframeStyles = `
+export const keyframeStyles = `
   @keyframes wiggle {
     0%, 100% { transform: rotate(-12deg); }
     50% { transform: rotate(12deg); }

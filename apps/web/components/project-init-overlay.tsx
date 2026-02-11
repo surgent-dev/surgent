@@ -2,29 +2,30 @@
 
 import { motion, AnimatePresence } from 'motion/react'
 import { cn } from '@/lib/utils'
-import { useFunVibe } from '@/components/ui/fun-loading'
+import { useFunVibe, keyframeStyles } from '@/components/ui/fun-loading'
+import Link from 'next/link'
 
 import type { SandboxStage } from '@/hooks/use-sandbox-ready'
 
-type InitStage = SandboxStage
-
 interface ProjectInitOverlayProps {
   show: boolean
-  stage: InitStage
+  stage: SandboxStage
+  provisioningStep?: string
 }
 
-const stageLabels: Record<InitStage, string> = {
+const stageLabels: Record<SandboxStage, string> = {
   creating: 'Creating project',
   loading: 'Loading project',
   activating: 'Activating sandbox',
   starting: 'Starting environment',
   ready: 'Ready',
+  failed: 'Setup failed',
 }
 
-export function ProjectInitOverlay({ show, stage }: ProjectInitOverlayProps) {
+export function ProjectInitOverlay({ show, stage, provisioningStep }: ProjectInitOverlayProps) {
   const vibe = useFunVibe(2000)
   const Icon = vibe.icon
-  const isReady = stage === 'ready'
+  const isFailed = stage === 'failed'
 
   return (
     <AnimatePresence>
@@ -35,119 +36,7 @@ export function ProjectInitOverlay({ show, stage }: ProjectInitOverlayProps) {
           transition={{ duration: 0.4, ease: 'easeOut' }}
           className="fixed inset-0 z-50 bg-background flex items-center justify-center"
         >
-          <style jsx>{`
-            @keyframes wiggle {
-              0%,
-              100% {
-                transform: rotate(-12deg);
-              }
-              50% {
-                transform: rotate(12deg);
-              }
-            }
-            @keyframes float {
-              0%,
-              100% {
-                transform: translateY(0) scale(1);
-                opacity: 0.8;
-              }
-              50% {
-                transform: translateY(-8px) scale(1.1);
-                opacity: 1;
-              }
-            }
-            @keyframes flicker {
-              0%,
-              100% {
-                opacity: 1;
-                transform: scale(1);
-              }
-              50% {
-                opacity: 0.7;
-                transform: scale(0.95);
-              }
-            }
-            @keyframes zap {
-              0%,
-              100% {
-                transform: translateX(0);
-              }
-              25% {
-                transform: translateX(-3px);
-              }
-              75% {
-                transform: translateX(3px);
-              }
-            }
-            @keyframes rocket {
-              0%,
-              100% {
-                transform: translateY(0) rotate(-45deg);
-              }
-              50% {
-                transform: translateY(-8px) rotate(-45deg);
-              }
-            }
-            @keyframes wobble {
-              0%,
-              100% {
-                transform: rotate(0) scale(1);
-              }
-              25% {
-                transform: rotate(-5deg) scale(1.05);
-              }
-              75% {
-                transform: rotate(5deg) scale(1.05);
-              }
-            }
-            @keyframes orbit {
-              from {
-                transform: rotate(0deg);
-              }
-              to {
-                transform: rotate(360deg);
-              }
-            }
-            @keyframes throb {
-              0%,
-              100% {
-                transform: scale(1);
-              }
-              50% {
-                transform: scale(1.15);
-              }
-            }
-            @keyframes glow {
-              0%,
-              100% {
-                opacity: 0.6;
-                transform: scale(0.95);
-              }
-              50% {
-                opacity: 1;
-                transform: scale(1.1);
-              }
-            }
-            @keyframes spin3d {
-              0% {
-                transform: perspective(100px) rotateY(0deg);
-              }
-              100% {
-                transform: perspective(100px) rotateY(360deg);
-              }
-            }
-            @keyframes rainbow {
-              0%,
-              100% {
-                filter: hue-rotate(0deg);
-                transform: scale(1);
-              }
-              50% {
-                filter: hue-rotate(180deg);
-                transform: scale(1.1);
-              }
-            }
-          `}</style>
+          <style jsx>{keyframeStyles}</style>
           <div className="flex flex-col items-center gap-4">
             <motion.div
               key={vibe.message}
@@ -166,16 +55,24 @@ export function ProjectInitOverlay({ show, stage }: ProjectInitOverlayProps) {
                 transition={{ duration: 0.2 }}
                 className="text-sm text-muted-foreground"
               >
-                {isReady ? 'Ready!' : vibe.message}
+                {isFailed ? 'Something went wrong' : vibe.message}
               </motion.p>
               <motion.span
                 key={stage}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 0.5 }}
-                className="text-xs text-muted-foreground"
+                className={cn('text-xs text-muted-foreground', isFailed && 'text-destructive')}
               >
-                {stageLabels[stage]}
+                {stage === 'creating' && provisioningStep ? provisioningStep : stageLabels[stage]}
               </motion.span>
+              {isFailed && (
+                <Link
+                  href="/dashboard"
+                  className="mt-3 text-xs text-muted-foreground underline hover:text-foreground"
+                >
+                  Back to dashboard
+                </Link>
+              )}
             </div>
           </div>
         </motion.div>

@@ -3,6 +3,8 @@ import { http } from '@/lib/http'
 import { ProjectsSchema, CreateProjectResponseSchema, ProjectSchema } from '@/lib/schemas/project'
 import { z } from 'zod'
 
+const PROJECT_POLL_INTERVAL_MS = 1000
+
 async function fetchProjects() {
   const data = await http.get('api/projects').json()
   return ProjectsSchema.parse(data)
@@ -14,7 +16,16 @@ async function postProject(githubUrl: string, name: string, initConvex: boolean)
 }
 
 export function useProjectsQuery() {
-  return useQuery({ queryKey: ['projects'], queryFn: fetchProjects })
+  return useQuery({
+    queryKey: ['projects'],
+    queryFn: fetchProjects,
+    refetchInterval: (query) => {
+      const projects = query.state.data
+      if (!projects) return PROJECT_POLL_INTERVAL_MS
+      return projects.some((p) => p.status === 'provisioning') ? PROJECT_POLL_INTERVAL_MS : false
+    },
+    refetchIntervalInBackground: false,
+  })
 }
 
 export function useCreateProject() {
@@ -37,6 +48,12 @@ export function useProjectQuery(id?: string) {
     queryKey: ['project', id],
     queryFn: () => fetchProject(id as string),
     enabled: Boolean(id),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === 'provisioning' ? PROJECT_POLL_INTERVAL_MS : 60_000
+    },
+    refetchIntervalInBackground: false,
+    staleTime: 1000,
   })
 }
 

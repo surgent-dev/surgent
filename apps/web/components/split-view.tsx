@@ -12,6 +12,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useSandboxReady } from '@/hooks/use-sandbox-ready'
 import ProjectHeader from './project-header'
 import { ProjectInitOverlay } from './project-init-overlay'
+import { ProjectEventProvider } from '@/context/project-events'
 
 interface SplitViewProps {
   projectId?: string
@@ -117,14 +118,15 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
     return () => setOpenChangesTab(undefined)
   }, [handleOpenChangesTab, setOpenChangesTab])
 
-  // Activate project sandbox on mount
+  // Activate project sandbox on mount (skip if provisioning or failed)
+  const canActivate = !!project && project.status !== 'provisioning' && project.status !== 'failed'
   useEffect(() => {
-    if (!projectId) return
+    if (!projectId || !canActivate) return
     if (lastActivatedId.current === projectId) return
 
     lastActivatedId.current = projectId
     activateProject({ id: projectId })
-  }, [projectId, activateProject])
+  }, [projectId, canActivate, activateProject])
 
   // Set sandbox ID when project data loads
   useEffect(() => {
@@ -133,75 +135,83 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
 
   return (
     <div className="h-dvh w-full bg-background flex flex-col overflow-hidden">
-      <ProjectInitOverlay show={!isReady} stage={stage} />
+      <ProjectInitOverlay
+        show={!isReady}
+        stage={stage}
+        provisioningStep={project?.metadata?.provisioningStep}
+      />
       <ProjectHeader projectId={projectId} project={project} />
       <div className="flex-1 min-h-0">
-        {isMobile ? (
-          <div className="h-full min-h-0 flex flex-col">
-            <Tabs defaultValue="chat" className="h-full min-h-0 flex flex-col">
-              <div className="px-2 pt-2 pb-1.5">
-                <TabsList className="w-full max-w-sm mx-auto h-9 p-0.5!">
-                  <TabsTrigger
-                    value="chat"
-                    className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm"
-                  >
-                    Conversation
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="preview"
-                    className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm"
-                  >
-                    Preview
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-              <TabsContent value="chat" className="flex-1 min-h-0 flex flex-col">
-                <div className="flex-1 min-h-0 px-1 pb-1">
-                  <Conversation projectId={projectId} initialPrompt={initialPrompt} />
-                </div>
-              </TabsContent>
-              <TabsContent value="preview" className="flex-1 min-h-0 flex flex-col">
-                <div className="flex-1 min-h-0 px-1 pb-1">
-                  <div className="h-full min-h-0 overflow-hidden rounded-xl border bg-background">
-                    <PreviewPanel
-                      projectId={projectId}
-                      project={project}
-                      onPreviewUrl={onPreviewUrl}
-                      tabs={tabs}
-                      activeTabId={activeTabId}
-                      onTabChange={setActiveTabId}
-                      onCloseTab={handleCloseTab}
-                      onAddTab={handleAddTab}
-                    />
+        {isReady ? (
+          <ProjectEventProvider key={projectId} projectId={projectId}>
+            {isMobile ? (
+              <div className="h-full min-h-0 flex flex-col">
+                <Tabs defaultValue="chat" className="h-full min-h-0 flex flex-col">
+                  <div className="px-2 pt-2 pb-1.5">
+                    <TabsList className="w-full max-w-sm mx-auto h-9 p-0.5!">
+                      <TabsTrigger
+                        value="chat"
+                        className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm"
+                      >
+                        Conversation
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="preview"
+                        className="cursor-pointer select-none px-2 sm:px-3 text-xs sm:text-sm"
+                      >
+                        Preview
+                      </TabsTrigger>
+                    </TabsList>
                   </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </div>
-        ) : (
-          <div className="h-full min-h-0">
-            <ResizablePanelGroup direction="horizontal" className="h-full">
-              <ResizablePanel defaultSize={40} minSize={30}>
-                <Conversation projectId={projectId} initialPrompt={initialPrompt} />
-              </ResizablePanel>
-              <ResizableHandle className="shadow-2xl" />
-              <ResizablePanel defaultSize={60} minSize={30}>
-                <div className="h-full bg-background">
-                  <PreviewPanel
-                    projectId={projectId}
-                    project={project}
-                    onPreviewUrl={onPreviewUrl}
-                    tabs={tabs}
-                    activeTabId={activeTabId}
-                    onTabChange={setActiveTabId}
-                    onCloseTab={handleCloseTab}
-                    onAddTab={handleAddTab}
-                  />
-                </div>
-              </ResizablePanel>
-            </ResizablePanelGroup>
-          </div>
-        )}
+                  <TabsContent value="chat" className="flex-1 min-h-0 flex flex-col">
+                    <div className="flex-1 min-h-0 px-1 pb-1">
+                      <Conversation projectId={projectId} initialPrompt={initialPrompt} />
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="preview" className="flex-1 min-h-0 flex flex-col">
+                    <div className="flex-1 min-h-0 px-1 pb-1">
+                      <div className="h-full min-h-0 overflow-hidden rounded-xl border bg-background">
+                        <PreviewPanel
+                          projectId={projectId}
+                          project={project}
+                          onPreviewUrl={onPreviewUrl}
+                          tabs={tabs}
+                          activeTabId={activeTabId}
+                          onTabChange={setActiveTabId}
+                          onCloseTab={handleCloseTab}
+                          onAddTab={handleAddTab}
+                        />
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            ) : (
+              <div className="h-full min-h-0">
+                <ResizablePanelGroup direction="horizontal" className="h-full">
+                  <ResizablePanel defaultSize={40} minSize={30}>
+                    <Conversation projectId={projectId} initialPrompt={initialPrompt} />
+                  </ResizablePanel>
+                  <ResizableHandle className="shadow-2xl" />
+                  <ResizablePanel defaultSize={60} minSize={30}>
+                    <div className="h-full bg-background">
+                      <PreviewPanel
+                        projectId={projectId}
+                        project={project}
+                        onPreviewUrl={onPreviewUrl}
+                        tabs={tabs}
+                        activeTabId={activeTabId}
+                        onTabChange={setActiveTabId}
+                        onCloseTab={handleCloseTab}
+                        onAddTab={handleAddTab}
+                      />
+                    </div>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
+              </div>
+            )}
+          </ProjectEventProvider>
+        ) : null}
       </div>
     </div>
   )

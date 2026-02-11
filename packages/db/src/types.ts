@@ -300,6 +300,7 @@ export interface ProjectMetadata {
   workingDirectory: string
   processName?: string
   startCommand?: string
+  provisioningStep?: string
 }
 
 export type ProjectStatus = 'provisioning' | 'ready' | 'failed'

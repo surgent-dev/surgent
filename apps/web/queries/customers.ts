@@ -4,6 +4,7 @@ import { payHttp } from '@/lib/http'
 export interface Customer {
   id: string
   projectId: string
+  externalId: string | null
   email: string | null
   name: string | null
   processorCustomerId: string | null

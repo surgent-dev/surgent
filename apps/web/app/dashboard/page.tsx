@@ -17,7 +17,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, MoreHorizontal, Pencil, Trash2, ExternalLink, FolderOpen } from 'lucide-react'
+import {
+  Plus,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  ExternalLink,
+  FolderOpen,
+  Store,
+  Loader2,
+  AlertCircle,
+} from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -89,6 +99,8 @@ function ProjectCard({
   const accentColor = getProjectAccent(project.id)
   const initial = project.name.charAt(0).toUpperCase()
   const isLive = project.worker?.status === 'active' && project.worker?.hostname
+  const isProvisioning = project.status === 'provisioning'
+  const isFailed = project.status === 'failed'
 
   return (
     <div
@@ -97,27 +109,44 @@ function ProjectCard({
         'group relative flex flex-col rounded-xl border bg-card overflow-hidden',
         'border-border/50 hover:border-border hover:shadow-sm',
         'cursor-pointer transition-shadow duration-200',
+        isFailed && 'border-destructive/30',
       )}
     >
       {/* Preview area */}
       <div
-        className="relative h-36 sm:h-40 flex items-center justify-center"
+        className={cn(
+          'relative h-36 sm:h-40 flex items-center justify-center',
+          isProvisioning && 'animate-pulse',
+        )}
         style={{ backgroundColor: bgColor }}
       >
         <span
-          className="text-4xl sm:text-5xl font-semibold select-none"
+          className={cn(
+            'text-4xl sm:text-5xl font-semibold select-none',
+            isProvisioning && 'opacity-40',
+          )}
           style={{ color: accentColor }}
         >
           {initial}
         </span>
 
-        {/* Live indicator */}
-        {isLive && (
+        {/* Status badge — only one at a time */}
+        {isProvisioning ? (
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm">
+            <Loader2 className="w-3 h-3 text-neutral-600 animate-spin" />
+            <span className="text-xs font-medium text-neutral-700">Setting up</span>
+          </div>
+        ) : isFailed ? (
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm">
+            <AlertCircle className="w-3 h-3 text-red-500" />
+            <span className="text-xs font-medium text-red-600">Failed</span>
+          </div>
+        ) : isLive ? (
           <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
             <span className="text-xs font-medium text-neutral-700">Live</span>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Content */}
@@ -126,7 +155,13 @@ function ProjectCard({
           <div className="min-w-0 flex-1">
             <h3 className="text-base font-medium text-foreground truncate">{project.name}</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {formatRelativeDate(project.createdAt)}
+              {isFailed && project.failReason ? (
+                <span className="text-destructive">{project.failReason}</span>
+              ) : isProvisioning ? (
+                project.metadata?.provisioningStep || 'Creating project...'
+              ) : (
+                formatRelativeDate(project.createdAt)
+              )}
             </p>
           </div>
 
@@ -309,10 +344,20 @@ export default function DashboardPage() {
         {/* Title row */}
         <div className="flex items-center justify-between mb-10">
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Your Projects</h1>
-          <Button onClick={() => router.push('/')} className="gap-2 rounded-full">
-            <Plus className="h-4 w-4" />
-            New project
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => router.push('/marketplace')}
+              className="gap-2 rounded-full"
+            >
+              <Store className="h-4 w-4" />
+              Marketplace
+            </Button>
+            <Button onClick={() => router.push('/')} className="gap-2 rounded-full">
+              <Plus className="h-4 w-4" />
+              New project
+            </Button>
+          </div>
         </div>
 
         {/* Projects grid */}

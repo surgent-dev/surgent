@@ -10,6 +10,8 @@ import github from './routes/github'
 import mcp from './routes/mcp'
 import admin from './routes/admin'
 import providers from './routes/providers'
+import { serve as serveInngest } from 'inngest/hono'
+import { inngest, functions as inngestFunctions } from './inngest'
 import { auth } from './lib/auth'
 import { config } from './lib/config'
 import { db } from './lib/db'
@@ -115,6 +117,13 @@ app.use('*', async (c, next) => {
   c.set('session', session.session)
   return next()
 })
+
+// Inngest serve handler
+app.on(
+  ['GET', 'PUT', 'POST'],
+  '/api/inngest',
+  serveInngest({ client: inngest, functions: inngestFunctions }),
+)
 
 app.get('/health', (c) => c.text('ok'))
 

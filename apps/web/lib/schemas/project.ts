@@ -27,9 +27,19 @@ export const ProjectSchema = z.object({
   userId: z.string(),
   organizationId: z.string().optional(),
   name: z.string(),
+  status: z.enum(['provisioning', 'ready', 'failed']).optional().default('ready'),
+  failReason: z.string().nullable().optional(),
   github: z.any().nullable(),
   settings: z.any().nullable(),
-  metadata: z.any().nullable(),
+  metadata: z
+    .object({
+      workingDirectory: z.string().optional(),
+      processName: z.string().optional(),
+      startCommand: z.string().optional(),
+      provisioningStep: z.string().optional(),
+    })
+    .nullable()
+    .catch(null),
   createdAt: z.string(),
   updatedAt: z.string(),
   sandbox: SandboxSchema,
