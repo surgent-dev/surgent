@@ -42,6 +42,7 @@ import { inngest } from '@/inngest'
 const projects = new Hono<AppContext>()
 
 const idParam = z.object({ id: z.string().uuid() })
+const MAX_PROJECTS_PER_ORG = 2
 const listingBody = z.object({
   title: z.string().trim().min(3).max(80).optional(),
   description: z.string().trim().min(1).max(4000),
@@ -582,15 +583,16 @@ projects.post(
         return c.json({ error: 'Forbidden' }, 403)
       }
 
-      // Validate project limit (fast, synchronous check)
-      const MAX_PROJECTS_PER_ORG = 2
       const projectCount = await countProjectsByOrganizationId(organizationId)
-      if (projectCount >= MAX_PROJECTS_PER_ORG) {
+      const access = await auth.api.check({
+        body: { featureId: 'ai_credits' },
+        headers: c.req.raw.headers,
+      })
+      const limit = access?.unlimited ? Infinity : MAX_PROJECTS_PER_ORG
+      if (projectCount >= limit) {
         return c.json(
-          {
-            error: `Project limit reached. Maximum ${MAX_PROJECTS_PER_ORG} projects per organization.`,
-          },
-          400,
+          { error: 'Project limit reached. Please upgrade your plan to create more projects.' },
+          402,
         )
       }
 
@@ -683,6 +685,13 @@ projects.post(
       })
 
       const project = await getProjectWithAuth(id, c.get('user')!)
+      const publishAccess = await auth.api.check({
+        body: { featureId: 'publish_your_app' },
+        headers: c.req.raw.headers,
+      })
+      if (!publishAccess?.allowed) {
+        return c.json({ error: 'Please upgrade your plan to publish.' }, 402)
+      }
       const name = deployName ? sanitizeHostname(deployName) : undefined
 
       if (name) {
@@ -951,6 +960,13 @@ projects.get('/:id/download', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
 
   await getProjectWithAuth(id, c.get('user')!)
+  const access = await auth.api.check({
+    body: { featureId: 'download_code' },
+    headers: c.req.raw.headers,
+  })
+  if (!access?.allowed) {
+    return c.json({ error: 'Please upgrade your plan to download projects.' }, 402)
+  }
 
   try {
     const { buffer, filename } = await downloadProject({ projectId: id })
