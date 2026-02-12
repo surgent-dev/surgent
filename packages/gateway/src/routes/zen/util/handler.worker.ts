@@ -28,6 +28,7 @@ import { createRateLimiter } from './rateLimiter'
 import { createDataDumper } from './dataDumper'
 import { createTrialLimiter } from './trialLimiter'
 import { createStickyTracker } from './stickyProviderTracker'
+import { Autumn } from 'autumn-js'
 
 type ZenConfig = ReturnType<typeof loadZenData>
 
@@ -68,6 +69,7 @@ export async function handleZenRequest(
   const MAX_RETRIES = 3
   const logger = createLogger(c.env.STAGE)
   const db = getDb(c.env)
+  const autumn = c.env.AUTUMN_SECRET_KEY ? new Autumn({ secretKey: c.env.AUTUMN_SECRET_KEY }) : null
 
   try {
     const url = c.req.url
@@ -96,6 +98,7 @@ export async function handleZenRequest(
     const stickyTracker = createStickyTracker(modelInfo.stickyProvider, sessionId, c.env.GATEWAY_KV)
     const stickyProvider = (await stickyTracker?.get()) ?? undefined
     const authInfo = await authenticate(modelInfo)
+
     const retriableRequest = async (
       retry: RetryOptions = { excludeProviders: [], retryCount: 0 },
     ) => {
@@ -592,6 +595,16 @@ export async function handleZenRequest(
         .where('id', '=', authInfo.apiKeyId)
         .execute()
     })
+
+    if (costMicro > 0 && autumn) {
+      const credits = Math.max(1, Math.round(costMicro / 1_000_000))
+      c.executionCtx.waitUntil(
+        autumn
+          .track({ customer_id: authInfo.organizationId, feature_id: 'ai_credits', value: credits })
+          .catch(() => {}),
+      )
+    }
+
     return costBig
   }
 }
