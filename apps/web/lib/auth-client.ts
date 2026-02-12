@@ -13,8 +13,8 @@ const authClient: ReturnType<typeof createAuthClient> = createAuthClient({
     }),
     adminClient(),
     // oauthProviderClient(),
-    nextCookies(),
-  ], // make sure this is the last plugin in the array
+    nextCookies(), // make sure this is the last plugin in the array
+  ],
 })
 
 // Export the client

@@ -27,7 +27,9 @@ import {
   Store,
   Loader2,
   AlertCircle,
+  CreditCard,
 } from 'lucide-react'
+import { useCustomer } from 'autumn-js/react'
 import {
   Dialog,
   DialogContent,
@@ -222,6 +224,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const { data: projects = [], isLoading } = useProjectsQuery()
+  const { openBillingPortal } = useCustomer()
   const rename = useRenameProject()
   const deleteProject = useDeleteProject()
 
@@ -333,6 +336,10 @@ export default function DashboardPage() {
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => openBillingPortal()}>
+                <CreditCard className="mr-2 h-4 w-4" />
+                Billing
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

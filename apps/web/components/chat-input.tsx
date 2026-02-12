@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
-import { ArrowUp, X, Loader2, FileText } from 'lucide-react'
-import { Sliders, Paperclip, Plug } from '@phosphor-icons/react'
+import { X, Loader2, FileText } from 'lucide-react'
+import { Sliders, Paperclip, Plug, ArrowUp, Lightning } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -14,6 +14,8 @@ import {
 } from '@/lib/upload'
 import { useMcpStatusQuery } from '@/queries/mcp'
 import { MODELS, type ProviderModel } from '@/lib/models'
+import { useCredits } from '@/hooks/use-credits'
+import PlanDialog from '@/components/plan-dialog'
 import ModelSelectorDropdown from './model-selector-dropdown'
 import type { Agent } from '@opencode-ai/sdk'
 
@@ -268,6 +270,7 @@ export default function ChatInput({
 
   const handleSubmit = async () => {
     if ((!value.trim() && !attachments.length) || disabled || hasUploading) return
+    if (!gate()) return
 
     const fileParts = attachmentsToParts(attachments)
     // Prepend @mention to text if subagent is selected
@@ -322,6 +325,9 @@ export default function ChatInput({
   }
 
   const canSubmit = !hasUploading && !disabled && (value.trim() || attachments.length)
+  const { balance, total, remaining, unlimited, gate, planDialogOpen, setPlanDialogOpen } =
+    useCredits()
+  const showCreditsBanner = !unlimited && total > 0 && remaining <= 20
 
   return (
     <div
@@ -342,6 +348,23 @@ export default function ChatInput({
           isDragging ? 'border-brand' : 'border-border',
         )}
       >
+        {showCreditsBanner && (
+          <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-muted/20 px-4 py-2">
+            <span className="text-xs text-muted-foreground">
+              {balance <= 0
+                ? "You've hit your limit — upgrade to keep building"
+                : `${balance.toLocaleString()} credits left — don't lose momentum`}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPlanDialogOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-brand/25 bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand shrink-0 transition-colors hover:bg-brand/20"
+            >
+              <Lightning className="size-3" weight="fill" />
+              Upgrade
+            </button>
+          </div>
+        )}
         {/* File previews */}
         {attachments.length > 0 && (
           <div className="flex gap-2 p-3 pb-1 flex-wrap">
@@ -502,11 +525,12 @@ export default function ChatInput({
               size="sm"
               className="size-8 p-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
             >
-              <ArrowUp className="size-4" />
+              <ArrowUp className="size-4" weight="bold" />
             </Button>
           )}
         </div>
       </div>
+      <PlanDialog open={planDialogOpen} onOpenChange={setPlanDialogOpen} />
     </div>
   )
 }

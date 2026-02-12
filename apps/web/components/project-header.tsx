@@ -17,7 +17,6 @@ import {
   X,
   GithubLogo,
   SignOut,
-  ChartBar,
   CaretDown,
   Copy,
   Clock,
@@ -28,7 +27,10 @@ import {
   Headset,
   Storefront,
   UploadSimple,
+  CreditCard,
+  Lightning,
 } from '@phosphor-icons/react'
+import { useCredits } from '@/hooks/use-credits'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -45,7 +47,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import UsageDialog from '@/components/usage-dialog'
+import PlanDialog from '@/components/plan-dialog'
 import { authClient } from '@/lib/auth-client'
 import {
   useDeployProject,
@@ -113,13 +115,13 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
   // User state
   const [user, setUser] = useState<User | null>(null)
+  const credits = useCredits()
   useEffect(() => {
     authClient.getSession().then(({ data }) => data?.user && setUser(data.user as User))
   }, [])
 
   // Dialog states
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
-  const [isUsageOpen, setIsUsageOpen] = useState(false)
   const [isDeploymentStatusOpen, setIsDeploymentStatusOpen] = useState(false)
   const [isPublishOpen, setIsPublishOpen] = useState(false)
   const [isStripeSuccessOpen, setIsStripeSuccessOpen] = useState(false)
@@ -268,10 +270,15 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         { id: projectId, deployName: name },
         {
           onSuccess: () => setIsDeploying(false),
-          onError: (err) => {
-            toast.error(err instanceof Error ? err.message : 'Failed to deploy', {
-              position: 'top-right',
-            })
+          onError: (err: unknown) => {
+            const resp = (err as { response?: { status?: number } })?.response
+            if (resp?.status === 402) {
+              credits.setPlanDialogOpen(true)
+            } else {
+              toast.error(err instanceof Error ? err.message : 'Failed to deploy', {
+                position: 'top-right',
+              })
+            }
             setIsDeploying(false)
           },
         },
@@ -285,6 +292,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     setDownloading(true)
     try {
       const response = await http.get(`api/projects/${projectId}/download`, { timeout: 120000 })
+      if (response.status === 402) {
+        credits.setPlanDialogOpen(true)
+        return
+      }
       const blob = await response.blob()
       const disposition = response.headers.get('Content-Disposition')
       const filename =
@@ -300,7 +311,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     } finally {
       setDownloading(false)
     }
-  }, [projectId, downloading, project?.name])
+  }, [projectId, downloading, project?.name, credits])
 
   const handleSignOut = async () => {
     await authClient.signOut()
@@ -332,6 +343,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     const name = !workerName || isEditingHostname ? hostnameInput.trim() : workerName
     if (!name) return
     if (isDeploymentInProgress) return
+
     setPendingHostname(name)
     handleDeploy(name)
   }
@@ -861,6 +873,54 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               <div className="text-xs text-muted-foreground truncate">{user?.email}</div>
             </div>
             <div className="h-px bg-border" />
+            {credits.hasCustomer && !credits.unlimited && (
+              <>
+                <div className="px-3 py-2.5 space-y-2">
+                  {(credits.resetAtLabel || credits.renewLabel) && (
+                    <div className="text-[10px] text-muted-foreground tabular-nums text-right">
+                      {credits.resetAtLabel
+                        ? `Resets ${credits.resetAtLabel}`
+                        : `Renews ${credits.renewLabel}`}
+                      {credits.hoursUntilRenew !== null &&
+                        ` · ${credits.hoursUntilRenew < 1 ? '<1' : credits.hoursUntilRenew}h`}
+                    </div>
+                  )}
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-muted-foreground">Credits</span>
+                    <span className="text-sm font-semibold tabular-nums">
+                      {credits.used.toLocaleString()}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {' '}
+                        / {credits.total.toLocaleString()} used
+                      </span>
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground tabular-nums">
+                    {credits.balance.toLocaleString()} / {credits.total.toLocaleString()} left
+                  </div>
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        credits.usedPercent >= 90
+                          ? 'bg-rose-500'
+                          : credits.usedPercent >= 70
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                      }`}
+                      style={{ width: `${credits.usedPercent}%` }}
+                    />
+                  </div>
+                  <button
+                    onClick={() => credits.setPlanDialogOpen(true)}
+                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/25 bg-brand/10 px-2 py-1.5 text-[11px] font-medium text-brand transition-colors hover:bg-brand/15"
+                  >
+                    <Lightning className="size-3" weight="fill" />
+                    Upgrade
+                  </button>
+                </div>
+                <div className="h-px bg-border" />
+              </>
+            )}
             <div className="px-1 py-1">
               <DropdownMenuItem
                 onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
@@ -875,9 +935,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             </div>
             <div className="h-px bg-border" />
             <div className="px-1 py-1">
-              <DropdownMenuItem onClick={() => setIsUsageOpen(true)}>
-                <ChartBar className="size-4" weight="duotone" />
-                Usage
+              <DropdownMenuItem onClick={() => credits.openBillingPortal()}>
+                <CreditCard className="size-4" weight="duotone" />
+                Billing
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleSignOut}>
                 <SignOut className="size-4" weight="duotone" />
@@ -894,7 +954,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         onOpenChange={setIsGitHubDialogOpen}
         projectId={projectId}
       />
-      <UsageDialog open={isUsageOpen} onOpenChange={setIsUsageOpen} />
       <DeploymentStatusDialog
         open={isDeploymentStatusOpen}
         onOpenChange={setIsDeploymentStatusOpen}
@@ -932,6 +991,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
 
       <Dialog open={isStripeConflictOpen} onOpenChange={setIsStripeConflictOpen}>
         <DialogContent overlayClassName="backdrop-blur-sm" className="sm:max-w-lg">
