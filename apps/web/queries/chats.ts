@@ -99,7 +99,7 @@ async function sendMessage(
     body.agentOverrides = agentOverrides
   }
 
-  await http.post(`api/agent/${projectId}/session/${sessionId}/prompt`, {
+  await http.post(`api/agent/${projectId}/session/${sessionId}/message`, {
     json: body,
     timeout: false,
     retry: 0,
