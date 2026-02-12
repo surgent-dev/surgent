@@ -53,6 +53,7 @@ const SECRET_NAMES = [
   'S3_REGION',
   'INNGEST_SIGNING_KEY',
   'INNGEST_EVENT_KEY',
+  'AUTUMN_SECRET_KEY',
 ] as const
 
 export class SurgentStack extends cdk.Stack {

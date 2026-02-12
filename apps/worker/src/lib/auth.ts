@@ -1,6 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { admin, apiKey, jwt, organization } from 'better-auth/plugins'
 import { oauthProvider } from '@better-auth/oauth-provider'
+import { autumn } from 'autumn-js/better-auth'
 import { createAccessControl } from 'better-auth/plugins/access'
 import { db, dialect } from '@/lib/db'
 import { config } from './config'
@@ -105,6 +106,9 @@ export const auth = betterAuth({
         keyPairConfig: { alg: 'RS256', modulusLength: 2048 },
       },
       disableSettingJwtHeader: true,
+    }),
+    autumn({
+      customerScope: 'organization',
     }),
     oauthProvider({
       loginPage: new URL('/login', config.server.clientOrigin).toString(),

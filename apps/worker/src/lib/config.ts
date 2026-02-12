@@ -88,6 +88,9 @@ export const config = {
   surpay: {
     baseUrl: env.SURPAY_BASE_URL,
   },
+  autumn: {
+    secretKey: env.AUTUMN_SECRET_KEY,
+  },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
     baseUrl: env.OPENCODE_BASE_URL,
