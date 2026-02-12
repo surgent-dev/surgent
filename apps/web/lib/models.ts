@@ -11,8 +11,8 @@ export type ProviderModel = {
 
 export const MODELS: ProviderModel[] = [
   {
-    id: 'claude-opus-4-6',
-    name: 'Claude Opus 4.6',
+    id: 'claude-opus-4-5',
+    name: 'Claude Opus 4.5',
     providerId: 'opencode',
     providerName: 'OpenCode',
     limit: { context: 200000 },
