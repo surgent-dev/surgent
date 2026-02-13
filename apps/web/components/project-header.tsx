@@ -876,29 +876,13 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             {credits.hasCustomer && !credits.unlimited && (
               <>
                 <div className="px-3 py-2.5 space-y-2">
-                  {(credits.resetAtLabel || credits.renewLabel) && (
-                    <div className="text-[10px] text-muted-foreground tabular-nums text-right">
-                      {credits.resetAtLabel
-                        ? `Resets ${credits.resetAtLabel}`
-                        : `Renews ${credits.renewLabel}`}
-                      {credits.hoursUntilRenew !== null &&
-                        ` · ${credits.hoursUntilRenew < 1 ? '<1' : credits.hoursUntilRenew}h`}
-                    </div>
-                  )}
                   <div className="flex items-baseline justify-between">
                     <span className="text-xs text-muted-foreground">Credits</span>
-                    <span className="text-sm font-semibold tabular-nums">
-                      {credits.used.toLocaleString()}
-                      <span className="text-xs font-normal text-muted-foreground">
-                        {' '}
-                        / {credits.total.toLocaleString()} used
-                      </span>
+                    <span className="text-xs tabular-nums font-medium">
+                      {credits.used.toLocaleString()} / {credits.total.toLocaleString()}
                     </span>
                   </div>
-                  <div className="text-[11px] text-muted-foreground tabular-nums">
-                    {credits.balance.toLocaleString()} / {credits.total.toLocaleString()} left
-                  </div>
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className="h-1 bg-muted rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
                         credits.usedPercent >= 90
@@ -912,7 +896,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   </div>
                   <button
                     onClick={() => credits.setPlanDialogOpen(true)}
-                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/25 bg-brand/10 px-2 py-1.5 text-[11px] font-medium text-brand transition-colors hover:bg-brand/15"
+                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/20 bg-brand/8 px-2.5 py-1.5 text-[11px] font-medium text-brand shadow-sm shadow-brand/5 hover:bg-brand/12 active:shadow-none active:translate-y-px transition-all"
                   >
                     <Lightning className="size-3" weight="fill" />
                     Upgrade
