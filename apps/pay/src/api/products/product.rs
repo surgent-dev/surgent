@@ -95,9 +95,10 @@ pub async fn create_product(
         r#"
         SELECT COALESCE(MAX(version), 0) as "max!"
         FROM product
-        WHERE "productGroup" = $1
+        WHERE "productGroup" = $1 AND "projectId" = $2
         "#,
-        req.product_group
+        req.product_group,
+        project_id
     )
     .fetch_one(pool)
     .await
@@ -353,9 +354,10 @@ pub async fn update_product(
         r#"
         SELECT COALESCE(MAX(version), 0) as "max!"
         FROM product
-        WHERE "productGroup" = $1
+        WHERE "productGroup" = $1 AND "projectId" = $2
         "#,
-        existing.product_group
+        existing.product_group,
+        existing.project_id
     )
     .fetch_one(&state.pool)
     .await
