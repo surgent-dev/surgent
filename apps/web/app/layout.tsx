@@ -1,6 +1,6 @@
 import './globals.css'
 import Providers from '@/components/providers'
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import { Inter, JetBrains_Mono, Instrument_Serif } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata = {
@@ -20,6 +20,13 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 })
 
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-display',
+  display: 'swap',
+})
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,7 +34,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`antialiased ${inter.variable} ${jetbrainsMono.variable}`}>
+      <body
+        className={`antialiased ${inter.variable} ${jetbrainsMono.variable} ${instrumentSerif.variable}`}
+      >
         <Providers>{children}</Providers>
         <Toaster position="top-right" />
       </body>

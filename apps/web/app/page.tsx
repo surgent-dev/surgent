@@ -1,129 +1,191 @@
 'use client'
-import { Suspense, useEffect, useState } from 'react'
-import { Github, Twitter, Store } from 'lucide-react'
+
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { motion } from 'motion/react'
 import { toast } from 'react-hot-toast'
-import { Button } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
 import { isWaitlistMode } from '@/lib/waitlist'
 import { WaitlistScreen } from '@/components/waitlist-screen'
-import { ChatComposer } from '@/components/chat/chat-composer'
-import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card'
 import { useRouter } from 'next/navigation'
+import {
+  ArrowUp,
+  Briefcase,
+  CalendarCheck,
+  Layers,
+  LayoutDashboard,
+  Palette,
+  ShoppingBag,
+  Store,
+  UserCircle,
+} from 'lucide-react'
 
-// Typing placeholder hook
-function useTypingPlaceholder(placeholders: string[], typingSpeed = 50, pauseDuration = 2000) {
-  const [displayText, setDisplayText] = useState('')
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [isTyping, setIsTyping] = useState(true)
+/* ─── Typing placeholder ─── */
+function useTypingPlaceholder(items: string[], speed = 45, pause = 2200) {
+  const [text, setText] = useState('')
+  const [idx, setIdx] = useState(0)
+  const [typing, setTyping] = useState(true)
 
   useEffect(() => {
-    const currentPlaceholder = placeholders[currentIndex]!
-
-    if (isTyping) {
-      if (displayText.length < currentPlaceholder.length) {
-        const timeout = setTimeout(() => {
-          setDisplayText(currentPlaceholder.slice(0, displayText.length + 1))
-        }, typingSpeed)
-        return () => clearTimeout(timeout)
-      } else {
-        const timeout = setTimeout(() => setIsTyping(false), pauseDuration)
-        return () => clearTimeout(timeout)
+    const current = items[idx]!
+    if (typing) {
+      if (text.length < current.length) {
+        const t = setTimeout(() => setText(current.slice(0, text.length + 1)), speed)
+        return () => clearTimeout(t)
       }
-    } else {
-      if (displayText.length > 0) {
-        const timeout = setTimeout(() => {
-          setDisplayText(displayText.slice(0, -1))
-        }, typingSpeed / 2)
-        return () => clearTimeout(timeout)
-      } else {
-        setCurrentIndex((prev) => (prev + 1) % placeholders.length)
-        setIsTyping(true)
-      }
+      const t = setTimeout(() => setTyping(false), pause)
+      return () => clearTimeout(t)
     }
-  }, [displayText, currentIndex, isTyping, placeholders, typingSpeed, pauseDuration])
+    if (text.length > 0) {
+      const t = setTimeout(() => setText(text.slice(0, -1)), speed / 2)
+      return () => clearTimeout(t)
+    }
+    setIdx((p) => (p + 1) % items.length)
+    setTyping(true)
+  }, [text, idx, typing, items, speed, pause])
 
-  return displayText
+  return text
 }
 
-const typingPlaceholders = [
-  'Build a CRM for freelance photographers...',
-  'Build a habit tracker for students...',
-  'Build an invoicing app for freelancers...',
-  'Build a booking system for salons...',
+const placeholders = [
+  'A brutalist portfolio with bold type and raw edges...',
+  'A SaaS dashboard with live charts and dark UI...',
+  'A storefront with floating cart and smooth hover cards...',
+  'A booking app with calendar slots and instant confirm...',
 ]
 
-const templates = [
+const suggestions = [
   {
-    id: 'landing-page',
-    title: 'Landing Page',
-    description:
-      'Beautiful, responsive landing page with modern design. Great for product launches.',
-    image: '/landing-template.png',
-    gitRepo: 'https://github.com/bahodirr/web-landing-starter',
-    initConvex: false,
+    icon: UserCircle,
+    label: 'Portfolio',
+    color: 'text-violet-600',
+    prompt:
+      'A brutalist developer portfolio — bold oversized typography, monospace headings, exposed grid lines, high-contrast black and white with one accent color, project cards with raw bordered edges, and a noise-textured background',
   },
   {
-    id: 'portfolio',
-    title: 'Personal Website',
-    description:
-      'Showcase your work with a clean, professional portfolio site. Perfect for creatives.',
-    image: '/personal-website.png',
-    gitRepo: 'https://github.com/bahodirr/surgent-template-portfolio',
-    initConvex: false,
+    icon: LayoutDashboard,
+    label: 'SaaS Dashboard',
+    color: 'text-blue-600',
+    prompt:
+      'A glassmorphism SaaS dashboard — frosted translucent cards over a gradient mesh background, real-time metric counters with number animations, sparkline charts in each card, and a floating command palette',
   },
   {
-    id: '3d-apps',
-    title: '3D Interactive App',
-    description:
-      'Modern 3D application with interactive elements. Perfect for immersive experiences.',
-    image: '/3d-apps.png',
-    gitRepo: 'https://github.com/bahodirr/surgent-template-3d',
-    initConvex: false,
+    icon: ShoppingBag,
+    label: 'Online Store',
+    color: 'text-amber-600',
+    prompt:
+      'A clean minimal e-commerce store — airy whitespace layout, product cards with soft shadows that lift on hover, a slide-out cart drawer, sticky category nav bar, and Stripe-powered checkout flow',
   },
   {
-    id: 'utility-app',
-    title: 'Utility App',
-    description:
-      'Practical tools like calculators, converters, task managers, or note apps. Includes data persistence and real-time features.',
-    image: '/c4e_raw_note_transformer.svg',
-    gitRepo: 'https://github.com/bahodirr/surgent-template-utility',
-    initConvex: true,
+    icon: CalendarCheck,
+    label: 'Booking App',
+    color: 'text-emerald-600',
+    prompt:
+      'A neo-minimal booking platform — rounded soft UI cards, pastel accent tones, interactive weekly calendar with color-coded time slots, instant booking confirmation toasts, and a clean appointment history list',
+  },
+  {
+    icon: Briefcase,
+    label: 'Client Portal',
+    color: 'text-rose-600',
+    prompt:
+      'A Swiss-style client portal — tight grid system, neutral tones with red accents, Helvetica-inspired type hierarchy, kanban milestone board, invoice table with status pills, and a per-project file vault',
+  },
+  {
+    icon: Palette,
+    label: 'Agency Site',
+    color: 'text-cyan-600',
+    prompt:
+      'An editorial agency landing page — asymmetric layout, large hero imagery with overlapping text, horizontal scroll case study gallery, monochrome palette with one vivid highlight color, and smooth page transitions',
   },
 ]
 
-// Simple Template Card Component
-function TemplateCard({ template }: { template: (typeof templates)[0] }) {
+/* ─── Prompt input ─── */
+function LandingPrompt({
+  value,
+  onChange,
+  onSend,
+  placeholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onSend: () => void
+  placeholder: string
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const [focused, setFocused] = useState(false)
+  const hasValue = value.trim().length > 0
+
+  useEffect(() => {
+    if (!ref.current) return
+    ref.current.style.height = 'auto'
+    ref.current.style.height = `${Math.min(ref.current.scrollHeight, 160)}px`
+  }, [value])
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      onSend()
+    }
+  }
+
   return (
-    <Card className="border-0 p-0 shadow-none bg-transparent rounded-xs">
-      <div className="rounded-md overflow-hidden border border-border">
-        <Image
-          src={template.image}
-          alt={template.title}
-          width={1200}
-          height={750}
-          sizes="(min-width: 1280px) 28vw, (min-width: 768px) 40vw, 80vw"
-          className="w-full h-auto"
+    <div
+      onClick={() => ref.current?.focus()}
+      className={`
+        cursor-text rounded-2xl border bg-card
+        transition-all duration-200
+        ${
+          focused
+            ? 'border-border shadow-[0_2px_12px_rgba(0,0,0,0.06)]'
+            : 'border-border/50 shadow-[0_1px_4px_rgba(0,0,0,0.03)] hover:border-border'
+        }
+      `}
+    >
+      <div className="px-5 pt-4 pb-3 sm:px-6 sm:pt-5 sm:pb-3.5">
+        <textarea
+          ref={ref}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onKeyDown={handleKey}
+          placeholder={placeholder}
+          rows={2}
+          className="w-full resize-none bg-transparent text-foreground text-[15px] sm:text-base leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none"
         />
+
+        <div className="flex items-center justify-end pt-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onSend()
+            }}
+            disabled={!hasValue}
+            className={`
+              flex items-center justify-center
+              h-8 w-8 rounded-lg transition-all duration-150
+              ${
+                hasValue
+                  ? 'bg-foreground text-background cursor-pointer hover:opacity-85 active:scale-95'
+                  : 'bg-foreground/[0.06] text-muted-foreground/25 cursor-not-allowed'
+              }
+            `}
+          >
+            <ArrowUp className="h-4 w-4" />
+          </button>
+        </div>
       </div>
-      <CardContent className="px-0 pt-3 space-y-1.5">
-        <CardTitle className="text-base sm:text-lg text-foreground">{template.title}</CardTitle>
-        <CardDescription className="text-muted-foreground">{template.description}</CardDescription>
-      </CardContent>
-    </Card>
+    </div>
   )
 }
 
+/* ─── Main ─── */
 function IndexContent() {
   const waitlistMode = isWaitlistMode()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [promptValue, setPromptValue] = useState('')
   const router = useRouter()
-  const typingPlaceholder = useTypingPlaceholder(typingPlaceholders)
-
-  if (waitlistMode) return <WaitlistScreen />
+  const placeholder = useTypingPlaceholder(placeholders)
 
   useEffect(() => {
     const load = async () => {
@@ -133,43 +195,21 @@ function IndexContent() {
     load()
   }, [])
 
-  const handlePromptSend = (text: string, files?: FileList, projectType = 'simple') => {
-    const prompt = text.trim()
-    if (!prompt) return
-
-    if (isLoggedIn) {
-      // Navigate immediately to project creation page
-      const params = new URLSearchParams({ prompt, type: projectType })
-      router.push(`/project/new?${params.toString()}`)
-    } else {
-      // Save prompt to sessionStorage as backup
-      sessionStorage.setItem('pendingPrompt', JSON.stringify({ text: prompt, projectType }))
-      // Redirect to signup, then back to main page with initial param
-      const next = `/?initial=${encodeURIComponent(prompt)}`
-      router.push(`/signup?next=${encodeURIComponent(next)}`)
-    }
-  }
-
-  // Handle URL params and sessionStorage
   useEffect(() => {
     const url = new URL(window.location.href)
-    const initialFromUrl = url.searchParams.get('initial')
+    const initial = url.searchParams.get('initial')
     const error = url.searchParams.get('error')
 
-    if (initialFromUrl || error) {
-      // Clear URL immediately (sync) to prevent duplicate handling
+    if (initial || error) {
       url.searchParams.delete('initial')
       url.searchParams.delete('error')
-      const nextUrl = `${url.pathname}${url.search}${url.hash}`
-      window.history.replaceState({}, '', nextUrl)
-
-      if (initialFromUrl) setPromptValue(initialFromUrl)
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+      if (initial) setPromptValue(initial)
       if (error) toast.error(error)
       sessionStorage.removeItem('pendingPrompt')
       return
     }
 
-    // Fallback to sessionStorage
     if (!isLoggedIn) return
     const pending = sessionStorage.getItem('pendingPrompt')
     if (!pending) return
@@ -183,218 +223,141 @@ function IndexContent() {
     }
   }, [isLoggedIn])
 
+  if (waitlistMode) return <WaitlistScreen />
+
+  const handleSend = useCallback(() => {
+    const prompt = promptValue.trim()
+    if (!prompt) return
+
+    if (isLoggedIn) {
+      router.push(`/project/new?${new URLSearchParams({ prompt, type: 'simple' })}`)
+    } else {
+      sessionStorage.setItem(
+        'pendingPrompt',
+        JSON.stringify({ text: prompt, projectType: 'simple' }),
+      )
+      router.push(`/signup?next=${encodeURIComponent(`/?initial=${encodeURIComponent(prompt)}`)}`)
+    }
+  }, [promptValue, isLoggedIn, router])
+
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Floating orbs in background */}
-      <motion.div
-        className="absolute top-20 left-10 w-72 h-72 bg-brand/10 rounded-full blur-3xl"
-        animate={{
-          y: [0, 30, 0],
-          scale: [1, 1.1, 1],
-        }}
-        transition={{
-          duration: 8,
-          repeat: Number.POSITIVE_INFINITY,
-          ease: 'easeInOut',
-        }}
-      />
-      <motion.div
-        className="absolute bottom-20 right-10 w-96 h-96 bg-brand/10 rounded-full blur-3xl"
-        animate={{
-          y: [0, -40, 0],
-          scale: [1, 1.2, 1],
-        }}
-        transition={{
-          duration: 10,
-          repeat: Number.POSITIVE_INFINITY,
-          ease: 'easeInOut',
-        }}
-      />
-
-      {/* Subtle gradient background */}
-      <div className="absolute inset-0 bg-linear-to-br from-background via-background to-muted/20" />
-
-      {/* Dot pattern overlay */}
-      <div
-        className="absolute inset-0 opacity-[0.02] dark:opacity-[0.04]"
-        style={{
-          backgroundImage: 'radial-gradient(circle, #000 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
-        }}
-      />
-
-      <div className="relative z-10 min-h-screen flex flex-col">
-        {/* Header */}
-        <motion.header
-          className="w-full px-6 py-6"
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <Image
-                src="/surgent-logo.png"
-                alt="Surgent"
-                width={119}
-                height={32}
-                className="h-8 w-auto"
-                priority
-              />
-            </Link>
-            <div className="flex items-center gap-2">
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="rounded-full shrink-0 cursor-pointer gap-1.5"
-              >
-                <Link href="/marketplace">
-                  <Store className="h-4 w-4" />
-                  <span className="hidden sm:inline">Marketplace</span>
-                </Link>
-              </Button>
-              {isLoggedIn ? (
-                <Button
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full shrink-0 cursor-pointer"
-                >
-                  <Link href="/dashboard">Go to dashboard</Link>
-                </Button>
-              ) : (
-                <Button
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full shrink-0 cursor-pointer"
-                >
-                  <Link href="/signup">Sign up</Link>
-                </Button>
-              )}
-            </div>
-          </div>
-        </motion.header>
-
-        {/* Hero Section */}
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-18">
-          <div className="max-w-4xl w-full space-y-16">
-            {/* Hero text */}
-            <div className="text-center space-y-6">
-              {/* 2-line headline */}
-              <div className="space-y-2">
-                <motion.h1
-                  className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground"
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.6, delay: 0.1 }}
-                >
-                  Build your dream app.
-                </motion.h1>
-              </div>
-
-              {/* Subheadline */}
-              <motion.p
-                className="text-lg md:text-xl text-muted-foreground font-normal max-w-2xl mx-auto leading-relaxed"
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ duration: 0.6, delay: 0.3 }}
-              >
-                Vibe-code apps. We handle hosting & payments.
-              </motion.p>
-
-              {/* Prompt Box */}
-              <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-                className="max-w-xl mx-auto w-full pt-4 space-y-4"
-              >
-                <ChatComposer
-                  onSend={handlePromptSend}
-                  placeholder={typingPlaceholder || 'What do you want to build?'}
-                  value={promptValue}
-                  onValueChange={setPromptValue}
-                />
-
-                {/* Trust line */}
-                <motion.p
-                  className="text-xs sm:text-sm text-muted-foreground"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.6, delay: 0.5 }}
-                >
-                  No credit card required · Free to start
-                </motion.p>
-              </motion.div>
-            </div>
-
-            {/* Templates Section */}
-            <div className="space-y-8">
-              <motion.div
-                className="text-center"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-              >
-                <p className="text-sm font-medium text-muted-foreground tracking-wide uppercase">
-                  Things you can build
-                </p>
-              </motion.div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6 lg:gap-8 max-w-4xl mx-auto">
-                {templates.map((template, index) => (
-                  <motion.div
-                    key={template.id}
-                    initial={{ opacity: 0, y: 40 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}
-                  >
-                    <TemplateCard template={template} />
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <footer className="relative z-10 border-t border-border/50">
-          <div className="max-w-7xl mx-auto px-6 py-8">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <Link href="/terms" className="hover:text-foreground transition-colors">
-                  Terms
-                </Link>
-                <Link href="/privacy" className="hover:text-foreground transition-colors">
-                  Privacy
-                </Link>
-              </div>
-              <div className="flex items-center gap-3">
-                <a
-                  href="https://github.com/bahodirr/surgent"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="GitHub"
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Github className="h-5 w-5" />
-                </a>
-                <a
-                  href="https://twitter.com/benroff_"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Twitter"
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Twitter className="h-5 w-5" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </footer>
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-background text-foreground">
+      {/* Background */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute inset-0 landing-grid" />
+        <div className="absolute top-[30%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-brand/[0.03] blur-[120px]" />
       </div>
+
+      {/* Nav */}
+      <header className="relative z-10 flex items-center justify-between px-6 sm:px-8 h-16 shrink-0 landing-stagger-1">
+        <Link href="/" className="flex items-center gap-2">
+          <Image
+            src="/surgent-logo.png"
+            alt="Surgent"
+            width={119}
+            height={32}
+            className="h-6 w-auto sm:h-7"
+            priority
+          />
+        </Link>
+        <nav className="flex items-center gap-4 sm:gap-5 text-[13px]">
+          <Link
+            href="/marketplace"
+            className="hidden sm:flex items-center gap-1.5 text-muted-foreground/60 hover:text-foreground transition-colors"
+          >
+            <Store className="h-3.5 w-3.5" />
+            Marketplace
+          </Link>
+          {isLoggedIn ? (
+            <Link
+              href="/dashboard"
+              className="text-muted-foreground/60 hover:text-foreground transition-colors"
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="text-muted-foreground/60 hover:text-foreground transition-colors"
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/signup"
+                className="bg-foreground text-background px-3.5 py-1.5 rounded-lg text-[13px] font-medium hover:opacity-85 transition-opacity"
+              >
+                Get started
+              </Link>
+            </>
+          )}
+        </nav>
+      </header>
+
+      {/* Center */}
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-5 sm:px-6 pb-20">
+        <div className="w-full max-w-[620px]">
+          {/* Headline */}
+          <div className="text-center mb-9 sm:mb-11 landing-stagger-2">
+            <h1 className="text-3xl sm:text-5xl lg:text-[3.5rem] leading-[1.15] tracking-[-0.025em] font-semibold mb-3">
+              What will you{' '}
+              <span className="font-[var(--font-display)] italic font-normal text-brand">
+                build?
+              </span>
+            </h1>
+            <p className="text-muted-foreground/60 text-sm sm:text-[15px]">
+              Describe your idea and we&apos;ll turn it into a full-stack app.
+            </p>
+          </div>
+
+          {/* Prompt */}
+          <div className="landing-stagger-3 mb-6">
+            <LandingPrompt
+              value={promptValue}
+              onChange={setPromptValue}
+              onSend={handleSend}
+              placeholder={placeholder || 'Describe your app...'}
+            />
+          </div>
+
+          {/* Suggestions */}
+          <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2 landing-stagger-4">
+            {suggestions.map((s) => (
+              <button
+                key={s.label}
+                onClick={() => setPromptValue(s.prompt)}
+                className="group flex items-center gap-1.5 text-[12px] text-muted-foreground/70 rounded-full bg-card border border-border/40 px-3 py-1.5 transition-all duration-150 hover:text-foreground hover:bg-muted hover:border-border/70 cursor-pointer"
+              >
+                <s.icon className={`h-3 w-3 shrink-0 ${s.color}`} />
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Trust */}
+          <p className="text-center text-[11px] text-muted-foreground/30 mt-10 tracking-wide landing-stagger-5">
+            No credit card required · Free to start
+          </p>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="relative z-10 flex items-center justify-center gap-6 px-6 h-10 shrink-0 text-[11px] text-muted-foreground/35">
+        <Link href="/terms" className="hover:text-muted-foreground/60 transition-colors">
+          Terms
+        </Link>
+        <Link href="/privacy" className="hover:text-muted-foreground/60 transition-colors">
+          Privacy
+        </Link>
+        <a
+          href="https://twitter.com/benroff_"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-muted-foreground/60 transition-colors"
+        >
+          Twitter
+        </a>
+      </footer>
     </div>
   )
 }

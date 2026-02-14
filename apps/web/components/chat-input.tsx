@@ -344,7 +344,7 @@ export default function ChatInput({
       )}
       <div
         className={cn(
-          'rounded-2xl border bg-background shadow-lg overflow-hidden',
+          'rounded-2xl border bg-background overflow-hidden shadow-[0_1px_1px_rgba(0,0,0,0.02),0_2px_4px_rgba(0,0,0,0.02),0_4px_8px_rgba(0,0,0,0.02),0_8px_16px_rgba(0,0,0,0.02),0_16px_32px_rgba(0,0,0,0.02)]',
           isDragging ? 'border-brand' : 'border-border',
         )}
       >

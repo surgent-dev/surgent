@@ -179,7 +179,7 @@ function ConversationSkeleton() {
 
 function InputSkeleton() {
   return (
-    <div className="rounded-2xl border bg-muted/30 p-3 animate-pulse">
+    <div className="rounded-2xl border border-border/50 bg-muted/20 p-3.5 animate-pulse">
       <Skeleton className="h-5 w-32 mb-3" />
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
@@ -655,13 +655,13 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   return (
     <div className="flex flex-col h-full w-full min-w-0 @container/conversation">
       {/* Header */}
-      <header className="flex h-10 items-center border-b bg-muted/30 shrink-0 px-3 gap-2 min-w-0 text-xs">
+      <header className="flex h-11 items-center border-b shrink-0 px-3.5 gap-2.5 min-w-0 text-xs">
         <span
           className={cn(
-            'size-2 rounded-full',
-            !connected && 'bg-muted-foreground/40',
+            'size-2 rounded-full shrink-0 transition-colors',
+            !connected && 'bg-muted-foreground/30',
             connected && isRetrying && 'bg-warning',
-            connected && !isRetrying && 'bg-success',
+            connected && !isRetrying && 'bg-emerald-500',
           )}
         />
         <span className="font-medium truncate max-w-40 @md/conversation:max-w-72">
@@ -670,15 +670,15 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
         {connected && isRetrying && retryInfo && (
           <>
-            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-foreground/40">·</span>
             <RetryCountdown retryInfo={retryInfo} />
           </>
         )}
 
         {connected && !isRetrying && (compacting || session?.time?.compacting) && (
           <>
-            <span className="text-muted-foreground">·</span>
-            <span className="flex items-center gap-1 text-muted-foreground">
+            <span className="text-muted-foreground/40">·</span>
+            <span className="flex items-center gap-1 text-muted-foreground/70">
               <Loader2 className="size-2.5 animate-spin" />
               Compacting
             </span>
@@ -687,8 +687,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
         {connected && !isRetrying && !compacting && !session?.time?.compacting && (
           <>
-            <span className="text-muted-foreground">·</span>
-            <span className="text-muted-foreground tabular-nums">
+            <span className="text-muted-foreground/40">·</span>
+            <span className="text-muted-foreground/70 tabular-nums">
               {shownTokens?.toLocaleString() ?? '—'} tokens
               {shownPct !== undefined && !contextExceeded && (
                 <span className="hidden @md/conversation:inline"> / {shownPct}%</span>
@@ -696,14 +696,14 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
             </span>
             {contextExceeded && (
               <>
-                <span className="text-muted-foreground">·</span>
+                <span className="text-muted-foreground/40">·</span>
                 <span className="text-destructive font-medium">Context exceeded</span>
               </>
             )}
-            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-foreground/40">·</span>
             <button
               onClick={() => openChangesTab?.(undefined, activeId)}
-              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1 text-muted-foreground/60 hover:text-foreground transition-colors"
             >
               <GitCompare className="size-3" />
               <span>Changes</span>
@@ -715,7 +715,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="flex items-center justify-center size-7 rounded-md text-muted-foreground hover:bg-muted/50"
+              className="flex items-center justify-center size-7 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/40 transition-colors"
               aria-label="Session menu"
             >
               <MoreHorizontal className="size-4" />
@@ -803,11 +803,11 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         </div>
 
         {/* Input */}
-        <div className="px-2 py-2 shrink-0 relative @md/conversation:px-4 @md/conversation:py-4">
+        <div className="px-2 py-2.5 shrink-0 relative @md/conversation:px-4 @md/conversation:py-3.5">
           <div className="max-w-3xl mx-auto">
             {/* Revert banner */}
             {revertMessageId && (
-              <div className="mb-2 px-3 py-2 rounded-lg border border-warning/20 bg-warning/10 text-xs">
+              <div className="mb-2 px-3 py-2 rounded-xl border border-warning/15 bg-warning/[0.06] text-xs">
                 <div className="flex items-center gap-2">
                   <span className="flex-1 text-warning font-medium">
                     Changes reverted. File modifications have been undone.
@@ -815,7 +815,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                   <button
                     onClick={handleUnrevert}
                     disabled={unrevert.isPending}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-warning/20 hover:bg-warning/30 text-warning font-medium transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-warning/15 hover:bg-warning/25 text-warning font-medium transition-colors disabled:opacity-50"
                   >
                     {unrevert.isPending ? (
                       <Loader2 className="size-3 animate-spin" />
@@ -830,10 +830,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
             {displayError && (
               <div
                 className={cn(
-                  'mb-2 px-3 py-2 rounded-lg border text-xs',
+                  'mb-2 px-3 py-2 rounded-xl border text-xs',
                   displayError.isContext
-                    ? 'bg-warning/10 border-warning/20 text-warning'
-                    : 'bg-destructive/10 border-destructive/20 text-destructive',
+                    ? 'bg-warning/[0.06] border-warning/15 text-warning'
+                    : 'bg-destructive/[0.06] border-destructive/15 text-destructive',
                 )}
               >
                 <div className="flex items-center gap-2">

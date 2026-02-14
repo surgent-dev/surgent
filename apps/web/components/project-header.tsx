@@ -82,8 +82,8 @@ interface ProjectHeaderProps {
 
 // Styles
 const headerBtn =
-  'flex items-center gap-1.5 px-2 sm:px-4 text-sm text-muted-foreground hover:bg-muted/50 border-l transition-colors disabled:opacity-50'
-const iconBtn = 'p-1 hover:bg-background rounded transition-colors'
+  'flex items-center gap-1.5 px-2.5 sm:px-4 text-[13px] text-muted-foreground/70 hover:text-foreground hover:bg-muted/30 border-l border-border/40 transition-all duration-150 disabled:opacity-40'
+const iconBtn = 'p-1 hover:bg-muted/40 rounded-md transition-colors'
 
 // Status labels
 const STATUS_LABELS: Record<string, string> = {
@@ -411,7 +411,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     <>
       {/* Warning banner */}
       {!bannerDismissed && (
-        <div className="bg-warning/10 border-b border-warning/20 px-2 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-4 shrink-0">
+        <div className="bg-warning/[0.06] border-b border-warning/15 px-2.5 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-4 shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm min-w-0">
             <Warning className="size-4 text-warning shrink-0" weight="fill" />
             <span className="truncate">
@@ -447,12 +447,12 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       )}
 
       {/* Header */}
-      <header className="h-10 flex items-stretch bg-background border-y shrink-0">
+      <header className="h-11 flex items-stretch bg-background border-b shrink-0">
         {/* Back */}
         <button
           onClick={() => router.push('/dashboard')}
           aria-label="Back to dashboard"
-          className="flex items-center px-2 sm:px-4 text-muted-foreground hover:bg-muted/50"
+          className="flex items-center px-2.5 sm:px-4 text-muted-foreground/60 hover:text-foreground hover:bg-muted/30 transition-all duration-150"
         >
           <ArrowLeft className="size-4" />
         </button>
@@ -460,15 +460,15 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         {/* Logo + Brand */}
         <button
           onClick={() => router.push('/dashboard')}
-          className="hidden sm:flex items-center gap-2 px-3 border-l hover:bg-muted/50"
+          className="hidden sm:flex items-center gap-2 px-3 border-l border-border/40 hover:bg-muted/30 transition-colors"
         >
           <Image src="/surgent-coin.svg" alt="Surgent" width={20} height={20} className="size-5" />
-          <span className="text-sm font-medium">Surgent</span>
+          <span className="text-[13px] font-medium">Surgent</span>
         </button>
 
         {/* Project name */}
         {isEditing ? (
-          <div className="flex items-center px-2 sm:px-4">
+          <div className="flex items-center px-2.5 sm:px-4">
             <input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
@@ -477,19 +477,19 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 if (e.key === 'Enter') e.currentTarget.blur()
                 if (e.key === 'Escape') setIsEditing(false)
               }}
-              className="h-7 px-2 text-sm font-medium rounded border bg-background outline-none focus:ring-2 focus:ring-ring/50 w-28 sm:w-40"
+              className="h-7 px-2.5 text-[13px] font-medium rounded-lg border border-border/60 bg-muted/30 outline-none focus:border-foreground/15 w-28 sm:w-44 transition-colors"
               autoFocus
             />
           </div>
         ) : (
           <button
             onClick={handleStartEdit}
-            className="group flex items-center gap-1.5 px-2 sm:px-4 text-sm font-medium hover:bg-muted/50 min-w-0"
+            className="group flex items-center gap-1.5 px-2.5 sm:px-4 text-[13px] font-medium hover:bg-muted/30 min-w-0 transition-colors"
           >
             <span className="truncate max-w-[100px] sm:max-w-none">
               {project?.name || 'Untitled'}
             </span>
-            <PencilSimple className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
+            <PencilSimple className="size-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
           </button>
         )}
 
@@ -597,7 +597,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             <button
               disabled={!projectId || isDeploying}
               aria-label="Publish project"
-              className="flex items-center gap-1.5 px-3 sm:px-5 text-sm font-medium bg-brand text-brand-foreground hover:bg-brand/90 border-l disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 sm:px-5 text-[13px] font-medium bg-brand text-brand-foreground hover:bg-brand/90 border-l border-border/40 transition-colors disabled:opacity-40"
             >
               {isDeploying ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -612,7 +612,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             {/* Live URL — only when deployed and not editing */}
             {workerName && !isEditingHostname && (
               <div className="p-3">
-                <div className="flex items-center gap-1.5 rounded-lg border bg-muted/30 px-3 h-10 font-mono text-[13px]">
+                <div className="flex items-center gap-1.5 rounded-xl border border-border/50 bg-muted/20 px-3 h-10 font-mono text-[13px]">
                   <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
                   <span className="flex-1 truncate">{workerName}.surgent.site</span>
                   <a
@@ -659,7 +659,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   )}
                 </div>
                 <div
-                  className={`flex items-center h-10 px-3 rounded-lg border bg-muted/30 font-mono text-[13px] transition-colors ${hostnameTaken ? 'border-destructive/60' : 'focus-within:border-ring'}`}
+                  className={`flex items-center h-10 px-3 rounded-xl border bg-muted/20 font-mono text-[13px] transition-colors ${hostnameTaken ? 'border-destructive/40' : 'border-border/50 focus-within:border-foreground/15'}`}
                 >
                   <input
                     value={hostnameInput}
@@ -857,7 +857,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           <DropdownMenuTrigger asChild>
             <button
               aria-label="User menu"
-              className="flex items-center px-2 sm:px-4 border-l hover:bg-muted/50"
+              className="flex items-center px-2.5 sm:px-4 border-l border-border/40 hover:bg-muted/30 transition-colors"
             >
               <Avatar className="size-7">
                 <AvatarImage src={user?.image} alt={user?.name || user?.email} />
