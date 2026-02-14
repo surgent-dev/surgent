@@ -55,6 +55,7 @@ export const EmbeddedDashboard = memo(function EmbeddedDashboard({
 
   return (
     <iframe
+      key={deploymentUrl}
       ref={iframeRef}
       src={iframeSrc}
       className="w-full h-full border-0 bg-background"
