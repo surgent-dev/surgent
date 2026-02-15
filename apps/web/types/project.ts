@@ -29,6 +29,7 @@ export interface Project {
   github: any | null
   settings: any | null
   metadata: ProjectMetadata | null
+  isPublic: boolean
   createdAt: string
   updatedAt: string
   sandbox: Sandbox | null

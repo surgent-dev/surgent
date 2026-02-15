@@ -40,6 +40,7 @@ export const ProjectSchema = z.object({
     })
     .nullable()
     .catch(null),
+  isPublic: z.boolean().default(true),
   createdAt: z.string(),
   updatedAt: z.string(),
   sandbox: SandboxSchema,

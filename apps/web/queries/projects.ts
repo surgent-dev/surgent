@@ -5,6 +5,29 @@ import { z } from 'zod'
 
 const PROJECT_POLL_INTERVAL_MS = 1000
 
+// Recent deployed projects (public, no auth)
+const RecentProjectSchema = z.object({
+  name: z.string(),
+  liveUrl: z.string(),
+})
+
+const RecentProjectsSchema = z.array(RecentProjectSchema)
+
+type RecentProject = z.infer<typeof RecentProjectSchema>
+
+async function fetchRecentProjects(limit = 20): Promise<RecentProject[]> {
+  const data = await http.get(`api/projects/recent?limit=${limit}`).json()
+  return RecentProjectsSchema.parse(data)
+}
+
+export function useRecentProjectsQuery(limit = 20) {
+  return useQuery({
+    queryKey: ['recent-projects', limit],
+    queryFn: () => fetchRecentProjects(limit),
+    staleTime: 60_000,
+  })
+}
+
 async function fetchProjects() {
   const data = await http.get('api/projects').json()
   return ProjectsSchema.parse(data)
@@ -165,6 +188,22 @@ export function useRenameProject() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: renameProjectReq,
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+// Update project visibility
+async function updateVisibilityReq({ id, isPublic }: { id: string; isPublic: boolean }) {
+  await http.patch(`api/projects/${id}`, { json: { isPublic } }).json()
+}
+
+export function useUpdateProjectVisibility() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: updateVisibilityReq,
     onSuccess: (_res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })

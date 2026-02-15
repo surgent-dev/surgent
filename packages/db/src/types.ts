@@ -30,6 +30,18 @@ export interface Database {
   chats: ChatsTable
   github_installations: GitHubInstallationsTable
   github_oauth_tokens: GitHubOAuthTokensTable
+  product: ProductTable
+  product_price: ProductPriceTable
+  pay_account: PayAccountTable
+  pay_checkout_session: PayCheckoutSessionTable
+  pay_webhook_event: PayWebhookEventTable
+  pay_payment: PayPaymentTable
+  pay_subscription: PaySubscriptionTable
+  pay_invoice: PayInvoiceTable
+  pay_refund: PayRefundTable
+  pay_dispute: PayDisputeTable
+  pay_transaction: PayTransactionTable
+  pay_customer: PayCustomerTable
 }
 
 export interface UserTable {
@@ -318,6 +330,7 @@ export interface ProjectTable {
   deployment: any | null
   sandbox: any | null
   metadata: ProjectMetadata | null
+  isPublic?: boolean
   createdAt?: Date
   updatedAt?: Date
   deletedAt?: Date | null
@@ -426,6 +439,206 @@ export interface GitHubOAuthTokensTable {
   accessTokenExpiresAt: Date | null
   refreshToken: string | null
   refreshTokenExpiresAt: Date | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface ProductTable {
+  id: string | null
+  productGroup: string
+  name: string
+  description: string | null
+  projectId: string
+  slug: string
+  version: number | null
+  isArchived: boolean | null
+  isDefault: boolean | null
+  processor: string
+  processorProductId: string | null
+  isAddOn: boolean | null
+  planGroup: string | null
+  env: string | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface ProductPriceTable {
+  id: string | null
+  productId: string
+  name: string | null
+  description: string | null
+  priceAmount: number
+  priceCurrency: string
+  recurringInterval: string | null
+  isDefault: boolean | null
+  processor: string
+  processorPriceId: string | null
+  slug: string | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface PayAccountTable {
+  id: string | null
+  projectId: string
+  userId: string
+  whopCompanyId: string
+  title: string
+  status: string
+  metadata: Record<string, unknown>
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface PayCheckoutSessionTable {
+  id: string | null
+  projectId: string
+  userId: string | null
+  accountId: string | null
+  whopCompanyId: string
+  whopCheckoutId: string
+  purchaseUrl: string | null
+  mode: string
+  planType: string
+  status: string
+  amount: string | number | null
+  currency: string
+  metadata: Record<string, unknown>
+  createdAt?: Date
+  updatedAt?: Date
+  idempotencyKey: string | null
+  completedAt: Date | null
+}
+
+export interface PayWebhookEventTable {
+  id: string
+  eventType: string
+  payload: Record<string, unknown>
+  status: string
+  error: string | null
+  receivedAt?: Date
+  handledAt: Date | null
+}
+
+export interface PayPaymentTable {
+  id: string | null
+  projectId: string | null
+  checkoutId: string | null
+  whopPaymentId: string
+  whopCompanyId: string | null
+  amount: string | number
+  currency: string
+  status: string
+  customerEmail: string | null
+  customerName: string | null
+  metadata: Record<string, unknown>
+  raw: Record<string, unknown>
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface PaySubscriptionTable {
+  id: string | null
+  projectId: string | null
+  checkoutId: string | null
+  whopMembershipId: string
+  whopPlanId: string | null
+  whopProductId: string | null
+  whopUserId: string | null
+  status: string
+  cancelAtPeriodEnd: boolean
+  currentPeriodStart: Date | null
+  currentPeriodEnd: Date | null
+  canceledAt: Date | null
+  metadata: Record<string, unknown>
+  raw: Record<string, unknown>
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface PayInvoiceTable {
+  id: string | null
+  projectId: string | null
+  checkoutId: string | null
+  subscriptionId: string | null
+  whopInvoiceId: string
+  status: string
+  amount: string | number
+  currency: string
+  hostedUrl: string | null
+  dueAt: Date | null
+  paidAt: Date | null
+  voidedAt: Date | null
+  metadata: Record<string, unknown>
+  raw: Record<string, unknown>
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface PayRefundTable {
+  id: string | null
+  projectId: string | null
+  paymentId: string | null
+  whopRefundId: string
+  status: string
+  amount: string | number
+  currency: string
+  reason: string | null
+  metadata: Record<string, unknown>
+  raw: Record<string, unknown>
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface PayDisputeTable {
+  id: string | null
+  projectId: string | null
+  paymentId: string | null
+  whopDisputeId: string
+  status: string
+  amount: string | number
+  currency: string
+  reason: string | null
+  resolvedAt: Date | null
+  metadata: Record<string, unknown>
+  raw: Record<string, unknown>
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface PayTransactionTable {
+  id: string | null
+  projectId: string | null
+  accountId: string | null
+  checkoutId: string | null
+  paymentId: string | null
+  subscriptionId: string | null
+  invoiceId: string | null
+  kind: string
+  processor: string
+  direction: string
+  processorFeeType: string | null
+  paymentTransactionId: string | null
+  incurredByTransactionId: string | null
+  payoutTransactionId: string | null
+  sourceId: string | null
+  status: string | null
+  amount: string | number
+  currency: string
+  happenedAt: Date | null
+  metadata: Record<string, unknown>
+  raw: Record<string, unknown>
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface PayCustomerTable {
+  id: string | null
+  projectId: string
+  externalId: string | null
+  email: string | null
+  name: string | null
+  metadata: Record<string, unknown>
   createdAt?: Date
   updatedAt?: Date
 }

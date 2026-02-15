@@ -168,6 +168,33 @@ projects.get(
   },
 )
 
+// GET /projects/recent - Recently deployed public projects
+projects.get(
+  '/recent',
+  zValidator('query', z.object({ limit: z.coerce.number().int().min(1).max(20).optional() })),
+  async (c) => {
+    const { limit } = c.req.valid('query')
+
+    const rows = await db
+      .selectFrom('project')
+      .innerJoin('worker', 'worker.projectId', 'project.id')
+      .select(['project.name', 'worker.scriptName'])
+      .where('worker.status', '=', 'active')
+      .where('project.isPublic', '=', true)
+      .where('project.deletedAt', 'is', null)
+      .orderBy('project.updatedAt', 'desc')
+      .limit(limit ?? 20)
+      .execute()
+
+    return c.json(
+      rows.map((r) => ({
+        name: r.name,
+        liveUrl: `https://${r.scriptName}.surgent.site`,
+      })),
+    )
+  },
+)
+
 // ── Auth required from here ──
 
 projects.use('*', async (c, next) => {
@@ -210,6 +237,7 @@ projects.get('/', requireAuth, async (c) => {
       'project.github',
       'project.settings',
       'project.metadata',
+      'project.isPublic',
       'project.createdAt',
       'project.updatedAt',
       'sandbox.id as sandboxId',
@@ -236,6 +264,7 @@ projects.get('/', requireAuth, async (c) => {
       github: r.github,
       settings: r.settings,
       metadata: r.metadata,
+      isPublic: r.isPublic,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       sandbox: r.sandboxId
@@ -507,22 +536,28 @@ projects.get('/:id', zValidator('param', idParam), async (c) => {
   })
 })
 
-// PATCH /projects/:id - Rename project
+// PATCH /projects/:id - Update project (name, visibility)
 projects.patch(
   '/:id',
   zValidator('param', idParam),
-  zValidator('json', z.object({ name: z.string().min(1) })),
+  zValidator(
+    'json',
+    z.object({
+      name: z.string().min(1).optional(),
+      isPublic: z.boolean().optional(),
+    }),
+  ),
   async (c) => {
     const { id } = c.req.valid('param')
-    const { name } = c.req.valid('json')
+    const body = c.req.valid('json')
 
     const project = await getProjectWithAuth(id, c.get('user')!)
 
-    await db
-      .updateTable('project')
-      .set({ name, updatedAt: new Date() })
-      .where('id', '=', id)
-      .execute()
+    const updates: Record<string, any> = { updatedAt: new Date() }
+    if (body.name !== undefined) updates.name = body.name
+    if (body.isPublic !== undefined) updates.isPublic = body.isPublic
+
+    await db.updateTable('project').set(updates).where('id', '=', id).execute()
 
     return c.json({ updated: true })
   },

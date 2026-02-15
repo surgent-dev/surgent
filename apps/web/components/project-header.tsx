@@ -26,12 +26,16 @@ import {
   TelegramLogo,
   Headset,
   Storefront,
+  Globe,
   UploadSimple,
   CreditCard,
   Lightning,
 } from '@phosphor-icons/react'
+import { useCustomer } from 'autumn-js/react'
 import { useCredits } from '@/hooks/use-credits'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -52,6 +56,7 @@ import { authClient } from '@/lib/auth-client'
 import {
   useDeployProject,
   useRenameProject,
+  useUpdateProjectVisibility,
   useLatestDeploymentQuery,
   useHostnameAvailability,
 } from '@/queries/projects'
@@ -76,6 +81,7 @@ interface ProjectHeaderProps {
   projectId?: string
   project?: {
     name?: string
+    isPublic?: boolean
     worker?: { name: string; status: string | null; hostname: string | null } | null
   }
 }
@@ -116,6 +122,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   // User state
   const [user, setUser] = useState<User | null>(null)
   const credits = useCredits()
+  const { check: checkFeature } = useCustomer()
+  const canToggleVisibility = checkFeature({ featureId: 'private_projects' }).data?.allowed ?? false
   useEffect(() => {
     authClient.getSession().then(({ data }) => data?.user && setUser(data.user as User))
   }, [])
@@ -183,6 +191,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
   const { data: projectListing } = useProjectListingQuery(projectId, isPublishOpen)
   const upsertListing = useUpsertProjectListing()
+  const updateVisibility = useUpdateProjectVisibility()
   const surpayConnect = useSurpayConnect()
   const surpayMoveAccount = useSurpayMoveAccount()
 
@@ -736,6 +745,54 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     {latestDeployment.error || 'Deployment failed'}
                   </p>
                 )}
+            </div>
+
+            {/* Visibility */}
+            <div className="border-t px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <Globe className="size-3.5 text-muted-foreground/70" weight="duotone" />
+                <span className="text-xs font-medium text-muted-foreground">
+                  {(project?.isPublic ?? true) ? 'Public' : 'Private'}
+                </span>
+                {!canToggleVisibility && (
+                  <button
+                    onClick={() => credits.setPlanDialogOpen(true)}
+                    className="ml-auto text-[10px] font-medium text-brand hover:text-brand/80 transition-colors"
+                  >
+                    Upgrade
+                  </button>
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Switch
+                        className={canToggleVisibility ? 'ml-auto' : ''}
+                        checked={project?.isPublic ?? true}
+                        onCheckedChange={(checked) => {
+                          if (!projectId) return
+                          updateVisibility.mutate(
+                            { id: projectId, isPublic: checked },
+                            {
+                              onError: () =>
+                                toast.error('Failed to update visibility', {
+                                  position: 'top-right',
+                                }),
+                            },
+                          )
+                        }}
+                        disabled={!canToggleVisibility}
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {canToggleVisibility
+                      ? (project?.isPublic ?? true)
+                        ? 'Make private'
+                        : 'Make public'
+                      : 'Upgrade to control visibility'}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
 
             {/* Marketplace */}

@@ -333,11 +333,6 @@ function IndexContent() {
               </button>
             ))}
           </div>
-
-          {/* Trust */}
-          <p className="text-center text-[11px] text-muted-foreground/30 mt-10 tracking-wide landing-stagger-5">
-            No credit card required · Free to start
-          </p>
         </div>
       </main>
 
