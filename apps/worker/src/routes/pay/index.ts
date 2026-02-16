@@ -43,6 +43,7 @@ import {
   isSubscriptionActive,
   getClient,
   getAccountForProject,
+  resolveActiveAccountId,
   getProductsWithPrices,
   resolveCheckoutStatus,
   resolveBillingPeriod,
@@ -112,7 +113,8 @@ pay.get('/projects', async (c) => {
 
 pay.get('/products', zValidator('query', projectQuerySchema), async (c) => {
   const { projectId, auth } = await resolveProjectScope(c, c.req.valid('query').projectId)
-  const { products, pricesByProduct } = await getProductsWithPrices(projectId, auth.env)
+  const accountId = await resolveActiveAccountId(projectId, auth.env)
+  const { products, pricesByProduct } = await getProductsWithPrices(projectId, auth.env, accountId)
 
   if (!products.length) return c.json([])
 
@@ -126,6 +128,7 @@ pay.get('/products', zValidator('query', projectQuerySchema), async (c) => {
           name: product.name,
           slug: product.slug,
           projectId: product.projectId,
+          accountId: product.accountId,
           description: product.description,
           version: product.version,
           isArchived: product.isArchived,
@@ -153,6 +156,7 @@ pay.post(
   async (c) => {
     const { projectId, auth } = await resolveProjectScope(c, c.req.valid('query').projectId)
     const body = c.req.valid('json')
+    const accountId = await resolveActiveAccountId(projectId, auth.env)
 
     const slug = normalizeSlug(body.slug)
     if (!slug) return c.json({ error: 'Invalid slug' }, 400)
@@ -184,6 +188,7 @@ pay.post(
         .values({
           productGroup: body.productGroup,
           projectId,
+          accountId,
           name: body.name,
           description: body.description || null,
           slug,
@@ -250,27 +255,36 @@ pay.put(
     }
 
     const result = await db.transaction().execute(async (trx) => {
-      const versions = await trx
+      let versionsQuery = trx
         .selectFrom('product')
         .select('version')
         .where('projectId', '=', existing.projectId)
         .where('env', '=', existing.env)
         .where('productGroup', '=', existing.productGroup)
-        .forUpdate()
-        .execute()
+      if (existing.accountId) {
+        versionsQuery = versionsQuery.where((eb) =>
+          eb.or([eb('accountId', '=', existing.accountId!), eb('accountId', 'is', null)]),
+        )
+      }
+      const versions = await versionsQuery.forUpdate().execute()
       const version = versions.reduce((max, r) => Math.max(max, r.version || 0), 0) + 1
       const newSlug = body.slug
         ? normalizeSlug(body.slug)
         : normalizeSlug(`${existing.slug}-v${version}`)
       if (!newSlug) return { error: 'Invalid slug' as const }
 
-      const slugConflict = await trx
+      let slugConflictQuery = trx
         .selectFrom('product')
         .select('id')
         .where('projectId', '=', existing.projectId)
         .where('env', '=', existing.env)
         .where('slug', '=', newSlug)
-        .executeTakeFirst()
+      if (existing.accountId) {
+        slugConflictQuery = slugConflictQuery.where((eb) =>
+          eb.or([eb('accountId', '=', existing.accountId!), eb('accountId', 'is', null)]),
+        )
+      }
+      const slugConflict = await slugConflictQuery.executeTakeFirst()
       if (slugConflict) return { error: 'slug_conflict' as const }
 
       const now = new Date()
@@ -279,6 +293,7 @@ pay.put(
         .values({
           productGroup: existing.productGroup,
           projectId: existing.projectId,
+          accountId: existing.accountId,
           name: body.name ?? existing.name,
           description: body.description !== undefined ? body.description : existing.description,
           slug: newSlug,
@@ -319,13 +334,20 @@ pay.post(
   async (c) => {
     const { projectId, auth } = await resolveProjectScope(c, c.req.valid('query').projectId)
     const body = c.req.valid('json')
+    const accountId = await resolveActiveAccountId(projectId, auth.env)
 
-    const productRows = await db
+    let productQuery = db
       .selectFrom('product')
       .selectAll()
       .where('projectId', '=', projectId)
       .where('env', '=', auth.env)
       .where('productGroup', '=', body.productGroup)
+    if (accountId) {
+      productQuery = productQuery.where((eb) =>
+        eb.or([eb('accountId', '=', accountId), eb('accountId', 'is', null)]),
+      )
+    }
+    const productRows = await productQuery
       .orderBy('version', 'desc')
       .orderBy('createdAt', 'desc')
       .execute()

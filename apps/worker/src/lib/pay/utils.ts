@@ -124,13 +124,36 @@ function isNewerProduct(
   return Boolean(a.createdAt && (!b.createdAt || a.createdAt > b.createdAt))
 }
 
-export async function getProductsWithPrices(projectId: string, env: PayEnv) {
-  const allRows = await db
+export async function resolveActiveAccountId(
+  projectId: string,
+  env: PayEnv,
+): Promise<string | null> {
+  try {
+    const account = await getAccountForProject({ projectId, env })
+    return account.id
+  } catch {
+    return null
+  }
+}
+
+export async function getProductsWithPrices(
+  projectId: string,
+  env: PayEnv,
+  accountId?: string | null,
+) {
+  let query = db
     .selectFrom('product')
     .selectAll()
     .where('projectId', '=', projectId)
     .where('env', '=', env)
-    .execute()
+
+  if (accountId) {
+    query = query.where((eb) =>
+      eb.or([eb('accountId', '=', accountId), eb('accountId', 'is', null)]),
+    )
+  }
+
+  const allRows = await query.execute()
 
   // Keep only latest version per product group
   const latestByGroup = new Map<string, (typeof allRows)[number]>()

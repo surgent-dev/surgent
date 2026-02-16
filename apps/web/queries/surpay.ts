@@ -71,7 +71,7 @@ async function connectSurpay(projectId: string): Promise<SurpayConnectResponse> 
 }
 
 export interface WhopConnectRequest {
-  email: string
+  email?: string
   title: string
   country: string
   businessType?: string

@@ -8,6 +8,7 @@ export interface Product {
   name: string
   slug: string
   projectId: string
+  accountId?: string | null
   description?: string | null
   version?: number | null
   isArchived?: boolean | null

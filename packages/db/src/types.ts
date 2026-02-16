@@ -452,6 +452,7 @@ export interface ProductTable {
   name: string
   description: string | null
   projectId: string
+  accountId: string | null
   slug: string
   version: number | null
   isArchived: boolean | null
