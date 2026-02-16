@@ -1,3 +1,5 @@
+import type { Generated } from 'kysely'
+
 export interface Database {
   user: UserTable
   session: SessionTable
@@ -231,7 +233,7 @@ export interface TeamMemberTable {
 }
 
 export interface ApiKeyTable {
-  id: string
+  id: Generated<string>
   name: string | null
   start: string | null
   prefix: string | null
@@ -243,10 +245,10 @@ export interface ApiKeyTable {
   refillAmount: number | null
   lastRefillAt: Date | null
   enabled: boolean
-  rateLimitEnabled: boolean
+  rateLimitEnabled: Generated<boolean>
   rateLimitTimeWindow: number | null
   rateLimitMax: number | null
-  requestCount: number
+  requestCount: Generated<number>
   remaining: number | null
   lastRequest: Date | null
   expiresAt: Date | null
@@ -254,6 +256,7 @@ export interface ApiKeyTable {
   updatedAt: Date
   permissions: string | null
   metadata: any | null
+  env: string
 }
 
 export interface UsageTable {
@@ -457,7 +460,7 @@ export interface ProductTable {
   processorProductId: string | null
   isAddOn: boolean | null
   planGroup: string | null
-  env: string | null
+  env: string
   createdAt?: Date
   updatedAt?: Date
 }
@@ -486,6 +489,7 @@ export interface PayAccountTable {
   title: string
   status: string
   metadata: Record<string, unknown>
+  env: string
   createdAt?: Date
   updatedAt?: Date
 }
@@ -496,7 +500,7 @@ export interface PayCheckoutSessionTable {
   userId: string | null
   accountId: string | null
   whopCompanyId: string
-  whopCheckoutId: string
+  whopCheckoutId: string | null
   purchaseUrl: string | null
   mode: string
   planType: string
@@ -504,6 +508,7 @@ export interface PayCheckoutSessionTable {
   amount: string | number | null
   currency: string
   metadata: Record<string, unknown>
+  env: string
   createdAt?: Date
   updatedAt?: Date
   idempotencyKey: string | null
@@ -516,6 +521,7 @@ export interface PayWebhookEventTable {
   payload: Record<string, unknown>
   status: string
   error: string | null
+  env: string
   receivedAt?: Date
   handledAt: Date | null
 }
@@ -523,16 +529,25 @@ export interface PayWebhookEventTable {
 export interface PayPaymentTable {
   id: string | null
   projectId: string | null
+  customerId: string | null
   checkoutId: string | null
   whopPaymentId: string
   whopCompanyId: string | null
+  whopUserId: string | null
   amount: string | number
   currency: string
   status: string
   customerEmail: string | null
   customerName: string | null
+  paidAt: Date | null
+  billingReason: string | null
+  paymentMethodType: string | null
+  cardBrand: string | null
+  cardLast4: string | null
+  failureMessage: string | null
   metadata: Record<string, unknown>
   raw: Record<string, unknown>
+  env: string
   createdAt?: Date
   updatedAt?: Date
 }
@@ -540,6 +555,7 @@ export interface PayPaymentTable {
 export interface PaySubscriptionTable {
   id: string | null
   projectId: string | null
+  customerId: string | null
   checkoutId: string | null
   whopMembershipId: string
   whopPlanId: string | null
@@ -552,6 +568,7 @@ export interface PaySubscriptionTable {
   canceledAt: Date | null
   metadata: Record<string, unknown>
   raw: Record<string, unknown>
+  env: string
   createdAt?: Date
   updatedAt?: Date
 }
@@ -571,6 +588,7 @@ export interface PayInvoiceTable {
   voidedAt: Date | null
   metadata: Record<string, unknown>
   raw: Record<string, unknown>
+  env: string
   createdAt?: Date
   updatedAt?: Date
 }
@@ -586,6 +604,7 @@ export interface PayRefundTable {
   reason: string | null
   metadata: Record<string, unknown>
   raw: Record<string, unknown>
+  env: string
   createdAt?: Date
   updatedAt?: Date
 }
@@ -602,6 +621,7 @@ export interface PayDisputeTable {
   resolvedAt: Date | null
   metadata: Record<string, unknown>
   raw: Record<string, unknown>
+  env: string
   createdAt?: Date
   updatedAt?: Date
 }
@@ -628,6 +648,7 @@ export interface PayTransactionTable {
   happenedAt: Date | null
   metadata: Record<string, unknown>
   raw: Record<string, unknown>
+  env: string
   createdAt?: Date
   updatedAt?: Date
 }
@@ -639,6 +660,7 @@ export interface PayCustomerTable {
   email: string | null
   name: string | null
   metadata: Record<string, unknown>
+  env: string
   createdAt?: Date
   updatedAt?: Date
 }
