@@ -266,9 +266,9 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
           JWT_PRIVATE_KEY: { value: authKeys.privateKey, destination: 'server' },
           JWKS: { value: authKeys.jwks, destination: 'server' },
           SURGENT_API_KEY: { value: surgentApiKey, destination: 'server' },
-          // Payments - surpay-convex uses this for API calls
-          ...(config.surpay.baseUrl && {
-            SURPAY_BASE_URL: { value: config.surpay.baseUrl, destination: 'server' },
+          // Payments - Pay API base URL for Convex actions
+          ...(config.surgent.baseUrl && {
+            SURPAY_BASE_URL: { value: `${config.surgent.baseUrl}/api/pay`, destination: 'server' },
           }),
         }
 

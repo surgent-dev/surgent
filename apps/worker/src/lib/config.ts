@@ -85,8 +85,20 @@ export const config = {
   surgent: {
     baseUrl: env.SURGENT_BASE_URL,
   },
-  surpay: {
-    baseUrl: env.SURPAY_BASE_URL,
+  whop: {
+    test: {
+      apiKey: env.WHOP_TEST_API_KEY,
+      platformCompanyId: env.WHOP_TEST_PLATFORM_COMPANY_ID,
+      webhookSecret: env.WHOP_TEST_WEBHOOK_SECRET,
+      baseUrl: 'https://sandbox-api.whop.com/api/v1',
+    },
+    live: {
+      apiKey: env.WHOP_LIVE_API_KEY,
+      platformCompanyId: env.WHOP_LIVE_PLATFORM_COMPANY_ID,
+      webhookSecret: env.WHOP_LIVE_WEBHOOK_SECRET,
+      baseUrl: 'https://api.whop.com/api/v1',
+    },
+    redirectBaseUrl: env.WHOP_REDIRECT_BASE_URL,
   },
   autumn: {
     secretKey: env.AUTUMN_SECRET_KEY,

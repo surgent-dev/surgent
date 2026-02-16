@@ -8,10 +8,9 @@
 
 ## Services
 
-| Service        | Type               | Port | Domain          | ECR Repo       |
-| -------------- | ------------------ | ---- | --------------- | -------------- |
-| surgent-worker | ECS Fargate (Bun)  | 4000 | api.surgent.dev | surgent/worker |
-| surpay         | ECS Fargate (Rust) | 8090 | pay.surgent.dev | surgent/pay    |
+| Service        | Type              | Port | Domain          | ECR Repo       |
+| -------------- | ----------------- | ---- | --------------- | -------------- |
+| surgent-worker | ECS Fargate (Bun) | 4000 | api.surgent.dev | surgent/worker |
 
 ## ECS Cluster
 
@@ -24,19 +23,14 @@
 ### Check Service Status
 
 ```bash
-aws ecs describe-services --cluster surgent-cluster --services surgent-worker surpay \
+aws ecs describe-services --cluster surgent-cluster --services surgent-worker \
   --query 'services[*].{name:serviceName,running:runningCount,desired:desiredCount}' --output table
 ```
 
 ### Check Latest Deployed Image
 
 ```bash
-# Worker
 aws ecr describe-images --repository-name surgent/worker \
-  --query 'imageDetails | sort_by(@, &imagePushedAt) | [-1].{pushed:imagePushedAt,tag:imageTags[0]}' --output json
-
-# Pay
-aws ecr describe-images --repository-name surgent/pay \
   --query 'imageDetails | sort_by(@, &imagePushedAt) | [-1].{pushed:imagePushedAt,tag:imageTags[0]}' --output json
 ```
 
@@ -48,19 +42,12 @@ aws logs filter-log-events \
   --log-group-name "SurgentStack-WorkerTaskDefworkerLogGroup76A78CDA-Ea4mF0XO2hkK" \
   --start-time $(( $(date +%s) - 300 ))000 --limit 50 \
   --query 'events[*].message' --output text
-
-# Surpay logs
-aws logs filter-log-events \
-  --log-group-name "SurgentStack-SurpayTaskDefsurpayLogGroupA4B990FE-jaibIWFD9h08" \
-  --start-time $(( $(date +%s) - 300 ))000 --limit 50 \
-  --query 'events[*].message' --output text
 ```
 
 ### Force New Deployment
 
 ```bash
 aws ecs update-service --cluster surgent-cluster --service surgent-worker --force-new-deployment
-aws ecs update-service --cluster surgent-cluster --service surpay --force-new-deployment
 ```
 
 ### Check Stopped Tasks (Debug Crashes)
@@ -79,13 +66,10 @@ aws ecs describe-tasks --cluster surgent-cluster --tasks <TASK_ARN> \
 | Service | Log Group                                                     |
 | ------- | ------------------------------------------------------------- |
 | Worker  | SurgentStack-WorkerTaskDefworkerLogGroup76A78CDA-Ea4mF0XO2hkK |
-| Surpay  | SurgentStack-SurpayTaskDefsurpayLogGroupA4B990FE-jaibIWFD9h08 |
 
 ## Secrets (SSM Parameter Store)
 
-All secrets stored under `/surgent/prod/` prefix. Key secrets:
-
-- DATABASE*URL, BETTER_AUTH_SECRET, CONVEX*_, GITHUB\__, etc.
+All secrets stored under `/surgent/prod/` prefix as SecureString parameters.
 
 ## CI/CD
 
@@ -127,7 +111,7 @@ aws ecr describe-images --repository-name surgent/worker \
   --query 'imageDetails | sort_by(@, &imagePushedAt) | [-1].{pushed:imagePushedAt,tag:imageTags[0]}' --output json
 
 # 2. Check if services running
-aws ecs describe-services --cluster surgent-cluster --services surgent-worker surpay \
+aws ecs describe-services --cluster surgent-cluster --services surgent-worker \
   --query 'services[*].{name:serviceName,running:runningCount,desired:desiredCount}' --output table
 
 # 3. If running < desired, find stopped task
