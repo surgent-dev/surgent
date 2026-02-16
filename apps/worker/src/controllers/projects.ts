@@ -1,16 +1,23 @@
 import type { Sandbox } from '@/apis/sandbox'
 import type { ProjectMetadata } from '@repo/db'
 import { config } from '@/lib/config'
+import { createLogger } from '@/lib/logger'
 import { db } from '@/lib/db'
 import { HttpError } from '@/lib/errors'
 import { getProvider, resumeSandbox, workspacePath, defaultProviderName } from '@/lib/sandbox'
-import { sanitizeHostname } from '@/lib/utils'
+import {
+  sanitizeHostname,
+  shellQuote,
+  buildBashCommand,
+  validateProcessName,
+  validateDevScript,
+} from '@/lib/utils'
 import { createHash } from 'crypto'
 import { parse as parseDotEnv } from 'dotenv'
 import path from 'path'
 import stripJsonComments from 'strip-json-comments'
 import * as ProjectService from '@/services/projects'
-import { createDeployment, createDeployKey } from '@/apis/convex'
+import { createDeployment, createDeployKey, setDeploymentEnvVars } from '@/apis/convex'
 import {
   buildDeploymentConfig,
   parseWranglerConfig,
@@ -19,6 +26,8 @@ import {
 import { auth } from '@/lib/auth'
 import { WorkerDeployer } from '@/apis/deployer/deployer'
 import Cloudflare from 'cloudflare'
+
+const log = createLogger('projects')
 
 // ============================================================================
 // Constants
@@ -102,14 +111,6 @@ export interface RedeployVersionArgs {
 
 const posix = path.posix
 
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\"'\"'")}'`
-}
-
-function buildBashCommand(cwd: string, script: string): string {
-  return `bash -lc '${['set -euo pipefail', `cd ${shellQuote(cwd)}`, script].join('\n').replace(/'/g, "'\"'\"'")}'`
-}
-
 function stripTrailingSlash(s: string): string {
   return s.length > 1 && s.endsWith('/') ? s.slice(0, -1) : s
 }
@@ -128,20 +129,6 @@ function sanitizeScriptName(input: string): string {
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 63)
-}
-
-function validateProcessName(name: string): void {
-  if (!/^[a-zA-Z0-9._-]{1,64}$/.test(name)) {
-    throw new Error(`Invalid process name: must match ^[a-zA-Z0-9._-]{1,64}$`)
-  }
-}
-
-function validateDevScript(command: string): void {
-  // Allow: bun run <script>, npm run <script>, pnpm run <script>, yarn <script>, bunx <cmd>
-  const safe = /^(bun(x)?|npm|pnpm|yarn)\s+(run\s+)?[a-zA-Z0-9_:.-]+(\s+--[a-zA-Z0-9_=-]*)*$/
-  if (!safe.test(command.trim())) {
-    throw new Error(`Invalid dev script: only package manager run commands allowed`)
-  }
 }
 
 async function getProjectEnvVars(
@@ -262,7 +249,7 @@ async function ensurePm2Process(
 }
 
 async function startOpencodeServer(sandbox: Sandbox, cwd: string, env?: Record<string, string>) {
-  console.log('[opencode] starting server...', { sandboxId: sandbox.id, cwd })
+  log.info({ sandboxId: sandbox.id, cwd }, 'starting opencode server')
   // Trusted internal command - bypass validation
   await execPm2Start(
     sandbox,
@@ -271,7 +258,7 @@ async function startOpencodeServer(sandbox: Sandbox, cwd: string, env?: Record<s
     'opencode serve --hostname 0.0.0.0 --port 4096',
     env,
   )
-  console.log('[opencode] server started on port 4096')
+  log.info('opencode server started on port 4096')
 }
 
 async function getOrCreateSandbox(opts: {
@@ -315,7 +302,7 @@ export async function createDeploymentRecord(projectId: string, deployName?: str
 
 export async function deployProject(args: DeployProjectArgs): Promise<void> {
   const { projectId, deployName: rawName, deploymentId } = args
-  console.log('[deploy] start', { projectId, deploymentId })
+  log.info({ projectId, deploymentId }, 'deploy start')
 
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new Error(`Project ${projectId} not found`)
@@ -415,24 +402,27 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     const localKeys = Object.keys(localEnv || {})
     const projectKeys = Object.keys(envVars)
 
-    console.log('[deploy] plan', {
-      projectId,
-      deploymentId,
-      scriptName,
-      assets: {
-        dir: assetsDir,
-        count: assetPaths.length,
-        files: files.length,
-        paths: assetPreview,
-        ...(assetMore ? { more: assetMore } : {}),
+    log.info(
+      {
+        projectId,
+        deploymentId,
+        scriptName,
+        assets: {
+          dir: assetsDir,
+          count: assetPaths.length,
+          files: files.length,
+          paths: assetPreview,
+          ...(assetMore ? { more: assetMore } : {}),
+        },
+        env: {
+          count: envKeys.length,
+          keys: envPreview,
+          ...(envMore ? { more: envMore } : {}),
+          sources: { local: localKeys.length, project: projectKeys.length },
+        },
       },
-      env: {
-        count: envKeys.length,
-        keys: envPreview,
-        ...(envMore ? { more: envMore } : {}),
-        sources: { local: localKeys.length, project: projectKeys.length },
-      },
-    })
+      'deploy plan',
+    )
 
     const fileContents = new Map(files.map((f) => [f.path, Buffer.from(f.base64, 'base64')]))
     await deployToDispatch(
@@ -468,9 +458,9 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
         .catch(() => {})
     }
 
-    console.log('[deploy] success', { projectId, scriptName, cfDeploymentId: cfDeployment?.id })
+    log.info({ projectId, scriptName, cfDeploymentId: cfDeployment?.id }, 'deploy success')
   } catch (err: any) {
-    console.error('[deploy] failed', { projectId, error: err?.message })
+    log.error({ projectId, err }, 'deploy failed')
     await ProjectService.updateDeployment(deploymentId, {
       status: 'deploy_failed',
       error: err?.message || 'Deployment failed',
@@ -499,7 +489,7 @@ async function fetchLatestCloudflareDeployment(accountId: string, scriptName: st
 
 export async function undeployProject(args: UndeployProjectArgs): Promise<void> {
   const { projectId } = args
-  console.log('[undeploy] start', { projectId })
+  log.info({ projectId }, 'undeploy start')
 
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new Error(`Project ${projectId} not found`)
@@ -533,9 +523,9 @@ export async function undeployProject(args: UndeployProjectArgs): Promise<void> 
       status: null,
     })
 
-    console.log('[undeploy] success', { projectId, scriptName })
+    log.info({ projectId, scriptName }, 'undeploy success')
   } catch (err: any) {
-    console.error('[undeploy] failed', { projectId, error: err?.message })
+    log.error({ projectId, err }, 'undeploy failed')
     await ProjectService.updateDeployment(deployment.id, {
       status: 'undeploy_failed',
       error: err?.message || 'Undeploy failed',
@@ -604,7 +594,7 @@ export async function resumeProject(
     await ensureOpencodeConfigRepo(sandbox, config.opencode.configRepoUrl, opencodeConfigDir)
     await startOpencodeServer(sandbox, workingDirectory, opencodeEnv)
   } catch (err) {
-    console.log('[resume] error', err)
+    log.error({ err }, 'resume error')
   }
 
   await ProjectService.upsertSandbox({
@@ -625,11 +615,54 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
   const sandboxRow = await ProjectService.getSandboxByProjectId(args.projectId)
   if (!sandboxRow?.id) throw new Error('Sandbox not found')
 
+  await pushProdServerEnvVars(args.projectId)
+
   const sandbox = await getProvider().resume(sandboxRow.id)
   const cwd = project.metadata?.workingDirectory || workspacePath(args.projectId)
 
   const res = await sandbox.exec('bunx convex deploy -y', { cwd, timeout: 180_000 })
   if (res.code !== 0) throw new Error(`convex deploy failed: ${res.output}`)
+}
+
+/**
+ * Push server env vars to the production Convex deployment.
+ *
+ * Dev vars (PAY_API_URL, JWT_PRIVATE_KEY, JWKS …) are used as a base,
+ * then prod-specific values override them — this is how the live
+ * SURGENT_API_KEY replaces the test one on deploy.
+ */
+async function pushProdServerEnvVars(projectId: string): Promise<void> {
+  const convex = await ProjectService.getIntegrationByProvider(projectId, 'convex')
+  if (!convex?.id) return
+
+  const cfg = convex.config as ConvexConfig | null
+  const prodUrl = cfg?.deployments?.production?.url
+  if (!prodUrl) return
+
+  const [prodRows, devRows] = await Promise.all([
+    ProjectService.getEnvVarsByProjectId(projectId, 'production', convex.id),
+    ProjectService.getEnvVarsByProjectId(projectId, 'development', convex.id),
+  ])
+
+  const deployKey = prodRows.find((v) => v.key === 'CONVEX_DEPLOY_KEY')?.value
+  if (!deployKey) return
+
+  // Collect server-only vars from both environments into a flat record
+  const serverVars: Record<string, string> = {}
+  for (const row of devRows) {
+    if (row.value && row.destination === 'server' && row.key !== 'CONVEX_DEPLOY_KEY') {
+      serverVars[row.key] = row.value
+    }
+  }
+  for (const row of prodRows) {
+    if (row.value && row.destination === 'server' && row.key !== 'CONVEX_DEPLOY_KEY') {
+      serverVars[row.key] = row.value
+    }
+  }
+
+  if (Object.keys(serverVars).length) {
+    await setDeploymentEnvVars(prodUrl, deployKey, serverVars)
+  }
 }
 
 export async function downloadProject(
@@ -684,13 +717,12 @@ export async function deleteSandbox(args: DeleteProjectArgs): Promise<void> {
 
   try {
     await getProvider().kill(sandboxRow.id)
-    console.log('[delete] sandbox deleted', { projectId: args.projectId, sandboxId: sandboxRow.id })
+    log.info({ projectId: args.projectId, sandboxId: sandboxRow.id }, 'sandbox deleted')
   } catch (err) {
-    console.error('[delete] sandbox deletion failed', {
-      projectId: args.projectId,
-      sandboxId: sandboxRow.id,
-      error: err,
-    })
+    log.error(
+      { projectId: args.projectId, sandboxId: sandboxRow.id, err },
+      'sandbox deletion failed',
+    )
   }
 }
 
@@ -768,7 +800,7 @@ export async function redeployVersion(args: RedeployVersionArgs): Promise<void> 
       cloudflareVersionId: cfDeployment?.versionId ?? null,
     })
 
-    console.log('[rollback] success', { projectId, versionId })
+    log.info({ projectId, versionId }, 'rollback success')
   } catch (err: any) {
     await ProjectService.updateDeployment(deployment.id, {
       status: 'deploy_failed',
