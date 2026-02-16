@@ -29,20 +29,13 @@ export interface TransactionsResponse {
 }
 
 async function fetchTransactions(projectId: string): Promise<TransactionsResponse> {
-  try {
-    // API: GET /project/{project_id}/transactions?projectId=xxx
-    // Note: The handler requires projectId as query param for session auth
-    const data = await payHttp
-      .get(`project/${projectId}/transactions`, { searchParams: { projectId } })
-      .json<Transaction[]>()
-    return {
-      transactions: data ?? [],
-      total: data?.length ?? 0,
-      hasMore: false,
-    }
-  } catch (error) {
-    console.error('Failed to fetch transactions:', error)
-    return { transactions: [], total: 0, hasMore: false }
+  const data = await payHttp
+    .get(`project/${projectId}/transactions`, { searchParams: { projectId } })
+    .json<Transaction[]>()
+  return {
+    transactions: data ?? [],
+    total: data?.length ?? 0,
+    hasMore: false,
   }
 }
 

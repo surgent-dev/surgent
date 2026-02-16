@@ -51,6 +51,7 @@
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/react-query": "^5.90.12",
     "@tanstack/react-query-devtools": "^5.91.1",
+    "@whop/checkout": "0.0.52",
     "@whop/embedded-components-react-js": "0.0.9",
     "@whop/embedded-components-vanilla-js": "0.0.9",
     "@xterm/addon-attach": "^0.11.0",

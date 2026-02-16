@@ -33,16 +33,10 @@ export interface CustomersResponse {
 }
 
 async function fetchCustomers(projectId: string): Promise<CustomersResponse> {
-  try {
-    // API: GET /customers?projectId=xxx
-    const data = await payHttp.get('customers', { searchParams: { projectId } }).json<Customer[]>()
-    return {
-      customers: data ?? [],
-      total: data?.length ?? 0,
-    }
-  } catch (error) {
-    console.error('Failed to fetch customers:', error)
-    return { customers: [], total: 0 }
+  const data = await payHttp.get('customers', { searchParams: { projectId } }).json<Customer[]>()
+  return {
+    customers: data ?? [],
+    total: data?.length ?? 0,
   }
 }
 
@@ -51,6 +45,24 @@ export function useCustomers(projectId?: string) {
     queryKey: ['customers', projectId],
     queryFn: () => fetchCustomers(projectId!),
     enabled: Boolean(projectId),
+    staleTime: 1000 * 30,
+  })
+}
+
+async function fetchCustomerDetail(
+  customerId: string,
+  projectId: string,
+): Promise<CustomerWithDetails> {
+  return payHttp
+    .get(`customers/${encodeURIComponent(customerId)}`, { searchParams: { projectId } })
+    .json<CustomerWithDetails>()
+}
+
+export function useCustomerDetail(customerId?: string, projectId?: string) {
+  return useQuery({
+    queryKey: ['customer-detail', customerId, projectId],
+    queryFn: () => fetchCustomerDetail(customerId!, projectId!),
+    enabled: Boolean(customerId && projectId),
     staleTime: 1000 * 30,
   })
 }

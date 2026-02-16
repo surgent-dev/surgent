@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { payHttp } from '@/lib/http'
+import { usePayEnv } from '@/stores/pay-env'
 
 // Types
 export interface SurpayAccountData {
@@ -53,7 +54,7 @@ async function fetchSurpayAccounts(projectId: string): Promise<SurpayAccount[]> 
 }
 
 async function fetchSurpayAccount(projectId: string, accountId: string): Promise<SurpayAccount> {
-  return payHttp.get(`accounts/${accountId}`).json()
+  return payHttp.get(`accounts/${accountId}`, { searchParams: { projectId } }).json()
 }
 
 async function connectSurpay(projectId: string): Promise<SurpayConnectResponse> {
@@ -117,8 +118,9 @@ async function moveAccount(accountId: string, projectId: string): Promise<Surpay
 
 // Hooks
 export function useSurpayAccounts(projectId?: string) {
+  const env = usePayEnv((s) => s.env)
   return useQuery({
-    queryKey: ['surpay-accounts', projectId],
+    queryKey: ['surpay-accounts', projectId, env],
     queryFn: () => fetchSurpayAccounts(projectId!),
     enabled: Boolean(projectId),
     staleTime: 1000 * 30, // 30 seconds
@@ -130,8 +132,9 @@ export function useSurpayAccount(
   accountId?: string,
   options?: { enabled?: boolean },
 ) {
+  const env = usePayEnv((s) => s.env)
   return useQuery({
-    queryKey: ['surpay-account', projectId, accountId],
+    queryKey: ['surpay-account', projectId, accountId, env],
     queryFn: () => fetchSurpayAccount(projectId!, accountId!),
     enabled: Boolean(projectId) && Boolean(accountId) && (options?.enabled ?? true),
     staleTime: 1000 * 30, // 30 seconds
@@ -149,8 +152,9 @@ export function useSurpayConnect() {
 }
 
 export function useUserWhopAccounts() {
+  const env = usePayEnv((s) => s.env)
   return useQuery({
-    queryKey: ['user-whop-accounts'],
+    queryKey: ['user-whop-accounts', env],
     queryFn: fetchUserWhopAccounts,
     staleTime: 1000 * 30,
   })
