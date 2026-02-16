@@ -8,8 +8,9 @@ import {
   CreateOrganizationRepositoryOptions,
   CreateRepositoryResult,
 } from './types'
+import { createLogger } from '@/lib/logger'
 
-const log = (msg: string, data?: unknown) => console.log(`[GitHubService] ${msg}`, data ?? '')
+const log = createLogger('github-service')
 
 export class GitHubService {
   private static createHeaders(token: string, includeContentType = false): Record<string, string> {
@@ -34,12 +35,15 @@ export class GitHubService {
   ): Promise<CreateRepositoryResult> {
     const autoInit = options.auto_init ?? false
 
-    log('Creating GitHub repository', {
-      name: options.name,
-      private: options.private,
-      auto_init: autoInit,
-      description: options.description ? 'provided' : 'none',
-    })
+    log.info(
+      {
+        name: options.name,
+        private: options.private,
+        auto_init: autoInit,
+        description: options.description ? 'provided' : 'none',
+      },
+      'creating user repository',
+    )
 
     try {
       const response = await fetch('https://api.github.com/user/repos', {
@@ -55,12 +59,15 @@ export class GitHubService {
 
       if (!response.ok) {
         const error = await response.text()
-        log('Repository creation failed', {
-          status: response.status,
-          statusText: response.statusText,
-          error: error,
-          endpoint: 'https://api.github.com/user/repos',
-        })
+        log.error(
+          {
+            status: response.status,
+            statusText: response.statusText,
+            error: error,
+            endpoint: 'https://api.github.com/user/repos',
+          },
+          'repository creation failed',
+        )
 
         if (response.status === 403) {
           return {
@@ -77,14 +84,14 @@ export class GitHubService {
       }
 
       const repository = (await response.json()) as GitHubRepository
-      log(`Successfully created repository: ${repository.html_url}`)
+      log.info({ url: repository.html_url }, 'user repository created')
 
       return {
         success: true,
         repository,
       }
     } catch (error) {
-      log('Failed to create user repository', error)
+      log.error({ err: error }, 'failed to create user repository')
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -100,13 +107,16 @@ export class GitHubService {
   ): Promise<CreateRepositoryResult> {
     const autoInit = options.auto_init ?? false
 
-    log('Creating GitHub organization repository', {
-      org: options.org,
-      name: options.name,
-      private: options.private,
-      auto_init: autoInit,
-      description: options.description ? 'provided' : 'none',
-    })
+    log.info(
+      {
+        org: options.org,
+        name: options.name,
+        private: options.private,
+        auto_init: autoInit,
+        description: options.description ? 'provided' : 'none',
+      },
+      'creating organization repository',
+    )
 
     try {
       const response = await fetch(`https://api.github.com/orgs/${options.org}/repos`, {
@@ -122,12 +132,15 @@ export class GitHubService {
 
       if (!response.ok) {
         const error = await response.text()
-        log('Organization repository creation failed', {
-          status: response.status,
-          statusText: response.statusText,
-          error: error,
-          endpoint: `https://api.github.com/orgs/${options.org}/repos`,
-        })
+        log.error(
+          {
+            status: response.status,
+            statusText: response.statusText,
+            error: error,
+            endpoint: `https://api.github.com/orgs/${options.org}/repos`,
+          },
+          'organization repository creation failed',
+        )
 
         if (response.status === 403) {
           return {
@@ -144,14 +157,14 @@ export class GitHubService {
       }
 
       const repository = (await response.json()) as GitHubRepository
-      log(`Successfully created repository: ${repository.html_url}`)
+      log.info({ url: repository.html_url }, 'organization repository created')
 
       return {
         success: true,
         repository,
       }
     } catch (error) {
-      log('Failed to create organization repository', error)
+      log.error({ err: error }, 'failed to create organization repository')
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',

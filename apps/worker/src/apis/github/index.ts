@@ -4,6 +4,9 @@ export * from './types'
 
 import { db } from '@/lib/db'
 import { createGitHubApp } from './GitHubApp'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('github')
 
 /** Get valid GitHub token for user, auto-refreshing if expired */
 export async function getValidUserToken(userId: string): Promise<string | null> {
@@ -43,10 +46,10 @@ export async function getValidUserToken(userId: string): Promise<string | null> 
       .where('id', '=', row.id)
       .execute()
 
-    console.log('[github] Token refreshed for user', userId)
+    log.info({ userId }, 'token refreshed')
     return token
   } catch (err) {
-    console.error('[github] Token refresh failed', err)
+    log.error({ err }, 'token refresh failed')
     return null
   }
 }

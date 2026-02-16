@@ -7,8 +7,9 @@ import { refreshToken } from '@octokit/oauth-methods'
 import { Octokit } from '@octokit/rest'
 import { createPrivateKey } from 'node:crypto'
 import { config } from '@/lib/config'
+import { createLogger } from '@/lib/logger'
 
-const log = (msg: string, data?: unknown) => console.log(`[GitHubApp] ${msg}`, data ?? '')
+const log = createLogger('github-app')
 
 /**
  * Convert PKCS#1 key to PKCS#8 format (GitHub generates PKCS#1, but octokit needs PKCS#8)
@@ -121,20 +122,20 @@ export class GitHubApp {
 
       const expectedSignature = await this.hmacSign(data)
       if (signature !== expectedSignature) {
-        log('State signature mismatch')
+        log.warn('state signature mismatch')
         return null
       }
 
       const payload = JSON.parse(data) as StatePayload
 
       if (payload.exp < Math.floor(Date.now() / 1000)) {
-        log('State expired')
+        log.warn('state expired')
         return null
       }
 
       return payload
     } catch (err) {
-      log('Failed to verify state', err)
+      log.error({ err }, 'failed to verify state')
       return null
     }
   }
@@ -227,7 +228,7 @@ export function createGitHubApp(): GitHubApp | null {
   const cfg = config.github
 
   if (!cfg.appId || !cfg.appPrivateKey || !cfg.appSlug || !cfg.stateSecret) {
-    log('GitHub App not configured - missing environment variables')
+    log.warn('GitHub App not configured - missing environment variables')
     return null
   }
 

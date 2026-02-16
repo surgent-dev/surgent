@@ -70,7 +70,7 @@ git.get('/:id/git/log', zValidator('param', idParam), async (c) => {
         const { token } = await githubApp.getInstallationToken(gh.installationId)
         authUrl = `https://x-access-token:${token}@github.com/${gh.repoOwner}/${gh.repoName}.git`
       } catch (err) {
-        console.warn('[git/log] Failed to get token:', err)
+        c.var.logger.warn({ err }, 'failed to get token')
       }
     }
   }
@@ -163,7 +163,7 @@ echo "PUSHED_END"
 
     return c.json<GitLogResult>({ initialized: true, commits, branch, ahead, behind })
   } catch (err) {
-    console.error('[git/log] error:', err)
+    c.var.logger.error({ err }, 'git log error')
     return c.json(emptyResult)
   }
 })
@@ -238,7 +238,7 @@ echo "STATUS_END"
       modified: [...new Set([...staged, ...unstaged])],
     })
   } catch (err) {
-    console.error('[git/status] error:', err)
+    c.var.logger.error({ err }, 'git status error')
     return c.json({ initialized: false })
   }
 })
@@ -281,7 +281,7 @@ echo "SHA:$(git rev-parse HEAD)"
       const shaMatch = res.output?.match(/SHA:([a-f0-9]+)/)
       return c.json({ success: true, sha: shaMatch?.[1] })
     } catch (err) {
-      console.error('[git/commit]', err)
+      c.var.logger.error({ err }, 'git commit error')
       return c.json(
         { success: false, error: err instanceof Error ? err.message : 'Commit failed' },
         500,
@@ -358,7 +358,7 @@ exit $EXIT_CODE
 
     return c.json({ success: true, sha })
   } catch (err) {
-    console.error('[git/push]', err)
+    c.var.logger.error({ err }, 'git push error')
     return c.json(
       { success: false, error: err instanceof Error ? err.message : 'Push failed' },
       500,
@@ -419,7 +419,7 @@ exit $EXIT_CODE
     const shaMatch = res.output?.match(/SHA:([a-f0-9]+)/)
     return c.json({ success: true, sha: shaMatch?.[1] })
   } catch (err) {
-    console.error('[git/pull]', err)
+    c.var.logger.error({ err }, 'git pull error')
     return c.json(
       { success: false, error: err instanceof Error ? err.message : 'Pull failed' },
       500,

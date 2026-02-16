@@ -1,6 +1,9 @@
 import { inngest } from '../client'
 import { deployProject } from '@/controllers/projects'
 import * as ProjectService from '@/services/projects'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('inngest')
 
 // ---------------------------------------------------------------------------
 // Event type
@@ -35,11 +38,7 @@ export const deployProjectFn = inngest.createFunction(
         finishedAt: new Date(),
       }).catch(() => {})
 
-      console.error('[inngest:onFailure] deployment failed', {
-        projectId,
-        deploymentId,
-        errorMessage,
-      })
+      log.error({ projectId, deploymentId, errorMessage }, 'deployment failed (onFailure)')
     },
   },
   { event: 'project/deploy.requested' },

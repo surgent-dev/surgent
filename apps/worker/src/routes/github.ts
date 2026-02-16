@@ -72,7 +72,7 @@ github.get('/callback', async (c) => {
         )
         .execute()
 
-      console.log('[github] Installation saved', { installationId, account: account.login })
+      c.var.logger.info({ installationId, account: account.login }, 'installation saved')
     }
 
     // Save OAuth token (upsert by userId)
@@ -108,7 +108,7 @@ github.get('/callback', async (c) => {
         )
         .execute()
 
-      console.log('[github] OAuth token saved', { userId })
+      c.var.logger.info({ userId }, 'OAuth token saved')
     }
 
     // Redirect back to app
@@ -118,7 +118,7 @@ github.get('/callback', async (c) => {
 
     return c.redirect(redirect)
   } catch (err) {
-    console.error('[github] Callback failed', err)
+    c.var.logger.error({ err }, 'callback failed')
     return c.text('Failed to process installation', 500)
   }
 })
@@ -145,7 +145,7 @@ github.post('/webhook', async (c) => {
   }
 
   const payload = JSON.parse(body)
-  console.log('[github] Webhook received', { event, action: payload.action })
+  c.var.logger.info({ event, action: payload.action }, 'webhook received')
 
   try {
     if (event === 'installation' && payload.action === 'deleted') {
@@ -154,12 +154,12 @@ github.post('/webhook', async (c) => {
         .deleteFrom('github_installations')
         .where('installationId', '=', installationId)
         .execute()
-      console.log('[github] Installation deleted', { installationId })
+      c.var.logger.info({ installationId }, 'installation deleted')
     }
 
     return c.text('OK')
   } catch (err) {
-    console.error('[github] Webhook handler failed', { event, error: err })
+    c.var.logger.error({ event, err }, 'webhook handler failed')
     return c.text('Handler failed', 500)
   }
 })

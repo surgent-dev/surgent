@@ -52,7 +52,7 @@ upload.post('/', requireAuth, async (c) => {
 
   await storage.upload(key, buffer, file.type)
 
-  console.log('[upload]', { key, size: file.size, type: file.type })
+  c.var.logger.info({ key, size: file.size, type: file.type }, 'file uploaded')
 
   const url = storage.getPublicUrl(key) || (await storage.getSignedUrl(key))
 
