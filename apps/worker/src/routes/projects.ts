@@ -551,7 +551,7 @@ projects.patch(
     const { id } = c.req.valid('param')
     const body = c.req.valid('json')
 
-    const project = await getProjectWithAuth(id, c.get('user')!)
+    await getProjectWithAuth(id, c.get('user')!)
 
     const updates: Record<string, any> = { updatedAt: new Date() }
     if (body.name !== undefined) updates.name = body.name
@@ -719,7 +719,7 @@ projects.post(
         deployName,
       })
 
-      const project = await getProjectWithAuth(id, c.get('user')!)
+      await getProjectWithAuth(id, c.get('user')!)
       const publishAccess = await auth.api.check({
         body: { featureId: 'publish_your_app' },
         headers: c.req.raw.headers,
@@ -820,7 +820,7 @@ projects.post('/:id/undeploy', zValidator('param', idParam), async (c) => {
       userId: c.get('user')?.id,
     })
 
-    const project = await getProjectWithAuth(id, c.get('user')!)
+    await getProjectWithAuth(id, c.get('user')!)
 
     undeployProject({ projectId: id }).catch((err) => {
       console.error('[undeploy] background failed', {
@@ -848,7 +848,7 @@ projects.post(
   async (c) => {
     const { id } = c.req.valid('param')
     const { versionId } = c.req.valid('json')
-    const project = await getProjectWithAuth(id, c.get('user')!)
+    await getProjectWithAuth(id, c.get('user')!)
 
     try {
       await redeployVersion({ projectId: id, versionId })
@@ -878,7 +878,7 @@ projects.post(
         name,
       })
 
-      const project = await getProjectWithAuth(id, c.get('user')!)
+      await getProjectWithAuth(id, c.get('user')!)
 
       const sanitized = sanitizeHostname(name)
 
@@ -936,7 +936,7 @@ projects.post(
 // POST /projects/:id/activate - Resume project sandbox (alias)
 projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const project = await getProjectWithAuth(id, c.get('user')!)
+  await getProjectWithAuth(id, c.get('user')!)
 
   const sandboxRow = await db
     .selectFrom('sandbox')
@@ -954,7 +954,7 @@ projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
 // GET /projects/:id/logs - Get PM2 logs from sandbox
 projects.get('/:id/logs', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const project = await getProjectWithAuth(id, c.get('user')!)
+  await getProjectWithAuth(id, c.get('user')!)
 
   try {
     const logs = await getSandboxLogs({ projectId: id })
@@ -1058,7 +1058,7 @@ async function getConvexCredentials(
 // POST /projects/:id/convex/deploy/prod - Promote to production
 projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const project = await getProjectWithAuth(id, c.get('user')!)
+  await getProjectWithAuth(id, c.get('user')!)
 
   await deployConvexProd({ projectId: id })
   return c.json({ deployed: true })
@@ -1067,7 +1067,7 @@ projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c)
 // GET /projects/:id/convex/env - List deployment environment variables
 projects.get('/:id/convex/env', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
-  const project = await getProjectWithAuth(id, c.get('user')!)
+  await getProjectWithAuth(id, c.get('user')!)
 
   const creds = await getConvexCredentials(id, 'development')
   if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
@@ -1085,7 +1085,7 @@ projects.post(
     const { id } = c.req.valid('param')
     const { vars } = c.req.valid('json')
 
-    const project = await getProjectWithAuth(id, c.get('user')!)
+    await getProjectWithAuth(id, c.get('user')!)
 
     const creds = await getConvexCredentials(id, 'development')
     if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
@@ -1104,7 +1104,7 @@ projects.get(
     const { id } = c.req.valid('param')
     const { env = 'development' } = c.req.valid('query')
 
-    const project = await getProjectWithAuth(id, c.get('user')!)
+    await getProjectWithAuth(id, c.get('user')!)
 
     const creds = await getConvexCredentials(id, env)
     if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
@@ -1112,24 +1112,6 @@ projects.get(
     return c.json(buildDashboardCredentials(creds))
   },
 )
-
-function isOriginTrusted(origin: string, trustedOrigins: string[]): boolean {
-  try {
-    const originUrl = new URL(origin)
-    const originHost = `${originUrl.protocol}//${originUrl.host}`.toLowerCase()
-    return trustedOrigins.some((trusted) => {
-      try {
-        const trustedUrl = new URL(trusted)
-        const trustedHost = `${trustedUrl.protocol}//${trustedUrl.host}`.toLowerCase()
-        return originHost === trustedHost
-      } catch {
-        return false
-      }
-    })
-  } catch {
-    return false
-  }
-}
 
 // ============================================
 // GitHub Integration Endpoints
@@ -1187,7 +1169,7 @@ projects.get('/:id/github/install-url', zValidator('param', idParam), async (c) 
   const { id } = c.req.valid('param')
   const userId = c.get('user')!.id
 
-  const project = await getProjectWithAuth(id, c.get('user')!)
+  await getProjectWithAuth(id, c.get('user')!)
 
   const githubApp = createGitHubApp()
   if (!githubApp) return c.json({ error: 'GitHub App not configured' }, 500)
@@ -1245,7 +1227,7 @@ projects.post(
     const { owner, repo, repoId, defaultBranch } = c.req.valid('json')
     const userId = c.get('user')!.id
 
-    const project = await getProjectWithAuth(id, c.get('user')!)
+    await getProjectWithAuth(id, c.get('user')!)
 
     const installation = await db
       .selectFrom('github_installations')
@@ -1347,7 +1329,7 @@ projects.post(
     const { name, description, private: isPrivate, installationId } = c.req.valid('json')
     const userId = c.get('user')!.id
 
-    const project = await getProjectWithAuth(id, c.get('user')!)
+    await getProjectWithAuth(id, c.get('user')!)
 
     const installation = installationId
       ? await db

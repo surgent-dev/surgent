@@ -2,33 +2,16 @@ import { NonRetriableError } from 'inngest'
 import { inngest } from '../client'
 import { config } from '@/lib/config'
 import { getProvider, workspacePath, defaultProviderName } from '@/lib/sandbox'
+import { shellQuote, buildBashCommand, validateProcessName, validateDevScript } from '@/lib/utils'
 import * as ProjectService from '@/services/projects'
 import path from 'path'
 import stripJsonComments from 'strip-json-comments'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('inngest')
 
 const posix = path.posix
 const PREVIEW_PORT = 3000
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\"'\"'")}'`
-}
-
-function buildBashCommand(cwd: string, script: string): string {
-  return `bash -lc '${['set -euo pipefail', `cd ${shellQuote(cwd)}`, script].join('\n').replace(/'/g, "'\"'\"'")}'`
-}
-
-function validateProcessName(name: string): void {
-  if (!/^[a-zA-Z0-9._-]{1,64}$/.test(name)) {
-    throw new Error('Invalid process name: must match ^[a-zA-Z0-9._-]{1,64}$')
-  }
-}
-
-function validateDevScript(command: string): void {
-  const safe = /^(bun(x)?|npm|pnpm|yarn)\s+(run\s+)?[a-zA-Z0-9_:.-]+(\s+--[a-zA-Z0-9_=-]*)*$/
-  if (!safe.test(command.trim())) {
-    throw new Error('Invalid dev script: only package manager run commands allowed')
-  }
-}
 
 async function getProjectEnvVars(projectId: string, environment: string) {
   const rows = await ProjectService.getEnvVarsByProjectId(projectId, environment)
@@ -76,7 +59,7 @@ export const createProjectFn = inngest.createFunction(
       // Mark project as failed
       await ProjectService.updateProjectStatus(projectId, 'failed', errorMessage).catch(() => {})
 
-      console.error('[inngest:onFailure] project creation failed', { projectId, errorMessage })
+      log.error({ projectId, errorMessage }, 'project creation failed (onFailure)')
     },
   },
   { event: 'project/create.requested' },
@@ -109,7 +92,7 @@ export const createProjectFn = inngest.createFunction(
       const sandbox = await provider.create(opencodeEnv, 'server')
       const previewUrl = await sandbox.host(PREVIEW_PORT)
 
-      console.log('[inngest] sandbox created:', sandbox.id, 'provider:', defaultProviderName)
+      log.info({ sandboxId: sandbox.id, provider: defaultProviderName }, 'sandbox created')
 
       return { sandboxId: sandbox.id, previewUrl }
     })
@@ -126,7 +109,7 @@ export const createProjectFn = inngest.createFunction(
 
       // Clone repo
       if (githubUrl) {
-        console.log('[inngest] cloning template...')
+        log.info('cloning template')
         await sandbox.clone(githubUrl, workingDirectory)
         const reset = await sandbox.exec(
           buildBashCommand(workingDirectory, 'rm -rf .git && git init -b main'),
@@ -144,9 +127,9 @@ export const createProjectFn = inngest.createFunction(
         initScript = cfg?.scripts?.init
         devScript = cfg?.scripts?.dev
         if (cfg?.name?.trim()) processName = cfg.name.trim()
-        console.log('[inngest] config:', { initScript, devScript, processName })
+        log.info({ initScript, devScript, processName }, 'config loaded')
       } catch {
-        console.log('[inngest] no surgent.json or parse error')
+        log.debug('no surgent.json or parse error')
       }
 
       // Run init script
@@ -225,7 +208,7 @@ export const createProjectFn = inngest.createFunction(
           `Failed to start opencode server (exit ${pm2Opencode.code}): ${pm2Opencode.output}`,
         )
       }
-      console.log('[inngest] opencode server started')
+      log.info('opencode server started')
     })
 
     // -----------------------------------------------------------------------
@@ -249,7 +232,7 @@ export const createProjectFn = inngest.createFunction(
       })
       await ProjectService.updateProjectStatus(projectId, 'ready')
 
-      console.log('[inngest] project ready', { projectId })
+      log.info({ projectId }, 'project ready')
     })
 
     return { projectId, sandboxId: sandboxResult.sandboxId, previewUrl: sandboxResult.previewUrl }
