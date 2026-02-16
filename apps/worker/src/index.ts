@@ -1,5 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { requestId } from 'hono/request-id'
+import { pinoLogger } from 'hono-pino'
 import { HttpError } from './lib/errors'
 import projects from './routes/projects'
 import git from './routes/git'
@@ -10,6 +12,7 @@ import github from './routes/github'
 import mcp from './routes/mcp'
 import admin from './routes/admin'
 import providers from './routes/providers'
+import pay from './routes/pay'
 import { serve as serveInngest } from 'inngest/hono'
 import { inngest, functions as inngestFunctions } from './inngest'
 import { auth } from './lib/auth'
@@ -21,6 +24,10 @@ import {
   oauthProviderOpenIdConfigMetadata,
 } from '@better-auth/oauth-provider'
 import type { AppContext } from '@/types/application'
+import { startBoss, stopBoss } from '@/lib/pay/queue'
+import { logger, createLogger } from '@/lib/logger'
+
+const log = createLogger('server')
 
 function isPreviewSubdomain(sub: string): boolean {
   return sub.startsWith('preview-') || /^\d+-/.test(sub)
@@ -54,7 +61,7 @@ app.onError((err, c) => {
   if (err instanceof HttpError) {
     return c.json({ error: err.message }, err.status as 400 | 401 | 403 | 404 | 500)
   }
-  console.error('[server] unhandled error:', err)
+  log.error({ err }, 'unhandled error')
   return c.json({ error: 'Internal Server Error' }, 500)
 })
 
@@ -71,6 +78,38 @@ app.use(
     exposeHeaders: ['Content-Length', 'Content-Disposition'],
     maxAge: 600,
     credentials: true,
+  }),
+)
+
+app.use('*', requestId())
+app.use(
+  '*',
+  pinoLogger({
+    pino: logger,
+    http: {
+      referRequestIdKey: 'requestId',
+      onReqMessage: false,
+      onReqBindings: () => ({}),
+      onResBindings: () => ({}),
+      onResMessage: (c) => {
+        const p = c.req.path
+        let tag = ''
+        if (p.startsWith('/api/pay/webhooks/')) {
+          const env = p.split('/')[5] || ''
+          tag = `[WEBHOOK:whop:${env}] `
+        } else if (p.startsWith('/api/agent/')) tag = '[AGENT] '
+        else if (p.startsWith('/api/projects/')) tag = '[PROJECT] '
+        else if (p.startsWith('/api/pay/')) tag = '[PAY] '
+        else if (p.startsWith('/api/github/')) tag = '[GITHUB] '
+        else if (p.startsWith('/api/auth/')) tag = '[AUTH] '
+        else if (p.startsWith('/api/upload/')) tag = '[UPLOAD] '
+        else if (p.startsWith('/api/mcp/') || p.startsWith('/mcp/')) tag = '[MCP] '
+        else if (p.startsWith('/api/admin/')) tag = '[ADMIN] '
+        else if (p.startsWith('/api/inngest')) tag = '[INNGEST] '
+        else if (p.startsWith('/preview')) tag = '[PREVIEW] '
+        return `${tag}${c.req.method} ${p} ${c.res.status}`
+      },
+    },
   }),
 )
 
@@ -147,6 +186,7 @@ app.route('/api/github', github)
 app.route('/api/mcp', mcp)
 app.route('/api/admin', admin)
 app.route('/api/providers', providers)
+app.route('/api/pay', pay)
 app.route('/mcp', mcp)
 app.route('/preview', preview)
 
@@ -154,25 +194,26 @@ app.route('/preview', preview)
 const port = Number(config.server.port)
 
 ;(async () => {
-  console.log('🔄 Running migrations...')
+  log.info('running migrations')
   const result = await migrate(db)
   const { error, results } = result
 
   results?.forEach((it) => {
     if (it.status === 'Success') {
-      console.log(`✅ Migration "${it.migrationName}" was executed successfully`)
+      log.info({ migration: it.migrationName }, 'migration executed successfully')
     } else if (it.status === 'Error') {
-      console.error(`❌ Failed to execute migration "${it.migrationName}"`)
+      log.error({ migration: it.migrationName }, 'migration failed')
     }
   })
 
   if (error) {
-    console.error('💥 Failed to run migrations on startup')
-    console.error(error)
+    log.fatal({ err: error }, 'failed to run migrations on startup')
     process.exit(1)
   }
 
-  console.log('🎉 Migrations completed successfully')
+  log.info('migrations completed successfully')
+
+  await startBoss()
 
   const host = config.server.host
 
@@ -182,5 +223,17 @@ const port = Number(config.server.port)
     fetch: (req) => app.fetch(req),
   })
 
-  console.log(`[worker] listening on http://${host}:${port}`)
+  log.info({ host, port }, 'listening')
+
+  const shutdown = async (signal: string) => {
+    log.info({ signal }, 'shutting down')
+    try {
+      await stopBoss()
+    } catch (e) {
+      log.error({ err: e }, 'stopBoss error')
+    }
+    process.exit(0)
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
 })()
