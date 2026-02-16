@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import {
   CreditCard,
   Loader2,
@@ -20,7 +21,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { payHttp } from '@/lib/http'
 import { cn } from '@/lib/utils'
-import { authClient } from '@/lib/auth-client'
 import { formatPrice, formatInterval } from './utils'
 import type { Product, ProductWithPrices, ProductPrice } from '@/queries/products'
 
@@ -29,23 +29,23 @@ function PriceRow({ price }: { price: ProductPrice }) {
   const isRecurring = !!price.recurringInterval
 
   return (
-    <div className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors group">
+    <div className="flex items-center justify-between py-1.5 px-2 rounded-md">
       <div className="flex items-center gap-2 min-w-0">
         <div
           className={cn(
             'size-1.5 rounded-full shrink-0',
-            isRecurring ? 'bg-brand' : 'bg-muted-foreground',
+            isRecurring ? 'bg-foreground' : 'bg-muted-foreground/50',
           )}
         />
-        <span className="text-xs text-muted-foreground truncate">
+        <span className="text-[12px] text-muted-foreground truncate">
           {price.name || (isRecurring ? 'Recurring' : 'One-time')}
         </span>
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="text-sm font-medium tabular-nums">
+        <span className="text-[13px] font-medium tabular-nums">
           {formatPrice(price.priceAmount, price.priceCurrency)}
         </span>
-        {interval && <span className="text-xs text-muted-foreground">{interval}</span>}
+        {interval && <span className="text-[11px] text-muted-foreground">{interval}</span>}
       </div>
     </div>
   )
@@ -62,88 +62,69 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
   const { product, prices } = item
   const hasRecurring = prices.some((p) => p.recurringInterval)
   const hasOneTime = prices.some((p) => !p.recurringInterval)
+  const [creating, setCreating] = useState(false)
 
   const handleCreateCheckout = async (priceId?: string) => {
     const selectedPriceId = priceId || prices[0]?.id
     if (!selectedPriceId) return
 
+    setCreating(true)
     try {
-      // Get current user session
-      const session = await authClient.getSession()
-      const user = session.data?.user
-
-      if (!user?.id) {
-        toast.error('Please sign in to checkout')
-        return
-      }
-
-      const redirectUrl =
-        window.location.protocol === 'https:'
-          ? window.location.href
-          : 'https://example.com/checkout-complete'
-
       const response = await payHttp
         .post('checkout', {
-          searchParams: { projectId },
           json: {
-            customerId: user.id,
-            productId: product.id,
+            projectId,
             priceId: selectedPriceId,
-            successUrl: redirectUrl,
-            cancelUrl: redirectUrl,
-            customerData: {
-              email: user.email || undefined,
-              name: user.name || undefined,
-            },
           },
         })
-        .json<{ checkoutUrl: string }>()
-      window.open(response.checkoutUrl, '_blank')
+        .json<{ id: string; purchaseUrl: string | null }>()
+
+      if (!response.purchaseUrl) {
+        throw new Error('Checkout URL missing')
+      }
+      window.location.href = response.purchaseUrl
     } catch (error) {
       toast.error(
         'Failed to create checkout: ' + (error instanceof Error ? error.message : 'Unknown error'),
       )
+    } finally {
+      setCreating(false)
     }
   }
 
   return (
     <div
       className={cn(
-        'group rounded-xl border bg-card overflow-hidden transition-all duration-200 hover:shadow-md hover:border-border/80',
+        'group rounded-xl border bg-card overflow-hidden transition-colors',
         product.isArchived && 'opacity-50',
       )}
     >
       <div className="p-4 pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <h4 className="font-semibold truncate mb-0.5">{product.name}</h4>
-            <div className="flex items-center gap-1.5">
+            <h4 className="text-[14px] font-semibold truncate">{product.name}</h4>
+            <div className="flex items-center gap-1.5 mt-1">
               {hasRecurring && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-brand font-medium">
+                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-medium px-1.5 py-0.5 rounded-md bg-muted/60">
                   <RefreshCw className="size-2.5" />
-                  Subscription
+                  Recurring
                 </span>
               )}
               {hasOneTime && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
+                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-medium px-1.5 py-0.5 rounded-md bg-muted/60">
                   <Zap className="size-2.5" />
                   One-time
-                </span>
-              )}
-              {product.isArchived && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                  Archived
                 </span>
               )}
             </div>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="size-7 flex items-center justify-center rounded-md hover:bg-muted transition-colors">
+              <button className="size-7 flex items-center justify-center rounded-md hover:bg-muted/50 transition-colors opacity-0 group-hover:opacity-100">
                 <MoreHorizontal className="size-4 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuContent align="end" className="w-36">
               <DropdownMenuItem onClick={() => onEdit(product)} className="gap-2 text-xs">
                 <Pencil className="size-3" />
                 Edit
@@ -156,37 +137,48 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
           </DropdownMenu>
         </div>
         {product.description && (
-          <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{product.description}</p>
+          <p className="text-[12px] text-muted-foreground mt-2 line-clamp-2">
+            {product.description}
+          </p>
         )}
       </div>
 
-      <div className="px-3 pb-3">
-        {prices.length > 0 ? (
-          <div className="rounded-lg border bg-muted/20 divide-y">
+      {prices.length > 0 ? (
+        <div className="px-3 pb-3">
+          <div className="rounded-lg border bg-muted/20 p-1">
             {prices.map((price) => (
               <PriceRow key={price.id} price={price} />
             ))}
           </div>
-        ) : (
+        </div>
+      ) : (
+        <div className="px-3 pb-3">
           <button
             onClick={() => onAddPrice(item)}
-            className="w-full flex items-center justify-center gap-1.5 py-3 rounded-lg border border-dashed text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-dashed text-[12px] text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
           >
-            <Plus className="size-3.5" />
-            Add pricing to publish
+            <Plus className="size-3" />
+            Add pricing
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="px-4 py-2.5 border-t bg-muted/30 flex items-center justify-between gap-2">
-        <code className="text-[10px] text-muted-foreground font-mono truncate">{product.slug}</code>
+      <div className="px-4 py-2 border-t flex items-center justify-between gap-2">
+        <code className="text-[10px] text-muted-foreground/70 font-mono truncate">
+          {product.slug}
+        </code>
         {prices.length > 0 && (
           <button
             onClick={() => handleCreateCheckout()}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md bg-brand text-brand-foreground hover:bg-brand/90 transition-colors"
+            disabled={creating}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <CreditCard className="size-3" />
-            Checkout
+            {creating ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <CreditCard className="size-3" />
+            )}
+            {creating ? 'Creating...' : 'Checkout'}
           </button>
         )}
       </div>
@@ -214,10 +206,7 @@ export function ProductsView({
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="size-8 text-muted-foreground animate-spin mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Loading products...</p>
-        </div>
+        <Loader2 className="size-5 text-muted-foreground animate-spin" />
       </div>
     )
   }
@@ -225,19 +214,19 @@ export function ProductsView({
   if (products.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
-        <div className="text-center max-w-sm">
-          <div className="rounded-2xl bg-muted/50 p-5 inline-block mb-4">
-            <Package className="size-10 text-muted-foreground" strokeWidth={1.5} />
+        <div className="text-center max-w-xs">
+          <div className="size-12 rounded-xl bg-muted/50 border grid place-items-center mx-auto mb-4">
+            <Package className="size-5 text-muted-foreground" strokeWidth={1.5} />
           </div>
-          <h3 className="text-lg font-semibold mb-1">No products yet</h3>
-          <p className="text-sm text-muted-foreground mb-4">
+          <h3 className="text-[15px] font-semibold mb-1">No products yet</h3>
+          <p className="text-[13px] text-muted-foreground mb-4">
             Create your first product to start accepting payments
           </p>
           <button
             onClick={onCreateProduct}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground font-medium text-sm hover:bg-brand/90 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-foreground text-background font-medium text-[13px] hover:bg-foreground/90 transition-colors"
           >
-            <Plus className="size-4" />
+            <Plus className="size-3.5" />
             Create Product
           </button>
         </div>
@@ -247,8 +236,8 @@ export function ProductsView({
 
   return (
     <ScrollArea className="flex-1">
-      <div className="p-4">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mx-auto w-full max-w-[1080px] p-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {products.map((item) => (
             <ProductCard
               key={item.product.id}

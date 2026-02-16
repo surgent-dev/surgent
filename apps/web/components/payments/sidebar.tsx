@@ -1,10 +1,26 @@
 'use client'
 
 import Image from 'next/image'
-import { LayoutDashboard, Package, Users, Receipt, Settings, Wallet } from 'lucide-react'
+import {
+  ArrowUpRight,
+  FlaskConical,
+  LayoutDashboard,
+  Package,
+  Repeat,
+  Users,
+  Receipt,
+  Settings,
+  Wallet,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export type ViewType = 'dashboard' | 'products' | 'customers' | 'transactions' | 'settings'
+export type ViewType =
+  | 'dashboard'
+  | 'products'
+  | 'subscriptions'
+  | 'customers'
+  | 'transactions'
+  | 'settings'
 
 export interface AccountData {
   email?: string
@@ -19,35 +35,38 @@ interface NavItemProps {
   active: boolean
   onClick: () => void
   badge?: number | string
+  trailingIcon?: React.ElementType
   disabled?: boolean
 }
 
-function NavItem({ icon: Icon, label, active, onClick, badge, disabled }: NavItemProps) {
+function NavItem({
+  icon: Icon,
+  label,
+  active,
+  onClick,
+  badge,
+  trailingIcon: TrailingIcon,
+  disabled,
+}: NavItemProps) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all',
+        'w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium transition-colors',
         active
-          ? 'bg-muted text-foreground'
-          : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
+          ? 'bg-foreground/[0.06] text-foreground'
+          : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04]',
         disabled &&
-          'opacity-50 cursor-not-allowed hover:text-muted-foreground hover:bg-transparent',
+          'opacity-40 cursor-not-allowed hover:text-muted-foreground hover:bg-transparent',
       )}
     >
-      <Icon className="size-4 shrink-0" strokeWidth={2} />
+      <Icon className="size-[15px] shrink-0" strokeWidth={active ? 2 : 1.75} />
       <span className="flex-1 text-left truncate">{label}</span>
       {badge !== undefined && (
-        <span
-          className={cn(
-            'text-xs tabular-nums px-1.5 py-0.5 rounded-md min-w-[20px] text-center font-medium',
-            active ? 'bg-background text-muted-foreground' : 'bg-muted text-muted-foreground',
-          )}
-        >
-          {badge}
-        </span>
+        <span className="text-[11px] tabular-nums text-muted-foreground font-normal">{badge}</span>
       )}
+      {!badge && TrailingIcon && <TrailingIcon className="size-3.5 text-muted-foreground" />}
     </button>
   )
 }
@@ -56,10 +75,11 @@ interface SidebarProps {
   view: ViewType
   setView: (view: ViewType) => void
   productCount: number
+  subscriptionCount: number
   customerCount: number
   transactionCount: number
-  stripeConnected: boolean
-  stripeProcessor?: string
+  isConnected: boolean
+  processor?: string
   accountData?: AccountData
   onOpenPayoutsPortal?: () => void
   isOpeningPayoutsPortal?: boolean
@@ -69,44 +89,40 @@ export function Sidebar({
   view,
   setView,
   productCount,
+  subscriptionCount,
   customerCount,
   transactionCount,
-  stripeConnected,
-  stripeProcessor,
+  isConnected,
+  processor,
   accountData,
   onOpenPayoutsPortal,
   isOpeningPayoutsPortal,
 }: SidebarProps) {
-  const showPayouts = stripeConnected && stripeProcessor === 'whop' && onOpenPayoutsPortal
+  const showPayouts = isConnected && processor === 'whop' && onOpenPayoutsPortal
 
   return (
-    <div className="w-52 shrink-0 border-r bg-muted/10 flex flex-col">
-      <div className="p-4 border-b">
+    <div className="w-52 shrink-0 border-r flex flex-col">
+      <div className="px-4 pt-4 pb-3">
         <div className="flex items-center gap-2.5">
-          {stripeProcessor === 'whop' ? (
-            <div className="size-8 rounded-lg bg-[#FF6243] grid place-items-center">
-              <Image
-                src="/whop_logo_brandmark_orange.svg"
-                alt="Whop"
-                width={18}
-                height={9}
-                className="brightness-0 invert"
-              />
-            </div>
-          ) : (
-            <div className="size-8 rounded-lg overflow-hidden">
-              <Image src="/Stripe_icon_-_square.svg" alt="Stripe" width={32} height={32} />
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate">{accountData?.title || 'Payments'}</p>
-            <p className="text-[11px] text-muted-foreground capitalize">
-              {stripeConnected ? stripeProcessor || 'Stripe' : 'Not connected'}
+          <div className="size-8 rounded-lg border bg-background grid place-items-center overflow-hidden shrink-0">
+            <Image src="/surpay-coin.svg" alt="Surgent" width={22} height={22} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Company</p>
+            <p className="text-[13px] font-semibold truncate leading-tight">
+              {accountData?.title || 'Payments'}
             </p>
           </div>
         </div>
+        <div className="mt-2.5 flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 w-fit">
+          <FlaskConical className="size-3 text-amber-600" strokeWidth={2} />
+          <span className="text-[11px] font-medium text-amber-600">Sandbox</span>
+        </div>
       </div>
-      <div className="flex-1 p-2 space-y-0.5">
+
+      <div className="h-px bg-border mx-4" />
+
+      <nav className="flex-1 px-3 py-3 space-y-0.5">
         <NavItem
           icon={LayoutDashboard}
           label="Dashboard"
@@ -119,6 +135,13 @@ export function Sidebar({
           active={view === 'products'}
           onClick={() => setView('products')}
           badge={productCount > 0 ? productCount : undefined}
+        />
+        <NavItem
+          icon={Repeat}
+          label="Subscriptions"
+          active={view === 'subscriptions'}
+          onClick={() => setView('subscriptions')}
+          badge={subscriptionCount > 0 ? subscriptionCount : undefined}
         />
         <NavItem
           icon={Users}
@@ -134,11 +157,15 @@ export function Sidebar({
           onClick={() => setView('transactions')}
           badge={transactionCount > 0 ? transactionCount : undefined}
         />
+
+        <div className="h-px bg-border my-2 !mx-0" />
+
         {showPayouts && (
           <NavItem
             icon={Wallet}
-            label="Payout Portal"
+            label="Payouts"
             active={false}
+            trailingIcon={ArrowUpRight}
             onClick={() => onOpenPayoutsPortal?.()}
             disabled={isOpeningPayoutsPortal}
           />
@@ -149,7 +176,7 @@ export function Sidebar({
           active={view === 'settings'}
           onClick={() => setView('settings')}
         />
-      </div>
+      </nav>
     </div>
   )
 }

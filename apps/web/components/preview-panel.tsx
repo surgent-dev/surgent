@@ -20,7 +20,6 @@ import {
   CreditCard,
 } from 'lucide-react'
 import Image from 'next/image'
-import { Coins } from '@phosphor-icons/react'
 import type { FileDiff } from '@opencode-ai/sdk'
 
 import {
@@ -38,6 +37,7 @@ import { useSandbox } from '@/hooks/use-sandbox'
 import DiffView from '@/components/diff/diff-view'
 import { ProductsSection } from '@/components/payments/products-section'
 import { WhopConnectDialog } from '@/components/payments/whop-connect-dialog'
+import { parseConnectError } from '@/components/payments/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   DropdownMenu,
@@ -231,16 +231,6 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
     return <LoadingState icon={CreditCard} message="Loading payment accounts..." />
   }
 
-  const showConnectError = (err: Error, fallback: string) => {
-    const msg = err?.message || ''
-    const match = msg.match(/PROCESSOR_ALREADY_CONNECTED:(\w+)/)
-    if (match) {
-      toast.error(`Already connected to ${match[1]}. Disconnect it first.`)
-    } else {
-      toast.error(fallback)
-    }
-  }
-
   const handleConnect = async () => {
     if (!projectId) return
     try {
@@ -249,7 +239,7 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
         window.location.href = result.oauthUrl
       }
     } catch (err: any) {
-      showConnectError(err, 'Failed to connect Stripe')
+      toast.error(parseConnectError(err, 'Failed to connect Stripe'))
     }
   }
 
@@ -259,43 +249,19 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
     return (
       <>
         <div className="w-full h-full flex items-center justify-center p-4">
-          <div className="flex flex-col items-center gap-4 max-w-xs text-center">
-            <div className="rounded-full bg-muted p-3">
-              <Coins className="size-6 text-muted-foreground" weight="duotone" />
+          <div className="flex flex-col items-center gap-4 max-w-xs text-center rounded-2xl border bg-card p-6 shadow-sm">
+            <div className="size-12 rounded-xl border bg-muted/40 grid place-items-center overflow-hidden">
+              <Image src="/surpay-coin.svg" alt="Surgent" width={32} height={32} />
             </div>
 
             <p className="font-semibold">Start earning</p>
 
-            <div className="flex items-center justify-center gap-3">
-              <div className="flex items-center gap-2">
-                <div className="size-8 rounded-lg overflow-hidden">
-                  <Image src="/surgent-coin.svg" alt="Surgent" width={32} height={32} />
-                </div>
-                <span className="text-sm font-medium">Surgent</span>
-              </div>
-              <span className="text-muted-foreground/40">×</span>
-              <div className="flex items-center gap-2">
-                <div className="size-8 rounded-lg bg-[#FF6243] grid place-items-center">
-                  <Image
-                    src="/whop_logo_brandmark_orange.svg"
-                    alt="Whop"
-                    width={18}
-                    height={9}
-                    className="brightness-0 invert"
-                  />
-                </div>
-                <span className="text-sm font-medium">Whop</span>
-              </div>
-            </div>
-
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Surgent partners with Whop to power payments.
-              <br />
-              Connect to start earning from your AI agents.
+              Connect your payment account to start earning from your AI agents.
             </p>
 
             <Button onClick={handleConnectWhop} className="w-full">
-              Connect Whop
+              Connect Payments
             </Button>
 
             <button
@@ -333,8 +299,8 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
       {hasConnectedAccount && projectId ? (
         <ProductsSection
           projectId={projectId}
-          stripeConnected={hasConnectedAccount}
-          stripeProcessor={connectedAccount?.processor}
+          isConnected={hasConnectedAccount}
+          processor={connectedAccount?.processor}
           accountData={connectedAccount?.data}
           accountId={connectedAccount?.id}
           onDisconnect={handleDisconnect}
@@ -491,14 +457,8 @@ function TabButton({
       }
       if (connectedProcessor === 'whop') {
         return (
-          <div className="size-4 rounded-sm bg-[#FF6243] grid place-items-center">
-            <Image
-              src="/whop_logo_brandmark_orange.svg"
-              alt="Whop"
-              width={10}
-              height={5}
-              className="brightness-0 invert"
-            />
+          <div className="size-4 rounded-sm border bg-muted/40 grid place-items-center overflow-hidden">
+            <Image src="/surpay-coin.svg" alt="Surgent" width={12} height={12} />
           </div>
         )
       }

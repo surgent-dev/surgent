@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useWhopConnect, useUserWhopAccounts, type UserSurpayAccount } from '@/queries/surpay'
+import { parseConnectError } from './utils'
 import { authClient } from '@/lib/auth-client'
 
 interface WhopConnectDialogProps {
@@ -40,16 +41,6 @@ export function WhopConnectDialog({
     (a) => a.status === 'disconnected' && a.projectId === null,
   )
 
-  const showConnectError = (err: any, fallback: string) => {
-    const msg = err?.message || ''
-    if (msg.includes('PROCESSOR_ALREADY_CONNECTED')) {
-      const processor = msg.split(':')[1] || 'another provider'
-      toast.error(`This project already has ${processor} connected`)
-    } else {
-      toast.error(fallback)
-    }
-  }
-
   const handleReconnect = async (account: UserSurpayAccount) => {
     if (!projectId) return
     try {
@@ -62,11 +53,11 @@ export function WhopConnectDialog({
           country: account.country || 'us',
         },
       })
-      toast.success('Whop connected')
+      toast.success('Payment account connected')
       onOpenChange(false)
       onSuccess?.()
     } catch (err: any) {
-      showConnectError(err, 'Failed to connect Whop')
+      toast.error(parseConnectError(err, 'Failed to connect payment account'))
     }
   }
 
@@ -89,12 +80,12 @@ export function WhopConnectDialog({
         projectId,
         data: { email, title: companyName.trim(), country: 'us' },
       })
-      toast.success('Whop connected')
+      toast.success('Payment account connected')
       onOpenChange(false)
       setCompanyName('')
       onSuccess?.()
     } catch (err: any) {
-      showConnectError(err, 'Failed to connect Whop')
+      toast.error(parseConnectError(err, 'Failed to connect payment account'))
     }
   }
 
@@ -115,7 +106,7 @@ export function WhopConnectDialog({
         {showCreate ? (
           <>
             <DialogHeader>
-              <DialogTitle>Create Whop Account</DialogTitle>
+              <DialogTitle>Create Payment Account</DialogTitle>
               <DialogDescription>Enter your company name to get started</DialogDescription>
             </DialogHeader>
             <div className="py-2">
@@ -148,7 +139,7 @@ export function WhopConnectDialog({
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Connect Whop</DialogTitle>
+              <DialogTitle>Connect Payment Account</DialogTitle>
               <DialogDescription>Select an existing account or create new</DialogDescription>
             </DialogHeader>
             <div className="space-y-2 py-2">
@@ -165,14 +156,8 @@ export function WhopConnectDialog({
                       disabled={whopConnect.isPending}
                       className="flex items-center gap-3 w-full p-3 rounded-lg border hover:bg-muted/50 transition-colors disabled:opacity-50"
                     >
-                      <div className="size-8 rounded-md bg-[#FF6243] grid place-items-center shrink-0">
-                        <Image
-                          src="/whop_logo_brandmark_orange.svg"
-                          alt="Whop"
-                          width={18}
-                          height={9}
-                          className="brightness-0 invert"
-                        />
+                      <div className="size-8 rounded-md border bg-muted/40 grid place-items-center shrink-0">
+                        <Image src="/surpay-coin.svg" alt="Surgent" width={20} height={20} />
                       </div>
                       <div className="text-left min-w-0 flex-1">
                         <div className="text-sm font-medium truncate">
