@@ -273,7 +273,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
 
               <div className="pt-5 mt-5 border-t">
                 <Button
-                  className="w-full h-11 bg-foreground text-background hover:bg-foreground/90"
+                  className="w-full h-11 rounded-md bg-primary text-primary-foreground hover:bg-primary-hover transition-all duration-100"
                   disabled={!sessionId || embedState !== 'ready' || submitting}
                   onClick={handleSubmit}
                 >

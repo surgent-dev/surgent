@@ -163,10 +163,10 @@ function LandingPrompt({
             disabled={!hasValue}
             className={`
               flex items-center justify-center
-              h-8 w-8 rounded-lg transition-all duration-150
+              h-8 w-8 rounded-md transition-all duration-100
               ${
                 hasValue
-                  ? 'bg-foreground text-background cursor-pointer hover:opacity-85 active:scale-95'
+                  ? 'bg-primary text-primary-foreground cursor-pointer hover:bg-primary-hover active:scale-95'
                   : 'bg-foreground/[0.06] text-muted-foreground/25 cursor-not-allowed'
               }
             `}
@@ -285,7 +285,7 @@ function IndexContent() {
               </Link>
               <Link
                 href="/signup"
-                className="bg-foreground text-background px-3.5 py-1.5 rounded-lg text-[13px] font-medium hover:opacity-85 transition-opacity"
+                className="bg-primary text-primary-foreground px-3.5 py-1.5 rounded-md text-[13px] font-medium hover:bg-primary-hover transition-all duration-100"
               >
                 Get started
               </Link>
