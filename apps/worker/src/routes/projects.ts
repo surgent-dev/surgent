@@ -36,10 +36,13 @@ import {
   updateProjectStatus,
   updateDeployment,
   attachApiKeyToProject,
+  upsertEnvVar,
 } from '@/services/projects'
 import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
 import { inngest } from '@/inngest'
-import type { PayEnv } from '@/lib/pay/types'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('projects')
 const projects = new Hono<AppContext>()
 
 const idParam = z.object({ id: z.string().uuid() })
@@ -642,20 +645,9 @@ projects.post(
       })
       projectId = created.id
 
-      // Determine pay env from user's active Whop account (fall back to live)
-      const payAccount = await db
-        .selectFrom('pay_account')
-        .select('env')
-        .where('userId', '=', userId)
-        .where('status', '<>', 'disconnected')
-        .orderBy('createdAt', 'desc')
-        .executeTakeFirst()
-      const payEnv: PayEnv = payAccount?.env === 'test' ? 'test' : 'live'
-      const keyPrefix = payEnv === 'test' ? 'sk_test_' : 'sk_live_'
-
-      // Create API key via Better Auth with env-aware prefix
+      // Create a test API key for development (live key is created on first deploy)
       const apiKeyResult = await auth.api.createApiKey({
-        body: { name: `p-${projectId.slice(0, 8)}`, prefix: keyPrefix },
+        body: { name: `p-${projectId.slice(0, 8)}`, prefix: 'sk_test_' },
         headers: c.req.raw.headers,
       })
 
@@ -664,10 +656,9 @@ projects.post(
         throw new Error('Failed to attach API key to project')
       }
 
-      // Set the correct pay env on the API key
       await db
         .updateTable('apikey')
-        .set({ env: payEnv })
+        .set({ env: 'test' })
         .where('id', '=', apiKeyResult.id)
         .execute()
 
@@ -738,7 +729,7 @@ projects.post(
         deployName,
       })
 
-      await getProjectWithAuth(id, c.get('user')!)
+      const project = await getProjectWithAuth(id, c.get('user')!)
       const publishAccess = await auth.api.check({
         body: { featureId: 'publish_your_app' },
         headers: c.req.raw.headers,
@@ -756,6 +747,39 @@ projects.post(
             409,
           )
         }
+      }
+
+      // Ensure a live API key exists for production
+      const existingLiveKey = await db
+        .selectFrom('env_var')
+        .select('value')
+        .where('projectId', '=', id)
+        .where('environment', '=', 'production')
+        .where('key', '=', 'SURGENT_API_KEY')
+        .executeTakeFirst()
+
+      if (!existingLiveKey?.value) {
+        const liveKeyResult = await auth.api.createApiKey({
+          body: { name: `p-${id.slice(0, 8)}-live`, prefix: 'sk_live_' },
+          headers: c.req.raw.headers,
+        })
+
+        await attachApiKeyToProject(liveKeyResult.id, id, project.organizationId)
+        await db
+          .updateTable('apikey')
+          .set({ env: 'live' })
+          .where('id', '=', liveKeyResult.id)
+          .execute()
+
+        await upsertEnvVar({
+          projectId: id,
+          environment: 'production',
+          key: 'SURGENT_API_KEY',
+          value: liveKeyResult.key,
+          destination: 'server',
+        })
+
+        log.info({ projectId: id }, 'created live API key for production')
       }
 
       const deployment = await createDeploymentRecord(id, name)

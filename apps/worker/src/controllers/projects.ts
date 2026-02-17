@@ -628,8 +628,8 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
  * Push server env vars to the production Convex deployment.
  *
  * Dev vars (PAY_API_URL, JWT_PRIVATE_KEY, JWKS …) are used as a base,
- * then prod-specific values override them — this is how the live
- * SURGENT_API_KEY replaces the test one on deploy.
+ * then prod-specific values override them (e.g. sk_live_ SURGENT_API_KEY
+ * replaces the sk_test_ one).
  */
 async function pushProdServerEnvVars(projectId: string): Promise<void> {
   const convex = await ProjectService.getIntegrationByProvider(projectId, 'convex')
