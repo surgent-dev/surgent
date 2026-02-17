@@ -546,6 +546,15 @@ pay.post(
       businessType: body.businessType || null,
     }
 
+    // Disconnect any previous account for this user+env before inserting
+    await db
+      .updateTable('pay_account')
+      .set({ status: 'disconnected', updatedAt: now })
+      .where('userId', '=', userId)
+      .where('env', '=', auth.env)
+      .where('status', '!=', 'disconnected')
+      .execute()
+
     const account = await db
       .insertInto('pay_account')
       .values({
@@ -558,15 +567,6 @@ pay.post(
         createdAt: now,
         updatedAt: now,
       })
-      .onConflict((oc) =>
-        oc.columns(['userId', 'env']).doUpdateSet({
-          whopCompanyId: company.id,
-          title: company.title,
-          status: 'connected',
-          metadata: accountMeta,
-          updatedAt: now,
-        }),
-      )
       .returningAll()
       .executeTakeFirstOrThrow()
 
