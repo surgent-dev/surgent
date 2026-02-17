@@ -61,6 +61,15 @@ app.onError((err, c) => {
   if (err instanceof HttpError) {
     return c.json({ error: err.message }, err.status as 400 | 401 | 403 | 404 | 500)
   }
+
+  // Forward upstream API errors (e.g. Whop) with their actual status and message
+  const statusCode = (err as { statusCode?: number }).statusCode
+  if (statusCode && statusCode >= 400 && statusCode < 600 && err.message) {
+    log.warn({ err, statusCode }, 'upstream API error')
+    const code = statusCode as 400 | 401 | 403 | 404 | 500
+    return c.json({ error: err.message }, code)
+  }
+
   log.error({ err }, 'unhandled error')
   return c.json({ error: 'Internal Server Error' }, 500)
 })
