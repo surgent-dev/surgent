@@ -765,7 +765,7 @@ function Todos({ part }: { part: ToolPart }) {
   const done = todos.filter((t) => t.status === 'completed').length
 
   return (
-    <div className="my-1.5 sm:my-2 p-2 sm:p-3 rounded-xl bg-muted/50 border w-full min-w-0">
+    <div className="my-1.5 p-2.5 rounded-lg bg-muted/30 w-full min-w-0">
       <div className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-sm text-muted-foreground mb-1.5 sm:mb-2">
         <ListTodo className="size-3 sm:size-4 shrink-0" />
         <span className="font-medium">
@@ -884,7 +884,7 @@ function ApiError({ error }: { error: ApiErrorInfo }) {
 
   return (
     <div
-      className={`flex items-start gap-2 py-2 px-3 rounded-lg border text-xs sm:text-sm ${isContext ? 'bg-warning/10 border-warning/20 text-warning' : 'bg-muted/50 text-muted-foreground'}`}
+      className={`flex items-start gap-2 py-2 px-3 rounded-lg text-xs ${isContext ? 'bg-warning/8 text-warning' : 'bg-muted/40 text-muted-foreground'}`}
     >
       <AlertCircle className="size-3.5 shrink-0 mt-0.5" />
       <p className="min-w-0 break-normal [overflow-wrap:break-word]">
@@ -1119,7 +1119,7 @@ export function AgentThread({
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4">
       {turns.map((turn, idx) => {
         const timeline = turn.assistants.flatMap((m) => partsMap[m.id] || [])
         const messageDiffs = getMessageDiffs(turn.user)
@@ -1162,7 +1162,7 @@ export function AgentThread({
           lastAssistantId
 
         return (
-          <div key={turn.user.id} className="space-y-2 sm:space-y-3">
+          <div key={turn.user.id} className="space-y-2">
             {showUser && (
               <div className="flex flex-col items-end gap-1">
                 {userFiles.length > 0 && (
@@ -1172,8 +1172,8 @@ export function AgentThread({
                     ))}
                   </div>
                 )}
-                <div className="relative max-w-[90%] sm:max-w-[80%] md:max-w-[70%] rounded-xl bg-muted/50 border px-2.5 sm:px-3 py-2 overflow-hidden">
-                  <div className="whitespace-pre-wrap text-sm sm:text-[15px] break-normal [overflow-wrap:break-word]">
+                <div className="relative max-w-[85%] rounded-2xl bg-muted/50 border border-border/50 px-3 py-2 overflow-hidden">
+                  <div className="whitespace-pre-wrap text-sm break-normal [overflow-wrap:break-word]">
                     {text ? (
                       text
                     ) : showSending ? (

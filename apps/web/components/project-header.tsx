@@ -453,7 +453,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       )}
 
       {/* Header */}
-      <header className="h-11 flex items-center bg-background border-b shrink-0 px-4 sm:px-8">
+      <header className="h-11 flex items-center bg-background shrink-0 pl-3 pr-4">
         {/* Back */}
         <Button
           variant="ghost"

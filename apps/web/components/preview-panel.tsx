@@ -485,8 +485,8 @@ function TabButton({
     <button
       onClick={onSelect}
       className={cn(
-        'group flex items-center gap-1.5 px-2.5 text-sm border-r transition-colors shrink-0',
-        isActive ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-muted/50',
+        'group flex items-center gap-1.5 px-3 text-[13px] border-r border-border/40 transition-colors shrink-0',
+        isActive ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-background/50',
         isPulsing && 'animate-pulse bg-brand/15 ring-1 ring-inset ring-brand/40',
       )}
     >
@@ -681,7 +681,7 @@ export default function PreviewPanel({
   const content = (
     <div className="h-full flex flex-col relative">
       {/* Tab bar */}
-      <div className="flex h-10 items-stretch border-b bg-muted/30 shrink-0">
+      <div className="flex h-10 items-stretch border-b bg-muted/20 shrink-0">
         <div className="flex min-w-0 flex-1 overflow-x-auto">
           {tabs.map((tab) => (
             <TabButton

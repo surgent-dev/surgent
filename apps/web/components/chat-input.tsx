@@ -344,8 +344,8 @@ export default function ChatInput({
       )}
       <div
         className={cn(
-          'rounded-2xl border bg-background overflow-hidden shadow-[0_1px_1px_rgba(0,0,0,0.02),0_2px_4px_rgba(0,0,0,0.02),0_4px_8px_rgba(0,0,0,0.02),0_8px_16px_rgba(0,0,0,0.02),0_16px_32px_rgba(0,0,0,0.02)]',
-          isDragging ? 'border-brand' : 'border-border',
+          'rounded-2xl border bg-background overflow-hidden shadow-sm',
+          isDragging ? 'border-brand' : 'border-border/60',
         )}
       >
         {showCreditsBanner && (
@@ -441,10 +441,10 @@ export default function ChatInput({
         )}
 
         {/* Input area */}
-        <div className={cn('px-3 pb-1', selectedSubagent ? 'pt-2' : 'pt-4')}>
+        <div className={cn('px-3.5 pb-1', selectedSubagent ? 'pt-2' : 'pt-3.5')}>
           <textarea
             ref={textareaRef}
-            className="w-full resize-none outline-none text-sm min-h-[20px] max-h-48 bg-transparent"
+            className="w-full resize-none outline-none text-sm min-h-[20px] max-h-48 bg-transparent placeholder:text-muted-foreground/50"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onPaste={handlePaste}
@@ -453,7 +453,7 @@ export default function ChatInput({
             rows={1}
           />
         </div>
-        <div className="flex items-center justify-between gap-2 px-2 py-2">
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
           <div className="flex items-center gap-1 sm:gap-2 flex-wrap min-w-0">
             {/* Hidden file input */}
             <input

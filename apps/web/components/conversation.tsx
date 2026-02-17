@@ -148,30 +148,19 @@ function RetryCountdown({ retryInfo }: { retryInfo: SessionStatusRetry }) {
 
 function ConversationSkeleton() {
   return (
-    <div className="space-y-8 pt-8 animate-in fade-in duration-300">
-      <div className="flex gap-3">
-        <Skeleton className="size-8 rounded-full shrink-0" />
-        <div className="space-y-2 flex-1">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-4 w-3/4" />
-          <Skeleton className="h-4 w-1/2" />
-        </div>
+    <div className="space-y-6 pt-6 animate-in fade-in duration-300">
+      <div className="space-y-2.5">
+        <Skeleton className="h-3.5 w-3/4" />
+        <Skeleton className="h-3.5 w-1/2" />
       </div>
-      <div className="flex gap-3">
-        <Skeleton className="size-8 rounded-full shrink-0" />
-        <div className="space-y-2 flex-1">
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-4 w-5/6" />
-          <Skeleton className="h-4 w-1/3" />
-        </div>
+      <div className="space-y-2.5">
+        <Skeleton className="h-3.5 w-2/3" />
+        <Skeleton className="h-3.5 w-5/6" />
+        <Skeleton className="h-3.5 w-1/3" />
       </div>
-      <div className="flex gap-3">
-        <Skeleton className="size-8 rounded-full shrink-0" />
-        <div className="space-y-2 flex-1">
-          <Skeleton className="h-4 w-16" />
-          <Skeleton className="h-4 w-1/2" />
-        </div>
+      <div className="space-y-2.5">
+        <Skeleton className="h-3.5 w-1/2" />
+        <Skeleton className="h-3.5 w-2/5" />
       </div>
     </div>
   )
@@ -179,14 +168,14 @@ function ConversationSkeleton() {
 
 function InputSkeleton() {
   return (
-    <div className="rounded-2xl border border-border/50 bg-muted/20 p-3.5 animate-pulse">
-      <Skeleton className="h-5 w-32 mb-3" />
+    <div className="rounded-2xl border border-border/60 p-3.5 animate-pulse">
+      <Skeleton className="h-4 w-28 mb-3" />
       <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          <Skeleton className="size-8 rounded-lg" />
-          <Skeleton className="size-8 rounded-lg" />
+        <div className="flex gap-1.5">
+          <Skeleton className="size-7 rounded-lg" />
+          <Skeleton className="size-7 rounded-lg" />
         </div>
-        <Skeleton className="h-8 w-20 rounded-lg" />
+        <Skeleton className="size-8 rounded-full" />
       </div>
     </div>
   )
@@ -655,7 +644,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   return (
     <div className="flex flex-col h-full w-full min-w-0 @container/conversation">
       {/* Header */}
-      <header className="flex h-11 items-center border-b shrink-0 px-3.5 gap-2.5 min-w-0 text-xs">
+      <header className="flex h-10 items-center shrink-0 px-6 gap-2 min-w-0 text-xs">
         <span
           className={cn(
             'size-2 rounded-full shrink-0 transition-colors',
@@ -764,10 +753,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       <div className="flex flex-col flex-1 min-h-0">
         <div ref={scrollRef} className="flex-1 min-h-0 relative">
           <ScrollArea className="h-full">
-            <div
-              ref={contentRef}
-              className="max-w-3xl mx-auto px-2 py-4 @md/conversation:px-4 @md/conversation:py-6 overflow-hidden"
-            >
+            <div ref={contentRef} className="max-w-3xl mx-auto px-6 py-4 overflow-hidden">
               {showSkeleton ? (
                 <ConversationSkeleton />
               ) : visibleMessages.length ? (
@@ -789,25 +775,25 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
             <button
               onClick={() => scrollToBottom(true)}
               className={cn(
-                'absolute bottom-4 right-4 z-10',
-                'flex items-center justify-center size-9 rounded-full',
-                'bg-primary text-primary-foreground shadow-lg',
-                'hover:bg-primary/90 transition-all',
+                'absolute bottom-3 right-3 z-10',
+                'flex items-center justify-center size-8 rounded-full',
+                'bg-muted/80 text-muted-foreground backdrop-blur-sm border border-border/40',
+                'hover:bg-muted hover:text-foreground transition-all',
                 'animate-in fade-in slide-in-from-bottom-2 duration-200',
               )}
               aria-label="Scroll to bottom"
             >
-              <ArrowDown className="size-4" />
+              <ArrowDown className="size-3.5" />
             </button>
           )}
         </div>
 
         {/* Input */}
-        <div className="px-2 py-2.5 shrink-0 relative @md/conversation:px-4 @md/conversation:py-3.5">
+        <div className="px-6 pb-3 pt-1 shrink-0 relative">
           <div className="max-w-3xl mx-auto">
             {/* Revert banner */}
             {revertMessageId && (
-              <div className="mb-2 px-3 py-2 rounded-xl border border-warning/15 bg-warning/[0.06] text-xs">
+              <div className="mb-2 px-3 py-2 rounded-lg bg-warning/8 text-xs">
                 <div className="flex items-center gap-2">
                   <span className="flex-1 text-warning font-medium">
                     Changes reverted. File modifications have been undone.
@@ -815,7 +801,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                   <button
                     onClick={handleUnrevert}
                     disabled={unrevert.isPending}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-warning/15 hover:bg-warning/25 text-warning font-medium transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-warning/15 hover:bg-warning/25 text-warning text-xs font-medium transition-colors disabled:opacity-50"
                   >
                     {unrevert.isPending ? (
                       <Loader2 className="size-3 animate-spin" />
@@ -830,10 +816,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
             {displayError && (
               <div
                 className={cn(
-                  'mb-2 px-3 py-2 rounded-xl border text-xs',
+                  'mb-2 px-3 py-2 rounded-lg text-xs',
                   displayError.isContext
-                    ? 'bg-warning/[0.06] border-warning/15 text-warning'
-                    : 'bg-destructive/[0.06] border-destructive/15 text-destructive',
+                    ? 'bg-warning/8 text-warning'
+                    : 'bg-destructive/8 text-destructive',
                 )}
               >
                 <div className="flex items-center gap-2">
