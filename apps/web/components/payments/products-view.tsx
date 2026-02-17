@@ -75,6 +75,7 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
           json: {
             projectId,
             priceId: selectedPriceId,
+            redirectUrl: window.location.href,
           },
         })
         .json<{ id: string; purchaseUrl: string | null }>()
@@ -82,7 +83,7 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
       if (!response.purchaseUrl) {
         throw new Error('Checkout URL missing')
       }
-      window.location.href = response.purchaseUrl
+      window.open(response.purchaseUrl, '_blank', 'noopener')
     } catch (error) {
       toast.error(
         'Failed to create checkout: ' + (error instanceof Error ? error.message : 'Unknown error'),

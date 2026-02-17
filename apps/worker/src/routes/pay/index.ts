@@ -832,8 +832,11 @@ pay.post('/checkout', zValidator('json', checkoutBodySchema), async (c) => {
   const amount = amountCents / 100
   const fee = body.applicationFeeAmount !== undefined ? body.applicationFeeAmount / 100 : undefined
   const billingPeriod = resolveBillingPeriod(recurringInterval, body.billingPeriod)
-  const safeRedirectUrl =
+  const callerRedirectUrl =
     body.redirectUrl && /^https?:\/\//i.test(body.redirectUrl) ? body.redirectUrl : undefined
+  const base = config.whop.redirectBaseUrl || config.server.clientOrigin
+  const defaultRedirectUrl = `${base}/project/${body.projectId}?tab=payments&checkout=success`
+  const safeRedirectUrl = callerRedirectUrl || defaultRedirectUrl
   const metadata = {
     ...(body.metadata || {}),
     session_id: checkoutId,
@@ -841,7 +844,7 @@ pay.post('/checkout', zValidator('json', checkoutBodySchema), async (c) => {
     title,
     ...(productId ? { product_id: productId } : {}),
     ...(body.customerId ? { customer_id: body.customerId } : {}),
-    ...(safeRedirectUrl ? { redirect_url: safeRedirectUrl } : {}),
+    redirect_url: safeRedirectUrl,
   }
 
   // Reserve slot — ON CONFLICT handles the race between concurrent delete+insert
@@ -1003,21 +1006,18 @@ pay.get(
     const { sessionId } = c.req.valid('param')
     const row = await db
       .selectFrom('pay_checkout_session')
-      .select(['metadata'])
+      .select(['metadata', 'projectId'])
       .where('whopCheckoutId', '=', sessionId)
       .executeTakeFirst()
     if (!row) return c.json({ error: 'Checkout session not found' }, 404)
 
     const redirectUrl = metadataText(row.metadata, 'redirect_url')
-    const base = config.whop.redirectBaseUrl || config.server.clientOrigin
     if (redirectUrl && /^https?:\/\//i.test(redirectUrl)) {
       return c.redirect(redirectUrl, 302)
     }
 
-    return c.redirect(
-      `${base}/dashboard/payments?checkout=success&sessionId=${encodeURIComponent(sessionId)}`,
-      302,
-    )
+    const base = config.whop.redirectBaseUrl || config.server.clientOrigin
+    return c.redirect(`${base}/project/${row.projectId}?tab=payments&checkout=success`, 302)
   },
 )
 
@@ -1028,21 +1028,18 @@ pay.get(
     const { sessionId } = c.req.valid('param')
     const row = await db
       .selectFrom('pay_checkout_session')
-      .select(['metadata'])
+      .select(['metadata', 'projectId'])
       .where('whopCheckoutId', '=', sessionId)
       .executeTakeFirst()
     if (!row) return c.json({ error: 'Checkout session not found' }, 404)
 
     const redirectUrl = metadataText(row.metadata, 'redirect_url')
-    const base = config.whop.redirectBaseUrl || config.server.clientOrigin
     if (redirectUrl && /^https?:\/\//i.test(redirectUrl)) {
       return c.redirect(redirectUrl, 302)
     }
 
-    return c.redirect(
-      `${base}/dashboard/payments?checkout=cancel&sessionId=${encodeURIComponent(sessionId)}`,
-      302,
-    )
+    const base = config.whop.redirectBaseUrl || config.server.clientOrigin
+    return c.redirect(`${base}/project/${row.projectId}?tab=payments&checkout=cancel`, 302)
   },
 )
 

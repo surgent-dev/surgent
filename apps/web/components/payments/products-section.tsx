@@ -89,7 +89,7 @@ export function ProductsSection({
         .json<{ url?: string }>()
 
       if (!data.url) throw new Error('Missing payouts portal URL')
-      window.location.href = data.url
+      window.open(data.url, '_blank', 'noopener')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to open payouts portal')
     } finally {

@@ -67,8 +67,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
       window.location.href = session.redirectUrl
       return
     }
-    router.back()
-  }, [session?.redirectUrl, router])
+    window.close()
+  }, [session?.redirectUrl])
 
   if (isLoading) {
     return <CheckoutSkeleton />

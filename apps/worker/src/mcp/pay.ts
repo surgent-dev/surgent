@@ -1,6 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { db } from '@/lib/db'
-import { requiredId, hashApiKey, getProductsWithPrices } from '@/lib/pay/utils'
+import {
+  requiredId,
+  hashApiKey,
+  getProductsWithPrices,
+  resolveActiveAccountId,
+} from '@/lib/pay/utils'
 import type { PayEnv } from '@/lib/pay/types'
 
 export interface McpContext {
@@ -88,9 +93,11 @@ REQUIRES _meta.context with apiKey (project-scoped API key).`,
         const scope = await resolveProjectId(ctx.apiKey)
         if (!scope) return err('Invalid API key')
 
+        const accountId = await resolveActiveAccountId(scope.projectId, scope.env)
         const { products: allProducts, pricesByProduct } = await getProductsWithPrices(
           scope.projectId,
           scope.env,
+          accountId,
         )
         const products = allProducts.filter((p) => !p.isArchived)
 
