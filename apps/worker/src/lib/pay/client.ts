@@ -66,7 +66,9 @@ export class PayClient {
 
     if (!response.ok) {
       log.error({ status: response.status, method, path, body: text }, 'request failed')
-      throw new Error(parseWhopError(data, text || `Whop API ${response.status}`))
+      const err = new Error(parseWhopError(data, text || `Whop API ${response.status}`))
+      ;(err as any).statusCode = response.status
+      throw err
     }
 
     return data as T
