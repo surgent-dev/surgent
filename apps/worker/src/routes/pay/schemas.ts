@@ -54,7 +54,7 @@ export const connectWhopQuerySchema = z.object({
 
 export const checkoutBodySchema = z
   .object({
-    projectId: uuid,
+    projectId: uuid.optional(),
     accountId: uuid.optional(),
     priceId: uuid.optional(),
     title: z.string().trim().min(1).max(120).optional(),
@@ -64,9 +64,12 @@ export const checkoutBodySchema = z
     billingPeriod: z.number().int().positive().optional(),
     applicationFeeAmount: z.number().int().nonnegative().optional(),
     redirectUrl: z.string().url().optional(),
+    successUrl: z.string().url().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
     productId: z.string().optional(),
     customerId: z.string().trim().min(1).optional(),
+    customerEmail: z.string().email().optional(),
+    customerName: z.string().trim().min(1).max(200).optional(),
     idempotencyKey: z.string().trim().min(1).max(255).optional(),
   })
   .refine(

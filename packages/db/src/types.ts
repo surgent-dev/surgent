@@ -658,6 +658,7 @@ export interface PayCustomerTable {
   id: string | null
   projectId: string
   externalId: string | null
+  processorCustomerId: string | null
   email: string | null
   name: string | null
   metadata: Record<string, unknown>

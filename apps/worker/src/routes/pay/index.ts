@@ -702,14 +702,14 @@ pay.delete('/accounts/:id', zValidator('param', accountPathSchema), async (c) =>
 
 pay.post('/checkout', zValidator('json', checkoutBodySchema), async (c) => {
   const body = c.req.valid('json')
-  const auth = await authorizeProjectRequest(c, body.projectId)
+  const { projectId, auth } = await resolveProjectScope(c, body.projectId)
 
   // Idempotency: return existing successful checkout, clear retriable ones
   if (body.idempotencyKey) {
     const existing = await db
       .selectFrom('pay_checkout_session')
       .select(['id', 'whopCheckoutId', 'purchaseUrl', 'status', 'createdAt'])
-      .where('projectId', '=', body.projectId)
+      .where('projectId', '=', projectId)
       .where('env', '=', auth.env)
       .where('idempotencyKey', '=', body.idempotencyKey)
       .executeTakeFirst()
@@ -756,7 +756,7 @@ pay.post('/checkout', zValidator('json', checkoutBodySchema), async (c) => {
       .executeTakeFirst()
     if (!product) return c.json({ error: 'Product not found' }, 404)
     if (product.isArchived) return c.json({ error: 'Product is archived' }, 400)
-    if (product.projectId !== body.projectId) {
+    if (product.projectId !== projectId) {
       return c.json({ error: 'Price does not belong to this project' }, 403)
     }
 
@@ -779,18 +779,21 @@ pay.post('/checkout', zValidator('json', checkoutBodySchema), async (c) => {
   const amount = amountCents / 100
   const fee = body.applicationFeeAmount !== undefined ? body.applicationFeeAmount / 100 : undefined
   const billingPeriod = resolveBillingPeriod(recurringInterval, body.billingPeriod)
+  const rawRedirectUrl = body.redirectUrl || body.successUrl
   const callerRedirectUrl =
-    body.redirectUrl && /^https?:\/\//i.test(body.redirectUrl) ? body.redirectUrl : undefined
+    rawRedirectUrl && /^https?:\/\//i.test(rawRedirectUrl) ? rawRedirectUrl : undefined
   const base = config.whop.redirectBaseUrl || config.server.clientOrigin
-  const defaultRedirectUrl = `${base}/project/${body.projectId}?tab=payments&checkout=success`
+  const defaultRedirectUrl = `${base}/project/${projectId}?tab=payments&checkout=success`
   const safeRedirectUrl = callerRedirectUrl || defaultRedirectUrl
   const metadata = {
     ...(body.metadata || {}),
     session_id: checkoutId,
-    project_id: body.projectId,
+    project_id: projectId,
     title,
     ...(productId ? { product_id: productId } : {}),
     ...(body.customerId ? { customer_id: body.customerId } : {}),
+    ...(body.customerEmail ? { customer_email: body.customerEmail } : {}),
+    ...(body.customerName ? { customer_name: body.customerName } : {}),
     redirect_url: safeRedirectUrl,
   }
 
@@ -799,7 +802,7 @@ pay.post('/checkout', zValidator('json', checkoutBodySchema), async (c) => {
     .insertInto('pay_checkout_session')
     .values({
       id: checkoutId,
-      projectId: body.projectId,
+      projectId,
       userId: auth.userId,
       accountId: account.id,
       env: auth.env,
@@ -825,7 +828,7 @@ pay.post('/checkout', zValidator('json', checkoutBodySchema), async (c) => {
     const winner = await db
       .selectFrom('pay_checkout_session')
       .select(['id', 'whopCheckoutId', 'purchaseUrl', 'status'])
-      .where('projectId', '=', body.projectId)
+      .where('projectId', '=', projectId)
       .where('env', '=', auth.env)
       .where('idempotencyKey', '=', body.idempotencyKey)
       .executeTakeFirst()
@@ -1057,7 +1060,7 @@ pay.get('/customers', zValidator('query', projectListQuerySchema), async (c) => 
 
   const rows = await db
     .selectFrom('pay_customer')
-    .select(['id', 'projectId', 'externalId', 'email', 'name'])
+    .select(['id', 'projectId', 'externalId', 'processorCustomerId', 'email', 'name'])
     .where('projectId', '=', projectId)
     .where('env', '=', auth.env)
     .orderBy('createdAt', 'desc')
@@ -1071,7 +1074,7 @@ pay.get('/customers', zValidator('query', projectListQuerySchema), async (c) => 
       externalId: row.externalId,
       email: row.email,
       name: row.name,
-      processorCustomerId: row.externalId,
+      processorCustomerId: row.processorCustomerId,
     })),
   )
 })
@@ -1086,7 +1089,7 @@ pay.get(
 
     const customer = await db
       .selectFrom('pay_customer')
-      .select(['id', 'projectId', 'externalId', 'email', 'name'])
+      .select(['id', 'projectId', 'externalId', 'processorCustomerId', 'email', 'name'])
       .where('projectId', '=', projectId)
       .where('env', '=', auth.env)
       .where((eb) =>
@@ -1151,7 +1154,7 @@ pay.get(
       externalId: customer.externalId,
       email: customer.email,
       name: customer.name,
-      processorCustomerId: customer.externalId,
+      processorCustomerId: customer.processorCustomerId,
       transactions: transactions.map((r) => ({
         id: requiredId(r.id, 'transaction'),
         createdAt: r.createdAt,
@@ -1169,6 +1172,48 @@ pay.get(
     })
   },
 )
+
+// --- Transactions (SDK-facing) ---
+
+pay.get('/transactions', zValidator('query', projectListQuerySchema), async (c) => {
+  const query = c.req.valid('query')
+  const { projectId, auth } = await resolveProjectScope(c, query.projectId)
+
+  const rows = await db
+    .selectFrom('pay_transaction')
+    .selectAll()
+    .where('projectId', '=', projectId)
+    .where('env', '=', auth.env)
+    .where('kind', 'in', ['payment', 'processor_fee', 'refund', 'dispute', 'balance', 'payout'])
+    .orderBy('createdAt', 'desc')
+    .limit(query.limit || 50)
+    .execute()
+
+  // Aggregate processor_fee rows by paymentTransactionId
+  const feesByPayment = new Map<string, typeof rows>()
+  const nonFeeRows: typeof rows = []
+  for (const row of rows) {
+    if (row.kind === 'processor_fee' && row.paymentTransactionId) {
+      const existing = feesByPayment.get(row.paymentTransactionId)
+      if (existing) existing.push(row)
+      else feesByPayment.set(row.paymentTransactionId, [row])
+    } else {
+      nonFeeRows.push(row)
+    }
+  }
+
+  const aggregatedFees = [...feesByPayment.entries()].map(([, fees]) => {
+    const total = fees.reduce((sum, f) => sum + Number(f.amount), 0)
+    const first = fees[0]
+    return { ...first, amount: String(total) }
+  })
+
+  const merged = [...nonFeeRows, ...aggregatedFees].sort(
+    (a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime(),
+  )
+
+  return c.json(merged.map(mapLegacyTransaction))
+})
 
 // --- Legacy transactions (mapped format) ---
 

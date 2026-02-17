@@ -273,9 +273,37 @@ async function upsertCustomer(
   email: string | null,
   name: string | null,
   env: PayEnv,
+  processorCustomerId?: string | null,
 ): Promise<string | null> {
   if (!externalId && !email) return null
   const now = new Date()
+
+  // When externalId is a Whop ID (same as processorCustomerId), check if a customer
+  // already exists with that processorCustomerId under a different (app-provided) externalId.
+  // This prevents creating a duplicate row when the same person pays via SDK (has app ID)
+  // and later via dashboard (no app ID, falls back to Whop ID).
+  if (externalId && processorCustomerId && externalId === processorCustomerId) {
+    const byProcessor = await trx
+      .selectFrom('pay_customer')
+      .select(['id', 'externalId'])
+      .where('projectId', '=', projectId)
+      .where('processorCustomerId', '=', processorCustomerId)
+      .where('env', '=', env)
+      .executeTakeFirst()
+
+    if (byProcessor) {
+      await trx
+        .updateTable('pay_customer')
+        .set({
+          ...(email ? { email } : {}),
+          ...(name ? { name } : {}),
+          updatedAt: now,
+        })
+        .where('id', '=', byProcessor.id)
+        .execute()
+      return byProcessor.id
+    }
+  }
 
   if (externalId) {
     const row = await trx
@@ -283,6 +311,7 @@ async function upsertCustomer(
       .values({
         projectId,
         externalId,
+        processorCustomerId: processorCustomerId || null,
         email,
         name,
         metadata: {},
@@ -294,6 +323,7 @@ async function upsertCustomer(
         oc.columns(['projectId', 'externalId', 'env']).doUpdateSet({
           email: email || undefined,
           name: name || undefined,
+          ...(processorCustomerId ? { processorCustomerId } : {}),
           updatedAt: now,
         }),
       )
@@ -312,13 +342,15 @@ async function upsertCustomer(
     .executeTakeFirst()
 
   if (existing) {
-    if (name) {
-      await trx
-        .updateTable('pay_customer')
-        .set({ name, updatedAt: now })
-        .where('id', '=', existing.id)
-        .execute()
-    }
+    await trx
+      .updateTable('pay_customer')
+      .set({
+        ...(name ? { name } : {}),
+        ...(processorCustomerId ? { processorCustomerId } : {}),
+        updatedAt: now,
+      })
+      .where('id', '=', existing.id)
+      .execute()
     return existing.id
   }
 
@@ -327,6 +359,7 @@ async function upsertCustomer(
     .values({
       projectId,
       externalId: null,
+      processorCustomerId: processorCustomerId || null,
       email,
       name,
       metadata: {},
@@ -434,15 +467,19 @@ async function upsertPaymentFromWebhook(
     ...(ev.userId ? { user_id: ev.userId } : {}),
   }
 
+  // Prefer app's customer ID from checkout metadata over Whop user ID
+  const appCustomerId =
+    typeof ev.metadata?.customer_id === 'string' ? ev.metadata.customer_id : null
   const customerId =
-    projectId && (ev.userId || ev.userEmail)
+    projectId && (appCustomerId || ev.userId || ev.userEmail)
       ? await upsertCustomer(
           trx,
           projectId,
-          ev.userId || null,
+          appCustomerId || ev.userId || null,
           ev.userEmail || null,
           ev.userName || null,
           env,
+          ev.userId || null,
         )
       : null
 
@@ -613,15 +650,18 @@ async function upsertMembershipFromWebhook(
   const periodEnd = toDate(ev.renewalPeriodEnd)
   const canceledAt = toDate(ev.canceledAt)
 
+  const appCustomerIdSub =
+    typeof ev.metadata?.customer_id === 'string' ? ev.metadata.customer_id : null
   const customerId =
-    projectId && (ev.userId || ev.userEmail)
+    projectId && (appCustomerIdSub || ev.userId || ev.userEmail)
       ? await upsertCustomer(
           trx,
           projectId,
-          ev.userId || null,
+          appCustomerIdSub || ev.userId || null,
           ev.userEmail || null,
           ev.userName || null,
           env,
+          ev.userId || null,
         )
       : null
 
