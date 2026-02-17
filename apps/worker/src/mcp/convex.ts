@@ -67,8 +67,11 @@ interface ConvexIntegrationConfig {
   }
 }
 
+type ConvexEnv = 'development' | 'production'
+
 interface ToolContext {
   projectId: string
+  env: ConvexEnv
   integration: Awaited<ReturnType<typeof ProjectService.getIntegrationByProvider>>
   sandbox: Awaited<ReturnType<typeof ProjectService.getSandboxByProjectId>>
   deploymentUrl: string
@@ -91,13 +94,22 @@ const deleteProjectSchema = {
   projectId: z.string().describe('ID of the project to delete'),
 }
 
+const envParam = {
+  env: z
+    .enum(['development', 'production'])
+    .optional()
+    .describe('Target environment. Defaults to "development".'),
+}
+
 const setEnvVarsSchema = {
+  ...envParam,
   vars: z
     .record(z.string(), z.string())
     .describe('Required. Object containing key-value pairs to set'),
 }
 
 const callFunctionSchema = {
+  ...envParam,
   path: z.string().describe('Function path in format "file:functionName" (e.g., "messages:list")'),
   args: z.record(z.string(), z.unknown()).optional().describe('Arguments to pass to the function'),
 }
@@ -135,7 +147,10 @@ function extractProjectId(extra: unknown): string | undefined {
   return meta?._meta?.context?.projectId
 }
 
-async function getToolContext(extra: unknown): Promise<ToolContext | null> {
+async function getToolContext(
+  extra: unknown,
+  env: ConvexEnv = 'development',
+): Promise<ToolContext | null> {
   const projectId = extractProjectId(extra)
   if (!projectId) return null
 
@@ -145,15 +160,15 @@ async function getToolContext(extra: unknown): Promise<ToolContext | null> {
   ])
   if (!integration?.id) return null
 
-  const config = integration.config as ConvexIntegrationConfig | null
-  const deploymentUrl = config?.deployments?.development?.url
+  const cfg = integration.config as ConvexIntegrationConfig | null
+  const deploymentUrl = cfg?.deployments?.[env]?.url
   if (!deploymentUrl) return null
 
-  const vars = await ProjectService.getEnvVarsByProjectId(projectId, 'development', integration.id)
+  const vars = await ProjectService.getEnvVarsByProjectId(projectId, env, integration.id)
   const deployKey = vars.find((v) => v.key === 'CONVEX_DEPLOY_KEY')?.value
   if (!deployKey) return null
 
-  return { projectId, integration, sandbox, deploymentUrl, deployKey }
+  return { projectId, env, integration, sandbox, deploymentUrl, deployKey }
 }
 
 async function writeEnvToSandbox(
@@ -348,7 +363,7 @@ Existing variables with the same name will be overwritten. Other variables are p
       inputSchema: setEnvVarsSchema,
     },
     async (args, extra) => {
-      const ctx = await getToolContext(extra)
+      const ctx = await getToolContext(extra, args.env)
       if (!ctx) return err('Convex not provisioned')
 
       try {
@@ -360,14 +375,11 @@ Existing variables with the same name will be overwritten. Other variables are p
             { value, destination: 'server' as const },
           ]),
         )
-        await ProjectService.upsertEnvVars(
-          ctx.projectId,
-          'development',
-          dbVars,
-          ctx.integration?.id,
-        )
+        await ProjectService.upsertEnvVars(ctx.projectId, ctx.env, dbVars, ctx.integration?.id)
 
-        return ok({ message: `Set ${Object.keys(args.vars).length} environment variable(s)` })
+        return ok({
+          message: `Set ${Object.keys(args.vars).length} environment variable(s) on ${ctx.env}`,
+        })
       } catch (e) {
         return err(errMsg(e))
       }
@@ -381,10 +393,10 @@ Existing variables with the same name will be overwritten. Other variables are p
       description: `List all environment variables currently set on a Convex deployment.
 
 Returns an array of variable names and values.`,
-      inputSchema: {},
+      inputSchema: envParam,
     },
-    async (_args, extra) => {
-      const ctx = await getToolContext(extra)
+    async (args, extra) => {
+      const ctx = await getToolContext(extra, args.env)
       if (!ctx) return err('Convex not provisioned')
 
       try {
@@ -412,7 +424,7 @@ Pass arguments as a JSON object matching the function's expected args.`,
       inputSchema: callFunctionSchema,
     },
     async (args, extra) => {
-      const ctx = await getToolContext(extra)
+      const ctx = await getToolContext(extra, args.env)
       if (!ctx) return err('Convex not provisioned')
 
       try {
@@ -443,7 +455,7 @@ Pass arguments as a JSON object matching the function's expected args.`,
       inputSchema: callFunctionSchema,
     },
     async (args, extra) => {
-      const ctx = await getToolContext(extra)
+      const ctx = await getToolContext(extra, args.env)
       if (!ctx) return err('Convex not provisioned')
 
       try {
