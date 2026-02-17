@@ -39,6 +39,7 @@ import {
 } from '@/services/projects'
 import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
 import { inngest } from '@/inngest'
+import type { PayEnv } from '@/lib/pay/types'
 const projects = new Hono<AppContext>()
 
 const idParam = z.object({ id: z.string().uuid() })
@@ -641,9 +642,20 @@ projects.post(
       })
       projectId = created.id
 
-      // Setup API key synchronously (needs user session from request headers)
+      // Determine pay env from user's active Whop account (fall back to live)
+      const payAccount = await db
+        .selectFrom('pay_account')
+        .select('env')
+        .where('userId', '=', userId)
+        .where('status', '<>', 'disconnected')
+        .orderBy('createdAt', 'desc')
+        .executeTakeFirst()
+      const payEnv: PayEnv = payAccount?.env === 'test' ? 'test' : 'live'
+      const keyPrefix = payEnv === 'test' ? 'sk_test_' : 'sk_live_'
+
+      // Create API key via Better Auth with env-aware prefix
       const apiKeyResult = await auth.api.createApiKey({
-        body: { name: `p-${projectId.slice(0, 8)}` },
+        body: { name: `p-${projectId.slice(0, 8)}`, prefix: keyPrefix },
         headers: c.req.raw.headers,
       })
 
@@ -651,6 +663,13 @@ projects.post(
       if (!attached) {
         throw new Error('Failed to attach API key to project')
       }
+
+      // Set the correct pay env on the API key
+      await db
+        .updateTable('apikey')
+        .set({ env: payEnv })
+        .where('id', '=', apiKeyResult.id)
+        .execute()
 
       await db
         .insertInto('env_var')
