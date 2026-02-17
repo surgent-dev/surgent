@@ -35,7 +35,6 @@ import {
   createProject,
   updateProjectStatus,
   updateDeployment,
-  attachApiKeyToProject,
   upsertEnvVar,
 } from '@/services/projects'
 import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
@@ -651,14 +650,9 @@ projects.post(
         headers: c.req.raw.headers,
       })
 
-      const attached = await attachApiKeyToProject(apiKeyResult.id, projectId, organizationId)
-      if (!attached) {
-        throw new Error('Failed to attach API key to project')
-      }
-
       await db
         .updateTable('apikey')
-        .set({ env: 'test' })
+        .set({ projectId, organizationId, env: 'test' })
         .where('id', '=', apiKeyResult.id)
         .execute()
 
@@ -759,23 +753,22 @@ projects.post(
         .executeTakeFirst()
 
       if (!existingLiveKey?.value) {
-        const liveKeyResult = await auth.api.createApiKey({
+        const liveKey = await auth.api.createApiKey({
           body: { name: `p-${id.slice(0, 8)}-live`, prefix: 'sk_live_' },
           headers: c.req.raw.headers,
         })
 
-        await attachApiKeyToProject(liveKeyResult.id, id, project.organizationId)
         await db
           .updateTable('apikey')
-          .set({ env: 'live' })
-          .where('id', '=', liveKeyResult.id)
+          .set({ projectId: id, organizationId: project.organizationId, env: 'live' })
+          .where('id', '=', liveKey.id)
           .execute()
 
         await upsertEnvVar({
           projectId: id,
           environment: 'production',
           key: 'SURGENT_API_KEY',
-          value: liveKeyResult.key,
+          value: liveKey.key,
           destination: 'server',
         })
 
