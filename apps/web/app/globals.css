@@ -20,6 +20,7 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
@@ -72,9 +73,10 @@
   --card-foreground: #0a2540; /* Stripe deep navy text */
   --popover: #ffffff;
   --popover-foreground: #0a2540;
-  --primary: #0a2540; /* Primary text color (dark) */
+  --primary: #303030;
+  --primary-hover: #1a1a1a;
   --primary-foreground: #ffffff;
-  --brand: #635bff; /* Stripe brand purple for buttons/accents */
+  --brand: #7c3aed; /* Violet 600 */
   --brand-foreground: #ffffff;
   --secondary: #ffffff; /* Secondary surfaces/buttons are white */
   --secondary-foreground: #0a2540;
@@ -85,7 +87,7 @@
   --destructive: #e11d48; /* Red 600-ish */
   --border: #e0e6eb; /* Stripe neutral border */
   --input: #e0e6eb;
-  --ring: #635bff; /* Brand focus ring */
+  --ring: #7c3aed;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -129,8 +131,9 @@
   --popover: #0f172a;
   --popover-foreground: #f8fafc;
   --primary: #f8fafc;
+  --primary-hover: #e2e8f0;
   --primary-foreground: #0f172a;
-  --brand: #635bff; /* Stripe brand purple - keeping as brand accent */
+  --brand: #7c3aed;
   --brand-foreground: #ffffff;
   --secondary: #1e293b; /* Slate 800 */
   --secondary-foreground: #f8fafc;
@@ -142,7 +145,7 @@
   --destructive-foreground: #f8fafc;
   --border: #1e293b;
   --input: #1e293b;
-  --ring: #635bff;
+  --ring: #7c3aed;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -155,7 +158,7 @@
   --sidebar-accent: #1e293b;
   --sidebar-accent-foreground: #f8fafc;
   --sidebar-border: #1e293b;
-  --sidebar-ring: #635bff;
+  --sidebar-ring: #7c3aed;
 
   /* Status + misc semantic colors */
   --success: #22c55e; /* Green 500 */
@@ -324,6 +327,78 @@ body {
 
 .dark {
   --shadow-color: 220 40% 2%;
+}
+
+/* ─── Button depth (Polaris-matched) ─── */
+
+/* Secondary: white bg, gray bevel edges */
+.btn-elevated {
+  box-shadow:
+    inset 0 -1px 0 0 #b5b5b5,
+    inset 0 0 0 1px rgba(0, 0, 0, 0.1),
+    inset 0 0.5px 0 1.5px #fff;
+}
+.btn-elevated:active {
+  box-shadow:
+    inset -1px 0 1px 0 rgba(26, 26, 26, 0.12),
+    inset 1px 0 1px 0 rgba(26, 26, 26, 0.12),
+    inset 0 2px 1px 0 rgba(26, 26, 26, 0.2);
+}
+
+/* Primary: dark bg, gradient sheen, dark bevel */
+.btn-elevated-primary {
+  background-image: linear-gradient(180deg, transparent 63.53%, rgba(255, 255, 255, 0.15) 100%);
+  box-shadow:
+    inset 0 -1px 0 1px rgba(0, 0, 0, 0.8),
+    inset 0 0 0 1px #303030,
+    inset 0 0.5px 0 1.5px rgba(255, 255, 255, 0.25);
+}
+.btn-elevated-primary:active {
+  box-shadow: inset 0 3px 0 0 #000;
+}
+
+/* Brand: violet bg, color-matched bevel */
+.btn-elevated-brand {
+  background-image: linear-gradient(180deg, transparent 63.53%, rgba(255, 255, 255, 0.12) 100%);
+  box-shadow:
+    inset 0 -1px 0 1px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(124, 58, 237, 0.8),
+    inset 0 0.5px 0 1.5px rgba(255, 255, 255, 0.2);
+}
+.btn-elevated-brand:active {
+  box-shadow:
+    inset -1px 0 1px 0 rgba(0, 0, 0, 0.2),
+    inset 1px 0 1px 0 rgba(0, 0, 0, 0.2),
+    inset 0 2px 0 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Dark mode secondary */
+.dark .btn-elevated {
+  box-shadow:
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 0.5px 0 1.5px rgba(255, 255, 255, 0.03);
+}
+.dark .btn-elevated:active {
+  box-shadow:
+    inset -1px 0 1px 0 rgba(0, 0, 0, 0.25),
+    inset 1px 0 1px 0 rgba(0, 0, 0, 0.25),
+    inset 0 2px 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* Dark mode primary: light button */
+.dark .btn-elevated-primary {
+  background-image: linear-gradient(180deg, transparent 63.53%, rgba(0, 0, 0, 0.03) 100%);
+  box-shadow:
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.12),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.06),
+    inset 0 0.5px 0 1.5px rgba(255, 255, 255, 0.9);
+}
+.dark .btn-elevated-primary:active {
+  box-shadow:
+    inset -1px 0 1px 0 rgba(0, 0, 0, 0.08),
+    inset 1px 0 1px 0 rgba(0, 0, 0, 0.08),
+    inset 0 2px 1px 0 rgba(0, 0, 0, 0.12);
 }
 
 /* ─── Landing page ─── */
