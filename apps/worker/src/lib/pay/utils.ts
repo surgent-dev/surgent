@@ -101,7 +101,6 @@ export function resolveBillingPeriod(
   fallback?: number,
 ): number {
   if (fallback && Number.isFinite(fallback) && fallback > 0) return Math.floor(fallback)
-  if (interval === 'day') return 1
   if (interval === 'week') return 7
   if (interval === 'year') return 365
   return 30

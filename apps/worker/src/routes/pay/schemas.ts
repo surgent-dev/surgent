@@ -103,7 +103,7 @@ export const createPriceBodySchema = z.object({
   priceCurrency: z.string().trim().length(3),
   name: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().max(2000).optional(),
-  recurringInterval: z.enum(['day', 'week', 'month', 'year']).optional(),
+  recurringInterval: z.enum(['week', 'month', 'year']).optional(),
   isDefault: z.boolean().optional(),
   slug: z.string().trim().min(1).max(200).optional(),
 })

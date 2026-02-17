@@ -22,7 +22,7 @@ export interface ProductPrice {
   description?: string | null
   priceAmount: number
   priceCurrency: string
-  recurringInterval?: 'day' | 'week' | 'month' | 'year' | null
+  recurringInterval?: 'week' | 'month' | 'year' | null
   isDefault?: boolean | null
 }
 
@@ -65,7 +65,7 @@ interface CreatePriceInput {
   priceCurrency: string
   name?: string
   description?: string
-  recurringInterval?: 'day' | 'week' | 'month' | 'year'
+  recurringInterval?: 'week' | 'month' | 'year'
   isDefault?: boolean
 }
 

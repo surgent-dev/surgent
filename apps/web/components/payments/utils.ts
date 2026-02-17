@@ -23,8 +23,6 @@ export const formatInterval = (interval: ProductPrice['recurringInterval']) => {
       return '/yr'
     case 'week':
       return '/wk'
-    case 'day':
-      return '/day'
     default:
       return ''
   }

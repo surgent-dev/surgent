@@ -29,7 +29,7 @@ const schema = z.object({
       'Must be a valid positive number',
     ),
   priceCurrency: z.enum(['usd', 'eur', 'gbp']),
-  recurringInterval: z.enum(['day', 'week', 'month', 'year']).optional(),
+  recurringInterval: z.enum(['week', 'month', 'year']).optional(),
 })
 
 type FormData = z.infer<typeof schema>
@@ -61,7 +61,6 @@ const intervals = [
   { value: 'month', label: 'Monthly', description: 'Billed every month' },
   { value: 'year', label: 'Yearly', description: 'Billed once a year' },
   { value: 'week', label: 'Weekly', description: 'Billed every week' },
-  { value: 'day', label: 'Daily', description: 'Billed every day' },
 ] as const
 
 export function CreatePriceDialog({
