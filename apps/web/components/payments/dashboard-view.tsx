@@ -122,7 +122,7 @@ export function DashboardView({
           </p>
           <button
             onClick={onCreateProduct}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-foreground text-background text-[13px] font-medium hover:bg-foreground/90 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-primary text-primary-foreground text-[13px] font-medium btn-elevated-primary hover:bg-primary-hover transition-all duration-100"
           >
             <Plus className="size-3.5" />
             Create Product

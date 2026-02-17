@@ -128,7 +128,7 @@ export function ProductsSection({
           {view === 'products' && (
             <button
               onClick={handleCreateProduct}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-md bg-primary text-primary-foreground btn-elevated-primary hover:bg-primary-hover transition-all duration-100"
             >
               <Plus className="size-3.5" />
               New Product

@@ -89,7 +89,7 @@ function SubscriptionRow({
           {isActive && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="p-1 hover:bg-muted/50 rounded transition-colors">
+                <button className="p-1 hover:bg-muted/50 rounded-md transition-all duration-100">
                   <MoreHorizontal className="size-3.5 text-muted-foreground" />
                 </button>
               </DropdownMenuTrigger>
@@ -186,7 +186,7 @@ export function SubscriptionsView({ subscriptions, isLoading, projectId }: Subsc
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1.5 h-8 px-2.5 text-[13px] border rounded-lg hover:bg-muted/30 transition-colors">
+              <button className="flex items-center gap-1.5 h-8 px-2.5 text-[13px] rounded-md bg-background btn-elevated hover:bg-muted/30 transition-all duration-100">
                 <Filter className="size-3 text-muted-foreground" />
                 {filter === 'all' ? 'All' : filter === 'active' ? 'Active' : 'Canceled'}
                 <ChevronDown className="size-3 text-muted-foreground" />

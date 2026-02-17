@@ -55,7 +55,7 @@ function NavItem({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium transition-colors',
+        'w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] font-medium transition-colors',
         active
           ? 'bg-foreground/[0.06] text-foreground'
           : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04]',

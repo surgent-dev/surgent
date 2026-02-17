@@ -121,7 +121,7 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="size-7 flex items-center justify-center rounded-md hover:bg-muted/50 transition-colors opacity-0 group-hover:opacity-100">
+              <button className="size-7 flex items-center justify-center rounded-md hover:bg-muted/50 transition-all duration-100 opacity-0 group-hover:opacity-100">
                 <MoreHorizontal className="size-4 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
@@ -156,7 +156,7 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
         <div className="px-3 pb-3">
           <button
             onClick={() => onAddPrice(item)}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-dashed text-[12px] text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-md border border-dashed text-[12px] text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-100"
           >
             <Plus className="size-3" />
             Add pricing
@@ -172,7 +172,7 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
           <button
             onClick={() => handleCreateCheckout()}
             disabled={creating}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md bg-primary text-primary-foreground btn-elevated-primary hover:bg-primary-hover transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {creating ? (
               <Loader2 className="size-3 animate-spin" />
@@ -225,7 +225,7 @@ export function ProductsView({
           </p>
           <button
             onClick={onCreateProduct}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-foreground text-background font-medium text-[13px] hover:bg-foreground/90 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-primary text-primary-foreground font-medium text-[13px] btn-elevated-primary hover:bg-primary-hover transition-all duration-100"
           >
             <Plus className="size-3.5" />
             Create Product
