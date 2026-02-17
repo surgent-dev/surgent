@@ -6,12 +6,10 @@ COPY package.json bun.lock bunfig.toml ./
 COPY apps/web/package.json ./apps/web/
 COPY apps/dispatch/package.json ./apps/dispatch/
 COPY apps/worker/package.json ./apps/worker/
-COPY apps/pay/package.json ./apps/pay/
 COPY packages/db/package.json ./packages/db/
 COPY packages/util/package.json ./packages/util/
 COPY packages/gateway/package.json ./packages/gateway/
-# --ignore-scripts: pay package has a postinstall requiring cargo (Rust) which isn't available
-RUN HUSKY=0 bun install --frozen-lockfile --ignore-scripts
+RUN HUSKY=0 bun install --frozen-lockfile
 
 FROM oven/bun:1-slim AS production
 RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
