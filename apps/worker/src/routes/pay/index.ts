@@ -18,7 +18,6 @@ import {
   projectListQuerySchema,
   listQuerySchema,
   accountListQuerySchema,
-  moveAccountBodySchema,
   connectBodySchema,
   connectWhopQuerySchema,
   checkoutBodySchema,
@@ -42,7 +41,7 @@ import {
   normalizeAccountStatus,
   isSubscriptionActive,
   getClient,
-  getAccountForProject,
+  getAccountForUser,
   resolveActiveAccountId,
   getProductsWithPrices,
   resolveCheckoutStatus,
@@ -477,32 +476,34 @@ pay.post(
     const query = c.req.valid('query')
     const body = c.req.valid('json')
     const auth = await authorizeRequest(c)
-    const projectId = body.projectId || query.projectId || auth.projectId
-    if (!projectId) return c.json({ error: 'projectId is required' }, 400)
-
-    await authorizeProjectRequest(c, projectId)
     const userId = auth.userId
     const now = new Date()
 
-    const existingProjectAccount = await db
+    // Check if user already has an active account for this env
+    const existing = await db
       .selectFrom('pay_account')
-      .select(['id', 'status'])
-      .where('projectId', '=', projectId)
+      .selectAll()
+      .where('userId', '=', userId)
       .where('env', '=', auth.env)
       .where('status', '!=', 'disconnected')
       .executeTakeFirst()
 
-    if (
-      existingProjectAccount &&
-      (!query.accountId || existingProjectAccount.id !== query.accountId)
-    ) {
-      return c.json({ error: 'PROCESSOR_ALREADY_CONNECTED:whop' }, 409)
+    if (existing) {
+      return c.json({
+        accountId: requiredId(existing.id, 'account'),
+        processorAccountId: existing.whopCompanyId,
+        status: normalizeAccountStatus(existing.status),
+        id: existing.id,
+        companyId: existing.whopCompanyId,
+        title: existing.title,
+      })
     }
 
+    // Reconnect a disconnected account
     if (query.accountId) {
       const reconnected = await db
         .updateTable('pay_account')
-        .set({ projectId, status: 'connected', updatedAt: now })
+        .set({ status: 'connected', updatedAt: now })
         .where('id', '=', query.accountId)
         .where('userId', '=', userId)
         .where('env', '=', auth.env)
@@ -516,22 +517,23 @@ pay.post(
         processorAccountId: reconnected.whopCompanyId,
         status: normalizeAccountStatus(reconnected.status),
         id: reconnected.id,
-        projectId: reconnected.projectId,
         companyId: reconnected.whopCompanyId,
         title: reconnected.title,
       })
     }
 
+    // Create new Whop company and account
     const companyTitle = body.title || body.companyName
     if (!companyTitle) return c.json({ error: 'title or companyName is required' }, 400)
 
+    const projectId = body.projectId || query.projectId || auth.projectId
     const client = getClient(auth.env)
     const company = await client.createCompany({
       title: companyTitle,
       email: body.email,
       metadata: {
         internal_user_id: userId,
-        project_id: projectId,
+        project_id: projectId || null,
         country: (body.country || 'us').toLowerCase(),
         business_type: body.businessType || null,
       },
@@ -547,7 +549,6 @@ pay.post(
     const account = await db
       .insertInto('pay_account')
       .values({
-        projectId,
         userId,
         whopCompanyId: company.id,
         title: company.title,
@@ -558,7 +559,7 @@ pay.post(
         updatedAt: now,
       })
       .onConflict((oc) =>
-        oc.columns(['projectId', 'userId', 'env']).doUpdateSet({
+        oc.columns(['userId', 'env']).doUpdateSet({
           whopCompanyId: company.id,
           title: company.title,
           status: 'connected',
@@ -574,7 +575,6 @@ pay.post(
       processorAccountId: account.whopCompanyId,
       status: normalizeAccountStatus(account.status),
       id: account.id,
-      projectId: account.projectId,
       companyId: account.whopCompanyId,
       title: account.title,
     })
@@ -586,19 +586,14 @@ pay.get('/accounts', zValidator('query', accountListQuerySchema), async (c) => {
   const query = c.req.valid('query')
   if (query.processor && query.processor !== 'whop') return c.json([])
 
-  const scopedProjectId =
-    auth.mode === 'api_key' ? query.projectId || auth.projectId || undefined : query.projectId
-  if (scopedProjectId) await authorizeProjectRequest(c, scopedProjectId)
-
-  let rowsQuery = db
+  const rows = await db
     .selectFrom('pay_account')
     .selectAll()
     .where('userId', '=', auth.userId)
     .where('env', '=', auth.env)
     .orderBy('createdAt', 'desc')
-  if (scopedProjectId) rowsQuery = rowsQuery.where('projectId', '=', scopedProjectId)
+    .execute()
 
-  const rows = await rowsQuery.execute()
   return c.json(rows.map(mapLegacyAccount))
 })
 
@@ -614,18 +609,12 @@ pay.get('/accounts/user', zValidator('query', userAccountsQuerySchema), async (c
     .orderBy('createdAt', 'desc')
     .execute()
 
-  const filtered =
-    auth.mode === 'api_key' && auth.projectId
-      ? rows.filter((r) => r.projectId === auth.projectId)
-      : rows
-
   return c.json(
-    filtered.map((row) => ({
+    rows.map((row) => ({
       id: requiredId(row.id, 'account'),
       processor: 'whop',
       processorAccountId: row.whopCompanyId,
       status: normalizeAccountStatus(row.status),
-      projectId: normalizeAccountStatus(row.status) === 'disconnected' ? null : row.projectId,
       email: metadataText(row.metadata, 'email'),
       title: row.title || metadataText(row.metadata, 'title'),
       country: metadataText(row.metadata, 'country'),
@@ -641,8 +630,7 @@ pay.get('/accounts/whop/token', zValidator('query', accountQuerySchema), async (
     auth.mode === 'api_key' ? query.projectId || auth.projectId || undefined : query.projectId
   if (projectId) await authorizeProjectRequest(c, projectId)
 
-  const account = await getAccountForProject({ projectId, accountId, env: auth.env })
-  await authorizeProjectRequest(c, account.projectId)
+  const account = await getAccountForUser({ userId: auth.userId, accountId, env: auth.env })
 
   const client = getClient(auth.env)
   const token = await client.createAccessToken(account.whopCompanyId)
@@ -654,12 +642,8 @@ pay.get('/accounts/whop/payouts-link', zValidator('query', payoutsLinkQuerySchem
   const auth = await authorizeRequest(c)
   const query = c.req.valid('query')
   const accountId = query.accountId || query.account_id
-  const projectId =
-    auth.mode === 'api_key' ? query.projectId || auth.projectId || undefined : query.projectId
-  if (projectId) await authorizeProjectRequest(c, projectId)
 
-  const account = await getAccountForProject({ projectId, accountId, env: auth.env })
-  await authorizeProjectRequest(c, account.projectId)
+  const account = await getAccountForUser({ userId: auth.userId, accountId, env: auth.env })
 
   const base = query.redirectBaseUrl || config.whop.redirectBaseUrl || config.server.clientOrigin
   const returnUrl = query.returnUrl || `${base}/dashboard/payments`
@@ -687,58 +671,21 @@ pay.get('/accounts/:id', zValidator('param', accountPathSchema), async (c) => {
     .executeTakeFirst()
 
   if (!row) return c.json({ error: 'Account not found' }, 404)
-  await authorizeProjectRequest(c, row.projectId)
   return c.json(mapLegacyAccount(row))
 })
-
-pay.patch(
-  '/accounts/:id',
-  zValidator('param', accountPathSchema),
-  zValidator('json', moveAccountBodySchema),
-  async (c) => {
-    const auth = await authorizeRequest(c)
-    const { id } = c.req.valid('param')
-    const body = c.req.valid('json')
-    await authorizeProjectRequest(c, body.projectId)
-
-    const conflict = await db
-      .selectFrom('pay_account')
-      .select('id')
-      .where('projectId', '=', body.projectId)
-      .where('env', '=', auth.env)
-      .where('status', '!=', 'disconnected')
-      .where('id', '!=', id)
-      .executeTakeFirst()
-    if (conflict) return c.json({ error: 'PROCESSOR_ALREADY_CONNECTED:whop' }, 409)
-
-    const row = await db
-      .updateTable('pay_account')
-      .set({ projectId: body.projectId, status: 'connected', updatedAt: new Date() })
-      .where('id', '=', id)
-      .where('userId', '=', auth.userId)
-      .where('env', '=', auth.env)
-      .returningAll()
-      .executeTakeFirst()
-
-    if (!row) return c.json({ error: 'Account not found' }, 404)
-    return c.json(mapLegacyAccount(row))
-  },
-)
 
 pay.delete('/accounts/:id', zValidator('param', accountPathSchema), async (c) => {
   const auth = await authorizeRequest(c)
   const { id } = c.req.valid('param')
 
-  const account = await db
+  const exists = await db
     .selectFrom('pay_account')
-    .select(['projectId'])
+    .select('id')
     .where('id', '=', id)
     .where('userId', '=', auth.userId)
     .where('env', '=', auth.env)
     .executeTakeFirst()
-  if (!account) return c.json({ error: 'Account not found' }, 404)
-
-  await authorizeProjectRequest(c, account.projectId)
+  if (!exists) return c.json({ error: 'Account not found' }, 404)
 
   await db
     .updateTable('pay_account')
@@ -821,8 +768,8 @@ pay.post('/checkout', zValidator('json', checkoutBodySchema), async (c) => {
     productId = product.id || undefined
   }
 
-  const account = await getAccountForProject({
-    projectId: body.projectId,
+  const account = await getAccountForUser({
+    userId: auth.userId,
     accountId: body.accountId,
     env: auth.env,
   })
@@ -1243,7 +1190,30 @@ pay.get(
       .limit(c.req.valid('query').limit || 50)
       .execute()
 
-    return c.json(rows.map(mapLegacyTransaction))
+    // Aggregate processor_fee rows by paymentTransactionId into a single fee per payment
+    const feesByPayment = new Map<string, typeof rows>()
+    const nonFeeRows: typeof rows = []
+    for (const row of rows) {
+      if (row.kind === 'processor_fee' && row.paymentTransactionId) {
+        const existing = feesByPayment.get(row.paymentTransactionId)
+        if (existing) existing.push(row)
+        else feesByPayment.set(row.paymentTransactionId, [row])
+      } else {
+        nonFeeRows.push(row)
+      }
+    }
+
+    const aggregatedFees = [...feesByPayment.entries()].map(([, fees]) => {
+      const total = fees.reduce((sum, f) => sum + Number(f.amount), 0)
+      const first = fees[0]
+      return { ...first, amount: String(total) }
+    })
+
+    const merged = [...nonFeeRows, ...aggregatedFees].sort(
+      (a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime(),
+    )
+
+    return c.json(merged.map(mapLegacyTransaction))
   },
 )
 

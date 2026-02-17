@@ -8,7 +8,7 @@ import {
 
 type AccountRow = {
   id: string | null
-  projectId: string
+  projectId: string | null
   whopCompanyId: string
   title: string
   status: string

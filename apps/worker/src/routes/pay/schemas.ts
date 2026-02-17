@@ -38,10 +38,6 @@ export const accountListQuerySchema = z.object({
   processor: z.string().trim().optional(),
 })
 
-export const moveAccountBodySchema = z.object({
-  projectId: uuid,
-})
-
 export const connectBodySchema = z.object({
   projectId: uuid.optional(),
   companyName: z.string().trim().min(1).max(120).optional(),

@@ -128,7 +128,7 @@ export async function resolveActiveAccountId(
   env: PayEnv,
 ): Promise<string | null> {
   try {
-    const account = await getAccountForProject({ projectId, env })
+    const account = await getAccountForUser({ projectId, env })
     return account.id
   } catch {
     return null
@@ -193,21 +193,36 @@ export function getClient(env: PayEnv): PayClient {
   return new PayClient({ apiKey, platformCompanyId, baseUrl })
 }
 
-export async function getAccountForProject(args: {
+export async function getAccountForUser(args: {
+  userId?: string
   projectId?: string
   accountId?: string
   env: PayEnv
 }) {
-  if (!args.projectId && !args.accountId)
-    throw new HttpError(400, 'projectId or accountId required')
+  let userId = args.userId
+
+  // If we only have projectId, resolve the project owner's userId
+  if (!userId && args.projectId) {
+    const project = await db
+      .selectFrom('project')
+      .select('userId')
+      .where('id', '=', args.projectId)
+      .executeTakeFirst()
+    if (!project) throw new HttpError(404, 'Project not found')
+    userId = project.userId
+  }
+
+  if (!userId && !args.accountId)
+    throw new HttpError(400, 'userId, projectId, or accountId required')
 
   let query = db
     .selectFrom('pay_account')
     .selectAll()
     .where('status', '!=', 'disconnected')
     .where('env', '=', args.env)
-  if (args.projectId) query = query.where('projectId', '=', args.projectId)
+
   if (args.accountId) query = query.where('id', '=', args.accountId)
+  else if (userId) query = query.where('userId', '=', userId)
 
   const row = await query.orderBy('createdAt', 'desc').executeTakeFirst()
   if (!row) throw new HttpError(404, 'Whop account not found')

@@ -484,7 +484,7 @@ export interface ProductPriceTable {
 
 export interface PayAccountTable {
   id: string | null
-  projectId: string
+  projectId: string | null
   userId: string
   whopCompanyId: string
   title: string

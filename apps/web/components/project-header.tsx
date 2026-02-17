@@ -67,7 +67,7 @@ import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
 import { useGitHubStatus } from '@/queries/github'
 import { useSandbox } from '@/hooks/use-sandbox'
-import { useSurpayConnect, useSurpayMoveAccount } from '@/queries/surpay'
+import { useSurpayConnect } from '@/queries/surpay'
 
 // Types
 interface User {
@@ -193,7 +193,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const upsertListing = useUpsertProjectListing()
   const updateVisibility = useUpdateProjectVisibility()
   const surpayConnect = useSurpayConnect()
-  const surpayMoveAccount = useSurpayMoveAccount()
 
   // Toast when deployment completes
   const prevStatusRef = useRef<string | null>(null)
@@ -1076,30 +1075,14 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 Use Different Account
               </Button>
               <Button
-                className="flex-1 h-10 bg-brand hover:bg-brand/90 text-brand-foreground"
-                disabled={surpayMoveAccount.isPending}
+                className="flex-1 h-10"
+                variant="outline"
                 onClick={() => {
-                  if (!projectId || !conflictAccountId) return
-                  surpayMoveAccount.mutate(
-                    { accountId: conflictAccountId, projectId },
-                    {
-                      onSuccess: () => {
-                        setIsStripeConflictOpen(false)
-                        setConflictAccountId(null)
-                        toast.success('Stripe account moved successfully', {
-                          position: 'top-right',
-                        })
-                        setPulsePaymentsTab(true)
-                        setTimeout(() => setPulsePaymentsTab(false), 10000)
-                      },
-                      onError: () =>
-                        toast.error('Failed to move Stripe account', { position: 'top-right' }),
-                    },
-                  )
+                  setIsStripeConflictOpen(false)
+                  setConflictAccountId(null)
                 }}
               >
-                {surpayMoveAccount.isPending && <Loader2 className="size-4 animate-spin mr-1.5" />}
-                Move Here
+                Cancel
               </Button>
             </div>
           </div>

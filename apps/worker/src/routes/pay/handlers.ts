@@ -202,7 +202,7 @@ async function lookupAccount(companyId: string | undefined, env: PayEnv, trx: Tr
   return (
     (await trx
       .selectFrom('pay_account')
-      .select(['id', 'projectId'])
+      .select(['id'])
       .where('whopCompanyId', '=', companyId)
       .where('env', '=', env)
       .executeTakeFirst()) ?? null
@@ -416,8 +416,7 @@ async function upsertPaymentFromWebhook(
     !checkout?.projectId && !extractProjectId(ev.metadata)
       ? await lookupAccount(ev.companyId, env, trx)
       : null
-  const projectId =
-    checkout?.projectId || extractProjectId(ev.metadata) || account?.projectId || null
+  const projectId = checkout?.projectId || extractProjectId(ev.metadata) || null
   const accountId = checkout?.accountId || account?.id || null
   const checkoutId = checkout?.id || null
   const whopCompanyId = checkout?.whopCompanyId || null
@@ -604,8 +603,7 @@ async function upsertMembershipFromWebhook(
     !checkout?.projectId && !extractProjectId(ev.metadata)
       ? await lookupAccount(ev.companyId, env, trx)
       : null
-  const projectId =
-    checkout?.projectId || extractProjectId(ev.metadata) || account?.projectId || null
+  const projectId = checkout?.projectId || extractProjectId(ev.metadata) || null
   const checkoutId = checkout?.id || null
   const now = new Date()
   const rawStatus =
@@ -887,11 +885,7 @@ async function upsertInvoiceFromWebhook(
       ? await lookupAccount(ev.companyId, env, trx)
       : null
   const projectId =
-    checkout?.projectId ||
-    subscription?.projectId ||
-    extractProjectId(ev.metadata) ||
-    account?.projectId ||
-    null
+    checkout?.projectId || subscription?.projectId || extractProjectId(ev.metadata) || null
   const checkoutId = checkout?.id || subscription?.checkoutId || null
   const subscriptionId = subscription?.id || null
   const accountId =
@@ -1001,7 +995,7 @@ async function upsertWithdrawalFromWebhook(
         .executeTakeFirst()
     : null
 
-  const projectId = account?.projectId || extractProjectId(ev.metadata)
+  const projectId = extractProjectId(ev.metadata) || null
   const status = statusFromWithdrawal(eventType, ev.status)
   const amount = ev.amount ?? 0
   const now = new Date()
