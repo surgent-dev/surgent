@@ -97,8 +97,8 @@ const deleteProjectSchema = {
 const envParam = {
   env: z
     .enum(['development', 'production'])
-    .optional()
-    .describe('Target environment. Defaults to "development".'),
+    .default('development')
+    .describe('Target environment: "development" or "production".'),
 }
 
 const setEnvVarsSchema = {
@@ -355,15 +355,14 @@ Use the projectId returned from create_project.`,
 
 Input: { "vars": { "KEY": "value" }, "env": "development" }
 
-Optionally pass "env" to target development (default) or production.
+Pass "env" to target development (default) or production.
 Use this to configure API keys, secrets, or any runtime configuration your Convex functions need.
 Existing variables with the same name will be overwritten. Other variables are preserved.`,
       inputSchema: setEnvVarsSchema,
     },
     async (args, extra) => {
-      const env = args.env ?? 'development'
-      const ctx = await getToolContext(extra, env)
-      if (!ctx) return err(`Convex ${env} deployment not provisioned`)
+      const ctx = await getToolContext(extra, args.env)
+      if (!ctx) return err(`Convex ${args.env} deployment not provisioned`)
 
       try {
         await setDeploymentEnvVars(ctx.deploymentUrl, ctx.deployKey, args.vars)
@@ -391,18 +390,17 @@ Existing variables with the same name will be overwritten. Other variables are p
       title: 'List Environment Variables',
       description: `List all environment variables currently set on a Convex deployment.
 
-Optionally pass "env" to target development (default) or production.
+Pass "env" to target development (default) or production.
 Returns an array of variable names and values.`,
       inputSchema: envParam,
     },
     async (args, extra) => {
-      const env = args.env ?? 'development'
-      const ctx = await getToolContext(extra, env)
-      if (!ctx) return err(`Convex ${env} deployment not provisioned`)
+      const ctx = await getToolContext(extra, args.env)
+      if (!ctx) return err(`Convex ${args.env} deployment not provisioned`)
 
       try {
         const vars = await listDeploymentEnvVars(ctx.deploymentUrl, ctx.deployKey)
-        return ok({ env, environmentVariables: vars })
+        return ok({ env: args.env, environmentVariables: vars })
       } catch (e) {
         return err(errMsg(e))
       }
@@ -416,7 +414,7 @@ Returns an array of variable names and values.`,
       description: `Execute a read-only Convex query function to fetch data from the database.
 
 Queries are for reading data - they cannot modify the database. Use call_mutation for writes.
-Optionally pass "env" to target development (default) or production.
+Pass "env" to target development (default) or production.
 
 The 'path' format is "filename:functionName":
 - "messages:list" → calls the 'list' query in convex/messages.ts
@@ -426,9 +424,8 @@ Pass arguments as a JSON object matching the function's expected args.`,
       inputSchema: callFunctionSchema,
     },
     async (args, extra) => {
-      const env = args.env ?? 'development'
-      const ctx = await getToolContext(extra, env)
-      if (!ctx) return err(`Convex ${env} deployment not provisioned`)
+      const ctx = await getToolContext(extra, args.env)
+      if (!ctx) return err(`Convex ${args.env} deployment not provisioned`)
 
       try {
         const funcArgs = (args.args ?? {}) as Record<string, ConvexValue>
@@ -448,7 +445,7 @@ Pass arguments as a JSON object matching the function's expected args.`,
       description: `Execute a Convex mutation function to modify data in the database.
 
 Mutations are for writing data - creating, updating, or deleting records. Use call_query for reads.
-Optionally pass "env" to target development (default) or production.
+Pass "env" to target development (default) or production.
 
 The 'path' format is "filename:functionName":
 - "messages:send" → calls the 'send' mutation in convex/messages.ts
@@ -459,9 +456,8 @@ Pass arguments as a JSON object matching the function's expected args.`,
       inputSchema: callFunctionSchema,
     },
     async (args, extra) => {
-      const env = args.env ?? 'development'
-      const ctx = await getToolContext(extra, env)
-      if (!ctx) return err(`Convex ${env} deployment not provisioned`)
+      const ctx = await getToolContext(extra, args.env)
+      if (!ctx) return err(`Convex ${args.env} deployment not provisioned`)
 
       try {
         const funcArgs = (args.args ?? {}) as Record<string, ConvexValue>
