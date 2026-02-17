@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { z } from 'zod'
 import { db } from '@/lib/db'
 import {
   requiredId,
@@ -10,6 +11,13 @@ import type { PayEnv } from '@/lib/pay/types'
 
 export interface McpContext {
   apiKey: string
+}
+
+const envSchema = {
+  env: z
+    .enum(['test', 'live'])
+    .optional()
+    .describe('Environment: "test" (sandbox) or "live". Defaults to API key environment.'),
 }
 
 type McpResponse = { content: { type: 'text'; text: string }[]; isError?: boolean }
@@ -83,25 +91,26 @@ CHECKOUT ARGS:
 - redirectUrl: Where to send the user after payment
 
 REQUIRES _meta.context with apiKey (project-scoped API key).`,
-      inputSchema: {},
+      inputSchema: envSchema,
     },
-    async (_args, extra) => {
+    async (args, extra) => {
       const ctx = getContext(extra)
       if (!ctx?.apiKey) return err('Missing apiKey in context')
 
       try {
         const scope = await resolveProjectId(ctx.apiKey)
         if (!scope) return err('Invalid API key')
+        const env = (args.env as PayEnv) || scope.env
 
-        const accountId = await resolveActiveAccountId(scope.projectId, scope.env)
+        const accountId = await resolveActiveAccountId(scope.projectId, env)
         const { products: allProducts, pricesByProduct } = await getProductsWithPrices(
           scope.projectId,
-          scope.env,
+          env,
           accountId,
         )
         const products = allProducts.filter((p) => !p.isArchived)
 
-        if (!products.length) return ok({ products: [] })
+        if (!products.length) return ok({ products: [], env })
 
         const result = products.map((product) => {
           const id = requiredId(product.id, 'product')
@@ -126,7 +135,7 @@ REQUIRES _meta.context with apiKey (project-scoped API key).`,
           }
         })
 
-        return ok({ products: result })
+        return ok({ products: result, env })
       } catch (e) {
         return err(errMsg(e))
       }
