@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Info, Plus } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import {
   useProducts,
@@ -16,6 +16,7 @@ import { CreateProductDialog } from './create-product-dialog'
 import { CreatePriceDialog } from './create-price-dialog'
 import { EditProductDialog } from './edit-product-dialog'
 import { Sidebar, type ViewType, type AccountData } from './sidebar'
+import { usePayEnv } from '@/stores/pay-env'
 import { DashboardView } from './dashboard-view'
 import { ProductsView } from './products-view'
 import { TransactionsView } from './transactions-view'
@@ -47,6 +48,7 @@ export function ProductsSection({
   const { data: subscriptionsData, isLoading: subscriptionsLoading } = useSubscriptions(projectId)
   const [view, setView] = useState<ViewType>('dashboard')
 
+  const payEnv = usePayEnv((s) => s.env)
   const [createProductOpen, setCreateProductOpen] = useState(false)
   const [createPriceOpen, setCreatePriceOpen] = useState(false)
   const [editProductOpen, setEditProductOpen] = useState(false)
@@ -135,6 +137,16 @@ export function ProductsSection({
             </button>
           )}
         </header>
+
+        {payEnv === 'live' && (
+          <div className="mx-4 mt-3 flex items-start gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+            <Info className="size-3.5 text-amber-600 shrink-0 mt-0.5" strokeWidth={2} />
+            <p className="text-[12px] leading-relaxed text-amber-700 dark:text-amber-500">
+              The coding agent only has access to <span className="font-semibold">Sandbox</span>{' '}
+              mode. Switch to Sandbox to create products and test payments from your app.
+            </p>
+          </div>
+        )}
 
         <div className="flex-1 min-h-0">
           {view === 'dashboard' && (

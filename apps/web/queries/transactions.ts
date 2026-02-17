@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { payHttp } from '@/lib/http'
+import { usePayEnv } from '@/stores/pay-env'
 
 export type TransactionType =
   | 'payment'
@@ -40,8 +41,9 @@ async function fetchTransactions(projectId: string): Promise<TransactionsRespons
 }
 
 export function useTransactions(projectId?: string) {
+  const env = usePayEnv((s) => s.env)
   return useQuery({
-    queryKey: ['transactions', projectId],
+    queryKey: ['transactions', projectId, env],
     queryFn: () => fetchTransactions(projectId!),
     enabled: Boolean(projectId),
     staleTime: 1000 * 30,

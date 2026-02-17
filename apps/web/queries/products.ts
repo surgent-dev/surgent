@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { payHttp } from '@/lib/http'
+import { usePayEnv } from '@/stores/pay-env'
 
 // Types
 export interface Product {
@@ -110,8 +111,9 @@ async function createPrice(
 
 // Hooks
 export function useProducts(projectId?: string) {
+  const env = usePayEnv((s) => s.env)
   return useQuery({
-    queryKey: ['products', projectId],
+    queryKey: ['products', projectId, env],
     queryFn: () => fetchProducts(projectId!),
     enabled: Boolean(projectId),
     staleTime: 1000 * 30,
@@ -119,42 +121,46 @@ export function useProducts(projectId?: string) {
 }
 
 export function useCreateProduct(projectId?: string) {
+  const env = usePayEnv((s) => s.env)
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: CreateProductInput) => createProduct(projectId!, input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['products', projectId, env] })
     },
   })
 }
 
 export function useUpdateProduct(projectId?: string) {
+  const env = usePayEnv((s) => s.env)
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ productId, input }: { productId: string; input: UpdateProductInput }) =>
       updateProduct(productId, input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['products', projectId, env] })
     },
   })
 }
 
 export function useArchiveProduct(projectId?: string) {
+  const env = usePayEnv((s) => s.env)
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (productId: string) => archiveProduct(productId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['products', projectId, env] })
     },
   })
 }
 
 export function useCreatePrice(projectId?: string) {
+  const env = usePayEnv((s) => s.env)
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: CreatePriceInput) => createPrice(projectId!, input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['products', projectId, env] })
     },
   })
 }

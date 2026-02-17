@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { payHttp } from '@/lib/http'
+import { usePayEnv } from '@/stores/pay-env'
 
 export interface Subscription {
   id: string
@@ -26,8 +27,9 @@ async function fetchSubscriptions(projectId: string): Promise<Subscription[]> {
 }
 
 export function useSubscriptions(projectId?: string) {
+  const env = usePayEnv((s) => s.env)
   return useQuery({
-    queryKey: ['subscriptions', projectId],
+    queryKey: ['subscriptions', projectId, env],
     queryFn: () => fetchSubscriptions(projectId!),
     enabled: Boolean(projectId),
     staleTime: 1000 * 30,
@@ -35,6 +37,7 @@ export function useSubscriptions(projectId?: string) {
 }
 
 export function useCancelSubscription(projectId?: string) {
+  const env = usePayEnv((s) => s.env)
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -46,7 +49,7 @@ export function useCancelSubscription(projectId?: string) {
         .json<{ id: string; status: string; canceledAt: string }>()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subscriptions', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['subscriptions', projectId, env] })
     },
   })
 }

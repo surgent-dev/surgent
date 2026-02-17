@@ -55,7 +55,7 @@ function NavItem({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] font-medium transition-colors',
+        'w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium transition-all duration-150',
         active
           ? 'bg-foreground/[0.06] text-foreground'
           : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04]',
@@ -66,7 +66,14 @@ function NavItem({
       <Icon className="size-[15px] shrink-0" strokeWidth={active ? 2 : 1.75} />
       <span className="flex-1 text-left truncate">{label}</span>
       {badge !== undefined && (
-        <span className="text-[11px] tabular-nums text-muted-foreground font-normal">{badge}</span>
+        <span
+          className={cn(
+            'text-[10px] tabular-nums font-medium px-1.5 py-0.5 rounded-full min-w-[20px] text-center',
+            active ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {badge}
+        </span>
       )}
       {!badge && TrailingIcon && <TrailingIcon className="size-3.5 text-muted-foreground" />}
     </button>
@@ -102,6 +109,7 @@ export function Sidebar({
 }: SidebarProps) {
   const showPayouts = isConnected && processor === 'whop' && onOpenPayoutsPortal
   const env = usePayEnv((s) => s.env)
+  const setEnv = usePayEnv((s) => s.setEnv)
   const isLive = env === 'live'
 
   return (
@@ -112,35 +120,58 @@ export function Sidebar({
             <Image src="/surpay-coin.svg" alt="Surgent" width={22} height={22} />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Company</p>
+            <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider leading-none mb-0.5">
+              Company
+            </p>
             <p className="text-[13px] font-semibold truncate leading-tight">
               {accountData?.title || 'Payments'}
             </p>
           </div>
         </div>
-        <div
-          className={cn(
-            'mt-2.5 flex items-center gap-1.5 px-2 py-1 rounded-md w-fit',
-            isLive ? 'bg-emerald-500/10' : 'bg-amber-500/10',
-          )}
-        >
-          {isLive ? (
-            <>
-              <Globe className="size-3 text-emerald-600" strokeWidth={2} />
-              <span className="text-[11px] font-medium text-emerald-600">Live</span>
-            </>
-          ) : (
-            <>
-              <FlaskConical className="size-3 text-amber-600" strokeWidth={2} />
-              <span className="text-[11px] font-medium text-amber-600">Sandbox</span>
-            </>
-          )}
+
+        <div className="mt-3 rounded-lg border bg-muted/40 p-[3px] grid grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setEnv('test')}
+            className={cn(
+              'flex items-center justify-center gap-1.5 rounded-[5px] py-1 text-[11px] font-medium transition-colors',
+              !isLive
+                ? 'bg-background border text-amber-600'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <span
+              className={cn(
+                'size-1.5 rounded-full',
+                !isLive ? 'bg-amber-500' : 'bg-muted-foreground/40',
+              )}
+            />
+            Sandbox
+          </button>
+          <button
+            type="button"
+            onClick={() => setEnv('live')}
+            className={cn(
+              'flex items-center justify-center gap-1.5 rounded-[5px] py-1 text-[11px] font-medium transition-colors',
+              isLive
+                ? 'bg-background border text-emerald-600'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <span
+              className={cn(
+                'size-1.5 rounded-full',
+                isLive ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+              )}
+            />
+            Live
+          </button>
         </div>
       </div>
 
-      <div className="h-px bg-border mx-4" />
+      <div className="h-px bg-border/60 mx-4" />
 
-      <nav className="flex-1 px-3 py-3 space-y-0.5">
+      <nav className="flex-1 px-2.5 py-2.5 space-y-0.5">
         <NavItem
           icon={LayoutDashboard}
           label="Dashboard"
@@ -176,7 +207,7 @@ export function Sidebar({
           badge={transactionCount > 0 ? transactionCount : undefined}
         />
 
-        <div className="h-px bg-border my-2 !mx-0" />
+        <div className="h-px bg-border/60 my-2 !mx-0" />
 
         {showPayouts && (
           <NavItem

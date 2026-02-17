@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { payHttp } from '@/lib/http'
+import { usePayEnv } from '@/stores/pay-env'
 
 export interface Customer {
   id: string
@@ -41,8 +42,9 @@ async function fetchCustomers(projectId: string): Promise<CustomersResponse> {
 }
 
 export function useCustomers(projectId?: string) {
+  const env = usePayEnv((s) => s.env)
   return useQuery({
-    queryKey: ['customers', projectId],
+    queryKey: ['customers', projectId, env],
     queryFn: () => fetchCustomers(projectId!),
     enabled: Boolean(projectId),
     staleTime: 1000 * 30,
@@ -59,8 +61,9 @@ async function fetchCustomerDetail(
 }
 
 export function useCustomerDetail(customerId?: string, projectId?: string) {
+  const env = usePayEnv((s) => s.env)
   return useQuery({
-    queryKey: ['customer-detail', customerId, projectId],
+    queryKey: ['customer-detail', customerId, projectId, env],
     queryFn: () => fetchCustomerDetail(customerId!, projectId!),
     enabled: Boolean(customerId && projectId),
     staleTime: 1000 * 30,
