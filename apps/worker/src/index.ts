@@ -163,12 +163,19 @@ app.use('*', async (c, next) => {
     c.set('user', session.user)
     c.set('session', session.session)
     return next()
-  } catch {
-    // Better Auth's apiKey plugin may reject Bearer-prefixed keys;
-    // let downstream route-level auth (e.g. pay) handle API key validation.
-    c.set('user', null)
-    c.set('session', null)
-    return next()
+  } catch (err) {
+    const status = (err as any).statusCode ?? (err as any).status_code
+    const hasApiKey = c.req.header('authorization') || c.req.header('x-api-key')
+
+    // Better Auth may reject API keys it can't resolve to a session;
+    // let route-level auth (pay, MCP) handle its own key validation.
+    if (hasApiKey && (status === 401 || status === 403)) {
+      c.set('user', null)
+      c.set('session', null)
+      return next()
+    }
+
+    throw err
   }
 })
 

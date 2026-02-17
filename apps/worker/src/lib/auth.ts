@@ -95,7 +95,13 @@ export const auth = betterAuth({
     apiKey({
       rateLimit: { enabled: false },
       enableSessionForAPIKeys: true,
-      apiKeyHeaders: ['x-api-key', 'authorization'],
+      customAPIKeyGetter: (ctx) => {
+        const xApiKey = ctx.headers?.get('x-api-key')
+        if (xApiKey) return xApiKey
+        const authHeader = ctx.headers?.get('authorization')
+        if (authHeader) return authHeader.replace(/^Bearer\s+/i, '')
+        return null
+      },
     }),
     jwt({
       jwt: {

@@ -22,6 +22,24 @@ export type AuthResult = {
 }
 
 export async function authorizeRequest(c: Context<AppContext>): Promise<AuthResult> {
+  // API key takes priority — we need projectId + env from the apikey row
+  const rawApiKey = readApiKey(c.req.raw.headers)
+  if (rawApiKey) {
+    const hashed = await hashApiKey(rawApiKey)
+    const key = await db
+      .selectFrom('apikey')
+      .select(['projectId', 'userId', 'enabled', 'expiresAt', 'env'])
+      .where('key', '=', hashed)
+      .executeTakeFirst()
+
+    if (key && key.enabled) {
+      if (key.expiresAt && key.expiresAt <= new Date()) throw new HttpError(401, 'API key expired')
+      const env: PayEnv = key.env === 'test' ? 'test' : 'live'
+      return { userId: key.userId, mode: 'api_key', projectId: key.projectId, env }
+    }
+  }
+
+  // Fall back to session auth (browser/dashboard)
   const user = c.get('user')
   const session = c.get('session')
   if (user && session) {
@@ -30,21 +48,7 @@ export async function authorizeRequest(c: Context<AppContext>): Promise<AuthResu
     return { userId: user.id, mode: 'session', projectId: null, env }
   }
 
-  const rawApiKey = readApiKey(c.req.raw.headers)
-  if (!rawApiKey) throw new HttpError(401, 'Unauthorized')
-
-  const hashed = await hashApiKey(rawApiKey)
-  const key = await db
-    .selectFrom('apikey')
-    .select(['projectId', 'userId', 'enabled', 'expiresAt', 'env'])
-    .where('key', '=', hashed)
-    .executeTakeFirst()
-
-  if (!key || !key.enabled) throw new HttpError(401, 'Unauthorized')
-  if (key.expiresAt && key.expiresAt <= new Date()) throw new HttpError(401, 'API key expired')
-
-  const env: PayEnv = key.env === 'test' ? 'test' : 'live'
-  return { userId: key.userId, mode: 'api_key', projectId: key.projectId, env }
+  throw new HttpError(401, 'Unauthorized')
 }
 
 export async function authorizeProjectRequest(
