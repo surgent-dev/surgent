@@ -62,6 +62,12 @@ app.onError((err, c) => {
     return c.json({ error: err.message }, err.status as 400 | 401 | 403 | 404 | 500)
   }
 
+  const statusCode = (err as any).statusCode ?? (err as any).status_code
+  if (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 600) {
+    log.warn({ err, statusCode }, 'upstream error')
+    return c.json({ error: err.message || 'Request failed' }, statusCode as any)
+  }
+
   log.error({ err }, 'unhandled error')
   return c.json({ error: 'Internal Server Error' }, 500)
 })
@@ -145,17 +151,25 @@ app.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw))
 
 // Session middleware
 app.use('*', async (c, next) => {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers })
+  try {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers })
 
-  if (!session) {
+    if (!session) {
+      c.set('user', null)
+      c.set('session', null)
+      return next()
+    }
+
+    c.set('user', session.user)
+    c.set('session', session.session)
+    return next()
+  } catch {
+    // Better Auth's apiKey plugin may reject Bearer-prefixed keys;
+    // let downstream route-level auth (e.g. pay) handle API key validation.
     c.set('user', null)
     c.set('session', null)
     return next()
   }
-
-  c.set('user', session.user)
-  c.set('session', session.session)
-  return next()
 })
 
 // Inngest serve handler
