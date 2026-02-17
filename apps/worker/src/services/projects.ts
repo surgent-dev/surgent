@@ -32,19 +32,6 @@ export async function getProjectWithAuth(id: string, user: User) {
   return project
 }
 
-export async function attachApiKeyToProject(
-  apiKeyId: string,
-  projectId: string,
-  organizationId: string,
-): Promise<boolean> {
-  const result = await db
-    .updateTable('apikey')
-    .set({ projectId, organizationId })
-    .where('id', '=', apiKeyId)
-    .executeTakeFirst()
-  return result.numUpdatedRows > 0n
-}
-
 export function getProjectById(id: string) {
   return db
     .selectFrom('project')
