@@ -1,8 +1,8 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, useCallback, use } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useCallback, useEffect, use } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { WhopCheckoutEmbed, useCheckoutEmbedControls } from '@whop/checkout/react'
 import type { WhopCheckoutState } from '@whop/checkout/util'
@@ -24,6 +24,7 @@ import { formatPrice } from '@/components/payments/utils'
 export default function CheckoutPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { resolvedTheme } = useTheme()
 
   const { data: session, isLoading, error } = useCheckoutSession(id)
@@ -33,6 +34,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
   const [embedState, setEmbedState] = useState<WhopCheckoutState>('loading')
   const [completed, setCompleted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  // Handle return from external payment providers (e.g. PayPal)
+  const returnStatus = searchParams.get('status')
+  useEffect(() => {
+    if (returnStatus === 'success') setCompleted(true)
+  }, [returnStatus])
 
   const title = session?.title || 'Payment'
   const amount = session?.amount ?? null
@@ -246,6 +253,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
                       sessionId={sessionId}
                       theme={theme}
                       environment={session?.env === 'live' ? 'production' : 'sandbox'}
+                      returnUrl={typeof window !== 'undefined' ? window.location.href : undefined}
                       hidePrice
                       hideTermsAndConditions
                       hideSubmitButton
