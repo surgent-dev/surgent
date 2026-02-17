@@ -7,8 +7,7 @@ For detailed architecture, refer to docs/ARCHITECTURE.md.
 ### Key Components
 
 - @apps/web — Next.js frontend
-- @apps/worker — Bun + Hono backend, orchestrates everything
-- @apps/pay — Rust payment backend (Surpay)
+- @apps/worker — Bun + Hono backend, orchestrates everything (including payments)
 - @apps/dispatch — Cloudflare Worker router for customer apps
 - @packages/gateway — AI token streaming and usage tracking
 - @packages/db — Shared database client (Kysely + Postgres)
@@ -47,14 +46,6 @@ To regenerate the javascript SDK, run ./packages/sdk/js/script/build.ts
 ## Tool Calling
 
 - ALWAYS USE PARALLEL TOOLS WHEN APPLICABLE.
-
-## Rust
-
-- DO NOT EDIT .sqlx/ by hand. Use `cargo prepare` to generate offline sqlx queries.
-- DO NOT run migrations by hand, DO NOT edit database directly.
-- Always run `cargo fmt` after rust code changes
-- Do not leave comments if the code is easy to understand, leave comments if logic is complicated or the behavior is not immediately obvious.
-- Run tests faster with `cargo nextest run`
 
 ## Plans
 

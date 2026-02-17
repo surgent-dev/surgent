@@ -12,7 +12,6 @@ Surgent is built as a monorepo with the following core components:
 
 - `@apps/web` — Next.js frontend
 - `@apps/worker` — Bun + Hono backend for orchestration
-- `@apps/pay` — Rust payment service (Surpay)
 - `@apps/dispatch` — Cloudflare Worker router for customer apps
 - `@packages/gateway` — AI gateway for token streaming and usage tracking
 - `@packages/db` — Shared database client using Kysely
@@ -22,7 +21,7 @@ For a detailed breakdown of the system architecture, refer to [docs/ARCHITECTURE
 ## Tech Stack
 
 - **Frontend**: Next.js
-- **Backend**: Bun, Hono, Rust (Axum)
+- **Backend**: Bun, Hono
 - **Edge**: Cloudflare Workers
 - **Infrastructure**: AWS (ECS, SQS)
 - **Database**: Postgres
@@ -34,7 +33,6 @@ For a detailed breakdown of the system architecture, refer to [docs/ARCHITECTURE
 Ensure you have the following installed:
 
 - [Bun](https://bun.sh/)
-- [Rust](https://www.rust-lang.org/)
 - [Docker](https://www.docker.com/) (for local Postgres)
 
 ### Installation
@@ -56,7 +54,6 @@ Ensure you have the following installed:
    Copy the example environment files to `.env` in each relevant directory:
    - `apps/web/.example.env` -> `apps/web/.env`
    - `apps/worker/.example.env` -> `apps/worker/.env`
-   - `apps/pay/env.example` -> `apps/pay/.env`
    - `packages/gateway/.env.example` -> `packages/gateway/.env`
 
 ### Local Development
@@ -79,7 +76,6 @@ bun db:migrate
 .
 ├── apps/
 │   ├── dispatch/    # Cloudflare Worker router
-│   ├── pay/         # Rust payment backend (Surpay)
 │   ├── web/         # Next.js frontend
 │   └── worker/      # Bun + Hono orchestration backend
 ├── docs/            # Documentation and architecture plans

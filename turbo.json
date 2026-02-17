@@ -1,20 +1,11 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
-  "globalPassThroughEnv": [
-    "PKG_CONFIG_PATH",
-    "LD_LIBRARY_PATH",
-    "OPENSSL_DIR",
-    "OPENSSL_LIB_DIR",
-    "OPENSSL_INCLUDE_DIR",
-    "SSL_CERT_FILE",
-    "NODE_EXTRA_CA_CERTS"
-  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "target/release/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]

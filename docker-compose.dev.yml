@@ -31,24 +31,5 @@ services:
       timeout: 5s
       retries: 5
 
-  sqs:
-    image: softwaremill/elasticmq-native:latest
-    container_name: elasticmq
-    restart: unless-stopped
-    ports:
-      - '9324:9324' # SQS-compatible REST endpoint
-      - '9325:9325' # (optional) UI / additional port depending on image
-    environment:
-      # dev environment so listen on all
-      - ELASTICMQ_NODE_ADDRESS=0.0.0.0
-    volumes:
-      - ./elasticmq.conf:/opt/elasticmq.conf:ro
-    command: ['-Dconfig.file=/opt/elasticmq.conf']
-    healthcheck:
-      test: ['CMD-SHELL', 'nc -z localhost 9324 || exit 1']
-      interval: 10s
-      timeout: 2s
-      retries: 5
-
 volumes:
   postgres_data:
