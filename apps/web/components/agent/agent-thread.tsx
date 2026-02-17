@@ -103,7 +103,7 @@ const TOOLS: Record<string, ToolConfig> = {
 const MCP_SERVERS: Record<string, { icon: React.ElementType; label: string }> = {
   convex: { icon: Database, label: 'Convex' },
   pay: { icon: Database, label: 'Pay' },
-  stripe: { icon: Database, label: 'Stripe' },
+  stripe: { icon: Database, label: 'Pay' },
   supabase: { icon: Database, label: 'Supabase' },
   firebase: { icon: Database, label: 'Firebase' },
 }

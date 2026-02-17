@@ -74,7 +74,7 @@ const suggestions = [
     label: 'Online Store',
     color: 'text-amber-600',
     prompt:
-      'A clean minimal e-commerce store — airy whitespace layout, product cards with soft shadows that lift on hover, a slide-out cart drawer, sticky category nav bar, and Stripe-powered checkout flow',
+      'A clean minimal e-commerce store — airy whitespace layout, product cards with soft shadows that lift on hover, a slide-out cart drawer, sticky category nav bar, and payment-powered checkout flow',
   },
   {
     icon: CalendarCheck,

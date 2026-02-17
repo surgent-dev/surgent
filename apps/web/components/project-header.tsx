@@ -130,33 +130,33 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
   const [isDeploymentStatusOpen, setIsDeploymentStatusOpen] = useState(false)
   const [isPublishOpen, setIsPublishOpen] = useState(false)
-  const [isStripeSuccessOpen, setIsStripeSuccessOpen] = useState(false)
-  const [isStripeConflictOpen, setIsStripeConflictOpen] = useState(false)
+  const [isPaySuccessOpen, setIsPaySuccessOpen] = useState(false)
+  const [isPayConflictOpen, setIsPayConflictOpen] = useState(false)
   const [conflictAccountId, setConflictAccountId] = useState<string | null>(null)
 
-  // Stripe success handling
+  // Pay success handling
   const setPulsePaymentsTab = useSandbox((s) => s.setPulsePaymentsTab)
   useEffect(() => {
-    if (searchParams.get('stripe_connected') === 'true') {
-      setIsStripeSuccessOpen(true)
+    if (searchParams.get('pay_connected') === 'true') {
+      setIsPaySuccessOpen(true)
       const params = new URLSearchParams(searchParams.toString())
-      params.delete('stripe_connected')
+      params.delete('pay_connected')
       const newQuery = params.toString()
       router.replace(newQuery ? `${pathname}?${newQuery}` : pathname)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, pathname, router])
 
-  // Stripe conflict handling
+  // Pay conflict handling
   useEffect(() => {
-    if (searchParams.get('stripe_conflict') === 'true') {
+    if (searchParams.get('pay_conflict') === 'true') {
       const accountId = searchParams.get('conflict_account_id')
       if (accountId) {
         setConflictAccountId(accountId)
-        setIsStripeConflictOpen(true)
+        setIsPayConflictOpen(true)
       }
       const params = new URLSearchParams(searchParams.toString())
-      params.delete('stripe_conflict')
+      params.delete('pay_conflict')
       params.delete('conflict_account_id')
       const newQuery = params.toString()
       router.replace(newQuery ? `${pathname}?${newQuery}` : pathname)
@@ -1004,9 +1004,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       />
 
       <Dialog
-        open={isStripeSuccessOpen}
+        open={isPaySuccessOpen}
         onOpenChange={(open) => {
-          setIsStripeSuccessOpen(open)
+          setIsPaySuccessOpen(open)
           if (!open) {
             setPulsePaymentsTab(true)
             setTimeout(() => setPulsePaymentsTab(false), 10000)
@@ -1015,7 +1015,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       >
         <DialogContent overlayClassName="backdrop-blur-sm">
           <DialogHeader>
-            <DialogTitle>Stripe Connected Successfully!</DialogTitle>
+            <DialogTitle>Payment Account Connected!</DialogTitle>
             <DialogDescription>
               You can now head to the Payments tab to configure pricing and more.
             </DialogDescription>
@@ -1023,7 +1023,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           <DialogFooter>
             <Button
               onClick={() => {
-                setIsStripeSuccessOpen(false)
+                setIsPaySuccessOpen(false)
                 setPulsePaymentsTab(true)
                 setTimeout(() => setPulsePaymentsTab(false), 10000)
               }}
@@ -1036,7 +1036,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
       <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
 
-      <Dialog open={isStripeConflictOpen} onOpenChange={setIsStripeConflictOpen}>
+      <Dialog open={isPayConflictOpen} onOpenChange={setIsPayConflictOpen}>
         <DialogContent overlayClassName="backdrop-blur-sm" className="sm:max-w-lg">
           <div className="flex flex-col items-center text-center pt-12 pb-2">
             {/* Radiating circles icon */}
@@ -1048,9 +1048,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               </div>
             </div>
 
-            <h2 className="text-xl font-semibold mb-3">Move this Stripe account?</h2>
+            <h2 className="text-xl font-semibold mb-3">Move this payment account?</h2>
             <p className="text-sm text-muted-foreground mb-10">
-              This Stripe account is currently connected to another project.
+              This payment account is currently connected to another project.
               <br />
               You can move it here, or use a different account instead.
             </p>
@@ -1064,12 +1064,12 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   if (!projectId) return
                   surpayConnect.mutate(projectId, {
                     onSuccess: (data) => {
-                      setIsStripeConflictOpen(false)
+                      setIsPayConflictOpen(false)
                       setConflictAccountId(null)
                       window.location.href = data.oauthUrl
                     },
                     onError: () =>
-                      toast.error('Failed to start Stripe connection', { position: 'top-right' }),
+                      toast.error('Failed to start payment connection', { position: 'top-right' }),
                   })
                 }}
               >
@@ -1080,7 +1080,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 className="flex-1 h-10"
                 variant="outline"
                 onClick={() => {
-                  setIsStripeConflictOpen(false)
+                  setIsPayConflictOpen(false)
                   setConflictAccountId(null)
                 }}
               >

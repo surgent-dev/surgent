@@ -910,7 +910,7 @@ pay.get('/checkout/:id', zValidator('param', checkoutPathSchema), async (c) => {
     .executeTakeFirst()
   if (!row) return c.json({ error: 'Checkout not found' }, 404)
 
-  // Public endpoint — UUID is unguessable, no auth needed (same pattern as Stripe hosted checkout)
+  // Public endpoint — UUID is unguessable, no auth needed
   const isTerminal = ['completed', 'failed'].includes(row.status)
   const client = getClient(row.env as PayEnv)
   const remote =

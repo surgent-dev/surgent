@@ -47,11 +47,11 @@ async function connectSurpay(projectId: string): Promise<SurpayConnectResponse> 
     return await payHttp
       .post('accounts/connect', {
         searchParams: { projectId },
-        json: { processor: 'stripe', country: 'us' },
+        json: { country: 'us' },
       })
       .json()
   } catch (e) {
-    return extractError(e, 'Failed to connect Stripe')
+    return extractError(e, 'Failed to connect payment account')
   }
 }
 
