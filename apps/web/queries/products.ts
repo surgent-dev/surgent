@@ -74,6 +74,11 @@ interface CreatePriceResponse {
   productPriceId: string
 }
 
+interface SyncProductsResponse {
+  synced: number
+  skipped: number
+}
+
 // API functions
 async function fetchProducts(projectId: string): Promise<ProductWithPrices[]> {
   return payHttp.get('products', { searchParams: { projectId } }).json()
@@ -95,6 +100,10 @@ async function updateProduct(
 
 async function archiveProduct(productId: string): Promise<UpdateProductResponse> {
   return payHttp.put(`product/${productId}`, { json: { isArchived: true } }).json()
+}
+
+async function syncProducts(projectId: string): Promise<SyncProductsResponse> {
+  return payHttp.post('products/sync', { searchParams: { projectId } }).json()
 }
 
 async function createPrice(
@@ -161,6 +170,17 @@ export function useCreatePrice(projectId?: string) {
     mutationFn: (input: CreatePriceInput) => createPrice(projectId!, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products', projectId, env] })
+    },
+  })
+}
+
+export function useSyncProducts(projectId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => syncProducts(projectId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products', projectId, 'test'] })
+      queryClient.invalidateQueries({ queryKey: ['products', projectId, 'live'] })
     },
   })
 }

@@ -137,6 +137,10 @@ export const payoutsLinkQuerySchema = z
 
 export const subscriptionPathSchema = z.object({ id: z.string().uuid() })
 
+export const syncProductsQuerySchema = z.object({
+  projectId: uuid,
+})
+
 export const userAccountsQuerySchema = z.object({
   processor: z.string().trim().optional(),
 })

@@ -28,6 +28,7 @@ import {
   accountQuerySchema,
   payoutsLinkQuerySchema,
   subscriptionPathSchema,
+  syncProductsQuerySchema,
   userAccountsQuerySchema,
 } from './schemas'
 
@@ -409,6 +410,96 @@ pay.post(
     return c.json({ productPriceId: requiredId(inserted.id, 'product price') }, 201)
   },
 )
+
+// --- Sync products from sandbox to live ---
+
+pay.post('/products/sync', zValidator('query', syncProductsQuerySchema), async (c) => {
+  const { projectId } = c.req.valid('query')
+  const auth = await authorizeRequest(c)
+  if (auth.mode !== 'session') return c.json({ error: 'Dashboard only' }, 403)
+  await authorizeProjectRequest(c, projectId, auth)
+
+  const testAccountId = await resolveActiveAccountId(projectId, 'test')
+  const { products: testProducts, pricesByProduct: testPrices } = await getProductsWithPrices(
+    projectId,
+    'test',
+    testAccountId,
+  )
+
+  const activeTestProducts = testProducts.filter((p) => !p.isArchived)
+  if (!activeTestProducts.length) return c.json({ synced: 0, skipped: 0 })
+
+  const liveAccountId = await resolveActiveAccountId(projectId, 'live')
+
+  // Fetch existing live product groups + slugs in one query
+  const liveRows = await db
+    .selectFrom('product')
+    .select(['productGroup', 'slug'])
+    .where('projectId', '=', projectId)
+    .where('env', '=', 'live')
+    .execute()
+  const liveGroups = new Set(liveRows.map((r) => r.productGroup))
+  const liveSlugs = new Set(liveRows.map((r) => r.slug))
+
+  let synced = 0
+  let skipped = 0
+
+  for (const testProduct of activeTestProducts) {
+    if (liveGroups.has(testProduct.productGroup) || liveSlugs.has(testProduct.slug)) {
+      skipped++
+      continue
+    }
+    liveSlugs.add(testProduct.slug)
+
+    const now = new Date()
+    const inserted = await db
+      .insertInto('product')
+      .values({
+        productGroup: testProduct.productGroup,
+        projectId,
+        accountId: liveAccountId,
+        name: testProduct.name,
+        description: testProduct.description || null,
+        slug: testProduct.slug,
+        version: 1,
+        isDefault: testProduct.isDefault || false,
+        isArchived: false,
+        processor: testProduct.processor || 'whop',
+        env: 'live',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow()
+
+    const liveProductId = requiredId(inserted.id, 'product')
+    const testProductId = requiredId(testProduct.id, 'product')
+    const prices = testPrices.get(testProductId) || []
+
+    for (const price of prices) {
+      await db
+        .insertInto('product_price')
+        .values({
+          productId: liveProductId,
+          name: price.name || null,
+          description: price.description || null,
+          slug: price.slug || null,
+          priceAmount: price.priceAmount,
+          priceCurrency: price.priceCurrency,
+          recurringInterval: price.recurringInterval || null,
+          isDefault: price.isDefault || false,
+          processor: price.processor || 'whop',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .execute()
+    }
+
+    synced++
+  }
+
+  return c.json({ synced, skipped })
+})
 
 // --- Access check ---
 

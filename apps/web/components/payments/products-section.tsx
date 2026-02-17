@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Info, Plus } from 'lucide-react'
+import { ArrowUpFromLine, Loader2, Plus } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import {
   useProducts,
+  useSyncProducts,
   type Product,
   type ProductWithPrices,
   type ProductPrice,
@@ -56,6 +57,8 @@ export function ProductsSection({
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [selectedPrices, setSelectedPrices] = useState<ProductPrice[]>([])
 
+  const syncProducts = useSyncProducts(projectId)
+
   const allProducts = products ?? []
   const activeProducts = allProducts.filter((p) => !p.product.isArchived)
   const transactions = transactionsData?.transactions ?? []
@@ -75,6 +78,17 @@ export function ProductsSection({
 
   const handleCreateProduct = () => {
     setCreateProductOpen(true)
+  }
+
+  const handleSyncToLive = () => {
+    syncProducts.mutate(undefined, {
+      onSuccess: (data) => {
+        toast.success(`Synced ${data.synced} products to live (${data.skipped} skipped)`)
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to sync products')
+      },
+    })
   }
 
   const openPayoutPortal = async () => {
@@ -139,12 +153,45 @@ export function ProductsSection({
         </header>
 
         {payEnv === 'live' && (
-          <div className="mx-4 mt-3 flex items-start gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
-            <Info className="size-3.5 text-amber-600 shrink-0 mt-0.5" strokeWidth={2} />
-            <p className="text-[12px] leading-relaxed text-amber-700 dark:text-amber-500">
-              The coding agent only has access to <span className="font-semibold">Sandbox</span>{' '}
-              mode. Switch to Sandbox to create products and test payments from your app.
+          <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2">
+            <p className="text-[12px] text-muted-foreground">
+              Create and test products in Sandbox, then sync them here.
             </p>
+            <button
+              onClick={handleSyncToLive}
+              disabled={syncProducts.isPending}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-medium rounded-md border hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              {syncProducts.isPending ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <ArrowUpFromLine className="size-3" />
+              )}
+              Sync from Sandbox
+            </button>
+          </div>
+        )}
+
+        {payEnv === 'test' && activeProducts.length > 0 && (
+          <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2.5">
+            <div className="flex items-start gap-2.5">
+              <ArrowUpFromLine className="size-3.5 text-blue-600 shrink-0 mt-0.5" strokeWidth={2} />
+              <p className="text-[12px] leading-relaxed text-blue-700 dark:text-blue-400">
+                Ready to go live? Sync your sandbox products and prices to the live environment.
+              </p>
+            </div>
+            <button
+              onClick={handleSyncToLive}
+              disabled={syncProducts.isPending}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1 text-[12px] font-medium rounded-md border border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-500/20 transition-all duration-100 disabled:opacity-50"
+            >
+              {syncProducts.isPending ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <ArrowUpFromLine className="size-3" />
+              )}
+              Sync to Live
+            </button>
           </div>
         )}
 
