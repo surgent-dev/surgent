@@ -147,8 +147,8 @@ export function SubscriptionsView({ subscriptions, isLoading, projectId }: Subsc
         toast.success('Subscription canceled')
         setCancelingId(null)
       },
-      onError: () => {
-        toast.error('Failed to cancel subscription')
+      onError: (error) => {
+        toast.error(error.message || 'Failed to cancel subscription')
         setCancelingId(null)
       },
     })

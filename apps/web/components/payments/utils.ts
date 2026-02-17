@@ -70,5 +70,5 @@ export const parseConnectError = (err: any, fallback: string): string => {
   const msg = err?.message || ''
   const match = msg.match(/PROCESSOR_ALREADY_CONNECTED:(\w+)/)
   if (match) return `Already connected to ${match[1]}. Disconnect it first.`
-  return fallback
+  return msg || fallback
 }

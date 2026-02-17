@@ -82,16 +82,7 @@ async function createProduct(
   projectId: string,
   input: CreateProductInput,
 ): Promise<CreateProductResponse> {
-  try {
-    return await payHttp.post('product', { searchParams: { projectId }, json: input }).json()
-  } catch (error: any) {
-    // ky throws HTTPError on non-2xx, extract response body for better error message
-    if (error.response) {
-      const text = await error.response.text()
-      throw new Error(text || 'Failed to create product')
-    }
-    throw error
-  }
+  return payHttp.post('product', { searchParams: { projectId }, json: input }).json()
 }
 
 async function updateProduct(

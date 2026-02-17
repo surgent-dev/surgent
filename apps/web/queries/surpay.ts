@@ -28,13 +28,10 @@ export interface SurpayConnectResponse {
   oauthUrl: string
 }
 
-// Extracts error message from ky HTTPError response
-async function extractError(error: any, fallback: string): Promise<never> {
-  if (error.response) {
-    const text = await error.response.text()
-    throw new Error(text || fallback)
-  }
-  throw error
+// Re-throws with the extracted error message (ky beforeError hook already parses it)
+function extractError(error: any, fallback: string): never {
+  if (error instanceof Error && error.message) throw error
+  throw new Error(fallback)
 }
 
 // API functions

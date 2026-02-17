@@ -7,6 +7,7 @@ import type {
   WhopCompany,
 } from './types'
 import { createLogger } from '@/lib/logger'
+import { HttpError } from '@/lib/errors'
 
 const log = createLogger('whop')
 
@@ -66,9 +67,10 @@ export class PayClient {
 
     if (!response.ok) {
       log.error({ status: response.status, method, path, body: text }, 'request failed')
-      const err = new Error(parseWhopError(data, text || `Whop API ${response.status}`))
-      ;(err as any).statusCode = response.status
-      throw err
+      throw new HttpError(
+        response.status,
+        parseWhopError(data, text || `Whop API ${response.status}`),
+      )
     }
 
     return data as T
