@@ -87,9 +87,7 @@ interface ProjectHeaderProps {
 }
 
 // Styles
-const headerBtn =
-  'flex items-center gap-1.5 px-2.5 sm:px-4 text-[13px] text-muted-foreground/70 hover:text-foreground hover:bg-muted/30 border-l border-border/40 transition-all duration-150 disabled:opacity-40'
-const iconBtn = 'p-1 hover:bg-muted/40 rounded-md transition-colors'
+const iconBtn = 'p-1 hover:bg-muted/40 rounded-md transition-all duration-100'
 
 // Status labels
 const STATUS_LABELS: Record<string, string> = {
@@ -455,20 +453,21 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       )}
 
       {/* Header */}
-      <header className="h-11 flex items-stretch bg-background border-b shrink-0">
+      <header className="h-11 flex items-center bg-background border-b shrink-0 px-4 sm:px-8">
         {/* Back */}
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => router.push('/dashboard')}
           aria-label="Back to dashboard"
-          className="flex items-center px-2.5 sm:px-4 text-muted-foreground/60 hover:text-foreground hover:bg-muted/30 transition-all duration-150"
         >
           <ArrowLeft className="size-4" />
-        </button>
+        </Button>
 
         {/* Logo + Brand */}
         <button
           onClick={() => router.push('/dashboard')}
-          className="hidden sm:flex items-center gap-2 px-3 border-l border-border/40 hover:bg-muted/30 transition-colors"
+          className="hidden sm:flex items-center gap-2 px-3 hover:bg-muted/30 rounded-md transition-colors"
         >
           <Image src="/surgent-coin.svg" alt="Surgent" width={20} height={20} className="size-5" />
           <span className="text-[13px] font-medium">Surgent</span>
@@ -485,14 +484,14 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 if (e.key === 'Enter') e.currentTarget.blur()
                 if (e.key === 'Escape') setIsEditing(false)
               }}
-              className="h-7 px-2.5 text-[13px] font-medium rounded-lg border border-border/60 bg-muted/30 outline-none focus:border-foreground/15 w-28 sm:w-44 transition-colors"
+              className="h-7 px-2.5 text-[13px] font-medium rounded-md border border-border/60 bg-muted/30 outline-none focus:border-foreground/15 w-28 sm:w-44 transition-all duration-100"
               autoFocus
             />
           </div>
         ) : (
           <button
             onClick={handleStartEdit}
-            className="group flex items-center gap-1.5 px-2.5 sm:px-4 text-[13px] font-medium hover:bg-muted/30 min-w-0 transition-colors"
+            className="group flex items-center gap-1.5 px-2.5 sm:px-4 text-[13px] font-medium hover:bg-muted/30 rounded-md min-w-0 transition-colors"
           >
             <span className="truncate max-w-[100px] sm:max-w-none">
               {project?.name || 'Untitled'}
@@ -503,425 +502,428 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
         <div className="flex-1" />
 
-        {/* Status indicator */}
-        {(isDeployed || isFailed) && (
-          <button
-            onClick={() => setIsDeploymentStatusOpen(true)}
-            aria-label={
-              isDeployed ? 'Live - View deployment status' : 'Failed - View deployment status'
-            }
-            className={headerBtn}
-          >
-            <span
-              className={`size-2 rounded-full ${isDeployed ? 'bg-emerald-500' : 'bg-red-500'}`}
-            />
-            <span className="hidden sm:inline">{isDeployed ? 'Live' : 'Failed'}</span>
-          </button>
-        )}
-
-        {/* Download */}
-        <button
-          onClick={handleDownload}
-          disabled={downloading || !projectId}
-          aria-label="Download project"
-          className={headerBtn}
-        >
-          {downloading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <DownloadSimple className="size-4" />
-          )}
-          <span className="hidden md:inline">Download</span>
-        </button>
-
-        {/* GitHub */}
-        <button
-          onClick={() => setIsGitHubDialogOpen(true)}
-          disabled={!projectId}
-          aria-label="GitHub integration"
-          className={headerBtn}
-        >
-          <GithubLogo className="size-4" weight="bold" />
-          <span className="hidden md:inline">GitHub</span>
-        </button>
-
-        {/* Support */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button aria-label="Contact support" className={headerBtn}>
-              <span className="relative">
-                <Headset className="size-4" weight="bold" />
-                <span className="absolute -top-0.5 -right-0.5 size-2 bg-green-500 rounded-full animate-pulse" />
-              </span>
-              <span className="hidden md:inline">Support</span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52 p-0">
-            <div className="px-2.5 py-2 border-b">
-              <div className="flex items-center gap-1.5">
-                <span className="relative flex size-1.5">
-                  <span className="absolute inline-flex size-full rounded-full bg-green-400 opacity-75 animate-ping" />
-                  <span className="relative inline-flex size-1.5 rounded-full bg-green-500" />
-                </span>
-                <span className="text-xs font-medium">We&apos;re online</span>
-              </div>
-            </div>
-            <div className="p-1">
-              <DropdownMenuItem
-                className="gap-2 px-2 py-1.5"
-                onClick={() => {
-                  navigator.clipboard.writeText('ben@surgent.dev')
-                }}
-              >
-                <div className="flex items-center justify-center size-6 rounded bg-muted">
-                  <Envelope className="size-3.5" weight="duotone" />
-                </div>
-                <span className="text-xs flex-1">ben@surgent.dev</span>
-                <Copy className="size-3 text-muted-foreground" weight="bold" />
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild className="gap-2 px-2 py-1.5">
-                <a href="https://discord.gg/DRWbFEtY" target="_blank" rel="noopener noreferrer">
-                  <div className="flex items-center justify-center size-6 rounded bg-[#5865F2]/10">
-                    <DiscordLogo className="size-3.5 text-[#5865F2]" weight="fill" />
-                  </div>
-                  <span className="text-xs">Discord</span>
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild className="gap-2 px-2 py-1.5">
-                <a href="https://t.me/bensurgent" target="_blank" rel="noopener noreferrer">
-                  <div className="flex items-center justify-center size-6 rounded bg-[#26A5E4]/10">
-                    <TelegramLogo className="size-3.5 text-[#26A5E4]" weight="fill" />
-                  </div>
-                  <span className="text-xs">Telegram</span>
-                </a>
-              </DropdownMenuItem>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {/* Publish */}
-        <DropdownMenu open={isPublishOpen} onOpenChange={handlePublishOpenChange}>
-          <DropdownMenuTrigger asChild>
-            <button
-              disabled={!projectId || isDeploying}
-              aria-label="Publish project"
-              className="flex items-center gap-1.5 px-3 sm:px-5 text-[13px] font-medium bg-brand text-brand-foreground hover:bg-brand/90 border-l border-border/40 transition-colors disabled:opacity-40"
+        {/* Action buttons */}
+        <div className="flex items-center gap-1.5 pr-2">
+          {/* Status indicator */}
+          {(isDeployed || isFailed) && (
+            <Button
+              variant="ghost"
+              onClick={() => setIsDeploymentStatusOpen(true)}
+              aria-label={
+                isDeployed ? 'Live - View deployment status' : 'Failed - View deployment status'
+              }
             >
-              {isDeploying ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RocketLaunch className="size-4" weight="fill" />
-              )}
-              <span className="hidden sm:inline">{workerName ? 'Republish' : 'Publish'}</span>
-              <CaretDown className="size-3 hidden sm:block" weight="bold" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
-            {/* Live URL — only when deployed and not editing */}
-            {workerName && !isEditingHostname && (
-              <div className="p-3">
-                <div className="flex items-center gap-1.5 rounded-xl border border-border/50 bg-muted/20 px-3 h-10 font-mono text-[13px]">
-                  <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  <span className="flex-1 truncate">{workerName}.surgent.site</span>
-                  <a
-                    href={`https://${workerName}.surgent.site`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={iconBtn}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <ArrowSquareOut className="size-3.5 text-muted-foreground" />
-                  </a>
-                  <button onClick={copyUrl} className={iconBtn}>
-                    <Copy className="size-3.5 text-muted-foreground" />
-                  </button>
-                  <button onClick={startEditHostname} className={iconBtn}>
-                    <PencilSimple className="size-3.5 text-muted-foreground" />
-                  </button>
-                </div>
-              </div>
+              <span
+                className={`size-2 rounded-full ${isDeployed ? 'bg-emerald-500' : 'bg-red-500'}`}
+              />
+              <span className="hidden sm:inline">{isDeployed ? 'Live' : 'Failed'}</span>
+            </Button>
+          )}
+
+          {/* Download */}
+          <Button
+            variant="ghost"
+            onClick={handleDownload}
+            disabled={downloading || !projectId}
+            aria-label="Download project"
+          >
+            {downloading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <DownloadSimple className="size-4" />
             )}
+            <span className="hidden md:inline">Download</span>
+          </Button>
 
-            {/* Subdomain input — first deploy or editing */}
-            {(!workerName || isEditingHostname) && (
-              <div className="p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {workerName ? 'Change subdomain' : 'Choose a subdomain'}
-                  </span>
-                  {sanitizedHostname && isNewHostname && (
-                    <>
-                      {checkingHostname && (
-                        <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                      )}
-                      {!checkingHostname && availability?.available && (
-                        <CheckCircle2 className="size-3 text-emerald-500" />
-                      )}
-                      {!checkingHostname && hostnameTaken && (
-                        <span className="flex items-center gap-1 text-[11px] text-destructive">
-                          <XCircle className="size-3" />
-                          Taken
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-                <div
-                  className={`flex items-center h-10 px-3 rounded-xl border bg-muted/20 font-mono text-[13px] transition-colors ${hostnameTaken ? 'border-destructive/40' : 'border-border/50 focus-within:border-foreground/15'}`}
-                >
-                  <input
-                    value={hostnameInput}
-                    onChange={(e) => setHostnameInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && hostnameInput.trim() && !hostnameTaken)
-                        submitHostname()
-                      if (e.key === 'Escape' && workerName) cancelEditHostname()
-                    }}
-                    placeholder="my-app"
-                    className="flex-1 bg-transparent outline-none min-w-0"
-                    autoFocus
-                  />
-                  <span className="text-muted-foreground/60 shrink-0">.surgent.site</span>
-                  {workerName && (
-                    <button onClick={cancelEditHostname} className={`${iconBtn} ml-1`}>
-                      <X className="size-3.5 text-muted-foreground" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
+          {/* GitHub */}
+          <Button
+            variant="ghost"
+            onClick={() => setIsGitHubDialogOpen(true)}
+            disabled={!projectId}
+            aria-label="GitHub integration"
+          >
+            <GithubLogo className="size-4" weight="bold" />
+            <span className="hidden md:inline">GitHub</span>
+          </Button>
 
-            {/* Deploy + status */}
-            <div className="px-3 pb-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <Button
-                  className="flex-1 h-10 bg-brand hover:bg-brand/90 text-brand-foreground"
-                  onClick={submitHostname}
-                  disabled={
-                    isDeploying ||
-                    Boolean(isDeploymentInProgress) ||
-                    hostnameTaken ||
-                    checkingHostname ||
-                    (!workerName && !hostnameInput.trim())
-                  }
-                >
-                  {isDeploying ? (
-                    <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                  ) : (
-                    <RocketLaunch className="size-3.5 mr-1.5" weight="fill" />
-                  )}
-                  {!workerName
-                    ? 'Deploy'
-                    : isEditingHostname && hostnameInput.trim() !== workerName
-                      ? 'Save & Deploy'
-                      : 'Republish'}
-                </Button>
-                {workerName && (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 shrink-0"
-                    onClick={() => setIsDeploymentStatusOpen(true)}
-                  >
-                    <Clock className="size-3.5" />
-                  </Button>
-                )}
-              </div>
-
-              {/* In-progress status */}
-              {latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status) && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="size-3 animate-spin text-brand" />
-                  {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
-                </div>
-              )}
-
-              {/* Error status */}
-              {latestDeployment &&
-                TERMINAL_STATUSES.includes(latestDeployment.status) &&
-                latestDeployment.status !== 'deployed' && (
-                  <p className="text-xs text-destructive truncate">
-                    {latestDeployment.error || 'Deployment failed'}
-                  </p>
-                )}
-            </div>
-
-            {/* Visibility */}
-            <div className="border-t px-3 py-2.5">
-              <div className="flex items-center gap-2">
-                <Globe className="size-3.5 text-muted-foreground/70" weight="duotone" />
-                <span className="text-xs font-medium text-muted-foreground">
-                  {(project?.isPublic ?? true) ? 'Public' : 'Private'}
+          {/* Support */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" aria-label="Contact support">
+                <span className="relative">
+                  <Headset className="size-4" weight="bold" />
+                  <span className="absolute -top-0.5 -right-0.5 size-1.5 bg-green-500 rounded-full animate-pulse" />
                 </span>
-                {!canToggleVisibility && (
-                  <button
-                    onClick={() => credits.setPlanDialogOpen(true)}
-                    className="ml-auto text-[10px] font-medium text-brand hover:text-brand/80 transition-colors"
-                  >
-                    Upgrade
-                  </button>
-                )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <Switch
-                        className={canToggleVisibility ? 'ml-auto' : ''}
-                        checked={project?.isPublic ?? true}
-                        onCheckedChange={(checked) => {
-                          if (!projectId) return
-                          updateVisibility.mutate(
-                            { id: projectId, isPublic: checked },
-                            {
-                              onError: () =>
-                                toast.error('Failed to update visibility', {
-                                  position: 'top-right',
-                                }),
-                            },
-                          )
-                        }}
-                        disabled={!canToggleVisibility}
-                      />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {canToggleVisibility
-                      ? (project?.isPublic ?? true)
-                        ? 'Make private'
-                        : 'Make public'
-                      : 'Upgrade to control visibility'}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </div>
-
-            {/* Marketplace */}
-            <div className="border-t px-3 py-3 space-y-2.5">
-              <div className="flex items-center gap-2">
-                <Storefront className="size-3.5 text-muted-foreground/70" weight="duotone" />
-                <span className="text-xs font-medium text-muted-foreground">Marketplace</span>
-                {isProjectListed && (
-                  <span className="ml-auto text-[10px] font-medium text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
-                    Listed
+                <span className="hidden md:inline">Support</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 p-0">
+              <div className="px-2.5 py-2 border-b">
+                <div className="flex items-center gap-1.5">
+                  <span className="relative flex size-1.5">
+                    <span className="absolute inline-flex size-full rounded-full bg-green-400 opacity-75 animate-ping" />
+                    <span className="relative inline-flex size-1.5 rounded-full bg-green-500" />
                   </span>
-                )}
+                  <span className="text-xs font-medium">We&apos;re online</span>
+                </div>
               </div>
-
-              {/* Screenshot upload zone */}
-              <div className="relative">
-                {!screenshotPreview ? (
-                  <div
-                    onDragOver={(e) => {
-                      if (!workerName) return
-                      e.preventDefault()
-                      setIsDragging(true)
-                    }}
-                    onDragLeave={() => setIsDragging(false)}
-                    onDrop={workerName ? handleDrop : undefined}
-                    onClick={() => workerName && fileInputRef.current?.click()}
-                    className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed py-4 transition-colors ${
-                      !workerName
-                        ? 'border-muted-foreground/10 cursor-default'
-                        : isDragging
-                          ? 'border-brand bg-brand/5 cursor-pointer'
-                          : 'border-muted-foreground/20 hover:border-muted-foreground/40 cursor-pointer'
-                    }`}
-                  >
-                    <UploadSimple
-                      className={`size-5 ${!workerName ? 'text-muted-foreground/20' : 'text-muted-foreground/50'}`}
-                      weight="duotone"
-                    />
-                    <span
-                      className={`text-[11px] ${!workerName ? 'text-muted-foreground/30' : 'text-muted-foreground'}`}
-                    >
-                      Drop screenshot or click to upload
-                    </span>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleFileSelect}
-                    />
+              <div className="p-1">
+                <DropdownMenuItem
+                  className="gap-2 px-2 py-1.5"
+                  onClick={() => {
+                    navigator.clipboard.writeText('ben@surgent.dev')
+                  }}
+                >
+                  <div className="flex items-center justify-center size-6 rounded bg-muted">
+                    <Envelope className="size-3.5" weight="duotone" />
                   </div>
+                  <span className="text-xs flex-1">ben@surgent.dev</span>
+                  <Copy className="size-3 text-muted-foreground" weight="bold" />
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="gap-2 px-2 py-1.5">
+                  <a href="https://discord.gg/DRWbFEtY" target="_blank" rel="noopener noreferrer">
+                    <div className="flex items-center justify-center size-6 rounded bg-[#5865F2]/10">
+                      <DiscordLogo className="size-3.5 text-[#5865F2]" weight="fill" />
+                    </div>
+                    <span className="text-xs">Discord</span>
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="gap-2 px-2 py-1.5">
+                  <a href="https://t.me/bensurgent" target="_blank" rel="noopener noreferrer">
+                    <div className="flex items-center justify-center size-6 rounded bg-[#26A5E4]/10">
+                      <TelegramLogo className="size-3.5 text-[#26A5E4]" weight="fill" />
+                    </div>
+                    <span className="text-xs">Telegram</span>
+                  </a>
+                </DropdownMenuItem>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Publish */}
+          <DropdownMenu open={isPublishOpen} onOpenChange={handlePublishOpenChange}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="brand"
+                disabled={!projectId || isDeploying}
+                aria-label="Publish project"
+              >
+                {isDeploying ? (
+                  <Loader2 className="size-4 animate-spin" />
                 ) : (
-                  <div className="relative group rounded-lg overflow-hidden border bg-muted/30">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={screenshotPreview}
-                      alt="Screenshot preview"
-                      className="w-full h-28 object-cover"
-                    />
-                    {isUploading && (
-                      <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                        <Loader2 className="size-5 animate-spin text-brand" />
-                      </div>
+                  <RocketLaunch className="size-4" weight="fill" />
+                )}
+                <span className="hidden sm:inline">{workerName ? 'Republish' : 'Publish'}</span>
+                <CaretDown className="size-3 hidden sm:block" weight="bold" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
+              {/* Live URL — only when deployed and not editing */}
+              {workerName && !isEditingHostname && (
+                <div className="p-3">
+                  <div className="flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/20 px-3 h-8 font-mono text-[13px]">
+                    <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    <span className="flex-1 truncate">{workerName}.surgent.site</span>
+                    <a
+                      href={`https://${workerName}.surgent.site`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={iconBtn}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ArrowSquareOut className="size-3.5 text-muted-foreground" />
+                    </a>
+                    <button onClick={copyUrl} className={iconBtn}>
+                      <Copy className="size-3.5 text-muted-foreground" />
+                    </button>
+                    <button onClick={startEditHostname} className={iconBtn}>
+                      <PencilSimple className="size-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Subdomain input — first deploy or editing */}
+              {(!workerName || isEditingHostname) && (
+                <div className="p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {workerName ? 'Change subdomain' : 'Choose a subdomain'}
+                    </span>
+                    {sanitizedHostname && isNewHostname && (
+                      <>
+                        {checkingHostname && (
+                          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                        )}
+                        {!checkingHostname && availability?.available && (
+                          <CheckCircle2 className="size-3 text-emerald-500" />
+                        )}
+                        {!checkingHostname && hostnameTaken && (
+                          <span className="flex items-center gap-1 text-[11px] text-destructive">
+                            <XCircle className="size-3" />
+                            Taken
+                          </span>
+                        )}
+                      </>
                     )}
-                    {!isUploading && (
-                      <button
-                        onClick={() => {
-                          setScreenshotPreview(null)
-                          setScreenshotUrl(null)
-                          if (fileInputRef.current) fileInputRef.current.value = ''
-                        }}
-                        className="absolute top-1.5 right-1.5 p-1 rounded-md bg-background/80 hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="size-3" weight="bold" />
+                  </div>
+                  <div
+                    className={`flex items-center h-8 px-3 rounded-md border bg-muted/20 font-mono text-[13px] transition-all duration-100 ${hostnameTaken ? 'border-destructive/40' : 'border-border/50 focus-within:border-foreground/15'}`}
+                  >
+                    <input
+                      value={hostnameInput}
+                      onChange={(e) => setHostnameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && hostnameInput.trim() && !hostnameTaken)
+                          submitHostname()
+                        if (e.key === 'Escape' && workerName) cancelEditHostname()
+                      }}
+                      placeholder="my-app"
+                      className="flex-1 bg-transparent outline-none min-w-0"
+                      autoFocus
+                    />
+                    <span className="text-muted-foreground/60 shrink-0">.surgent.site</span>
+                    {workerName && (
+                      <button onClick={cancelEditHostname} className={`${iconBtn} ml-1`}>
+                        <X className="size-3.5 text-muted-foreground" />
                       </button>
                     )}
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Deploy first overlay */}
-                {!workerName && !screenshotPreview && (
-                  <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/60">
-                    <span className="text-[11px] font-medium text-muted-foreground">
-                      Deploy your project first
-                    </span>
+              {/* Deploy + status */}
+              <div className="px-3 pb-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="brand"
+                    className="flex-1"
+                    onClick={submitHostname}
+                    disabled={
+                      isDeploying ||
+                      Boolean(isDeploymentInProgress) ||
+                      hostnameTaken ||
+                      checkingHostname ||
+                      (!workerName && !hostnameInput.trim())
+                    }
+                  >
+                    {isDeploying ? (
+                      <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                    ) : (
+                      <RocketLaunch className="size-3.5 mr-1.5" weight="fill" />
+                    )}
+                    {!workerName
+                      ? 'Deploy'
+                      : isEditingHostname && hostnameInput.trim() !== workerName
+                        ? 'Save & Deploy'
+                        : 'Republish'}
+                  </Button>
+                  {workerName && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() => setIsDeploymentStatusOpen(true)}
+                    >
+                      <Clock className="size-3.5" />
+                    </Button>
+                  )}
+                </div>
+
+                {/* In-progress status */}
+                {latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status) && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="size-3 animate-spin text-brand" />
+                    {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
                   </div>
                 )}
+
+                {/* Error status */}
+                {latestDeployment &&
+                  TERMINAL_STATUSES.includes(latestDeployment.status) &&
+                  latestDeployment.status !== 'deployed' && (
+                    <p className="text-xs text-destructive truncate">
+                      {latestDeployment.error || 'Deployment failed'}
+                    </p>
+                  )}
               </div>
 
-              {/* List / View button */}
-              {isProjectListed ? (
-                <Button className="w-full h-8 text-xs" variant="outline" asChild>
-                  <Link href={`/marketplace/${projectListing?.id}`}>
-                    <ArrowSquareOut className="size-3 mr-1.5" />
-                    View in Marketplace
-                  </Link>
-                </Button>
-              ) : (
-                <Button
-                  className="w-full h-8 text-xs"
-                  variant="outline"
-                  disabled={!workerName || !screenshotUrl || isUploading || upsertListing.isPending}
-                  onClick={handleListOnMarketplace}
-                >
-                  {upsertListing.isPending ? (
-                    <Loader2 className="size-3 animate-spin mr-1.5" />
-                  ) : (
-                    <Storefront className="size-3 mr-1.5" weight="fill" />
+              {/* Visibility */}
+              <div className="border-t px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Globe className="size-3.5 text-muted-foreground/70" weight="duotone" />
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {(project?.isPublic ?? true) ? 'Public' : 'Private'}
+                  </span>
+                  {!canToggleVisibility && (
+                    <button
+                      onClick={() => credits.setPlanDialogOpen(true)}
+                      className="ml-auto text-[10px] font-medium text-brand hover:text-brand/80 transition-colors"
+                    >
+                      Upgrade
+                    </button>
                   )}
-                  List on Marketplace
-                </Button>
-              )}
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Switch
+                          className={canToggleVisibility ? 'ml-auto' : ''}
+                          checked={project?.isPublic ?? true}
+                          onCheckedChange={(checked) => {
+                            if (!projectId) return
+                            updateVisibility.mutate(
+                              { id: projectId, isPublic: checked },
+                              {
+                                onError: () =>
+                                  toast.error('Failed to update visibility', {
+                                    position: 'top-right',
+                                  }),
+                              },
+                            )
+                          }}
+                          disabled={!canToggleVisibility}
+                        />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {canToggleVisibility
+                        ? (project?.isPublic ?? true)
+                          ? 'Make private'
+                          : 'Make public'
+                        : 'Upgrade to control visibility'}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+
+              {/* Marketplace */}
+              <div className="border-t px-3 py-3 space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <Storefront className="size-3.5 text-muted-foreground/70" weight="duotone" />
+                  <span className="text-xs font-medium text-muted-foreground">Marketplace</span>
+                  {isProjectListed && (
+                    <span className="ml-auto text-[10px] font-medium text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
+                      Listed
+                    </span>
+                  )}
+                </div>
+
+                {/* Screenshot upload zone */}
+                <div className="relative">
+                  {!screenshotPreview ? (
+                    <div
+                      onDragOver={(e) => {
+                        if (!workerName) return
+                        e.preventDefault()
+                        setIsDragging(true)
+                      }}
+                      onDragLeave={() => setIsDragging(false)}
+                      onDrop={workerName ? handleDrop : undefined}
+                      onClick={() => workerName && fileInputRef.current?.click()}
+                      className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed py-4 transition-colors ${
+                        !workerName
+                          ? 'border-muted-foreground/10 cursor-default'
+                          : isDragging
+                            ? 'border-brand bg-brand/5 cursor-pointer'
+                            : 'border-muted-foreground/20 hover:border-muted-foreground/40 cursor-pointer'
+                      }`}
+                    >
+                      <UploadSimple
+                        className={`size-5 ${!workerName ? 'text-muted-foreground/20' : 'text-muted-foreground/50'}`}
+                        weight="duotone"
+                      />
+                      <span
+                        className={`text-[11px] ${!workerName ? 'text-muted-foreground/30' : 'text-muted-foreground'}`}
+                      >
+                        Drop screenshot or click to upload
+                      </span>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFileSelect}
+                      />
+                    </div>
+                  ) : (
+                    <div className="relative group rounded-lg overflow-hidden border bg-muted/30">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={screenshotPreview}
+                        alt="Screenshot preview"
+                        className="w-full h-28 object-cover"
+                      />
+                      {isUploading && (
+                        <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                          <Loader2 className="size-5 animate-spin text-brand" />
+                        </div>
+                      )}
+                      {!isUploading && (
+                        <button
+                          onClick={() => {
+                            setScreenshotPreview(null)
+                            setScreenshotUrl(null)
+                            if (fileInputRef.current) fileInputRef.current.value = ''
+                          }}
+                          className="absolute top-1.5 right-1.5 p-1 rounded-md bg-background/80 hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="size-3" weight="bold" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Deploy first overlay */}
+                  {!workerName && !screenshotPreview && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/60">
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        Deploy your project first
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* List / View button */}
+                {isProjectListed ? (
+                  <Button className="w-full h-8 text-xs" variant="outline" asChild>
+                    <Link href={`/marketplace/${projectListing?.id}`}>
+                      <ArrowSquareOut className="size-3 mr-1.5" />
+                      View in Marketplace
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full h-8 text-xs"
+                    variant="outline"
+                    disabled={
+                      !workerName || !screenshotUrl || isUploading || upsertListing.isPending
+                    }
+                    onClick={handleListOnMarketplace}
+                  >
+                    {upsertListing.isPending ? (
+                      <Loader2 className="size-3 animate-spin mr-1.5" />
+                    ) : (
+                      <Storefront className="size-3 mr-1.5" weight="fill" />
+                    )}
+                    List on Marketplace
+                  </Button>
+                )}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         {/* User menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button
-              aria-label="User menu"
-              className="flex items-center px-2.5 sm:px-4 border-l border-border/40 hover:bg-muted/30 transition-colors"
-            >
-              <Avatar className="size-7">
+            <Button variant="ghost" size="icon" aria-label="User menu">
+              <Avatar className="size-6">
                 <AvatarImage src={user?.image} alt={user?.name || user?.email} />
-                <AvatarFallback className="bg-muted text-foreground text-xs font-medium">
+                <AvatarFallback className="bg-muted text-foreground text-[11px] font-medium">
                   {user?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
-            </button>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56" align="end" sideOffset={8}>
             <div className="px-3 py-2">
@@ -952,7 +954,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   </div>
                   <button
                     onClick={() => credits.setPlanDialogOpen(true)}
-                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/20 bg-brand/8 px-2.5 py-1.5 text-[11px] font-medium text-brand shadow-sm shadow-brand/5 hover:bg-brand/12 active:shadow-none active:translate-y-px transition-all"
+                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/20 bg-brand/8 px-2.5 py-1.5 text-[11px] font-medium text-brand hover:bg-brand/12 active:translate-y-px transition-all duration-100"
                   >
                     <Lightning className="size-3" weight="fill" />
                     Upgrade
