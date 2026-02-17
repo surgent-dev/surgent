@@ -522,8 +522,9 @@ export default function ChatInput({
               type="button"
               disabled={!canSubmit}
               onClick={handleSubmit}
-              size="sm"
-              className="size-8 p-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+              variant="brand"
+              size="icon-lg"
+              className="rounded-full"
             >
               <ArrowUp className="size-4" weight="bold" />
             </Button>

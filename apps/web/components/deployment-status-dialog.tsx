@@ -212,7 +212,9 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
             </div>
           )}
           <Button
-            className="w-full h-9 bg-brand hover:bg-brand/90 text-brand-foreground"
+            variant="brand"
+            size="lg"
+            className="w-full"
             onClick={() => handleDeploy(editing ? input.trim() : name || '')}
             disabled={deploy.isPending || Boolean(busy) || (!name && !editing)}
           >

@@ -329,7 +329,7 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
               type="button"
               onClick={handleCreate}
               disabled={!companyName.trim() || whopConnect.isPending}
-              className="w-full h-9 text-[13px] font-medium rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40 flex items-center justify-center"
+              className="w-full h-9 text-[13px] font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary-hover transition-all duration-100 disabled:opacity-40 flex items-center justify-center"
             >
               {whopConnect.isPending ? 'Creating...' : 'Create Account'}
             </button>

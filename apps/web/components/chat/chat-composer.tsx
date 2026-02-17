@@ -63,7 +63,7 @@ export function ChatComposer({
                 onClick={handleSend}
                 disabled={disabled || !value.trim()}
                 className={cn(
-                  'h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-brand text-brand-foreground hover:opacity-90 shadow-sm transition-opacity',
+                  'h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-brand text-brand-foreground btn-elevated-brand hover:bg-brand/90 transition-all duration-100',
                   disabled || !value.trim() ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
                   buttonClassName,
                 )}
