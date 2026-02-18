@@ -750,8 +750,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       </header>
 
       {/* Chat */}
-      <div className="flex flex-col flex-1 min-h-0">
-        <div ref={scrollRef} className="flex-1 min-h-0 relative">
+      <div className="flex flex-col flex-1 min-h-0 min-w-0">
+        <div ref={scrollRef} className="flex-1 min-h-0 min-w-0 relative">
           <ScrollArea className="h-full">
             <div ref={contentRef} className="max-w-3xl mx-auto px-6 py-4 overflow-hidden">
               {showSkeleton ? (

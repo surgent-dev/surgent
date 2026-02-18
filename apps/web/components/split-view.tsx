@@ -141,11 +141,11 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
         provisioningStep={project?.metadata?.provisioningStep}
       />
       <ProjectHeader projectId={projectId} project={project} />
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 min-w-0">
         {isReady ? (
           <ProjectEventProvider key={projectId} projectId={projectId}>
             {isMobile ? (
-              <div className="h-full min-h-0 flex flex-col">
+              <div className="h-full min-h-0 min-w-0 flex flex-col">
                 <Tabs defaultValue="chat" className="h-full min-h-0 flex flex-col">
                   <div className="px-2 pt-2 pb-1.5">
                     <TabsList className="w-full max-w-sm mx-auto h-9 p-0.5!">
@@ -163,8 +163,8 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
                       </TabsTrigger>
                     </TabsList>
                   </div>
-                  <TabsContent value="chat" className="flex-1 min-h-0 flex flex-col">
-                    <div className="flex-1 min-h-0 px-1 pb-1">
+                  <TabsContent value="chat" className="flex-1 min-h-0 min-w-0 flex flex-col">
+                    <div className="flex-1 min-h-0 min-w-0 px-1 pb-1">
                       <Conversation projectId={projectId} initialPrompt={initialPrompt} />
                     </div>
                   </TabsContent>
@@ -187,7 +187,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
                 </Tabs>
               </div>
             ) : (
-              <div className="h-full min-h-0">
+              <div className="h-full min-h-0 min-w-0">
                 <ResizablePanelGroup direction="horizontal" className="h-full">
                   <ResizablePanel defaultSize={40} minSize={30}>
                     <Conversation projectId={projectId} initialPrompt={initialPrompt} />
