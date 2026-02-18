@@ -125,6 +125,11 @@ const readLogsSchema = {
     .max(1000)
     .default(50)
     .describe('Number of recent log entries to return (max 1000).'),
+  since: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Only return logs from the last N minutes. Omit for all available logs.'),
   success: z
     .boolean()
     .default(false)
@@ -519,8 +524,9 @@ Pass arguments as a JSON object matching the function's expected args.`,
       description: `Fetch recent function execution logs from a Convex deployment.
 
 Pass "env" to target development (default) or production.
-Shows only errors by default — set "success" to true to include successful executions.
-Returns formatted log entries with timestamps, function paths, duration, and error details.`,
+Use "since" to only get logs from the last N minutes (e.g., since=30 for last 30 min).
+Use "limit" to control how many entries to return (default 50, max 1000).
+Shows only errors by default — set "success" to true to include successful executions.`,
       inputSchema: readLogsSchema,
     },
     async (args, extra) => {
@@ -528,7 +534,8 @@ Returns formatted log entries with timestamps, function paths, duration, and err
       if (!ctx) return err(`Convex ${args.env} deployment not provisioned`)
 
       try {
-        const { entries } = await fetchDeploymentLogs(ctx.deploymentUrl, ctx.deployKey)
+        const cursor = args.since ? Date.now() - args.since * 60_000 : 0
+        const { entries } = await fetchDeploymentLogs(ctx.deploymentUrl, ctx.deployKey, cursor)
 
         const filtered = args.success ? entries : entries.filter((e) => e.error)
         const limited = filtered.slice(-args.limit)
