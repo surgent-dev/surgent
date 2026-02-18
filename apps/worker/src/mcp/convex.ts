@@ -129,7 +129,7 @@ const readLogsSchema = {
     .number()
     .positive()
     .optional()
-    .describe('Only return logs from the last N minutes. Omit for all available logs.'),
+    .describe('Filter to logs from the last N minutes (client-side). Omit for all available.'),
   success: z
     .boolean()
     .default(false)
@@ -171,7 +171,7 @@ function formatLogEntry(e: LogEntry): string {
   if (e.error) {
     parts.push(`${header} ${e.error}`)
   } else if (e.executionTime != null) {
-    parts.push(`${header} Function executed in ${(e.executionTime * 1000).toFixed(1)}ms`)
+    parts.push(`${header} Function executed in ${Math.ceil(e.executionTime * 1000)} ms`)
   }
   return parts.join('\n')
 }
@@ -524,9 +524,9 @@ Pass arguments as a JSON object matching the function's expected args.`,
       description: `Fetch recent function execution logs from a Convex deployment.
 
 Pass "env" to target development (default) or production.
-Use "since" to only get logs from the last N minutes (e.g., since=30 for last 30 min).
-Use "limit" to control how many entries to return (default 50, max 1000).
-Shows only errors by default — set "success" to true to include successful executions.`,
+Use "since" to filter to logs from the last N minutes (e.g., since=30 for last 30 min).
+Use "limit" to control how many entries (default 50, max 1000).
+Shows only errors by default — set "success" to true to include all executions.`,
       inputSchema: readLogsSchema,
     },
     async (args, extra) => {
@@ -534,10 +534,14 @@ Shows only errors by default — set "success" to true to include successful exe
       if (!ctx) return err(`Convex ${args.env} deployment not provisioned`)
 
       try {
-        const cursor = args.since ? Date.now() - args.since * 60_000 : 0
-        const { entries } = await fetchDeploymentLogs(ctx.deploymentUrl, ctx.deployKey, cursor)
+        const { entries } = await fetchDeploymentLogs(ctx.deploymentUrl, ctx.deployKey)
 
-        const filtered = args.success ? entries : entries.filter((e) => e.error)
+        let filtered = entries
+        if (args.since) {
+          const cutoff = Date.now() / 1000 - args.since * 60
+          filtered = filtered.filter((e) => e.timestamp >= cutoff)
+        }
+        if (!args.success) filtered = filtered.filter((e) => e.error)
         const limited = filtered.slice(-args.limit)
 
         if (!limited.length) {
