@@ -125,11 +125,6 @@ const readLogsSchema = {
     .max(1000)
     .default(50)
     .describe('Number of recent log entries to return (max 1000).'),
-  since: z
-    .number()
-    .positive()
-    .optional()
-    .describe('Filter to logs from the last N minutes (client-side). Omit for all available.'),
   success: z
     .boolean()
     .default(false)
@@ -524,7 +519,6 @@ Pass arguments as a JSON object matching the function's expected args.`,
       description: `Fetch recent function execution logs from a Convex deployment.
 
 Pass "env" to target development (default) or production.
-Use "since" to filter to logs from the last N minutes (e.g., since=30 for last 30 min).
 Use "limit" to control how many entries (default 50, max 1000).
 Shows only errors by default — set "success" to true to include all executions.`,
       inputSchema: readLogsSchema,
@@ -536,12 +530,7 @@ Shows only errors by default — set "success" to true to include all executions
       try {
         const { entries } = await fetchDeploymentLogs(ctx.deploymentUrl, ctx.deployKey)
 
-        let filtered = entries
-        if (args.since) {
-          const cutoff = Date.now() / 1000 - args.since * 60
-          filtered = filtered.filter((e) => e.timestamp >= cutoff)
-        }
-        if (!args.success) filtered = filtered.filter((e) => e.error)
+        const filtered = args.success ? entries : entries.filter((e) => e.error)
         const limited = filtered.slice(-args.limit)
 
         if (!limited.length) {
