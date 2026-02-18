@@ -314,13 +314,25 @@ export async function callMutation(
 
 // ── Deployment logs ──────────────────────────────────────────────────────────
 
-export interface LogEntry {
-  identifier: string
-  udfType: string
-  executionTime: number
+export interface LogLine {
+  level: 'DEBUG' | 'ERROR' | 'WARN' | 'INFO' | 'LOG'
+  messages: string[]
   timestamp: number
-  error?: string
-  logLines?: Array<{ level: string; messages: string[]; timestamp: number }>
+  isTruncated?: boolean
+}
+
+export interface LogEntry {
+  kind?: 'Completion' | 'Progress'
+  executionId?: string
+  requestId?: string
+  identifier: string
+  udfType: 'Query' | 'Mutation' | 'Action' | 'HttpAction'
+  timestamp: number
+  executionTime?: number
+  cachedResult?: boolean
+  success?: unknown
+  error?: string | null
+  logLines: LogLine[]
 }
 
 export interface LogsResult {

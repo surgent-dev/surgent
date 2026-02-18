@@ -146,15 +146,28 @@ const err = (error: string): McpResponse => ({
 
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
+const UDF_PREFIX: Record<string, string> = {
+  Query: 'Q',
+  Mutation: 'M',
+  Action: 'A',
+  HttpAction: 'H',
+}
+
 function formatLogEntry(e: LogEntry): string {
-  const ts = new Date(e.timestamp).toISOString()
-  const dur = `${e.executionTime.toFixed(1)}ms`
-  const status = e.error ? 'ERROR' : 'OK'
-  const parts = [`[${ts}] ${status} ${e.udfType}:${e.identifier} (${dur})`]
-  if (e.logLines?.length) {
-    for (const line of e.logLines) parts.push(`  [${line.level}] ${line.messages.join(' ')}`)
+  const ts = new Date(e.timestamp * 1000).toLocaleString()
+  const prefix = UDF_PREFIX[e.udfType] ?? e.udfType[0]
+  const header = `[${ts}] [CONVEX ${prefix}(${e.identifier})]`
+
+  const parts: string[] = []
+  for (const line of e.logLines) {
+    const msg = line.messages.join(' ') + (line.isTruncated ? ' (truncated)' : '')
+    parts.push(`${header} [${line.level}] ${msg}`)
   }
-  if (e.error) parts.push(`  Error: ${e.error}`)
+  if (e.error) {
+    parts.push(`${header} ${e.error}`)
+  } else if (e.executionTime != null) {
+    parts.push(`${header} Function executed in ${(e.executionTime * 1000).toFixed(1)}ms`)
+  }
   return parts.join('\n')
 }
 
