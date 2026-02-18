@@ -617,10 +617,13 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
 
   await pushProdServerEnvVars(args.projectId)
 
+  // Use production env vars so the Convex CLI picks up the prod deploy key
+  const prodEnv = await getProjectEnvVars(args.projectId, 'production')
+
   const sandbox = await getProvider().resume(sandboxRow.id)
   const cwd = project.metadata?.workingDirectory || workspacePath(args.projectId)
 
-  const res = await sandbox.exec('bunx convex deploy -y', { cwd, timeout: 180_000 })
+  const res = await sandbox.exec('bunx convex deploy -y', { cwd, timeout: 180_000, env: prodEnv })
   if (res.code !== 0) throw new Error(`convex deploy failed: ${res.output}`)
 }
 
