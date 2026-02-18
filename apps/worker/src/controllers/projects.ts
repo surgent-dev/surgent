@@ -397,10 +397,16 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     const assetPreview = assetPaths.slice(0, 12)
     const assetMore = assetPaths.length - assetPreview.length
     const envKeys = Object.keys(deployConfig.vars || {}).sort()
+    const envSnapshot = {
+      vars: deployConfig.vars || {},
+      capturedAt: new Date().toISOString(),
+    }
     const envPreview = envKeys.slice(0, 20)
     const envMore = envKeys.length - envPreview.length
     const localKeys = Object.keys(localEnv || {})
     const projectKeys = Object.keys(envVars)
+
+    await ProjectService.updateDeployment(deploymentId, { envSnapshot })
 
     log.info(
       {

@@ -221,6 +221,7 @@ export async function createDeployment(args: {
   projectId: string
   scriptName: string
   status: string
+  envSnapshot?: any | null
   hostname?: string | null
   error?: string | null
   startedAt?: Date | null
@@ -235,6 +236,7 @@ export async function createDeployment(args: {
       projectId: args.projectId,
       scriptName: args.scriptName,
       status: args.status,
+      envSnapshot: args.envSnapshot ?? null,
       hostname: args.hostname ?? null,
       error: args.error ?? null,
       startedAt: args.startedAt ?? null,
@@ -253,6 +255,7 @@ export async function updateDeployment(
   id: string,
   data: {
     status?: string
+    envSnapshot?: any | null
     hostname?: string | null
     error?: string | null
     startedAt?: Date | null
@@ -266,6 +269,7 @@ export async function updateDeployment(
     .updateTable('deployment')
     .set({
       status: data.status,
+      envSnapshot: data.envSnapshot,
       hostname: data.hostname,
       error: data.error,
       startedAt: data.startedAt,

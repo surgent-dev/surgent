@@ -389,6 +389,7 @@ export interface DeploymentTable {
   projectId: string
   scriptName: string
   status: string
+  envSnapshot: any | null
   error: string | null
   startedAt: Date | null
   finishedAt: Date | null

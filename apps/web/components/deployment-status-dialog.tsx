@@ -2,7 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
-import { Copy, PencilSimple, ArrowSquareOut, X, RocketLaunch } from '@phosphor-icons/react'
+import {
+  Copy,
+  PencilSimple,
+  ArrowSquareOut,
+  X,
+  RocketLaunch,
+  Eye,
+  EyeSlash,
+} from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -51,6 +59,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
   const [rollId, setRollId] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [input, setInput] = useState('')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const prevStatusRef = useRef<string | null>(null)
 
   const { data: history, isLoading } = useDeploymentHistoryQuery(projectId, open)
@@ -105,21 +114,21 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl p-0 gap-0 [&>button]:hidden">
+      <DialogContent className="max-w-2xl p-0 gap-0 [&>button]:hidden">
         {/* Header */}
-        <div className="h-11 px-4 border-b flex items-center justify-between">
+        <div className="h-12 px-5 border-b flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <span
               className={`size-2 rounded-full ${isLive ? 'bg-emerald-500' : busy ? 'bg-amber-500 animate-pulse' : 'bg-muted-foreground/30'}`}
             />
-            <span className="text-sm font-medium">
+            <span className="text-sm font-semibold">
               {isLive ? 'Live' : busy ? 'Deploying' : 'Offline'}
             </span>
           </div>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="p-1 hover:bg-muted rounded transition-colors"
+            className="size-7 flex items-center justify-center hover:bg-muted rounded-md transition-colors"
           >
             <X className="size-4 text-muted-foreground" />
           </button>
@@ -128,12 +137,12 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
         {/* Progress banner */}
         {latest && !['deployed'].includes(latest.status) && (
           <div
-            className={`h-9 px-4 border-b flex items-center gap-2 text-sm ${TERMINAL.includes(latest.status) ? 'bg-destructive/5' : 'bg-brand/5'}`}
+            className={`h-10 px-5 border-b flex items-center gap-2.5 text-sm ${TERMINAL.includes(latest.status) ? 'bg-destructive/5' : 'bg-brand/5'}`}
           >
             {TERMINAL.includes(latest.status) ? (
               <span className="size-1.5 rounded-full bg-destructive" />
             ) : (
-              <Loader2 className="size-3 animate-spin text-brand" />
+              <Loader2 className="size-3.5 animate-spin text-brand" />
             )}
             <span
               className={
@@ -152,9 +161,9 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
         )}
 
         {/* URL + Actions */}
-        <div className="p-4 border-b space-y-3">
+        <div className="px-5 py-4 border-b space-y-3">
           {name && (
-            <div className="flex items-center h-9 px-3 rounded-md border bg-muted/20 font-mono text-sm">
+            <div className="flex items-center h-10 px-3 rounded-lg border bg-muted/20 font-mono text-sm">
               {editing ? (
                 <>
                   <input
@@ -228,19 +237,19 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
         </div>
 
         {/* History header */}
-        <div className="h-9 px-4 flex items-center justify-between text-xs text-muted-foreground bg-muted/30">
-          <span className="font-medium">History</span>
-          {history?.length ? <span>{history.length} deployments</span> : null}
+        <div className="h-10 px-5 flex items-center justify-between text-xs text-muted-foreground border-b bg-muted/20">
+          <span className="font-medium uppercase tracking-wider">Deployments</span>
+          {history?.length ? <span>{history.length} total</span> : null}
         </div>
 
         {/* History list */}
-        <ScrollArea className="h-56">
+        <ScrollArea className="max-h-[26rem]">
           {isLoading ? (
-            <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin mr-2" /> Loading
             </div>
           ) : !history?.length ? (
-            <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
               No deployments yet
             </div>
           ) : (
@@ -249,43 +258,96 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                 const fail = d.status.includes('failed')
                 const pend = !TERMINAL.includes(d.status)
                 const ok = d.status === 'deployed'
+                const snap = d.envSnapshot
+                const varEntries = snap?.vars
+                  ? Object.entries(snap.vars).sort(([a], [b]) => a.localeCompare(b))
+                  : snap?.keys?.map((k) => [k, ''] as const) || []
+                const isExpanded = expandedId === d.id
+                const hasVals = Boolean(snap?.vars)
                 return (
-                  <div
-                    key={d.id}
-                    className={`px-4 py-2.5 flex items-start gap-3 text-sm ${i === 0 ? 'bg-muted/30' : 'hover:bg-muted/10'}`}
-                  >
-                    <span
-                      className={`size-1.5 rounded-full mt-1.5 shrink-0 ${fail ? 'bg-destructive' : pend ? 'bg-amber-500' : ok ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                  <div key={d.id} className={`px-5 py-3 text-sm ${i === 0 ? 'bg-muted/20' : ''}`}>
+                    {/* Row */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
                         <span
-                          className={`font-medium ${fail ? 'text-destructive' : pend ? 'text-amber-600 dark:text-amber-400' : ok ? 'text-emerald-600 dark:text-emerald-400' : ''}`}
-                        >
-                          {STATUS[d.status] || d.status}
-                        </span>
-                        <span className="text-xs text-muted-foreground/60 font-mono">
-                          {d.scriptName || '—'}
-                        </span>
+                          className={`size-2 rounded-full shrink-0 ${fail ? 'bg-destructive' : pend ? 'bg-amber-500' : ok ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`font-medium ${fail ? 'text-destructive' : pend ? 'text-amber-600 dark:text-amber-400' : ok ? 'text-emerald-600 dark:text-emerald-400' : ''}`}
+                            >
+                              {STATUS[d.status] || d.status}
+                            </span>
+                            <span className="text-xs text-muted-foreground/50 font-mono">
+                              {d.scriptName || '—'}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground/40">
+                              {timeAgo(d.createdAt)} · {duration(d.startedAt, d.deployedAt)}
+                            </span>
+                          </div>
+                          {d.error && (
+                            <p className="text-xs text-destructive/70 mt-0.5 truncate">{d.error}</p>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {timeAgo(d.createdAt)} · {duration(d.startedAt, d.deployedAt)}
-                        {d.error && <span className="text-destructive/70 ml-2">{d.error}</span>}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {varEntries.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId(isExpanded ? null : d.id)}
+                            className={`h-7 px-2 rounded-md text-xs inline-flex items-center gap-1.5 transition-colors ${isExpanded ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}
+                          >
+                            {isExpanded ? (
+                              <EyeSlash className="size-3.5" weight="bold" />
+                            ) : (
+                              <Eye className="size-3.5" />
+                            )}
+                            <span className="tabular-nums">{varEntries.length} env</span>
+                          </button>
+                        )}
+                        {ok && d.cloudflareVersionId && i > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRollback(d.cloudflareVersionId!)}
+                            disabled={rollId === d.cloudflareVersionId}
+                            className="h-7 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 disabled:opacity-50 transition-colors"
+                          >
+                            {rollId === d.cloudflareVersionId ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              'Rollback'
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
-                    {ok && d.cloudflareVersionId && i > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRollback(d.cloudflareVersionId!)}
-                        disabled={rollId === d.cloudflareVersionId}
-                        className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 shrink-0"
-                      >
-                        {rollId === d.cloudflareVersionId ? (
-                          <Loader2 className="size-3 animate-spin" />
-                        ) : (
-                          'Rollback'
-                        )}
-                      </button>
+
+                    {/* Env snapshot expanded */}
+                    {isExpanded && varEntries.length > 0 && (
+                      <div className="mt-3 ml-5 rounded-lg border bg-muted/10 overflow-hidden">
+                        <div className="grid grid-cols-[minmax(120px,auto)_1fr] text-[11px] font-mono">
+                          {varEntries.map(([k, v], idx) => (
+                            <div
+                              key={`${d.id}-${k}`}
+                              className={`contents ${idx < varEntries.length - 1 ? '[&>*]:border-b' : ''}`}
+                            >
+                              <div className="px-3 py-2 text-muted-foreground bg-muted/30 font-medium truncate">
+                                {k}
+                              </div>
+                              <div className="px-3 py-2 text-foreground/85 break-all">
+                                {hasVals ? (
+                                  v || (
+                                    <span className="text-muted-foreground/40 italic">empty</span>
+                                  )
+                                ) : (
+                                  <span className="text-muted-foreground/40">—</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )

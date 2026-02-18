@@ -825,6 +825,7 @@ projects.get('/:id/deployments', zValidator('param', idParam), async (c) => {
       'hostname',
       'rollbackOf',
       'scriptName',
+      'envSnapshot',
     ])
     .where('projectId', '=', id)
     .orderBy('createdAt', 'desc')
@@ -841,6 +842,7 @@ projects.get('/:id/deployments', zValidator('param', idParam), async (c) => {
     hostname: row.hostname ?? null,
     rollbackOf: row.rollbackOf ?? null,
     scriptName: row.scriptName,
+    envSnapshot: row.envSnapshot ?? null,
   }))
 
   return c.json(response)

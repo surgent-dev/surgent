@@ -298,6 +298,15 @@ export function useSandboxLogsQuery(id?: string, enabled = true) {
 }
 
 // Deployment history
+const DeploymentEnvSnapshotSchema = z
+  .object({
+    vars: z.record(z.string(), z.string()).optional(),
+    keys: z.array(z.string()).optional(),
+    capturedAt: z.string().optional(),
+  })
+  .nullable()
+  .optional()
+
 const DeploymentItemSchema = z.object({
   id: z.string(),
   status: z.string(),
@@ -309,6 +318,7 @@ const DeploymentItemSchema = z.object({
   hostname: z.string().nullable().optional(),
   rollbackOf: z.string().nullable().optional(),
   scriptName: z.string().optional(),
+  envSnapshot: DeploymentEnvSnapshotSchema,
 })
 
 const DeploymentHistorySchema = z.array(DeploymentItemSchema)
