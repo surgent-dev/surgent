@@ -189,12 +189,16 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
               </div>
             ) : (
               <div className="h-full min-h-0 min-w-0">
-                <ResizablePanelGroup direction="horizontal" className="h-full">
+                <ResizablePanelGroup direction="horizontal" className="h-full !overflow-visible">
                   <ResizablePanel defaultSize={40} minSize={30}>
                     <Conversation projectId={projectId} initialPrompt={initialPrompt} />
                   </ResizablePanel>
                   <ResizableHandle className="bg-transparent" />
-                  <ResizablePanel defaultSize={60} minSize={30}>
+                  <ResizablePanel
+                    defaultSize={60}
+                    minSize={30}
+                    className="!overflow-visible shadow-[-4px_-2px_16px_rgba(0,0,0,0.05)] dark:shadow-[-4px_-2px_16px_rgba(0,0,0,0.16)] rounded-tl-xl"
+                  >
                     <div className="h-full bg-background border-l border-t rounded-tl-xl overflow-hidden">
                       <PreviewPanel
                         projectId={projectId}
