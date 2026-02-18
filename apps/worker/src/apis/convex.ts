@@ -311,3 +311,37 @@ export async function callMutation(
 
   return { status: 'success', value: body.value ?? null }
 }
+
+// ── Deployment logs ──────────────────────────────────────────────────────────
+
+export interface LogEntry {
+  identifier: string
+  udfType: string
+  executionTime: number
+  timestamp: number
+  error?: string
+  logLines?: Array<{ level: string; messages: string[]; timestamp: number }>
+}
+
+export interface LogsResult {
+  entries: LogEntry[]
+  newCursor: number
+}
+
+export async function fetchDeploymentLogs(
+  deploymentUrl: string,
+  deployKey: string,
+  cursor = 0,
+): Promise<LogsResult> {
+  const res = await fetch(`${deploymentUrl}/api/stream_function_logs?cursor=${cursor}`, {
+    method: 'GET',
+    headers: { Authorization: `Convex ${deployKey}` },
+  })
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(text || `Fetch logs failed: ${res.status}`)
+  }
+
+  return res.json() as Promise<LogsResult>
+}

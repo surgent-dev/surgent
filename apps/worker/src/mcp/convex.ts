@@ -11,7 +11,9 @@ import {
   listDeploymentEnvVars,
   callQuery,
   callMutation,
+  fetchDeploymentLogs,
   type ConvexValue,
+  type LogEntry,
   generateAuthKeys,
 } from '@/apis/convex'
 import * as ProjectService from '@/services/projects'
@@ -114,6 +116,21 @@ const callFunctionSchema = {
   args: z.record(z.string(), z.unknown()).optional().describe('Arguments to pass to the function'),
 }
 
+const readLogsSchema = {
+  ...envParam,
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .max(1000)
+    .default(50)
+    .describe('Number of recent log entries to return (max 1000).'),
+  success: z
+    .boolean()
+    .default(false)
+    .describe('Include successful function logs. By default only errors are shown.'),
+}
+
 // ============================================
 // Helpers
 // ============================================
@@ -128,6 +145,18 @@ const err = (error: string): McpResponse => ({
 })
 
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
+
+function formatLogEntry(e: LogEntry): string {
+  const ts = new Date(e.timestamp).toISOString()
+  const dur = `${e.executionTime.toFixed(1)}ms`
+  const status = e.error ? 'ERROR' : 'OK'
+  const parts = [`[${ts}] ${status} ${e.udfType}:${e.identifier} (${dur})`]
+  if (e.logLines?.length) {
+    for (const line of e.logLines) parts.push(`  [${line.level}] ${line.messages.join(' ')}`)
+  }
+  if (e.error) parts.push(`  Error: ${e.error}`)
+  return parts.join('\n')
+}
 
 function toEnvFileContent(vars: Record<string, string>): string {
   return Object.entries(vars)
@@ -464,6 +493,43 @@ Pass arguments as a JSON object matching the function's expected args.`,
         const result = await callMutation(ctx.deploymentUrl, ctx.deployKey, args.path, funcArgs)
         if (result.status === 'error') return err(result.errorMessage)
         return ok({ value: result.value })
+      } catch (e) {
+        return err(errMsg(e))
+      }
+    },
+  )
+
+  server.registerTool(
+    'read_logs',
+    {
+      title: 'Read Convex Logs',
+      description: `Fetch recent function execution logs from a Convex deployment.
+
+Pass "env" to target development (default) or production.
+Shows only errors by default — set "success" to true to include successful executions.
+Returns formatted log entries with timestamps, function paths, duration, and error details.`,
+      inputSchema: readLogsSchema,
+    },
+    async (args, extra) => {
+      const ctx = await getToolContext(extra, args.env)
+      if (!ctx) return err(`Convex ${args.env} deployment not provisioned`)
+
+      try {
+        const { entries } = await fetchDeploymentLogs(ctx.deploymentUrl, ctx.deployKey)
+
+        const filtered = args.success ? entries : entries.filter((e) => e.error)
+        const limited = filtered.slice(-args.limit)
+
+        if (!limited.length) {
+          const msg = args.success ? `No ${args.env} logs found` : `No ${args.env} errors found`
+          return ok({ env: args.env, count: 0, message: msg })
+        }
+
+        return ok({
+          env: args.env,
+          count: limited.length,
+          logs: limited.map(formatLogEntry).join('\n\n'),
+        })
       } catch (e) {
         return err(errMsg(e))
       }
