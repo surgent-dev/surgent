@@ -363,6 +363,9 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       }
       await ProjectService.updateIntegrationConfig(convex.id, nextConfig)
 
+      // Push server env vars to the new Convex production deployment
+      await pushProdServerEnvVars(projectId)
+
       return getProjectEnvVars(projectId, 'production')
     })()
 
@@ -649,8 +652,8 @@ async function pushProdServerEnvVars(projectId: string): Promise<void> {
   if (!prodUrl) return
 
   const [prodRows, devRows] = await Promise.all([
-    ProjectService.getEnvVarsByProjectId(projectId, 'production', convex.id),
-    ProjectService.getEnvVarsByProjectId(projectId, 'development', convex.id),
+    ProjectService.getEnvVarsByProjectId(projectId, 'production'),
+    ProjectService.getEnvVarsByProjectId(projectId, 'development'),
   ])
 
   const deployKey = prodRows.find((v) => v.key === 'CONVEX_DEPLOY_KEY')?.value
