@@ -3,20 +3,16 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 
 import Link from 'next/link'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { useTheme } from 'next-themes'
+import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import Image from 'next/image'
-import { Loader2, CheckCircle2, XCircle, Sun, Moon } from 'lucide-react'
 import {
   ArrowLeft,
   RocketLaunch,
   PencilSimple,
   DownloadSimple,
-  Warning,
   X,
   GithubLogo,
-  SignOut,
   CaretDown,
   Copy,
   Clock,
@@ -28,8 +24,10 @@ import {
   Storefront,
   Globe,
   UploadSimple,
-  CreditCard,
-  Lightning,
+  Tag,
+  CircleNotch,
+  CheckCircle,
+  XCircle,
 } from '@phosphor-icons/react'
 import { useCustomer } from 'autumn-js/react'
 import { useCredits } from '@/hooks/use-credits'
@@ -37,22 +35,12 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import PlanDialog from '@/components/plan-dialog'
-import { authClient } from '@/lib/auth-client'
 import {
   useDeployProject,
   useRenameProject,
@@ -66,17 +54,12 @@ import { http } from '@/lib/http'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
 import { useGitHubStatus } from '@/queries/github'
-import { useSandbox } from '@/hooks/use-sandbox'
-import { useSurpayConnect } from '@/queries/surpay'
+import WarningBanner from '@/components/project-header/warning-banner'
+import UserMenu from '@/components/project-header/user-menu'
+import PayDialogs from '@/components/project-header/pay-dialogs'
+import SellDialog from '@/components/project-header/sell-dialog'
 
 // Types
-interface User {
-  id: string
-  email: string
-  name?: string
-  image?: string
-}
-
 interface ProjectHeaderProps {
   projectId?: string
   project?: {
@@ -113,55 +96,15 @@ function sanitizeHostname(value: string) {
 
 export default function ProjectHeader({ projectId, project }: ProjectHeaderProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const pathname = usePathname()
-  const { setTheme, resolvedTheme } = useTheme()
-
-  // User state
-  const [user, setUser] = useState<User | null>(null)
   const credits = useCredits()
   const { check: checkFeature } = useCustomer()
   const canToggleVisibility = checkFeature({ featureId: 'private_projects' }).data?.allowed ?? false
-  useEffect(() => {
-    authClient.getSession().then(({ data }) => data?.user && setUser(data.user as User))
-  }, [])
 
   // Dialog states
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
   const [isDeploymentStatusOpen, setIsDeploymentStatusOpen] = useState(false)
   const [isPublishOpen, setIsPublishOpen] = useState(false)
-  const [isPaySuccessOpen, setIsPaySuccessOpen] = useState(false)
-  const [isPayConflictOpen, setIsPayConflictOpen] = useState(false)
-  const [conflictAccountId, setConflictAccountId] = useState<string | null>(null)
-
-  // Pay success handling
-  const setPulsePaymentsTab = useSandbox((s) => s.setPulsePaymentsTab)
-  useEffect(() => {
-    if (searchParams.get('pay_connected') === 'true') {
-      setIsPaySuccessOpen(true)
-      const params = new URLSearchParams(searchParams.toString())
-      params.delete('pay_connected')
-      const newQuery = params.toString()
-      router.replace(newQuery ? `${pathname}?${newQuery}` : pathname)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, pathname, router])
-
-  // Pay conflict handling
-  useEffect(() => {
-    if (searchParams.get('pay_conflict') === 'true') {
-      const accountId = searchParams.get('conflict_account_id')
-      if (accountId) {
-        setConflictAccountId(accountId)
-        setIsPayConflictOpen(true)
-      }
-      const params = new URLSearchParams(searchParams.toString())
-      params.delete('pay_conflict')
-      params.delete('conflict_account_id')
-      const newQuery = params.toString()
-      router.replace(newQuery ? `${pathname}?${newQuery}` : pathname)
-    }
-  }, [searchParams, pathname, router])
+  const [isSellOpen, setIsSellOpen] = useState(false)
 
   // Edit states
   const [isEditing, setIsEditing] = useState(false)
@@ -173,7 +116,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   // Loading states
   const [isDeploying, setIsDeploying] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   // Screenshot upload
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
@@ -185,12 +127,11 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   // Queries & mutations
   const deployProject = useDeployProject()
   const renameProject = useRenameProject()
-  useGitHubStatus(projectId, { enabled: isGitHubDialogOpen }) // Prefetch for dialog
+  useGitHubStatus(projectId, { enabled: isGitHubDialogOpen })
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
   const { data: projectListing } = useProjectListingQuery(projectId, isPublishOpen)
   const upsertListing = useUpsertProjectListing()
   const updateVisibility = useUpdateProjectVisibility()
-  const surpayConnect = useSurpayConnect()
 
   // Toast when deployment completes
   const prevStatusRef = useRef<string | null>(null)
@@ -319,11 +260,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     }
   }, [projectId, downloading, project?.name, credits])
 
-  const handleSignOut = async () => {
-    await authClient.signOut()
-    router.push('/login')
-  }
-
   const copyUrl = () => {
     navigator.clipboard.writeText(`https://${workerName}.surgent.site`)
     toast.success('Copied', { position: 'top-right' })
@@ -339,7 +275,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const handlePublishOpenChange = (open: boolean) => {
     setIsPublishOpen(open)
     if (open) {
-      // Reset state when opening
       setHostnameInput(workerName || '')
       setIsEditingHostname(false)
     }
@@ -415,44 +350,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
   return (
     <>
-      {/* Warning banner */}
-      {!bannerDismissed && (
-        <div className="bg-warning/[0.06] border-b border-warning/15 px-2.5 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-4 shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm min-w-0">
-            <Warning className="size-4 text-warning shrink-0" weight="fill" />
-            <span className="truncate">
-              <span className="font-medium">Heads up!</span> Projects may be deleted after
-              inactivity.
-            </span>
-          </div>
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDownload}
-              disabled={downloading}
-              aria-label="Download project"
-              className="h-7 text-xs text-warning hover:bg-warning/20 px-2 sm:px-3"
-            >
-              {downloading ? (
-                <Loader2 className="size-3.5 animate-spin sm:mr-1.5" />
-              ) : (
-                <DownloadSimple className="size-3.5 sm:mr-1.5" weight="bold" />
-              )}
-              <span className="hidden sm:inline">Download</span>
-            </Button>
-            <button
-              onClick={() => setBannerDismissed(true)}
-              aria-label="Dismiss warning"
-              className="p-1 rounded hover:bg-warning/20 text-warning"
-            >
-              <X className="size-4" weight="bold" />
-            </button>
-          </div>
-        </div>
-      )}
+      <WarningBanner onDownload={handleDownload} downloading={downloading} />
 
-      {/* Header */}
       <header className="h-11 flex items-center bg-background shrink-0 pl-3 pr-4">
         {/* Back */}
         <Button
@@ -504,10 +403,112 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
         {/* Action buttons */}
         <div className="flex items-center gap-1.5 pr-2">
+          {/* Download */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleDownload}
+                disabled={downloading || !projectId}
+                aria-label="Download project"
+              >
+                {downloading ? (
+                  <CircleNotch className="size-4 animate-spin" />
+                ) : (
+                  <DownloadSimple className="size-4" weight="bold" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Download project</TooltipContent>
+          </Tooltip>
+
+          {/* GitHub */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setIsGitHubDialogOpen(true)}
+                disabled={!projectId}
+                aria-label="Push to GitHub"
+              >
+                <GithubLogo className="size-4" weight="bold" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Push to GitHub</TooltipContent>
+          </Tooltip>
+
+          {/* Support */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" aria-label="Support">
+                <span className="relative">
+                  <Headset className="size-4" weight="bold" />
+                  <span className="absolute -top-0.5 -right-0.5 size-1.5 bg-green-500 rounded-full" />
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={4}
+              className="w-52 rounded-lg border-border/40 p-1 shadow-[0_8px_16px_-4px_#00000014,0_4px_6px_-2px_#0000000a,0_0_0_1px_#0000000f]"
+            >
+              <div className="px-3.5 py-2.5 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex size-2">
+                    <span className="absolute inline-flex size-full rounded-full bg-green-400 opacity-75 animate-ping" />
+                    <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+                  </span>
+                  <span className="text-[13px] font-medium">We&apos;re online</span>
+                </div>
+              </div>
+              <DropdownMenuItem
+                className="gap-2 rounded-md px-2 py-2 text-[12px] cursor-pointer"
+                onClick={() => navigator.clipboard.writeText('ben@surgent.dev')}
+              >
+                <Envelope className="size-3.5 text-muted-foreground/70" weight="duotone" />
+                <span className="flex-1 truncate text-[12px]">ben@surgent.dev</span>
+                <Copy className="size-3 text-muted-foreground/40" weight="bold" />
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                asChild
+                className="gap-2 rounded-md px-2 py-2 text-[12px] cursor-pointer"
+              >
+                <a href="https://discord.gg/DRWbFEtY" target="_blank" rel="noopener noreferrer">
+                  <DiscordLogo className="size-3.5 text-[#5865F2]" weight="fill" />
+                  <span className="flex-1 text-[12px]">Discord</span>
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                asChild
+                className="gap-2 rounded-md px-2 py-2 text-[12px] cursor-pointer"
+              >
+                <a href="https://t.me/bensurgent" target="_blank" rel="noopener noreferrer">
+                  <TelegramLogo className="size-3.5 text-[#26A5E4]" weight="fill" />
+                  <span className="flex-1 text-[12px]">Telegram</span>
+                </a>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Sell */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button variant="default" disabled aria-label="Set up payments">
+                  <Tag className="size-4" weight="fill" />
+                  <span className="hidden sm:inline">Sell</span>
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Coming soon</TooltipContent>
+          </Tooltip>
+
           {/* Status indicator */}
           {(isDeployed || isFailed) && (
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={() => setIsDeploymentStatusOpen(true)}
               aria-label={
                 isDeployed ? 'Live - View deployment status' : 'Failed - View deployment status'
@@ -520,86 +521,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             </Button>
           )}
 
-          {/* Download */}
-          <Button
-            variant="ghost"
-            onClick={handleDownload}
-            disabled={downloading || !projectId}
-            aria-label="Download project"
-          >
-            {downloading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <DownloadSimple className="size-4" />
-            )}
-            <span className="hidden md:inline">Download</span>
-          </Button>
-
-          {/* GitHub */}
-          <Button
-            variant="ghost"
-            onClick={() => setIsGitHubDialogOpen(true)}
-            disabled={!projectId}
-            aria-label="GitHub integration"
-          >
-            <GithubLogo className="size-4" weight="bold" />
-            <span className="hidden md:inline">GitHub</span>
-          </Button>
-
-          {/* Support */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" aria-label="Contact support">
-                <span className="relative">
-                  <Headset className="size-4" weight="bold" />
-                  <span className="absolute -top-0.5 -right-0.5 size-1.5 bg-green-500 rounded-full animate-pulse" />
-                </span>
-                <span className="hidden md:inline">Support</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 p-0">
-              <div className="px-2.5 py-2 border-b">
-                <div className="flex items-center gap-1.5">
-                  <span className="relative flex size-1.5">
-                    <span className="absolute inline-flex size-full rounded-full bg-green-400 opacity-75 animate-ping" />
-                    <span className="relative inline-flex size-1.5 rounded-full bg-green-500" />
-                  </span>
-                  <span className="text-xs font-medium">We&apos;re online</span>
-                </div>
-              </div>
-              <div className="p-1">
-                <DropdownMenuItem
-                  className="gap-2 px-2 py-1.5"
-                  onClick={() => {
-                    navigator.clipboard.writeText('ben@surgent.dev')
-                  }}
-                >
-                  <div className="flex items-center justify-center size-6 rounded bg-muted">
-                    <Envelope className="size-3.5" weight="duotone" />
-                  </div>
-                  <span className="text-xs flex-1">ben@surgent.dev</span>
-                  <Copy className="size-3 text-muted-foreground" weight="bold" />
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="gap-2 px-2 py-1.5">
-                  <a href="https://discord.gg/DRWbFEtY" target="_blank" rel="noopener noreferrer">
-                    <div className="flex items-center justify-center size-6 rounded bg-[#5865F2]/10">
-                      <DiscordLogo className="size-3.5 text-[#5865F2]" weight="fill" />
-                    </div>
-                    <span className="text-xs">Discord</span>
-                  </a>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="gap-2 px-2 py-1.5">
-                  <a href="https://t.me/bensurgent" target="_blank" rel="noopener noreferrer">
-                    <div className="flex items-center justify-center size-6 rounded bg-[#26A5E4]/10">
-                      <TelegramLogo className="size-3.5 text-[#26A5E4]" weight="fill" />
-                    </div>
-                    <span className="text-xs">Telegram</span>
-                  </a>
-                </DropdownMenuItem>
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           {/* Publish */}
           <DropdownMenu open={isPublishOpen} onOpenChange={handlePublishOpenChange}>
             <DropdownMenuTrigger asChild>
@@ -609,7 +530,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 aria-label="Publish project"
               >
                 {isDeploying ? (
-                  <Loader2 className="size-4 animate-spin" />
+                  <CircleNotch className="size-4 animate-spin" />
                 ) : (
                   <RocketLaunch className="size-4" weight="fill" />
                 )}
@@ -653,10 +574,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     {sanitizedHostname && isNewHostname && (
                       <>
                         {checkingHostname && (
-                          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                          <CircleNotch className="size-3 animate-spin text-muted-foreground" />
                         )}
                         {!checkingHostname && availability?.available && (
-                          <CheckCircle2 className="size-3 text-emerald-500" />
+                          <CheckCircle className="size-3 text-emerald-500" />
                         )}
                         {!checkingHostname && hostnameTaken && (
                           <span className="flex items-center gap-1 text-[11px] text-destructive">
@@ -708,7 +629,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     }
                   >
                     {isDeploying ? (
-                      <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                      <CircleNotch className="size-3.5 animate-spin mr-1.5" />
                     ) : (
                       <RocketLaunch className="size-3.5 mr-1.5" weight="fill" />
                     )}
@@ -733,7 +654,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 {/* In-progress status */}
                 {latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status) && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="size-3 animate-spin text-brand" />
+                    <CircleNotch className="size-3 animate-spin text-brand" />
                     {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
                   </div>
                 )}
@@ -855,7 +776,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                       />
                       {isUploading && (
                         <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                          <Loader2 className="size-5 animate-spin text-brand" />
+                          <CircleNotch className="size-5 animate-spin text-brand" />
                         </div>
                       )}
                       {!isUploading && (
@@ -901,7 +822,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     onClick={handleListOnMarketplace}
                   >
                     {upsertListing.isPending ? (
-                      <Loader2 className="size-3 animate-spin mr-1.5" />
+                      <CircleNotch className="size-3 animate-spin mr-1.5" />
                     ) : (
                       <Storefront className="size-3 mr-1.5" weight="fill" />
                     )}
@@ -913,81 +834,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           </DropdownMenu>
         </div>
 
-        {/* User menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="User menu">
-              <Avatar className="size-6">
-                <AvatarImage src={user?.image} alt={user?.name || user?.email} />
-                <AvatarFallback className="bg-muted text-foreground text-[11px] font-medium">
-                  {user?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase() || 'U'}
-                </AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="end" sideOffset={8}>
-            <div className="px-3 py-2">
-              <div className="text-sm font-medium truncate">{user?.name || 'User'}</div>
-              <div className="text-xs text-muted-foreground truncate">{user?.email}</div>
-            </div>
-            <div className="h-px bg-border" />
-            {credits.hasCustomer && !credits.unlimited && (
-              <>
-                <div className="px-3 py-2.5 space-y-2">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-xs text-muted-foreground">Credits</span>
-                    <span className="text-xs tabular-nums font-medium">
-                      {credits.used.toLocaleString()} / {credits.total.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="h-1 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        credits.usedPercent >= 90
-                          ? 'bg-rose-500'
-                          : credits.usedPercent >= 70
-                            ? 'bg-amber-500'
-                            : 'bg-emerald-500'
-                      }`}
-                      style={{ width: `${credits.usedPercent}%` }}
-                    />
-                  </div>
-                  <button
-                    onClick={() => credits.setPlanDialogOpen(true)}
-                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/20 bg-brand/8 px-2.5 py-1.5 text-[11px] font-medium text-brand hover:bg-brand/12 active:translate-y-px transition-all duration-100"
-                  >
-                    <Lightning className="size-3" weight="fill" />
-                    Upgrade
-                  </button>
-                </div>
-                <div className="h-px bg-border" />
-              </>
-            )}
-            <div className="px-1 py-1">
-              <DropdownMenuItem
-                onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-              >
-                {resolvedTheme === 'dark' ? (
-                  <Sun className="size-4" />
-                ) : (
-                  <Moon className="size-4" />
-                )}
-                {resolvedTheme === 'dark' ? 'Light' : 'Dark'}
-              </DropdownMenuItem>
-            </div>
-            <div className="h-px bg-border" />
-            <div className="px-1 py-1">
-              <DropdownMenuItem onClick={() => credits.openBillingPortal()}>
-                <CreditCard className="size-4" weight="duotone" />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleSignOut}>
-                <SignOut className="size-4" weight="duotone" />
-                Sign out
-              </DropdownMenuItem>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <UserMenu />
       </header>
 
       {/* Dialogs */}
@@ -1002,94 +849,14 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         projectId={projectId}
         worker={worker}
       />
-
-      <Dialog
-        open={isPaySuccessOpen}
-        onOpenChange={(open) => {
-          setIsPaySuccessOpen(open)
-          if (!open) {
-            setPulsePaymentsTab(true)
-            setTimeout(() => setPulsePaymentsTab(false), 10000)
-          }
-        }}
-      >
-        <DialogContent overlayClassName="backdrop-blur-sm">
-          <DialogHeader>
-            <DialogTitle>Payment Account Connected!</DialogTitle>
-            <DialogDescription>
-              You can now head to the Payments tab to configure pricing and more.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                setIsPaySuccessOpen(false)
-                setPulsePaymentsTab(true)
-                setTimeout(() => setPulsePaymentsTab(false), 10000)
-              }}
-            >
-              Got it
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+      <PayDialogs projectId={projectId} />
+      <SellDialog
+        open={isSellOpen}
+        onOpenChange={setIsSellOpen}
+        projectId={projectId}
+        projectName={project?.name}
+      />
       <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
-
-      <Dialog open={isPayConflictOpen} onOpenChange={setIsPayConflictOpen}>
-        <DialogContent overlayClassName="backdrop-blur-sm" className="sm:max-w-lg">
-          <div className="flex flex-col items-center text-center pt-12 pb-2">
-            {/* Radiating circles icon */}
-            <div className="relative flex items-center justify-center mb-14">
-              <div className="absolute size-28 rounded-full bg-brand/10" />
-              <div className="absolute size-20 rounded-full bg-brand/20" />
-              <div className="relative size-12 rounded-full bg-brand/30 border-2 border-brand/50 flex items-center justify-center">
-                <span className="text-brand text-xl font-semibold">i</span>
-              </div>
-            </div>
-
-            <h2 className="text-xl font-semibold mb-3">Move this payment account?</h2>
-            <p className="text-sm text-muted-foreground mb-10">
-              This payment account is currently connected to another project.
-              <br />
-              You can move it here, or use a different account instead.
-            </p>
-
-            <div className="flex gap-3 w-full">
-              <Button
-                variant="outline"
-                className="flex-1 h-10"
-                disabled={surpayConnect.isPending}
-                onClick={() => {
-                  if (!projectId) return
-                  surpayConnect.mutate(projectId, {
-                    onSuccess: (data) => {
-                      setIsPayConflictOpen(false)
-                      setConflictAccountId(null)
-                      window.location.href = data.oauthUrl
-                    },
-                    onError: () =>
-                      toast.error('Failed to start payment connection', { position: 'top-right' }),
-                  })
-                }}
-              >
-                {surpayConnect.isPending && <Loader2 className="size-4 animate-spin mr-1.5" />}
-                Use Different Account
-              </Button>
-              <Button
-                className="flex-1 h-10"
-                variant="outline"
-                onClick={() => {
-                  setIsPayConflictOpen(false)
-                  setConflictAccountId(null)
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }
