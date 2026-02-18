@@ -39,6 +39,10 @@ For detailed architecture, refer to docs/ARCHITECTURE.md.
 
 - To test opencode in the `packages/opencode` directory you can run `bun dev`
 
+## Verification
+
+- NEVER verify changes by running a full build (e.g. `bun run build --filter=web`). Always use the linter/type-checker (`ReadLints` or `bun lint`) to validate correctness instead.
+
 ## SDK
 
 To regenerate the javascript SDK, run ./packages/sdk/js/script/build.ts

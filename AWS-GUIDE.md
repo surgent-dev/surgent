@@ -44,6 +44,19 @@ aws logs filter-log-events \
   --query 'events[*].message' --output text
 ```
 
+### Live Tail Logs
+
+```bash
+# All logs (Ctrl+C to stop)
+aws logs tail "SurgentStack-WorkerTaskDefworkerLogGroup76A78CDA-Ea4mF0XO2hkK" --follow
+
+# Errors only
+aws logs tail "SurgentStack-WorkerTaskDefworkerLogGroup76A78CDA-Ea4mF0XO2hkK" --follow --filter-pattern "error"
+
+# Pay/whop related
+aws logs tail "SurgentStack-WorkerTaskDefworkerLogGroup76A78CDA-Ea4mF0XO2hkK" --follow --filter-pattern "PAY"
+```
+
 ### Force New Deployment
 
 ```bash
