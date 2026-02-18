@@ -1101,29 +1101,41 @@ projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c)
 })
 
 // GET /projects/:id/convex/env - List deployment environment variables
-projects.get('/:id/convex/env', zValidator('param', idParam), async (c) => {
-  const { id } = c.req.valid('param')
-  await getProjectWithAuth(id, c.get('user')!)
+projects.get(
+  '/:id/convex/env',
+  zValidator('param', idParam),
+  zValidator('query', z.object({ env: z.enum(['development', 'production']).optional() })),
+  async (c) => {
+    const { id } = c.req.valid('param')
+    const { env = 'development' } = c.req.valid('query')
+    await getProjectWithAuth(id, c.get('user')!)
 
-  const creds = await getConvexCredentials(id, 'development')
-  if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
+    const creds = await getConvexCredentials(id, env)
+    if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
 
-  const vars = await listDeploymentEnvVars(creds.deploymentUrl, creds.deployKey)
-  return c.json({ environmentVariables: vars })
-})
+    const vars = await listDeploymentEnvVars(creds.deploymentUrl, creds.deployKey)
+    return c.json({ environmentVariables: vars })
+  },
+)
 
 // POST /projects/:id/convex/env - Update deployment environment variables
 projects.post(
   '/:id/convex/env',
   zValidator('param', idParam),
-  zValidator('json', z.object({ vars: z.record(z.string(), z.string()) })),
+  zValidator(
+    'json',
+    z.object({
+      env: z.enum(['development', 'production']).optional(),
+      vars: z.record(z.string(), z.string()),
+    }),
+  ),
   async (c) => {
     const { id } = c.req.valid('param')
-    const { vars } = c.req.valid('json')
+    const { env = 'development', vars } = c.req.valid('json')
 
     await getProjectWithAuth(id, c.get('user')!)
 
-    const creds = await getConvexCredentials(id, 'development')
+    const creds = await getConvexCredentials(id, env)
     if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
 
     await setDeploymentEnvVars(creds.deploymentUrl, creds.deployKey, vars)
