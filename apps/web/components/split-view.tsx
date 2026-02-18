@@ -43,34 +43,34 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   const [activeTabId, setActiveTabId] = useState('preview')
   const tabCounter = useRef(0)
 
-  // Add Convex database tabs after Preview tab
+  // Add single Convex database tab after Preview tab
   useEffect(() => {
     if (convexTabsAdded.current || (!hasConvexDev && !hasConvexProd)) return
     convexTabsAdded.current = true
 
-    const newTabs: PreviewTab[] = []
-    if (hasConvexDev) {
-      newTabs.push({
-        id: 'convex-dev',
-        type: 'convex',
-        title: 'Database',
-        convexEnv: 'development',
-      })
-    }
-    if (hasConvexProd) {
-      newTabs.push({
-        id: 'convex-prod',
-        type: 'convex',
-        title: 'Database',
-        convexEnv: 'production',
-      })
-    }
+    const envs: ('development' | 'production')[] = []
+    if (hasConvexDev) envs.push('development')
+    if (hasConvexProd) envs.push('production')
 
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === 'preview') + 1
-      return [...prev.slice(0, idx), ...newTabs, ...prev.slice(idx)]
+      return [
+        ...prev.slice(0, idx),
+        {
+          id: 'convex',
+          type: 'convex' as const,
+          title: 'Database',
+          convexEnv: envs[0],
+          convexEnvs: envs,
+        },
+        ...prev.slice(idx),
+      ]
     })
   }, [hasConvexDev, hasConvexProd])
+
+  const handleConvexEnvChange = useCallback((env: 'development' | 'production') => {
+    setTabs((prev) => prev.map((t) => (t.type === 'convex' ? { ...t, convexEnv: env } : t)))
+  }, [])
 
   const handleCloseTab = useCallback((tabId: string) => {
     setTabs((t) => t.filter((tab) => tab.id !== tabId))
@@ -180,6 +180,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
                           onTabChange={setActiveTabId}
                           onCloseTab={handleCloseTab}
                           onAddTab={handleAddTab}
+                          onConvexEnvChange={handleConvexEnvChange}
                         />
                       </div>
                     </div>
@@ -204,6 +205,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
                         onTabChange={setActiveTabId}
                         onCloseTab={handleCloseTab}
                         onAddTab={handleAddTab}
+                        onConvexEnvChange={handleConvexEnvChange}
                       />
                     </div>
                   </ResizablePanel>

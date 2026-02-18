@@ -18,6 +18,7 @@ import {
   Power,
   RefreshCw,
   CreditCard,
+  ChevronDown,
 } from 'lucide-react'
 import { Coins } from '@phosphor-icons/react'
 import Image from 'next/image'
@@ -78,6 +79,7 @@ export interface PreviewTab {
   sessionId?: string
   convexPath?: string
   convexEnv?: 'development' | 'production'
+  convexEnvs?: ('development' | 'production')[]
 }
 
 const DEFAULT_TABS: PreviewTab[] = [{ id: 'preview', type: 'preview', title: 'Preview' }]
@@ -458,6 +460,7 @@ function TabButton({
   onClose,
   isPulsing,
   connectedProcessor,
+  onConvexEnvChange,
 }: {
   tab: PreviewTab
   isActive: boolean
@@ -465,10 +468,12 @@ function TabButton({
   onClose?: () => void
   isPulsing?: boolean
   connectedProcessor?: string
+  onConvexEnvChange?: (env: 'development' | 'production') => void
 }) {
   const closable = tab.type !== 'preview' && tab.type !== 'convex' && tab.type !== 'payments'
   const Icon = getTabIcon(tab.type)
   const isProd = tab.convexEnv === 'production'
+  const hasMultipleEnvs = tab.convexEnvs && tab.convexEnvs.length > 1
 
   const renderIcon = () => {
     if (tab.type === 'payments' && connectedProcessor) {
@@ -481,28 +486,66 @@ function TabButton({
     return Icon ? <Icon className="size-4" /> : null
   }
 
+  const envBadge = tab.convexEnv ? (
+    <span
+      className={cn(
+        'px-2 py-1 text-[11px] font-medium rounded-full leading-none',
+        isProd
+          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+          : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+      )}
+    >
+      {isProd ? 'Prod' : 'Dev'}
+    </span>
+  ) : null
+
   return (
-    <button
+    <div
       onClick={onSelect}
       className={cn(
-        'group flex items-center gap-1.5 px-3 text-[13px] border-r border-border/40 transition-colors shrink-0',
+        'group flex items-center gap-1.5 px-3 text-[13px] border-r border-border/40 transition-colors shrink-0 cursor-pointer',
         isActive ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-background/50',
         isPulsing && 'animate-pulse bg-brand/15 ring-1 ring-inset ring-brand/40',
       )}
     >
       {renderIcon()}
       <span className="truncate max-w-32">{tab.title}</span>
-      {tab.convexEnv && (
-        <span
-          className={cn(
-            'px-1.5 py-0.5 text-[10px] font-medium rounded-full leading-none',
-            isProd
-              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-              : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-          )}
-        >
-          {isProd ? 'Prod' : 'Dev'}
-        </span>
+      {hasMultipleEnvs ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                'flex items-center gap-0.5 pl-2 pr-1.5 py-1 rounded-full text-[11px] font-medium leading-none transition-all',
+                isProd
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25'
+                  : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25',
+              )}
+            >
+              {isProd ? 'Prod' : 'Dev'}
+              <ChevronDown className="size-2.5 opacity-60" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-36">
+            {tab.convexEnvs!.map((env) => (
+              <DropdownMenuItem
+                key={env}
+                onClick={() => onConvexEnvChange?.(env)}
+                className={cn('gap-2 text-xs', tab.convexEnv === env && 'font-medium')}
+              >
+                <span
+                  className={cn(
+                    'size-1.5 rounded-full',
+                    env === 'production' ? 'bg-amber-500' : 'bg-emerald-500',
+                  )}
+                />
+                {env === 'production' ? 'Production' : 'Development'}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        envBadge
       )}
       {closable && onClose && (
         <span
@@ -516,7 +559,7 @@ function TabButton({
           <X className="size-3" />
         </span>
       )}
-    </button>
+    </div>
   )
 }
 
@@ -529,6 +572,7 @@ interface PreviewPanelProps {
   onTabChange?: (tabId: string) => void
   onCloseTab?: (tabId: string) => void
   onAddTab?: (type: PreviewTab['type']) => void
+  onConvexEnvChange?: (env: 'development' | 'production') => void
 }
 
 export default function PreviewPanel({
@@ -540,6 +584,7 @@ export default function PreviewPanel({
   onTabChange,
   onCloseTab,
   onAddTab,
+  onConvexEnvChange,
 }: PreviewPanelProps) {
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const tab = activeTab ?? tabs[0]
@@ -695,6 +740,7 @@ export default function PreviewPanel({
               onClose={onCloseTab ? () => onCloseTab(tab.id) : undefined}
               isPulsing={tab.type === 'payments' && pulsePaymentsTab}
               connectedProcessor={tab.type === 'payments' ? connectedProcessor : undefined}
+              onConvexEnvChange={tab.type === 'convex' ? onConvexEnvChange : undefined}
             />
           ))}
           {addTabMenu}
