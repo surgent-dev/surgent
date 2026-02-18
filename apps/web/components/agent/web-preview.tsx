@@ -335,12 +335,7 @@ export const WebPreviewNavButtons = () => {
               type="button"
               disabled={!canGoBack}
               onClick={goBack}
-              className={cn(
-                'flex size-7 items-center justify-center rounded-md transition-colors',
-                !canGoBack
-                  ? 'opacity-30'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
+              className="btn-control size-7"
               aria-label="Go back"
             >
               <ChevronLeftIcon size={16} />
@@ -357,12 +352,7 @@ export const WebPreviewNavButtons = () => {
               type="button"
               disabled={!canGoForward}
               onClick={goForward}
-              className={cn(
-                'flex size-7 items-center justify-center rounded-md transition-colors',
-                !canGoForward
-                  ? 'opacity-30'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
+              className="btn-control size-7"
               aria-label="Go forward"
             >
               <ChevronRightIcon size={16} />
@@ -378,10 +368,11 @@ export const WebPreviewNavButtons = () => {
             <button
               type="button"
               onClick={refresh}
-              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="btn-control h-7 gap-1 px-2 text-xs"
               aria-label="Refresh page"
             >
               <RefreshCwIcon size={14} />
+              Refresh
             </button>
           </TooltipTrigger>
           <TooltipContent>Refresh</TooltipContent>
@@ -395,12 +386,7 @@ export const WebPreviewNavButtons = () => {
               href={url || '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className={cn(
-                'flex size-7 items-center justify-center rounded-md transition-colors',
-                url
-                  ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  : 'pointer-events-none opacity-30',
-              )}
+              className={cn('btn-control size-7', !url && 'pointer-events-none opacity-30')}
               aria-label="Open in new tab"
             >
               <ExternalLinkIcon size={14} />
@@ -413,7 +399,7 @@ export const WebPreviewNavButtons = () => {
   )
 }
 
-export type WebPreviewNavigationButtonProps = ComponentProps<typeof Button> & {
+export type WebPreviewNavigationButtonProps = ComponentProps<'button'> & {
   tooltip?: string
 }
 
@@ -422,21 +408,21 @@ export const WebPreviewNavigationButton = ({
   disabled,
   tooltip,
   children,
+  className,
   ...props
 }: WebPreviewNavigationButtonProps) => (
   <TooltipProvider>
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          className="h-8 w-8 p-0 hover:text-foreground"
+        <button
+          type="button"
+          className={cn('btn-control size-7', className)}
           disabled={disabled}
           onClick={onClick}
-          size="sm"
-          variant="ghost"
           {...props}
         >
           {children}
-        </Button>
+        </button>
       </TooltipTrigger>
       <TooltipContent>
         <p>{tooltip}</p>
