@@ -17,12 +17,10 @@ import {
   Plus,
   Power,
   RefreshCw,
-  CreditCard,
+  CircleDollarSign,
   ChevronDown,
   Settings,
 } from 'lucide-react'
-import { Coins } from '@phosphor-icons/react'
-import Image from 'next/image'
 import type { FileDiff } from '@opencode-ai/sdk'
 
 import {
@@ -283,7 +281,7 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
     <div className="w-full h-full flex items-center justify-center p-8">
       <div className="flex flex-col items-center w-full max-w-[300px] text-center">
         <div className="size-11 rounded-xl bg-[var(--brand)]/10 flex items-center justify-center mb-5">
-          <Coins className="size-5 text-[var(--brand)]" weight="duotone" />
+          <CircleDollarSign className="size-5 text-[var(--brand)]" strokeWidth={1.5} />
         </div>
 
         <p className="text-[15px] font-semibold mb-1">Payments</p>
@@ -299,7 +297,7 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
             className="flex items-center gap-3 w-full p-3 rounded-lg border hover:bg-muted/50 transition-colors disabled:opacity-50"
           >
             <div className="size-8 rounded-md border bg-muted/40 grid place-items-center shrink-0">
-              <Image src="/surpay-coin.svg" alt="Surgent" width={20} height={20} />
+              <CircleDollarSign className="size-5 text-muted-foreground" strokeWidth={1.5} />
             </div>
             <div className="text-left min-w-0 flex-1">
               <div className="text-sm font-medium truncate">
@@ -350,7 +348,7 @@ function PaymentsContent({ projectId }: { projectId?: string }) {
   const [disconnectOpen, setDisconnectOpen] = useState(false)
 
   if (isLoading) {
-    return <LoadingState icon={CreditCard} message="Loading payment accounts..." />
+    return <LoadingState icon={CircleDollarSign} message="Loading payment accounts..." />
   }
 
   const account = accounts?.find((a) => a.status === 'connected')
@@ -450,7 +448,7 @@ function getTabIcon(type: PreviewTab['type']) {
     case 'logs':
       return ScrollText
     case 'payments':
-      return CreditCard
+      return CircleDollarSign
     case 'settings':
       return Settings
   }
@@ -485,11 +483,7 @@ function TabButton({
 
   const renderIcon = () => {
     if (tab.type === 'payments' && connectedProcessor) {
-      return (
-        <div className="size-4 rounded-sm border bg-muted/40 grid place-items-center overflow-hidden">
-          <Image src="/surpay-coin.svg" alt="Surgent" width={12} height={12} />
-        </div>
-      )
+      return <CircleDollarSign className="size-4" />
     }
     return Icon ? <Icon className="size-4" /> : null
   }
@@ -669,7 +663,7 @@ export default function PreviewPanel({
           disabled={hasPayments}
           className="gap-2"
         >
-          <CreditCard className="size-4 text-muted-foreground" />
+          <CircleDollarSign className="size-4 text-muted-foreground" />
           Payments
         </DropdownMenuItem>
       </DropdownMenuContent>
