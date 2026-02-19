@@ -332,7 +332,11 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       if (!convexId) return base // no project ID means incomplete integration, skip
 
       const prod = cfg.deployments?.production
-      if (prod?.name) return base // already provisioned
+      if (prod?.name) {
+        // Prod deployment exists — still sync server env vars to Convex
+        await pushProdServerEnvVars(projectId)
+        return base
+      }
 
       const required = ['CONVEX_URL', 'CONVEX_DEPLOY_KEY', 'VITE_CONVEX_URL', 'CONVEX_DEPLOYMENT']
       const missing = required.filter((key) => !base[key])
