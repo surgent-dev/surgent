@@ -310,6 +310,13 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
 
   try {
     await ensureConvexProdDeployment(projectId)
+
+    // Set production SITE_URL to the actual worker hostname (not the dev sandbox URL)
+    const workerHostname = `https://${scriptName}.${config.cloudflare.deployDomain}`
+    await ProjectService.upsertEnvVars(projectId, 'production', {
+      SITE_URL: { value: workerHostname, destination: 'both' },
+    })
+
     await syncServerVarsToConvex(projectId)
     const envVars = await getProjectEnvVars(projectId, 'production')
 
@@ -387,7 +394,6 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     // Fetch Cloudflare deployment info for version tracking
     const cfDeployment = await fetchLatestCloudflareDeployment(accountId, scriptName)
     const finishedAt = new Date()
-    const workerHostname = `https://${scriptName}.${config.cloudflare.deployDomain}`
 
     await ProjectService.updateDeployment(deploymentId, {
       status: 'deployed',
@@ -569,6 +575,15 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
   if (!sandboxRow?.id) throw new Error('Sandbox not found')
 
   await ensureConvexProdDeployment(args.projectId)
+
+  // Set production SITE_URL from the deployed worker hostname
+  const worker = await ProjectService.getWorkerByProjectId(args.projectId)
+  if (worker?.hostname) {
+    await ProjectService.upsertEnvVars(args.projectId, 'production', {
+      SITE_URL: { value: worker.hostname, destination: 'both' },
+    })
+  }
+
   await syncServerVarsToConvex(args.projectId)
 
   // Use production env vars so the Convex CLI picks up the prod deploy key

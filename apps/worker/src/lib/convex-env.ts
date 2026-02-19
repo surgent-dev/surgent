@@ -52,6 +52,9 @@ export function withDeployment(
   return { ...cfg, deployments: { ...cfg.deployments, [env]: dep } }
 }
 
+// Env vars that are inherently environment-specific and must not leak from dev to prod
+const ENV_SPECIFIC_KEYS = new Set(['SITE_URL'])
+
 // ============================================================================
 // Core
 // ============================================================================
@@ -99,14 +102,15 @@ export async function ensureConvexProdDeployment(projectId: string): Promise<voi
   }
   const deployKey = prodEnv.CONVEX_DEPLOY_KEY ?? (await createDeployKey(name))
 
-  // Copy dev server vars that don't already exist in prod
+  // Copy dev server vars that don't already exist in prod (skip env-specific keys like SITE_URL)
   const devRows = await ProjectService.getEnvVarsByProjectId(projectId, 'development')
   const devServerVars: Record<string, { value: string; destination: 'server' | 'both' }> = {}
   for (const row of devRows) {
     if (
       row.value &&
       (row.destination === 'server' || row.destination === 'both') &&
-      !(row.key in prodEnv)
+      !(row.key in prodEnv) &&
+      !ENV_SPECIFIC_KEYS.has(row.key)
     ) {
       devServerVars[row.key] = { value: row.value, destination: row.destination }
     }
@@ -151,8 +155,19 @@ export async function syncServerVarsToConvex(projectId: string): Promise<void> {
   const prodEnv = toEnvMap(prodRows)
   if (!prodEnv.CONVEX_URL || !prodEnv.CONVEX_DEPLOY_KEY) return
 
+  // Dev vars as base (excluding env-specific keys), prod vars override
   const serverVars: Record<string, string> = {}
-  for (const row of [...devRows, ...prodRows]) {
+  for (const row of devRows) {
+    if (
+      row.value &&
+      (row.destination === 'server' || row.destination === 'both') &&
+      row.key !== 'CONVEX_DEPLOY_KEY' &&
+      !ENV_SPECIFIC_KEYS.has(row.key)
+    ) {
+      serverVars[row.key] = row.value
+    }
+  }
+  for (const row of prodRows) {
     if (
       row.value &&
       (row.destination === 'server' || row.destination === 'both') &&
