@@ -323,7 +323,11 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     const sandbox = await getProvider().resume(sandboxRow.id)
 
     await updateStatus('building')
-    const build = await sandbox.exec('bun run build', { cwd: workingDir, timeout: 180_000 })
+    const build = await sandbox.exec('bun run build', {
+      cwd: workingDir,
+      timeout: 180_000,
+      env: envVars,
+    })
     if (build.code !== 0) {
       const error = `Build failed: ${String(build.output).slice(0, 500)}`
       await updateStatus('build_failed', { error, finishedAt: new Date() })
