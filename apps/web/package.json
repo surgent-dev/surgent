@@ -67,6 +67,7 @@
     "better-auth": "^1.4.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "css-mesh": "0.7.1",
     "date-fns": "^4.1.0",
     "diff": "^8.0.2",
     "embla-carousel-react": "^8.6.0",

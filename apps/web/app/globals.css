@@ -9,6 +9,7 @@
   --font-sans: var(--font-inter);
   --font-mono: var(--font-jetbrains-mono);
   --font-display: var(--font-display);
+  --font-satoshi: 'Satoshi', var(--font-inter), sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -539,3 +540,141 @@ body {
   animation: landing-fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: 0.4s;
 }
+.landing-stagger-6 {
+  animation: landing-fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.52s;
+}
+.landing-stagger-7 {
+  animation: landing-fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.64s;
+}
+.landing-stagger-8 {
+  animation: landing-fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.76s;
+}
+
+/* Landing glass card */
+.landing-glass {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+}
+.landing-glass:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Landing violet glow */
+.landing-glow {
+  position: absolute;
+  width: 600px;
+  height: 400px;
+  border-radius: 9999px;
+  background: rgba(124, 58, 237, 0.08);
+  filter: blur(120px);
+  pointer-events: none;
+}
+
+/* Landing section divider */
+.landing-divider {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Aurora blobs ─── */
+
+.aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(100px);
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+
+.aurora-blob-1 {
+  width: 600px;
+  height: 350px;
+  top: 10%;
+  left: 20%;
+  background: radial-gradient(ellipse, rgba(124, 58, 237, 0.35) 0%, transparent 70%);
+  animation: aurora-drift-1 12s ease-in-out infinite alternate;
+}
+
+.aurora-blob-2 {
+  width: 500px;
+  height: 300px;
+  top: 25%;
+  right: 15%;
+  background: radial-gradient(ellipse, rgba(167, 139, 250, 0.25) 0%, transparent 70%);
+  animation: aurora-drift-2 15s ease-in-out infinite alternate;
+}
+
+.aurora-blob-3 {
+  width: 700px;
+  height: 250px;
+  top: 40%;
+  left: 30%;
+  background: radial-gradient(ellipse, rgba(192, 132, 252, 0.2) 0%, transparent 70%);
+  animation: aurora-drift-3 18s ease-in-out infinite alternate;
+}
+
+.aurora-blob-4 {
+  width: 400px;
+  height: 200px;
+  top: 15%;
+  left: 50%;
+  background: radial-gradient(ellipse, rgba(139, 92, 246, 0.2) 0%, transparent 70%);
+  animation: aurora-drift-4 10s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift-1 {
+  from { transform: translate(0, 0) rotate(0deg) scale(1); }
+  to { transform: translate(80px, 40px) rotate(8deg) scale(1.1); }
+}
+
+@keyframes aurora-drift-2 {
+  from { transform: translate(0, 0) rotate(0deg) scale(1); }
+  to { transform: translate(-60px, 50px) rotate(-6deg) scale(1.15); }
+}
+
+@keyframes aurora-drift-3 {
+  from { transform: translate(0, 0) rotate(0deg) scale(1); }
+  to { transform: translate(40px, -30px) rotate(5deg) scale(0.95); }
+}
+
+@keyframes aurora-drift-4 {
+  from { transform: translate(0, 0) rotate(0deg) scale(1); }
+  to { transform: translate(-50px, 30px) rotate(-10deg) scale(1.2); }
+}
+
+/* ─── Aurora shader mesh ─── */
+
+@keyframes aurora-mesh {
+  0% { background-position: 0% 50%, 50% 50%; }
+  50% { background-position: 100% 50%, 0% 50%; }
+  100% { background-position: 0% 50%, 50% 50%; }
+}
+
+.aurora-shader {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 30%, rgba(124, 58, 237, 0.15), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 70% 20%, rgba(167, 139, 250, 0.1), transparent 65%),
+    radial-gradient(ellipse 70% 35% at 50% 60%, rgba(192, 132, 252, 0.08), transparent 70%),
+    radial-gradient(ellipse 40% 50% at 80% 50%, rgba(139, 92, 246, 0.12), transparent 60%);
+  filter: blur(40px);
+  opacity: 0.7;
+  pointer-events: none;
+  mask-image: radial-gradient(ellipse 85% 75% at 50% 40%, black 15%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 40%, black 15%, transparent 70%);
+}
+
+.dark .aurora-shader {
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 30%, rgba(124, 58, 237, 0.22), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 70% 20%, rgba(167, 139, 250, 0.16), transparent 65%),
+    radial-gradient(ellipse 70% 35% at 50% 60%, rgba(192, 132, 252, 0.12), transparent 70%),
+    radial-gradient(ellipse 40% 50% at 80% 50%, rgba(139, 92, 246, 0.18), transparent 60%);
+  opacity: 0.5;
+}
+
