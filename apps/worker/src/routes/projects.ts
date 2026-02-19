@@ -34,8 +34,10 @@ import {
   updateProjectStatus,
   updateDeployment,
   upsertEnvVar,
+  getEnvVarsByProjectId,
+  deleteEnvVar,
 } from '@/services/projects'
-import { getConvexCredentials } from '@/lib/convex-env'
+import { getConvexCredentials, syncEnvVarsToConvexForEnv } from '@/lib/convex-env'
 import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
 import { inngest } from '@/inngest'
 import { createLogger } from '@/lib/logger'
@@ -774,6 +776,17 @@ projects.post(
         log.info({ projectId: id }, 'created live API key for production')
       }
 
+      // Ensure SURPAY_BASE_URL exists for production
+      if (config.surgent.baseUrl) {
+        await upsertEnvVar({
+          projectId: id,
+          environment: 'production',
+          key: 'SURPAY_BASE_URL',
+          value: `${config.surgent.baseUrl}/api/pay`,
+          destination: 'both',
+        })
+      }
+
       const deployment = await createDeploymentRecord(id, name)
 
       try {
@@ -1057,6 +1070,83 @@ projects.get('/:id/download', zValidator('param', idParam), async (c) => {
     return c.json({ error: message }, status as 400 | 500)
   }
 })
+
+// ============================================
+// Project Environment Variables
+// ============================================
+
+// GET /projects/:id/env - List env vars for a project
+projects.get(
+  '/:id/env',
+  zValidator('param', idParam),
+  zValidator('query', z.object({ environment: z.enum(['development', 'production']).optional() })),
+  async (c) => {
+    const { id } = c.req.valid('param')
+    const { environment = 'development' } = c.req.valid('query')
+    await getProjectWithAuth(id, c.get('user')!)
+
+    const vars = await getEnvVarsByProjectId(id, environment)
+    return c.json(
+      vars.map((v) => ({
+        key: v.key,
+        value: v.value,
+        destination: v.destination,
+      })),
+    )
+  },
+)
+
+// PUT /projects/:id/env - Upsert a single env var
+projects.put(
+  '/:id/env',
+  zValidator('param', idParam),
+  zValidator(
+    'json',
+    z.object({
+      environment: z.enum(['development', 'production']),
+      key: z.string().min(1).max(256),
+      value: z.string().max(8192),
+      destination: z.enum(['server', 'client', 'both']).optional(),
+    }),
+  ),
+  async (c) => {
+    const { id } = c.req.valid('param')
+    const { environment, key, value, destination } = c.req.valid('json')
+    await getProjectWithAuth(id, c.get('user')!)
+
+    await upsertEnvVar({ projectId: id, environment, key, value, destination })
+
+    // Fire-and-forget sync to Convex if provisioned
+    syncEnvVarsToConvexForEnv(id, environment).catch(() => {})
+
+    return c.json({ updated: true })
+  },
+)
+
+// DELETE /projects/:id/env - Delete a single env var
+projects.delete(
+  '/:id/env',
+  zValidator('param', idParam),
+  zValidator(
+    'json',
+    z.object({
+      environment: z.enum(['development', 'production']),
+      key: z.string().min(1),
+    }),
+  ),
+  async (c) => {
+    const { id } = c.req.valid('param')
+    const { environment, key } = c.req.valid('json')
+    await getProjectWithAuth(id, c.get('user')!)
+
+    await deleteEnvVar(id, environment, key)
+
+    // Fire-and-forget sync to Convex if provisioned
+    syncEnvVarsToConvexForEnv(id, environment).catch(() => {})
+
+    return c.json({ deleted: true })
+  },
+)
 
 // ============================================
 // Convex Integration Endpoints

@@ -99,6 +99,19 @@ export async function ensureConvexProdDeployment(projectId: string): Promise<voi
   }
   const deployKey = prodEnv.CONVEX_DEPLOY_KEY ?? (await createDeployKey(name))
 
+  // Copy dev server vars that don't already exist in prod
+  const devRows = await ProjectService.getEnvVarsByProjectId(projectId, 'development')
+  const devServerVars: Record<string, { value: string; destination: 'server' | 'both' }> = {}
+  for (const row of devRows) {
+    if (
+      row.value &&
+      (row.destination === 'server' || row.destination === 'both') &&
+      !(row.key in prodEnv)
+    ) {
+      devServerVars[row.key] = { value: row.value, destination: row.destination }
+    }
+  }
+
   // Persist to env_var (source of truth)
   await ProjectService.upsertEnvVars(
     projectId,
@@ -108,6 +121,7 @@ export async function ensureConvexProdDeployment(projectId: string): Promise<voi
       CONVEX_URL: { value: url, destination: 'client' },
       CONVEX_DEPLOY_KEY: { value: deployKey, destination: 'client' },
       VITE_CONVEX_URL: { value: url, destination: 'client' },
+      ...devServerVars,
     },
     convex.id,
   )
@@ -150,5 +164,30 @@ export async function syncServerVarsToConvex(projectId: string): Promise<void> {
 
   if (Object.keys(serverVars).length) {
     await setDeploymentEnvVars(prodEnv.CONVEX_URL, prodEnv.CONVEX_DEPLOY_KEY, serverVars)
+  }
+}
+
+/**
+ * Sync server/both env vars to the Convex deployment for a specific environment.
+ * Fire-and-forget safe — silently returns if Convex is not provisioned.
+ */
+export async function syncEnvVarsToConvexForEnv(projectId: string, env: ConvexEnv): Promise<void> {
+  const creds = await getConvexCredentials(projectId, env)
+  if (!creds) return
+
+  const rows = await ProjectService.getEnvVarsByProjectId(projectId, env)
+  const serverVars: Record<string, string> = {}
+  for (const row of rows) {
+    if (
+      row.value &&
+      (row.destination === 'server' || row.destination === 'both') &&
+      row.key !== 'CONVEX_DEPLOY_KEY'
+    ) {
+      serverVars[row.key] = row.value
+    }
+  }
+
+  if (Object.keys(serverVars).length) {
+    await setDeploymentEnvVars(creds.deploymentUrl, creds.deployKey, serverVars)
   }
 }

@@ -417,6 +417,15 @@ export async function upsertEnvVars(
   }
 }
 
+export async function deleteEnvVar(projectId: string, environment: string, key: string) {
+  await db
+    .deleteFrom('env_var')
+    .where('projectId', '=', projectId)
+    .where('environment', '=', environment)
+    .where('key', '=', key)
+    .execute()
+}
+
 export async function deleteEnvVarsByIntegration(integrationId: string) {
   await db.deleteFrom('env_var').where('integrationId', '=', integrationId).execute()
 }
