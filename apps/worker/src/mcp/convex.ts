@@ -18,6 +18,15 @@ import {
 } from '@/apis/convex'
 import * as ProjectService from '@/services/projects'
 import { config } from '@/lib/config'
+import {
+  getConvexCredentials,
+  toEnvMap,
+  withDeployment,
+  parseDeploymentName,
+  parseDeploymentNameFromUrl,
+  type ConvexIntegrationConfig,
+  type ConvexEnv,
+} from '@/lib/convex-env'
 
 interface EnvVarConfig {
   value: string
@@ -60,16 +69,6 @@ export interface McpContext {
   workingDirectory?: string
   envFile?: string
 }
-
-interface ConvexIntegrationConfig {
-  convexProjectId?: string
-  deployments?: {
-    development?: { name?: string; url?: string }
-    production?: { name?: string; url?: string }
-  }
-}
-
-type ConvexEnv = 'development' | 'production'
 
 interface ToolContext {
   projectId: string
@@ -193,21 +192,21 @@ async function getToolContext(extra: unknown, env: ConvexEnv): Promise<ToolConte
   const projectId = extractProjectId(extra)
   if (!projectId) return null
 
-  const [integration, sandbox] = await Promise.all([
+  const [integration, sandbox, creds] = await Promise.all([
     ProjectService.getIntegrationByProvider(projectId, 'convex'),
     ProjectService.getSandboxByProjectId(projectId),
+    getConvexCredentials(projectId, env),
   ])
-  if (!integration?.id) return null
+  if (!integration?.id || !creds) return null
 
-  const cfg = integration.config as ConvexIntegrationConfig | null
-  const deployment = cfg?.deployments?.[env]
-  if (!deployment?.url) return null
-
-  const vars = await ProjectService.getEnvVarsByProjectId(projectId, env, integration.id)
-  const deployKey = vars.find((v) => v.key === 'CONVEX_DEPLOY_KEY')?.value
-  if (!deployKey) return null
-
-  return { projectId, env, integration, sandbox, deploymentUrl: deployment.url, deployKey }
+  return {
+    projectId,
+    env,
+    integration,
+    sandbox,
+    deploymentUrl: creds.deploymentUrl,
+    deployKey: creds.deployKey,
+  }
 }
 
 async function writeEnvToSandbox(
@@ -270,18 +269,14 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
         const surgentApiKey = projectEnvVars.find((v) => v.key === 'SURGENT_API_KEY')?.value
 
         if (existingIntegration) {
-          const config = existingIntegration.config as ConvexIntegrationConfig | null
-          const dev = config?.deployments?.development
-          const envVarRows = await ProjectService.getEnvVarsByProjectId(
-            projectId,
-            'development',
-            existingIntegration.id ?? undefined,
-          )
-          const envVars = Object.fromEntries(
-            envVarRows
-              .filter((row) => row.value && row.destination !== 'server')
-              .map((row) => [row.key, row.value as string]),
-          )
+          const cfg = existingIntegration.config as ConvexIntegrationConfig | null
+          const envVarRows = await ProjectService.getEnvVarsByProjectId(projectId, 'development')
+          const envMap = toEnvMap(envVarRows)
+          const envVars = toEnvMap(envVarRows.filter((row) => row.destination !== 'server'))
+          const deploymentUrl = envMap.CONVEX_URL
+          const deploymentName =
+            parseDeploymentName(envMap.CONVEX_DEPLOYMENT) ??
+            parseDeploymentNameFromUrl(deploymentUrl)
 
           return ok({
             message:
@@ -291,9 +286,9 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
               id: existingIntegration.id,
               provider: 'convex',
               status: existingIntegration.status,
-              convexProjectId: config?.convexProjectId,
-              deploymentName: dev?.name,
-              deploymentUrl: dev?.url,
+              convexProjectId: cfg?.convexProjectId,
+              deploymentName,
+              deploymentUrl,
             },
             envVars,
             envFileContent: toEnvFileContent(envVars),
@@ -334,12 +329,10 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
         const integration = await ProjectService.createIntegration({
           projectId,
           provider: 'convex',
-          config: {
-            convexProjectId: project.projectId,
-            deployments: {
-              development: { name: project.deploymentName, url: project.deploymentUrl },
-            },
-          },
+          config: withDeployment({ convexProjectId: project.projectId }, 'development', {
+            name: project.deploymentName,
+            url: project.deploymentUrl,
+          }) as Record<string, unknown>,
           status: 'connected',
         })
 

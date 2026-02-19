@@ -57,18 +57,13 @@ export function getWorkerByProjectId(projectId: string) {
   return db.selectFrom('worker').selectAll().where('projectId', '=', projectId).executeTakeFirst()
 }
 
-export function getEnvVarsByProjectId(
-  projectId: string,
-  environment: string,
-  integrationId?: string,
-) {
-  let query = db
+export function getEnvVarsByProjectId(projectId: string, environment: string) {
+  return db
     .selectFrom('env_var')
     .select(['key', 'value', 'destination'])
     .where('projectId', '=', projectId)
     .where('environment', '=', environment)
-  if (integrationId) query = query.where('integrationId', '=', integrationId)
-  return query.execute()
+    .execute()
 }
 
 export async function countProjectsByOrganizationId(organizationId: string) {

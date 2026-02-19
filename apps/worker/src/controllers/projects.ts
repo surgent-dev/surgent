@@ -17,7 +17,7 @@ import { parse as parseDotEnv } from 'dotenv'
 import path from 'path'
 import stripJsonComments from 'strip-json-comments'
 import * as ProjectService from '@/services/projects'
-import { createDeployment, createDeployKey, setDeploymentEnvVars } from '@/apis/convex'
+import { ensureConvexProdDeployment, syncServerVarsToConvex, toEnvMap } from '@/lib/convex-env'
 import {
   buildDeploymentConfig,
   parseWranglerConfig,
@@ -71,16 +71,6 @@ export interface DeployProjectArgs {
   projectId: string
   deployName?: string
   deploymentId: string
-}
-
-type ConvexConfig = {
-  convexProjectId?: string
-  deploymentName?: string
-  deploymentUrl?: string
-  deployments?: {
-    development?: { name?: string; url?: string }
-    production?: { name?: string; url?: string }
-  }
 }
 
 export interface UndeployProjectArgs {
@@ -138,11 +128,8 @@ async function getProjectEnvVars(
 ) {
   const rows = await ProjectService.getEnvVarsByProjectId(projectId, environment)
   const includeServer = options?.includeServer ?? true
-  return Object.fromEntries(
-    rows
-      .filter((row) => row.value && (includeServer || row.destination !== 'server'))
-      .map((row) => [row.key, row.value as string]),
-  )
+  const filtered = includeServer ? rows : rows.filter((row) => row.destination !== 'server')
+  return toEnvMap(filtered)
 }
 
 async function directoryExists(sandbox: Sandbox, dir: string): Promise<boolean> {
@@ -322,56 +309,9 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
   await updateStatus('starting')
 
   try {
-    const convex = await ProjectService.getIntegrationByProvider(projectId, 'convex')
-    const envVars = await (async () => {
-      const base = await getProjectEnvVars(projectId, 'production')
-      if (!convex?.id) return base
-
-      const cfg = (convex.config ?? {}) as ConvexConfig
-      const convexId = cfg.convexProjectId
-      if (!convexId) return base // no project ID means incomplete integration, skip
-
-      const prod = cfg.deployments?.production
-      if (prod?.name) {
-        // Prod deployment exists — still sync server env vars to Convex
-        await pushProdServerEnvVars(projectId)
-        return base
-      }
-
-      const required = ['CONVEX_URL', 'CONVEX_DEPLOY_KEY', 'VITE_CONVEX_URL', 'CONVEX_DEPLOYMENT']
-      const missing = required.filter((key) => !base[key])
-      if (!missing.length) return base
-
-      // Create prod deployment
-      const created = await createDeployment({ projectId: convexId, type: 'prod' })
-      const key = await createDeployKey(created.name)
-
-      const vars = {
-        CONVEX_DEPLOYMENT: `prod:${created.name}`,
-        CONVEX_URL: created.deploymentUrl,
-        CONVEX_DEPLOY_KEY: key,
-        VITE_CONVEX_URL: created.deploymentUrl,
-      }
-      await ProjectService.upsertEnvVars(projectId, 'production', vars, convex.id)
-
-      // Update config with prod deployment info
-      const dev =
-        cfg.deployments?.development ??
-        (cfg.deploymentName ? { name: cfg.deploymentName, url: cfg.deploymentUrl } : undefined)
-      const nextConfig: ConvexConfig = {
-        ...cfg,
-        deployments: {
-          ...(dev ? { development: dev } : {}),
-          production: { name: created.name, url: created.deploymentUrl },
-        },
-      }
-      await ProjectService.updateIntegrationConfig(convex.id, nextConfig)
-
-      // Push server env vars to the new Convex production deployment
-      await pushProdServerEnvVars(projectId)
-
-      return getProjectEnvVars(projectId, 'production')
-    })()
+    await ensureConvexProdDeployment(projectId)
+    await syncServerVarsToConvex(projectId)
+    const envVars = await getProjectEnvVars(projectId, 'production')
 
     const sandbox = await getProvider().resume(sandboxRow.id)
 
@@ -628,7 +568,8 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
   const sandboxRow = await ProjectService.getSandboxByProjectId(args.projectId)
   if (!sandboxRow?.id) throw new Error('Sandbox not found')
 
-  await pushProdServerEnvVars(args.projectId)
+  await ensureConvexProdDeployment(args.projectId)
+  await syncServerVarsToConvex(args.projectId)
 
   // Use production env vars so the Convex CLI picks up the prod deploy key
   const prodEnv = await getProjectEnvVars(args.projectId, 'production')
@@ -638,47 +579,6 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
 
   const res = await sandbox.exec('bunx convex deploy -y', { cwd, timeout: 180_000, env: prodEnv })
   if (res.code !== 0) throw new Error(`convex deploy failed: ${res.output}`)
-}
-
-/**
- * Push server env vars to the production Convex deployment.
- *
- * Dev vars (PAY_API_URL, JWT_PRIVATE_KEY, JWKS …) are used as a base,
- * then prod-specific values override them (e.g. sk_live_ SURGENT_API_KEY
- * replaces the sk_test_ one).
- */
-async function pushProdServerEnvVars(projectId: string): Promise<void> {
-  const convex = await ProjectService.getIntegrationByProvider(projectId, 'convex')
-  if (!convex?.id) return
-
-  const cfg = convex.config as ConvexConfig | null
-  const prodUrl = cfg?.deployments?.production?.url
-  if (!prodUrl) return
-
-  const [prodRows, devRows] = await Promise.all([
-    ProjectService.getEnvVarsByProjectId(projectId, 'production'),
-    ProjectService.getEnvVarsByProjectId(projectId, 'development'),
-  ])
-
-  const deployKey = prodRows.find((v) => v.key === 'CONVEX_DEPLOY_KEY')?.value
-  if (!deployKey) return
-
-  // Collect server-only vars from both environments into a flat record
-  const serverVars: Record<string, string> = {}
-  for (const row of devRows) {
-    if (row.value && row.destination === 'server' && row.key !== 'CONVEX_DEPLOY_KEY') {
-      serverVars[row.key] = row.value
-    }
-  }
-  for (const row of prodRows) {
-    if (row.value && row.destination === 'server' && row.key !== 'CONVEX_DEPLOY_KEY') {
-      serverVars[row.key] = row.value
-    }
-  }
-
-  if (Object.keys(serverVars).length) {
-    await setDeploymentEnvVars(prodUrl, deployKey, serverVars)
-  }
 }
 
 export async function downloadProject(

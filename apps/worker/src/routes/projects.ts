@@ -29,14 +29,13 @@ import { createGitHubApp, GitHubService, getValidUserToken } from '@/apis/github
 import {
   isHostnameAvailable,
   getProjectWithAuth,
-  getIntegrationByProvider,
-  getEnvVarsByProjectId,
   countProjectsByOrganizationId,
   createProject,
   updateProjectStatus,
   updateDeployment,
   upsertEnvVar,
 } from '@/services/projects'
+import { getConvexCredentials } from '@/lib/convex-env'
 import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
 import { inngest } from '@/inngest'
 import { createLogger } from '@/lib/logger'
@@ -1062,36 +1061,6 @@ projects.get('/:id/download', zValidator('param', idParam), async (c) => {
 // ============================================
 // Convex Integration Endpoints
 // ============================================
-
-type ConvexEnv = 'development' | 'production'
-
-interface ConvexCredentials {
-  deploymentName: string
-  deploymentUrl: string
-  deployKey: string
-}
-
-async function getConvexCredentials(
-  projectId: string,
-  env: ConvexEnv,
-): Promise<ConvexCredentials | null> {
-  const integration = await getIntegrationByProvider(projectId, 'convex')
-  if (!integration?.id) return null
-
-  const config = integration.config as Record<string, any> | null
-  const deployment = config?.deployments?.[env]
-  if (!deployment?.name || !deployment?.url) return null
-
-  const envVars = await getEnvVarsByProjectId(projectId, env, integration.id)
-  const deployKey = envVars.find((v) => v.key === 'CONVEX_DEPLOY_KEY')?.value
-  if (!deployKey) return null
-
-  return {
-    deploymentName: deployment.name,
-    deploymentUrl: deployment.url,
-    deployKey,
-  }
-}
 
 // POST /projects/:id/convex/deploy/prod - Promote to production
 projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c) => {
