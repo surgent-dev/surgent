@@ -288,41 +288,41 @@ export function LandingHero({
         </div>
 
         {/* Supported by */}
-        <div className="mt-6 landing-stagger-7">
+        <div className="mt-8 landing-stagger-7">
           <p
-            className="text-center text-[11px] text-[#b5b5b5] mb-5"
-            style={{ fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}
+            className="text-center text-[10px] text-[#c0c0c0] mb-4"
+            style={{ fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}
           >
             Supported by
           </p>
-          <div className="flex items-center justify-center gap-6 sm:gap-8">
+          <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-8">
             <Image
               src="/google-for-startups.svg"
               alt="Google for Startups"
               width={180}
               height={28}
-              className="h-6 sm:h-7 w-auto shrink-0"
+              className="h-5 sm:h-6 w-auto opacity-60 hover:opacity-100 transition-opacity duration-300"
             />
             <Image
               src="/aws-startups.png"
               alt="AWS Startups"
               width={120}
               height={32}
-              className="h-8 sm:h-9 w-auto shrink-0"
+              className="h-6 sm:h-7 w-auto opacity-60 hover:opacity-100 transition-opacity duration-300"
             />
             <Image
               src="/cloudflare-logo.svg"
               alt="Cloudflare"
               width={130}
               height={32}
-              className="h-8 sm:h-9 w-auto shrink-0"
+              className="h-6 sm:h-7 w-auto opacity-60 hover:opacity-100 transition-opacity duration-300"
             />
             <Image
               src="/convex-logo.svg"
               alt="Convex"
               width={120}
               height={32}
-              className="h-8 sm:h-9 w-auto shrink-0"
+              className="h-6 sm:h-7 w-auto opacity-60 hover:opacity-100 transition-opacity duration-300"
             />
           </div>
         </div>
