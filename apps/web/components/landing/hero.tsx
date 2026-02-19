@@ -119,16 +119,9 @@ function LandingPrompt({
   return (
     <div
       onClick={() => ref.current?.focus()}
-      className="cursor-text relative isolate transition-all duration-200"
-      style={{
-        borderRadius: '0.75rem',
-        boxShadow: focused
-          ? '0 0 0 2px rgba(124, 58, 237, 0.2), 0 5px 5px -2.5px #00000008, 0 3px 3px -1.5px #00000005, 0 2px 2px -1px #00000005, 0 1px 1px -0.5px #00000008, 0 0.5px 0.5px 0 #0000000a, 0 0 0 1px #0000000f'
-          : '0 5px 5px -2.5px #00000008, 0 3px 3px -1.5px #00000005, 0 2px 2px -1px #00000005, 0 1px 1px -0.5px #00000008, 0 0.5px 0.5px 0 #0000000a, 0 0 0 1px #0000000f',
-        background: '#fdfdfd',
-      }}
+      className={`cursor-text relative isolate rounded-2xl border bg-white transition-all duration-200 ${focused ? 'border-brand/25 shadow-[0_0_0_3px_rgba(124,58,237,0.08)]' : 'border-[#e5e5e5] shadow-sm'}`}
     >
-      <div className="px-4 pt-3.5 pb-2.5 sm:px-5 sm:pt-4 sm:pb-3">
+      <div className="px-4 pt-4 pb-3 sm:px-5">
         <textarea
           ref={ref}
           value={value}
@@ -139,21 +132,25 @@ function LandingPrompt({
           placeholder={placeholder}
           rows={2}
           style={{ fontWeight: 450 }}
-          className="w-full resize-none bg-transparent text-[#303030] text-[13px] sm:text-sm leading-relaxed placeholder:text-[#8a8a8a] focus:outline-none"
+          className="w-full resize-none bg-transparent text-[#1a1a1a] text-sm leading-relaxed placeholder:text-[#b0b0b0] focus:outline-none"
         />
-
-        <div className="flex items-center justify-between pt-1.5">
-          <span className="text-[11px] text-[#8a8a8a]">Press Enter to send</span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onSend()
-            }}
-            className="flex items-center justify-center h-8 w-8 rounded-lg transition-all duration-100 bg-brand text-white btn-elevated-brand cursor-pointer hover:bg-brand/90 active:scale-95"
-          >
-            <ArrowUp className="h-4 w-4" />
-          </button>
+      </div>
+      <div className="flex items-center justify-between px-4 pb-3 sm:px-5">
+        <div className="flex items-center gap-1.5 text-[11px] text-[#b0b0b0]">
+          <kbd className="px-1.5 py-0.5 rounded bg-[#f5f5f5] text-[10px] font-medium text-[#999]">
+            ↵
+          </kbd>
+          to send
         </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onSend()
+          }}
+          className="flex items-center justify-center h-8 w-8 rounded-full transition-all duration-100 bg-brand text-white cursor-pointer hover:bg-brand/90 active:scale-95"
+        >
+          <ArrowUp className="h-4 w-4" />
+        </button>
       </div>
     </div>
   )
@@ -195,32 +192,54 @@ export function LandingHero({
       <div className="relative z-10 w-full max-w-[720px] mx-auto px-5 sm:px-6">
         {/* Headline */}
         <div className="text-center mb-8 sm:mb-10 landing-stagger-2">
-          <a
-            href="https://whop.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-[#e0e6eb] hover:border-[#ccc] bg-white mb-6 transition-all duration-150 shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
-          >
-            <span
-              className="text-[13px] text-[#8a8a8a] group-hover:text-[#616161] transition-colors"
-              style={{ fontWeight: 450 }}
-            >
-              Backed by
-            </span>
-            <Image
-              src="/whop-logo.svg"
-              alt="Whop"
-              width={72}
-              height={19}
-              className="h-[19px] w-auto"
-            />
-          </a>
+          <div className="flex flex-col items-center gap-2 mb-6">
+            <div className="flex items-center gap-2.5">
+              <div className="flex -space-x-2">
+                {[
+                  { src: '/lovedby/alidar.png', alt: 'Alidar' },
+                  { src: '/lovedby/asadbek.jpeg', alt: 'Asadbek' },
+                  { src: '/lovedby/diyor.jpeg', alt: 'Diyor' },
+                  { src: '/lovedby/sardor.jpeg', alt: 'Sardor' },
+                  { src: '/lovedby/yunus.jpeg', alt: 'Yunus' },
+                ].map((a) => (
+                  <Image
+                    key={a.alt}
+                    src={a.src}
+                    alt={a.alt}
+                    width={32}
+                    height={32}
+                    className="w-8 h-8 rounded-full border-2 border-white object-cover shadow-sm"
+                  />
+                ))}
+              </div>
+              <div className="h-5 w-px bg-[#e0e0e0]" />
+              <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5">
+                  {[...Array(5)].map((_, i) => (
+                    <svg
+                      key={i}
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-3.5 h-3.5 text-amber-400"
+                    >
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  ))}
+                </div>
+                <span className="text-[13px] text-[#505050] font-semibold">4.8</span>
+              </div>
+            </div>
+            <p className="text-[12.5px] text-[#9a9a9a]" style={{ fontWeight: 500 }}>
+              Loved by <span className="text-[#606060]">1,500+</span> builders &middot;{' '}
+              <span className="text-[#606060]">2k+</span> projects created
+            </p>
+          </div>
           <h1
             className="font-(--font-satoshi) text-[2.25rem] sm:text-[2.75rem] lg:text-5xl leading-[1.2] tracking-[-0.035em] text-[#1a1a1a] mb-4"
             style={{ fontWeight: 700, textShadow: '0 1px 2px rgba(0,0,0,0.06)' }}
           >
             Build apps that{' '}
-            <span className="bg-[#f6f6f6] px-2 py-1 rounded-md inline-block leading-[1.1]">
+            <span className="text-brand underline decoration-brand decoration-2 underline-offset-4">
               make money
             </span>
           </h1>
@@ -245,87 +264,6 @@ export function LandingHero({
 
         {/* Suggestion pills */}
         <SuggestionButtons onSelect={onPromptChange} />
-
-        {/* Loved by */}
-        <div className="flex flex-col items-center gap-2.5 mt-12 landing-stagger-5">
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-2.5">
-              {[
-                { src: '/lovedby/alidar.png', alt: 'Alidar' },
-                { src: '/lovedby/asadbek.jpeg', alt: 'Asadbek' },
-                { src: '/lovedby/diyor.jpeg', alt: 'Diyor' },
-                { src: '/lovedby/sardor.jpeg', alt: 'Sardor' },
-                { src: '/lovedby/yunus.jpeg', alt: 'Yunus' },
-              ].map((a) => (
-                <Image
-                  key={a.alt}
-                  src={a.src}
-                  alt={a.alt}
-                  width={36}
-                  height={36}
-                  className="w-9 h-9 rounded-full border-2 border-white object-cover shadow-sm"
-                />
-              ))}
-            </div>
-            <div className="flex items-center gap-0.5">
-              {[...Array(5)].map((_, i) => (
-                <svg
-                  key={i}
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="w-3.5 h-3.5 text-amber-400"
-                >
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-              ))}
-            </div>
-          </div>
-          <p className="text-[13px] text-[#8a8a8a]" style={{ fontWeight: 500 }}>
-            Loved by <span className="text-[#505050] font-semibold">1,500+</span> builders &middot;{' '}
-            <span className="text-[#505050] font-semibold">2k+</span> projects created &middot;{' '}
-            <span className="text-[#505050] font-semibold">4.8+</span> stars
-          </p>
-        </div>
-
-        {/* Supported by */}
-        <div className="mt-8 landing-stagger-7">
-          <p
-            className="text-center text-[10px] text-[#c0c0c0] mb-4"
-            style={{ fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}
-          >
-            Supported by
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-8">
-            <Image
-              src="/google-for-startups.svg"
-              alt="Google for Startups"
-              width={180}
-              height={28}
-              className="h-5 sm:h-6 w-auto opacity-60 hover:opacity-100 transition-opacity duration-300"
-            />
-            <Image
-              src="/aws-startups.png"
-              alt="AWS Startups"
-              width={120}
-              height={32}
-              className="h-6 sm:h-7 w-auto opacity-60 hover:opacity-100 transition-opacity duration-300"
-            />
-            <Image
-              src="/cloudflare-logo.svg"
-              alt="Cloudflare"
-              width={130}
-              height={32}
-              className="h-6 sm:h-7 w-auto opacity-60 hover:opacity-100 transition-opacity duration-300"
-            />
-            <Image
-              src="/convex-logo.svg"
-              alt="Convex"
-              width={120}
-              height={32}
-              className="h-6 sm:h-7 w-auto opacity-60 hover:opacity-100 transition-opacity duration-300"
-            />
-          </div>
-        </div>
       </div>
     </section>
   )
