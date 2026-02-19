@@ -113,20 +113,24 @@ export function DashboardView({
     return (
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="text-center max-w-xs">
-          <div className="size-12 rounded-xl bg-muted/50 border grid place-items-center mx-auto mb-4">
-            <BadgeDollarSign className="size-5 text-muted-foreground" strokeWidth={1.5} />
+          <div className="size-10 rounded-lg bg-muted/50 border grid place-items-center mx-auto mb-3">
+            <BadgeDollarSign className="size-4.5 text-muted-foreground" strokeWidth={1.5} />
           </div>
-          <h2 className="text-[15px] font-semibold mb-1">No products yet</h2>
-          <p className="text-[13px] text-muted-foreground mb-5">
+          <h2 className="text-[14px] font-semibold mb-1">No products yet</h2>
+          <p className="text-[13px] text-muted-foreground mb-4">
             Create your first product to start accepting payments.
           </p>
           <button
             onClick={onCreateProduct}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-primary text-primary-foreground text-[13px] font-medium btn-elevated-primary hover:bg-primary-hover transition-all duration-100"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-primary-foreground text-[13px] font-medium btn-elevated-primary hover:bg-primary-hover transition-all duration-100"
           >
             <Plus className="size-3.5" />
             Create Product
           </button>
+          <p className="text-[11px] text-muted-foreground/60 mt-4">
+            <span className="font-medium text-muted-foreground/80">Tip:</span> Ask AI to integrate
+            payments into your app
+          </p>
         </div>
       </div>
     )

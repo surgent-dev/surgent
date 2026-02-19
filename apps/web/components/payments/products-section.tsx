@@ -13,7 +13,7 @@ import {
 import { useTransactions } from '@/queries/transactions'
 import { useCustomers } from '@/queries/customers'
 import { useSubscriptions } from '@/queries/subscriptions'
-import { CreateProductDialog } from './create-product-dialog'
+import { CreateProductSheet } from './create-product-sheet'
 import { CreatePriceDialog } from './create-price-dialog'
 import { EditProductDialog } from './edit-product-dialog'
 import { Sidebar, type ViewType, type AccountData } from './sidebar'
@@ -25,6 +25,7 @@ import { CustomersView } from './customers-view'
 import { SubscriptionsView } from './subscriptions-view'
 import { SettingsView } from './settings-view'
 import { payHttp } from '@/lib/http'
+import { cn } from '@/lib/utils'
 
 export function ProductsSection({
   projectId,
@@ -140,60 +141,65 @@ export function ProductsSection({
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-12 border-b shrink-0 flex items-center justify-between px-5">
-          <h1 className="text-[14px] font-semibold">{viewTitles[view]}</h1>
-          {view === 'products' && (
-            <button
-              onClick={handleCreateProduct}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-md bg-primary text-primary-foreground btn-elevated-primary hover:bg-primary-hover transition-all duration-100"
+          <div className="flex items-center gap-2">
+            <h1 className="text-[14px] font-semibold">{viewTitles[view]}</h1>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[10px] font-medium leading-relaxed',
+                payEnv === 'test'
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+              )}
             >
-              <Plus className="size-3.5" />
-              New Product
-            </button>
-          )}
+              <span
+                className={cn(
+                  'size-1.5 rounded-full',
+                  payEnv === 'test' ? 'bg-amber-500' : 'bg-emerald-500',
+                )}
+              />
+              {payEnv === 'test' ? 'Sandbox' : 'Live'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {view === 'products' && payEnv === 'test' && activeProducts.length > 0 && (
+              <button
+                onClick={handleSyncToLive}
+                disabled={syncProducts.isPending}
+                className="flex items-center gap-1.5 h-7 px-2.5 text-[12px] font-medium rounded-md border bg-background btn-elevated hover:bg-muted/30 transition-all duration-100 disabled:opacity-50"
+              >
+                {syncProducts.isPending ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <ArrowUpFromLine className="size-3" />
+                )}
+                Sync to Live
+              </button>
+            )}
+            {view === 'products' && payEnv === 'live' && (
+              <button
+                onClick={handleSyncToLive}
+                disabled={syncProducts.isPending}
+                className="flex items-center gap-1.5 h-7 px-2.5 text-[12px] font-medium rounded-md border bg-background btn-elevated hover:bg-muted/30 transition-all duration-100 disabled:opacity-50"
+              >
+                {syncProducts.isPending ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <ArrowUpFromLine className="size-3" />
+                )}
+                Sync from Sandbox
+              </button>
+            )}
+            {view === 'products' && (
+              <button
+                onClick={handleCreateProduct}
+                className="flex items-center gap-1.5 h-7 px-2.5 text-[12px] font-medium rounded-md bg-primary text-primary-foreground btn-elevated-primary hover:bg-primary-hover transition-all duration-100"
+              >
+                <Plus className="size-3" />
+                New Product
+              </button>
+            )}
+          </div>
         </header>
-
-        {payEnv === 'live' && (
-          <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2">
-            <p className="text-[12px] text-muted-foreground">
-              Create and test products in Sandbox, then sync them here.
-            </p>
-            <button
-              onClick={handleSyncToLive}
-              disabled={syncProducts.isPending}
-              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-medium rounded-md border hover:bg-muted transition-colors disabled:opacity-50"
-            >
-              {syncProducts.isPending ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <ArrowUpFromLine className="size-3" />
-              )}
-              Sync from Sandbox
-            </button>
-          </div>
-        )}
-
-        {payEnv === 'test' && activeProducts.length > 0 && (
-          <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2.5">
-            <div className="flex items-start gap-2.5">
-              <ArrowUpFromLine className="size-3.5 text-blue-600 shrink-0 mt-0.5" strokeWidth={2} />
-              <p className="text-[12px] leading-relaxed text-blue-700 dark:text-blue-400">
-                Ready to go live? Sync your sandbox products and prices to the live environment.
-              </p>
-            </div>
-            <button
-              onClick={handleSyncToLive}
-              disabled={syncProducts.isPending}
-              className="shrink-0 flex items-center gap-1.5 px-3 py-1 text-[12px] font-medium rounded-md border border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-500/20 transition-all duration-100 disabled:opacity-50"
-            >
-              {syncProducts.isPending ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <ArrowUpFromLine className="size-3" />
-              )}
-              Sync to Live
-            </button>
-          </div>
-        )}
 
         <div className="flex-1 min-h-0">
           {view === 'dashboard' && (
@@ -242,7 +248,7 @@ export function ProductsSection({
         </div>
       </div>
 
-      <CreateProductDialog
+      <CreateProductSheet
         projectId={projectId}
         open={createProductOpen}
         onOpenChange={setCreateProductOpen}
