@@ -789,7 +789,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         </div>
 
         {/* Input */}
-        <div className="px-6 pb-3 pt-1 shrink-0 relative">
+        <div className="px-6 pb-5 pt-1 shrink-0 relative">
           <div className="max-w-3xl mx-auto">
             {/* Revert banner */}
             {revertMessageId && (
