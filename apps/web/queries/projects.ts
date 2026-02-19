@@ -226,6 +226,82 @@ export function useDeleteProject() {
   })
 }
 
+// Environment variables
+export interface EnvVarItem {
+  key: string
+  value: string | null
+  destination: 'server' | 'client' | 'both' | null
+}
+
+async function fetchEnvVars(
+  id: string,
+  environment: 'development' | 'production',
+): Promise<EnvVarItem[]> {
+  return http.get(`api/projects/${id}/env?environment=${environment}`).json()
+}
+
+export function useEnvVarsQuery(
+  projectId?: string,
+  environment: 'development' | 'production' = 'development',
+) {
+  return useQuery({
+    queryKey: ['env-vars', projectId, environment],
+    queryFn: () => fetchEnvVars(projectId!, environment),
+    enabled: Boolean(projectId),
+    staleTime: 30_000,
+  })
+}
+
+async function upsertEnvVarReq({
+  id,
+  environment,
+  key,
+  value,
+  destination,
+}: {
+  id: string
+  environment: 'development' | 'production'
+  key: string
+  value: string
+  destination?: 'server' | 'client' | 'both'
+}) {
+  return http
+    .put(`api/projects/${id}/env`, { json: { environment, key, value, destination } })
+    .json()
+}
+
+export function useUpsertEnvVar() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: upsertEnvVarReq,
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['env-vars', vars.id] })
+    },
+  })
+}
+
+async function deleteEnvVarReq({
+  id,
+  environment,
+  key,
+}: {
+  id: string
+  environment: 'development' | 'production'
+  key: string
+}) {
+  return http.delete(`api/projects/${id}/env`, { json: { environment, key } }).json()
+}
+
+export function useDeleteEnvVar() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: deleteEnvVarReq,
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['env-vars', vars.id] })
+    },
+  })
+}
+
 // Sandbox health check
 type SandboxStatus = 'running' | 'paused' | 'no_sandbox' | 'not_found' | 'forbidden'
 

@@ -39,6 +39,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   const [tabs, setTabs] = useState<PreviewTab[]>([
     { id: 'preview', type: 'preview', title: 'Preview' },
     { id: 'payments', type: 'payments', title: 'Payments' },
+    { id: 'settings', type: 'settings', title: 'Settings' },
   ])
   const [activeTabId, setActiveTabId] = useState('preview')
   const tabCounter = useRef(0)

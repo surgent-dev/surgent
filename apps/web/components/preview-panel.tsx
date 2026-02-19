@@ -19,6 +19,7 @@ import {
   RefreshCw,
   CreditCard,
   ChevronDown,
+  Settings,
 } from 'lucide-react'
 import { Coins } from '@phosphor-icons/react'
 import Image from 'next/image'
@@ -69,10 +70,11 @@ import { authClient } from '@/lib/auth-client'
 import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
 import { FunLoadingState } from '@/components/ui/fun-loading'
 import { PreviewErrorOverlay } from '@/components/agent/preview-error-overlay'
+import { EnvVarsContent } from '@/components/env-vars-content'
 
 export interface PreviewTab {
   id: string
-  type: 'preview' | 'changes' | 'convex' | 'logs' | 'payments'
+  type: 'preview' | 'changes' | 'convex' | 'logs' | 'payments' | 'settings'
   title: string
   diffs?: FileDiff[]
   messageId?: string
@@ -449,6 +451,8 @@ function getTabIcon(type: PreviewTab['type']) {
       return ScrollText
     case 'payments':
       return CreditCard
+    case 'settings':
+      return Settings
   }
 }
 
@@ -470,7 +474,11 @@ function TabButton({
   connectedProcessor?: string
   onConvexEnvChange?: (env: 'development' | 'production') => void
 }) {
-  const closable = tab.type !== 'preview' && tab.type !== 'convex' && tab.type !== 'payments'
+  const closable =
+    tab.type !== 'preview' &&
+    tab.type !== 'convex' &&
+    tab.type !== 'payments' &&
+    tab.type !== 'settings'
   const Icon = getTabIcon(tab.type)
   const isProd = tab.convexEnv === 'production'
   const hasMultipleEnvs = tab.convexEnvs && tab.convexEnvs.length > 1
@@ -720,6 +728,8 @@ export default function PreviewPanel({
         )
       case 'payments':
         return <PaymentsContent projectId={projectId} />
+      case 'settings':
+        return <EnvVarsContent projectId={projectId} />
     }
   })()
 
