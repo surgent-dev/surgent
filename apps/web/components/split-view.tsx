@@ -197,7 +197,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
                   <ResizablePanel
                     defaultSize={60}
                     minSize={30}
-                    className="!overflow-visible shadow-[-4px_-2px_16px_rgba(0,0,0,0.05)] dark:shadow-[-4px_-2px_16px_rgba(0,0,0,0.16)] rounded-tl-xl"
+                    className="!overflow-visible rounded-tl-xl"
                   >
                     <div className="h-full bg-background border-l border-t rounded-tl-xl overflow-hidden">
                       <PreviewPanel
