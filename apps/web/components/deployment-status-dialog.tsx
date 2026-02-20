@@ -26,6 +26,7 @@ interface Props {
 
 const STATUS: Record<string, string> = {
   deployed: 'Deployed',
+  deploying_convex: 'Deploying Convex',
   building: 'Building',
   uploading: 'Uploading',
   starting: 'Starting',

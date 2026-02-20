@@ -76,6 +76,7 @@ const iconBtn = 'p-1 hover:bg-muted/40 rounded-md transition-all duration-100'
 const STATUS_LABELS: Record<string, string> = {
   queued: 'Queued',
   starting: 'Starting',
+  deploying_convex: 'Deploying Convex',
   building: 'Building',
   uploading: 'Uploading',
   deployed: 'Deployed',

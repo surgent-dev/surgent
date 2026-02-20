@@ -17,7 +17,12 @@ import { parse as parseDotEnv } from 'dotenv'
 import path from 'path'
 import stripJsonComments from 'strip-json-comments'
 import * as ProjectService from '@/services/projects'
-import { ensureConvexProdDeployment, syncServerVarsToConvex, toEnvMap } from '@/lib/convex-env'
+import {
+  ensureConvexProdDeployment,
+  getConvexCredentials,
+  syncServerVarsToConvex,
+  toEnvMap,
+} from '@/lib/convex-env'
 import {
   buildDeploymentConfig,
   parseWranglerConfig,
@@ -130,6 +135,20 @@ async function getProjectEnvVars(
   const includeServer = options?.includeServer ?? true
   const filtered = includeServer ? rows : rows.filter((row) => row.destination !== 'server')
   return toEnvMap(filtered)
+}
+
+async function deployConvexFunctions(
+  sandbox: Sandbox,
+  cwd: string,
+  env: Record<string, string>,
+): Promise<void> {
+  const result = await sandbox.exec('bunx convex deploy -y', {
+    cwd,
+    timeout: 180_000,
+    env,
+  })
+  if (result.code === 0) return
+  throw new Error(`Convex deploy failed: ${String(result.output).slice(0, 500)}`)
 }
 
 async function directoryExists(sandbox: Sandbox, dir: string): Promise<boolean> {
@@ -306,7 +325,8 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     await ProjectService.updateDeployment(deploymentId, { status, ...extra })
   }
 
-  await updateStatus('starting')
+  let stage: 'starting' | 'deploying_convex' | 'building' | 'uploading' = 'starting'
+  await updateStatus(stage)
 
   try {
     await ensureConvexProdDeployment(projectId)
@@ -322,16 +342,24 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
 
     const sandbox = await getProvider().resume(sandboxRow.id)
 
-    await updateStatus('building')
+    // Deploy Convex functions to production (if project uses Convex)
+    const convexCreds = await getConvexCredentials(projectId, 'production')
+    if (convexCreds) {
+      stage = 'deploying_convex'
+      await updateStatus(stage)
+      await deployConvexFunctions(sandbox, workingDir, envVars)
+      log.info({ projectId }, 'convex functions deployed to production')
+    }
+
+    stage = 'building'
+    await updateStatus(stage)
     const build = await sandbox.exec('bun run build', {
       cwd: workingDir,
       timeout: 180_000,
       env: envVars,
     })
     if (build.code !== 0) {
-      const error = `Build failed: ${String(build.output).slice(0, 500)}`
-      await updateStatus('build_failed', { error, finishedAt: new Date() })
-      throw new Error(error)
+      throw new Error(`Build failed: ${String(build.output).slice(0, 500)}`)
     }
 
     const assetsDir = await findAssetsDir(sandbox, workingDir)
@@ -343,7 +371,8 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
 
     const localEnv = await readEnvFile(sandbox, `${workingDir}/.env`)
 
-    await updateStatus('uploading')
+    stage = 'uploading'
+    await updateStatus(stage)
 
     const wranglerConfig = { name: scriptName, ...DEFAULT_WRANGLER }
     const wrangler = parseWranglerConfig(JSON.stringify(wranglerConfig))
@@ -424,8 +453,9 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     log.info({ projectId, scriptName, cfDeploymentId: cfDeployment?.id }, 'deploy success')
   } catch (err: any) {
     log.error({ projectId, err }, 'deploy failed')
+    const failStatus = stage === 'building' ? 'build_failed' : 'deploy_failed'
     await ProjectService.updateDeployment(deploymentId, {
-      status: 'deploy_failed',
+      status: failStatus,
       error: err?.message || 'Deployment failed',
       finishedAt: new Date(),
     }).catch(() => {})
@@ -596,8 +626,7 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
   const sandbox = await getProvider().resume(sandboxRow.id)
   const cwd = project.metadata?.workingDirectory || workspacePath(args.projectId)
 
-  const res = await sandbox.exec('bunx convex deploy -y', { cwd, timeout: 180_000, env: prodEnv })
-  if (res.code !== 0) throw new Error(`convex deploy failed: ${res.output}`)
+  await deployConvexFunctions(sandbox, cwd, prodEnv)
 }
 
 export async function downloadProject(
