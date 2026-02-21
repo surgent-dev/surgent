@@ -29,6 +29,9 @@ type SandboxState = {
   // Prompt to inject into chat input (e.g., for "Fix with AI")
   pendingPrompt: string | null
   setPendingPrompt: (prompt: string | null) => void
+  // Preview refresh signal (incremented when dev-run completes)
+  previewRefreshTick: number
+  requestPreviewRefresh: () => void
 }
 
 export const useSandbox = create<SandboxState>()(
@@ -47,6 +50,8 @@ export const useSandbox = create<SandboxState>()(
       setIframeError: (error) => set({ iframeError: error }),
       pendingPrompt: null,
       setPendingPrompt: (prompt) => set({ pendingPrompt: prompt }),
+      previewRefreshTick: 0,
+      requestPreviewRefresh: () => set((s) => ({ previewRefreshTick: s.previewRefreshTick + 1 })),
     }),
     { name: 'sandbox-store', partialize: (s) => ({ activeSessionId: s.activeSessionId }) },
   ),

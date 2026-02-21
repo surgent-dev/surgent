@@ -678,3 +678,70 @@ body {
   opacity: 0.5;
 }
 
+/* Preview refresh glow — Siri-style multicolor edge glow */
+@keyframes preview-glow-border {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  55% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+
+@keyframes preview-glow-edge {
+  0% { opacity: 0; transform: scale(0.99); }
+  15% { opacity: 1; transform: scale(1); }
+  55% { opacity: 0.4; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.005); }
+}
+
+.preview-glow-border {
+  animation: preview-glow-border 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  border-radius: inherit;
+  border: 1.5px solid transparent;
+  background:
+    conic-gradient(
+      from 180deg,
+      rgba(255, 45, 85, 0.5),
+      rgba(175, 82, 222, 0.5),
+      rgba(0, 122, 255, 0.5),
+      rgba(90, 200, 250, 0.45),
+      rgba(48, 209, 88, 0.5),
+      rgba(255, 149, 0, 0.45),
+      rgba(255, 45, 85, 0.5)
+    ) border-box;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  box-shadow:
+    0 0 12px -4px rgba(255, 45, 85, 0.12),
+    0 0 12px -4px rgba(0, 122, 255, 0.1),
+    0 0 8px -3px rgba(90, 200, 250, 0.1);
+}
+
+.preview-glow-edge {
+  animation: preview-glow-edge 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  border-radius: inherit;
+  background:
+    /* Top — pink to purple */
+    radial-gradient(ellipse 40% 12% at 30% 0%, rgba(255, 45, 85, 0.25), transparent 70%),
+    radial-gradient(ellipse 35% 12% at 65% 0%, rgba(175, 82, 222, 0.2), transparent 70%),
+    /* Right — blue to teal */
+    radial-gradient(ellipse 12% 35% at 100% 30%, rgba(0, 122, 255, 0.22), transparent 70%),
+    radial-gradient(ellipse 12% 35% at 100% 65%, rgba(90, 200, 250, 0.18), transparent 70%),
+    /* Bottom — green to orange */
+    radial-gradient(ellipse 40% 12% at 60% 100%, rgba(48, 209, 88, 0.22), transparent 70%),
+    radial-gradient(ellipse 35% 12% at 30% 100%, rgba(255, 149, 0, 0.18), transparent 70%),
+    /* Left — pink */
+    radial-gradient(ellipse 12% 40% at 0% 50%, rgba(255, 45, 85, 0.18), transparent 70%),
+    /* Corners */
+    radial-gradient(circle at 0% 0%, rgba(255, 45, 85, 0.15), transparent 25%),
+    radial-gradient(circle at 100% 0%, rgba(175, 82, 222, 0.15), transparent 25%),
+    radial-gradient(circle at 100% 100%, rgba(90, 200, 250, 0.15), transparent 25%),
+    radial-gradient(circle at 0% 100%, rgba(48, 209, 88, 0.15), transparent 25%);
+  filter: blur(8px);
+}
+

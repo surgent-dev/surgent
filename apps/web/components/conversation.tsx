@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import type { Message, Part } from '@opencode-ai/sdk'
+import type { Message, Part, ToolPart } from '@opencode-ai/sdk'
 import { format, parseISO } from 'date-fns'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -364,6 +364,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   // Handle pending prompt from error overlay "Fix with AI"
   const pendingPrompt = useSandbox((s) => s.pendingPrompt)
   const setPendingPrompt = useSandbox((s) => s.setPendingPrompt)
+  const requestPreviewRefresh = useSandbox((s) => s.requestPreviewRefresh)
   useEffect(() => {
     if (!pendingPrompt) return
     setInputValue(pendingPrompt)
@@ -636,6 +637,32 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       usageRef.current.costSpent = currentCost
     }
   }, [assistantMessages, availableModels, lastAssistantError?.isContext, sessionError])
+
+  // Auto-refresh preview when dev-run tool completes
+  const refreshedToolIds = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    refreshedToolIds.current = new Set()
+  }, [activeId])
+
+  useEffect(() => {
+    let shouldRefresh = false
+    for (const m of messages) {
+      const msgParts = parts[m.id]
+      if (!msgParts) continue
+      for (const p of msgParts) {
+        if (
+          p.type === 'tool' &&
+          p.tool === 'dev-run' &&
+          (p as ToolPart).state.status === 'completed' &&
+          !refreshedToolIds.current.has(p.id)
+        ) {
+          refreshedToolIds.current.add(p.id)
+          shouldRefresh = true
+        }
+      }
+    }
+    if (shouldRefresh) requestPreviewRefresh()
+  }, [messages, parts, requestPreviewRefresh])
 
   const shownTokens = usageRef.current?.ctxTokens
   const shownPct = usageRef.current?.contextPct

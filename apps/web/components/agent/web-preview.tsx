@@ -486,6 +486,7 @@ export type WebPreviewBodyProps = ComponentProps<'iframe'> & {
 
 type PreviewStatus = 'idle' | 'loading' | 'ready' | 'failed'
 const WATCHDOG_MS = 10000
+const ONLOAD_FALLBACK_MS = 3000
 
 export const WebPreviewBody = ({
   className,
@@ -494,15 +495,43 @@ export const WebPreviewBody = ({
   onLoad,
   ...props
 }: WebPreviewBodyProps) => {
-  const { url, iframeRef, reloadTick } = useWebPreview()
+  const { url, iframeRef, reloadTick, refresh } = useWebPreview()
   const setIframeError = useSandbox((s) => s.setIframeError)
+  const previewRefreshTick = useSandbox((s) => s.previewRefreshTick)
   const [status, setStatus] = useState<PreviewStatus>('idle')
+  const [glowing, setGlowing] = useState(false)
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const onLoadFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const retryRef = useRef(0)
+  const prevRefreshTick = useRef(previewRefreshTick)
   const currentUrl = src ?? url
 
+  // Auto-refresh when dev-run completes (via sandbox store signal)
+  // Directly sets iframe.src to avoid triggering the loading overlay
+  useEffect(() => {
+    if (previewRefreshTick === prevRefreshTick.current) return
+    prevRefreshTick.current = previewRefreshTick
+    if (!currentUrl) return
+
+    setGlowing(true)
+    const timer = setTimeout(() => {
+      if (iframeRef.current) {
+        iframeRef.current.src = currentUrl
+      }
+      setTimeout(() => setGlowing(false), 1200)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [previewRefreshTick, currentUrl, iframeRef])
+
   const clearTimers = useCallback(() => {
-    if (watchdogRef.current) clearTimeout(watchdogRef.current)
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current)
+      watchdogRef.current = null
+    }
+    if (onLoadFallbackRef.current) {
+      clearTimeout(onLoadFallbackRef.current)
+      onLoadFallbackRef.current = null
+    }
   }, [])
 
   const markReady = useCallback(() => {
@@ -550,10 +579,14 @@ export const WebPreviewBody = ({
     }
   }, [currentUrl, reloadTick, iframeRef, markReady, clearTimers, startWatchdog])
 
-  // onLoad is compatibility fallback when template does not post "preview-ready".
+  // onLoad = HTML loaded, not React rendered. Wait for preview-ready postMessage.
+  // Delayed fallback for templates that don't send preview-ready.
   const handleLoad: ComponentProps<'iframe'>['onLoad'] = (event) => {
     onLoad?.(event)
-    markReady()
+    if (onLoadFallbackRef.current) clearTimeout(onLoadFallbackRef.current)
+    onLoadFallbackRef.current = setTimeout(() => {
+      setStatus((prev) => (prev === 'loading' ? 'ready' : prev))
+    }, ONLOAD_FALLBACK_MS)
   }
 
   const handleRetry = () => {
@@ -608,6 +641,12 @@ export const WebPreviewBody = ({
               </Button>
             </div>
           </div>
+        </div>
+      )}
+      {glowing && (
+        <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-[inherit]">
+          <div className="absolute -inset-1 preview-glow-edge opacity-0" />
+          <div className="absolute inset-0 preview-glow-border opacity-0" />
         </div>
       )}
       {overlay ? <div className="pointer-events-none absolute inset-0 z-10">{overlay}</div> : null}
