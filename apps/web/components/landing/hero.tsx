@@ -188,7 +188,7 @@ export function LandingHero({
   const placeholder = useTypingPlaceholder(placeholders)
 
   return (
-    <section className="relative flex-1 flex flex-col items-center justify-center pt-16 pb-12 sm:pt-20 sm:pb-16 overflow-hidden">
+    <section className="relative flex-1 flex flex-col items-center justify-center pt-24 pb-12 sm:pt-32 sm:pb-16 overflow-hidden">
       <div className="relative z-10 w-full max-w-[720px] mx-auto px-5 sm:px-6">
         {/* Headline */}
         <div className="text-center mb-8 sm:mb-10 landing-stagger-2">
