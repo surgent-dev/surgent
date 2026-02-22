@@ -1,6 +1,6 @@
 import pino from 'pino'
 
-const isDev = process.env.DEBUG === 'true' || process.env.NODE_ENV !== 'production'
+const isDev = process.env.APP_DEBUG === 'true' || process.env.NODE_ENV !== 'production'
 
 const TAG_COLORS: Record<string, string> = {
   WEBHOOK: '\x1b[36m', // cyan

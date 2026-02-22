@@ -51,7 +51,7 @@
     "zod": "^4.1.12"
   },
   "scripts": {
-    "dev": "DEBUG=true bun --hot src/index.ts",
+    "dev": "APP_DEBUG=true bun --hot src/index.ts",
     "dev:inngest": "npx inngest-cli@latest dev -u http://localhost:4000/api/inngest",
     "start": "bun src/index.ts",
     "e2b:build:dev": "bun run src/e2b/build.ts",

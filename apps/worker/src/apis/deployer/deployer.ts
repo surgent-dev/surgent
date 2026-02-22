@@ -1,9 +1,10 @@
 import Cloudflare from 'cloudflare'
 import { config } from '@/lib/config'
+import { createLogger } from '@/lib/logger'
 import { AssetManifest, WorkerBinding, WranglerConfig } from './types'
 import { getMimeType } from './utils/index'
 
-const logger = console
+const log = createLogger('deployer')
 
 type AssetFile = { path: string; content: Buffer; hash: string }
 
@@ -36,7 +37,7 @@ export class WorkerDeployer {
     compatibilityFlags?: string[],
     observability?: WranglerConfig['observability'],
   ): Promise<void> {
-    logger.info('🚀 Starting SDK deployment...', { scriptName, dispatchNamespace })
+    log.info({ scriptName, dispatchNamespace }, 'starting asset deployment')
 
     if (!dispatchNamespace) {
       throw new Error('Dispatch namespace is required for Workers for Platforms')
@@ -52,7 +53,7 @@ export class WorkerDeployer {
     }
 
     // 1. Start asset upload session
-    logger.info('📤 Starting asset upload session...')
+    log.debug('starting asset upload session')
     const uploadSession =
       await this.client.workersForPlatforms.dispatch.namespaces.scripts.assetUpload.create(
         dispatchNamespace,
@@ -71,14 +72,14 @@ export class WorkerDeployer {
     // 2. Upload assets in buckets
     let completionJwt = uploadJwt
     if (buckets && buckets.length > 0) {
-      logger.info(`📦 Uploading ${buckets.length} asset bucket(s)...`)
+      log.debug({ buckets: buckets.length }, 'uploading asset buckets')
       completionJwt = await this.uploadAssetBuckets(buckets, assetFiles, uploadJwt)
     } else {
-      logger.info('✅ All assets already uploaded (cached)')
+      log.debug('all assets already cached')
     }
 
     // 3. Deploy script with assets
-    logger.info('🚀 Deploying worker script...')
+    log.debug('deploying worker script')
     const scriptFilename = 'index.js'
 
     await this.client.workersForPlatforms.dispatch.namespaces.scripts.update(
@@ -108,7 +109,7 @@ export class WorkerDeployer {
       },
     )
 
-    logger.info('✅ Deployment completed successfully')
+    log.info({ scriptName }, 'deployment completed')
   }
 
   /**
@@ -124,7 +125,7 @@ export class WorkerDeployer {
     compatibilityFlags?: string[],
     observability?: WranglerConfig['observability'],
   ): Promise<void> {
-    logger.info('🚀 Starting simple SDK deployment...', { scriptName, dispatchNamespace })
+    log.info({ scriptName, dispatchNamespace }, 'starting simple deployment')
 
     if (!dispatchNamespace) {
       throw new Error('Dispatch namespace is required for Workers for Platforms')
@@ -150,7 +151,7 @@ export class WorkerDeployer {
       },
     )
 
-    logger.info('✅ Simple deployment completed')
+    log.info({ scriptName }, 'simple deployment completed')
   }
 
   /**
@@ -161,7 +162,7 @@ export class WorkerDeployer {
       throw new Error('Dispatch namespace is required')
     }
 
-    logger.info(`🗑️ Deleting worker: ${scriptName}`)
+    log.info({ scriptName }, 'deleting worker')
 
     try {
       await this.client.workersForPlatforms.dispatch.namespaces.scripts.delete(
@@ -172,11 +173,11 @@ export class WorkerDeployer {
           force: true,
         },
       )
-      logger.info(`✅ Worker deleted: ${scriptName}`)
+      log.info({ scriptName }, 'worker deleted')
     } catch (err: any) {
       // 404 means already deleted - that's fine
       if (err?.status === 404) {
-        logger.info(`Worker ${scriptName} not found (already deleted)`)
+        log.debug({ scriptName }, 'worker not found (already deleted)')
         return
       }
       throw err
@@ -206,7 +207,7 @@ export class WorkerDeployer {
         formData.append(hash, blob, hash)
       }
 
-      logger.info(`📤 Uploading bucket ${i + 1}/${buckets.length}...`)
+      log.debug({ bucket: `${i + 1}/${buckets.length}` }, 'uploading bucket')
 
       const response = await fetch(
         `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/workers/assets/upload?base64=true`,
