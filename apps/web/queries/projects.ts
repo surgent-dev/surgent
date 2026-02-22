@@ -395,6 +395,7 @@ const DeploymentItemSchema = z.object({
   rollbackOf: z.string().nullable().optional(),
   scriptName: z.string().optional(),
   envSnapshot: DeploymentEnvSnapshotSchema,
+  screenshotUrl: z.string().nullable().optional(),
 })
 
 const DeploymentHistorySchema = z.array(DeploymentItemSchema)
@@ -479,6 +480,7 @@ const DeploymentStatusSchema = z.object({
   error: z.string().optional(),
   hostname: z.string().nullable(),
   scriptName: z.string(),
+  screenshotUrl: z.string().nullable(),
 })
 
 export type DeploymentStatus = z.infer<typeof DeploymentStatusSchema>
@@ -500,6 +502,7 @@ async function fetchLatestDeployment(projectId: string): Promise<DeploymentStatu
     error: latest.error,
     hostname: latest.hostname ?? null,
     scriptName: latest.scriptName || 'unknown',
+    screenshotUrl: latest.screenshotUrl ?? null,
   }
 }
 

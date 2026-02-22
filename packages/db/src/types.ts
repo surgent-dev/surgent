@@ -397,6 +397,7 @@ export interface DeploymentTable {
   cloudflareVersionId: string | null
   rollbackOf: string | null
   hostname: string | null
+  screenshotUrl: string | null
   createdAt?: Date
 }
 
@@ -406,6 +407,8 @@ export interface ListingTable {
   title: string
   description: string
   imageUrl: string | null
+  productId: string | null
+  priceId: string | null
   status: string
   createdAt?: Date
   updatedAt?: Date

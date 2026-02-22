@@ -27,6 +27,14 @@ function formatDate(dateIso: string | null) {
   })
 }
 
+function formatPrice(amount: number, currency: string | null) {
+  const symbol = currency === 'eur' ? '\u20AC' : currency === 'gbp' ? '\u00A3' : '$'
+  return `${symbol}${(amount / 100).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
+}
+
 export default function ListingPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -43,15 +51,15 @@ export default function ListingPage() {
     return (
       <div className="min-h-screen bg-background">
         <header className="w-full px-6 h-14 flex items-center border-b">
-          <div className="max-w-3xl mx-auto w-full flex items-center gap-3">
+          <div className="max-w-4xl mx-auto w-full flex items-center gap-3">
             <Skeleton className="h-7 w-32" />
             <Skeleton className="h-4 w-4" />
             <Skeleton className="h-4 w-24" />
           </div>
         </header>
-        <main className="max-w-3xl mx-auto py-6 px-6 space-y-5">
-          <Skeleton className="w-full h-64 rounded-lg" />
-          <Skeleton className="h-6 w-72" />
+        <main className="max-w-4xl mx-auto py-10 px-6 space-y-6">
+          <Skeleton className="w-full aspect-[16/9] rounded-md" />
+          <Skeleton className="h-7 w-72" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-3/4" />
         </main>
@@ -73,7 +81,7 @@ export default function ListingPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="w-full px-6 h-14 flex items-center border-b">
-        <div className="max-w-3xl mx-auto w-full flex items-center justify-between gap-4">
+        <div className="max-w-4xl mx-auto w-full flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/" className="flex items-center gap-2 shrink-0">
               <Image
@@ -115,56 +123,74 @@ export default function ListingPage() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto py-6 px-6">
+      <main className="max-w-4xl mx-auto py-10 px-6">
         {/* Screenshot */}
-        {listing.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={listing.imageUrl}
-            alt={listing.title}
-            className="w-full h-auto max-h-80 object-cover rounded-lg border"
-          />
-        ) : (
-          <div className="w-full h-48 bg-muted/30 rounded-lg border flex items-center justify-center">
-            <span className="text-xs text-muted-foreground/40">No preview</span>
-          </div>
-        )}
-
-        {/* Title + meta */}
-        <div className="mt-5">
-          <h1 className="text-xl font-semibold tracking-tight">{listing.title}</h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            {listing.projectName} · Listed {formatDate(listing.updatedAt)}
-          </p>
+        <div className="rounded-md overflow-hidden border border-border/60">
+          {listing.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={listing.imageUrl} alt={listing.title} className="w-full h-auto block" />
+          ) : (
+            <div className="w-full aspect-[16/9] flex items-center justify-center bg-muted/30">
+              <span className="text-xs text-muted-foreground/40">No preview</span>
+            </div>
+          )}
         </div>
 
-        {/* Seller + live demo */}
-        <div className="flex items-center justify-between mt-4 gap-4">
-          <div className="flex items-center gap-2">
-            <Avatar className="h-6 w-6">
-              <AvatarImage src={listing.sellerImage || undefined} />
-              <AvatarFallback className="text-[10px]">
-                {listing.sellerName?.charAt(0)?.toUpperCase() || 'S'}
-              </AvatarFallback>
-            </Avatar>
-            <span className="text-xs text-muted-foreground">{listing.sellerName}</span>
+        {/* Title + price */}
+        <div className="mt-8 flex items-start justify-between gap-6">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight">{listing.title}</h1>
+            <div className="flex items-center gap-2.5 mt-2.5">
+              <Avatar className="h-5 w-5">
+                <AvatarImage src={listing.sellerImage || undefined} />
+                <AvatarFallback className="text-[9px]">
+                  {listing.sellerName?.charAt(0)?.toUpperCase() || 'S'}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-sm text-muted-foreground">{listing.sellerName}</span>
+              <span className="text-muted-foreground/30">&middot;</span>
+              <span className="text-sm text-muted-foreground/70">
+                {formatDate(listing.updatedAt)}
+              </span>
+            </div>
           </div>
-          {listing.liveUrl && (
-            <Button asChild variant="outline" size="sm" className="h-8 text-xs">
+
+          <div className="shrink-0">
+            {listing.priceAmount != null && listing.priceAmount > 0 ? (
+              <div className="text-right">
+                <span className="text-2xl font-bold tabular-nums tracking-tight">
+                  {formatPrice(listing.priceAmount, listing.priceCurrency)}
+                </span>
+                <p className="text-xs text-muted-foreground mt-0.5">One-time</p>
+              </div>
+            ) : (
+              <span className="text-sm font-medium rounded-full bg-emerald-500/10 text-emerald-600 px-3.5 py-1.5">
+                Free
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        {listing.liveUrl && (
+          <div className="mt-5">
+            <Button asChild variant="outline" size="sm" className="h-9 text-xs">
               <a href={listing.liveUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
                 Live demo
               </a>
             </Button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Description */}
-        <div className="mt-5 border-t pt-5">
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-            {listing.description}
-          </p>
-        </div>
+        {listing.description && (
+          <div className="mt-8 border-t pt-6">
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+              {listing.description}
+            </p>
+          </div>
+        )}
       </main>
     </div>
   )

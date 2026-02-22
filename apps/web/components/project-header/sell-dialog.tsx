@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Tag, UploadSimple, X, CircleNotch, Image as ImageIcon } from '@phosphor-icons/react'
 import { toast } from 'react-hot-toast'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useCreateProduct, useCreatePrice } from '@/queries/products'
+import { useUpsertProjectListing } from '@/queries/marketplace'
 import { uploadFile, fileToDataUrl } from '@/lib/upload'
 
 interface SellDialogProps {
@@ -16,6 +17,7 @@ interface SellDialogProps {
   projectName?: string
   sellerName?: string
   sellerImage?: string
+  screenshotUrl?: string | null
 }
 
 const currencies = [
@@ -52,30 +54,51 @@ export default function SellDialog({
   projectName,
   sellerName,
   sellerImage,
+  screenshotUrl,
 }: SellDialogProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [listingType, setListingType] = useState<'free' | 'paid'>('free')
   const [price, setPrice] = useState('')
   const [currency, setCurrency] = useState<'usd' | 'eur' | 'gbp'>('usd')
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [imageCleared, setImageCleared] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const createProduct = useCreateProduct(projectId)
   const createPrice = useCreatePrice(projectId)
+  const upsertListing = useUpsertProjectListing()
 
-  const isSubmitting = createProduct.isPending || createPrice.isPending
-  const canSubmit = name.trim() && price && parseFloat(price) > 0 && !isSubmitting && !uploading
+  const isSubmitting = createProduct.isPending || createPrice.isPending || upsertListing.isPending
+  const hasPaidPrice = listingType === 'paid' && price && parseFloat(price) > 0
+  const canSubmit =
+    name.trim() &&
+    !isSubmitting &&
+    !uploading &&
+    (listingType === 'free' || (price && parseFloat(price) > 0))
 
   const currencySymbol = currencies.find((c) => c.value === currency)?.symbol || '$'
+
+  // Use deployment screenshot as default when dialog opens
+  useEffect(() => {
+    if (open && screenshotUrl && !imagePreview && !imageUrl && !imageCleared) {
+      setImagePreview(screenshotUrl)
+      setImageUrl(screenshotUrl)
+    }
+  }, [open, screenshotUrl, imagePreview, imageUrl, imageCleared])
 
   const resetForm = () => {
     setName('')
     setDescription('')
+    setListingType('free')
     setPrice('')
     setCurrency('usd')
     setImagePreview(null)
+    setImageUrl(null)
+    setImageCleared(false)
   }
 
   const handleImage = useCallback(async (file: File) => {
@@ -87,13 +110,16 @@ export default function SellDialog({
       toast.error('Image must be under 10MB', { position: 'top-right' })
       return
     }
+    setImageCleared(false)
     setImagePreview(await fileToDataUrl(file))
     setUploading(true)
     try {
-      await uploadFile(file)
+      const { url } = await uploadFile(file)
+      setImageUrl(url)
     } catch {
       toast.error('Upload failed', { position: 'top-right' })
       setImagePreview(null)
+      setImageUrl(null)
     } finally {
       setUploading(false)
     }
@@ -101,27 +127,57 @@ export default function SellDialog({
 
   const handleSubmit = async () => {
     if (!projectId || !canSubmit) return
-    const slug = nameToSlug(name)
+    const trimmedName = name.trim()
+    const trimmedDesc = description.trim() || `${trimmedName} — built on Surgent`
+
     try {
-      const product = await createProduct.mutateAsync({
-        productGroup: slug,
-        name: name.trim(),
-        slug,
-        description: description.trim() || undefined,
+      let productId: string | undefined
+      let priceId: string | undefined
+
+      if (hasPaidPrice) {
+        const slug = nameToSlug(trimmedName)
+        const product = await createProduct.mutateAsync({
+          productGroup: slug,
+          name: trimmedName,
+          slug,
+          description: trimmedDesc,
+        })
+        const priceResult = await createPrice.mutateAsync({
+          productGroup: product.productGroup,
+          price: Math.round(parseFloat(price) * 100),
+          priceCurrency: currency,
+        })
+        productId = product.productId
+        priceId = priceResult.productPriceId
+      }
+
+      await upsertListing.mutateAsync({
+        projectId,
+        title: trimmedName,
+        description: trimmedDesc,
+        imageUrl: imageUrl || undefined,
+        productId,
+        priceId,
       })
-      await createPrice.mutateAsync({
-        productGroup: product.productGroup,
-        price: Math.round(parseFloat(price) * 100),
-        priceCurrency: currency,
+
+      toast.success(hasPaidPrice ? 'Listed for sale' : 'Listed on marketplace', {
+        position: 'top-right',
       })
-      toast.success('Product created', { position: 'top-right' })
       resetForm()
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create product', {
+      toast.error(err instanceof Error ? err.message : 'Failed to create listing', {
         position: 'top-right',
       })
     }
+  }
+
+  const openFilePicker = () => fileRef.current?.click()
+  const clearImage = () => {
+    setImagePreview(null)
+    setImageUrl(null)
+    setImageCleared(true)
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   return (
@@ -145,16 +201,28 @@ export default function SellDialog({
                   <Tag className="size-4 text-background" weight="fill" />
                 </div>
                 <DialogTitle className="text-base font-semibold tracking-tight">
-                  List for sale
+                  List on marketplace
                 </DialogTitle>
               </div>
               <DialogDescription className="text-[13px] text-muted-foreground/70 leading-relaxed">
-                Create a product listing with pricing.
+                Create a listing for your project on the marketplace.
               </DialogDescription>
             </div>
 
             <div className="px-6 pb-6 space-y-4">
-              {/* Image upload */}
+              {/* Hidden file input — single instance */}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) handleImage(f)
+                }}
+              />
+
+              {/* Cover image */}
               {!imagePreview ? (
                 <div
                   onDragOver={(e) => {
@@ -168,9 +236,9 @@ export default function SellDialog({
                     const file = e.dataTransfer.files[0]
                     if (file) handleImage(file)
                   }}
-                  onClick={() => fileRef.current?.click()}
+                  onClick={openFilePicker}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-2 h-32 rounded-lg border-2 border-dashed cursor-pointer transition-colors',
+                    'flex flex-col items-center justify-center gap-2 h-36 rounded-lg border-2 border-dashed cursor-pointer transition-colors',
                     dragging
                       ? 'border-foreground/40 bg-muted/40'
                       : 'border-border hover:border-muted-foreground/40',
@@ -182,39 +250,38 @@ export default function SellDialog({
                       Drop image or click to upload
                     </span>
                     <span className="text-[11px] text-muted-foreground/40">
-                      This will be your product cover image
+                      This will be your listing cover image
                     </span>
                   </div>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      if (f) handleImage(f)
-                    }}
-                  />
                 </div>
               ) : (
-                <div className="relative group rounded-lg overflow-hidden border h-32">
+                <div className="relative group rounded-lg overflow-hidden border h-36">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imagePreview} alt="Product" className="w-full h-full object-cover" />
+                  <img src={imagePreview} alt="Cover" className="w-full h-full object-cover" />
                   {uploading && (
                     <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
                       <CircleNotch className="size-4 animate-spin" />
                     </div>
                   )}
                   {!uploading && (
-                    <button
-                      onClick={() => {
-                        setImagePreview(null)
-                        if (fileRef.current) fileRef.current.value = ''
-                      }}
-                      className="absolute top-1.5 right-1.5 p-1 rounded-md bg-background/80 hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="size-3" weight="bold" />
-                    </button>
+                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={openFilePicker}
+                        className="p-1 rounded-md bg-background/80 hover:bg-background"
+                        title="Upload custom image"
+                      >
+                        <UploadSimple className="size-3" weight="bold" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearImage}
+                        className="p-1 rounded-md bg-background/80 hover:bg-background"
+                        title="Remove image"
+                      >
+                        <X className="size-3" weight="bold" />
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
@@ -225,7 +292,7 @@ export default function SellDialog({
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Pro Plan"
+                  placeholder="e.g. AI Chat Template"
                   className={field}
                 />
               </div>
@@ -244,36 +311,65 @@ export default function SellDialog({
                 />
               </div>
 
-              {/* Price */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Price</label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
-                      {currencySymbol}
-                    </span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      placeholder="0.00"
-                      className={cn(field, 'pl-7 font-medium tabular-nums')}
-                    />
-                  </div>
-                  <div className={toggleTrack}>
-                    {currencies.map((c) => (
-                      <button
-                        key={c.value}
-                        type="button"
-                        onClick={() => setCurrency(c.value)}
-                        className={toggleBtn(currency === c.value)}
-                      >
-                        {c.label}
-                      </button>
-                    ))}
-                  </div>
+              {/* Pricing */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Pricing</label>
+                <div className={toggleTrack + ' w-full'}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setListingType('free')
+                      setPrice('')
+                    }}
+                    className={cn(toggleBtn(listingType === 'free'), 'flex-1 text-center')}
+                  >
+                    Free
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setListingType('paid')}
+                    className={cn(toggleBtn(listingType === 'paid'), 'flex-1 text-center')}
+                  >
+                    One-time price
+                  </button>
                 </div>
+
+                {listingType === 'paid' && (
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+                        {currencySymbol}
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        placeholder="0.00"
+                        autoFocus
+                        className={cn(field, 'pl-7 font-medium tabular-nums')}
+                      />
+                    </div>
+                    <div className={toggleTrack}>
+                      {currencies.map((c) => (
+                        <button
+                          key={c.value}
+                          type="button"
+                          onClick={() => setCurrency(c.value)}
+                          className={toggleBtn(currency === c.value)}
+                        >
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-[11px] text-muted-foreground/50">
+                  {listingType === 'free'
+                    ? 'Anyone can access your project for free.'
+                    : 'Buyers pay once to get access to your project.'}
+                </p>
               </div>
             </div>
 
@@ -288,7 +384,13 @@ export default function SellDialog({
                 Cancel
               </Button>
               <Button className="flex-1 h-9" disabled={!canSubmit} onClick={handleSubmit}>
-                {isSubmitting ? <CircleNotch className="size-4 animate-spin" /> : 'Create product'}
+                {isSubmitting ? (
+                  <CircleNotch className="size-4 animate-spin" />
+                ) : listingType === 'paid' ? (
+                  'List for sale'
+                ) : (
+                  'List for free'
+                )}
               </Button>
             </div>
           </div>
@@ -336,7 +438,7 @@ export default function SellDialog({
                   )}
 
                   <div className="mt-3.5">
-                    {price && parseFloat(price) > 0 ? (
+                    {hasPaidPrice ? (
                       <span className="text-base font-bold tabular-nums tracking-tight">
                         {currencySymbol}
                         {parseFloat(price).toLocaleString('en-US', {
@@ -345,7 +447,7 @@ export default function SellDialog({
                         })}
                       </span>
                     ) : (
-                      <span className="text-sm text-muted-foreground/20 tabular-nums">$0.00</span>
+                      <span className="text-sm font-medium text-emerald-600">Free</span>
                     )}
                   </div>
 

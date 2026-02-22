@@ -8,6 +8,11 @@ const ListingSchema = z.object({
   title: z.string(),
   description: z.string(),
   imageUrl: z.string().nullable(),
+  productId: z.string().nullable(),
+  priceId: z.string().nullable(),
+  priceAmount: z.number().nullable(),
+  priceCurrency: z.string().nullable(),
+  recurringInterval: z.string().nullable(),
   status: z.string(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
@@ -42,10 +47,18 @@ async function upsertProjectListing(args: {
   title?: string
   description: string
   imageUrl?: string
+  productId?: string
+  priceId?: string
 }): Promise<ProjectListing> {
   const data = await http
     .post(`api/projects/${args.projectId}/listing`, {
-      json: { title: args.title, description: args.description, imageUrl: args.imageUrl },
+      json: {
+        title: args.title,
+        description: args.description,
+        imageUrl: args.imageUrl,
+        productId: args.productId,
+        priceId: args.priceId,
+      },
     })
     .json()
   return UpsertListingResponseSchema.parse(data).listing

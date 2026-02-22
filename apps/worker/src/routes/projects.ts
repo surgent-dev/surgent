@@ -51,6 +51,8 @@ const listingBody = z.object({
   title: z.string().trim().min(3).max(80).optional(),
   description: z.string().trim().min(1).max(4000),
   imageUrl: z.string().url().optional(),
+  productId: z.string().uuid().optional(),
+  priceId: z.string().uuid().optional(),
 })
 
 function serializeListing(row: {
@@ -59,9 +61,14 @@ function serializeListing(row: {
   title: string
   description: string
   imageUrl: string | null
+  productId?: string | null
+  priceId?: string | null
   status: string
   createdAt?: Date
   updatedAt?: Date
+  priceAmount?: number | null
+  priceCurrency?: string | null
+  recurringInterval?: string | null
 }) {
   return {
     id: row.id,
@@ -69,6 +76,11 @@ function serializeListing(row: {
     title: row.title,
     description: row.description,
     imageUrl: row.imageUrl,
+    productId: row.productId ?? null,
+    priceId: row.priceId ?? null,
+    priceAmount: row.priceAmount ?? null,
+    priceCurrency: row.priceCurrency ?? null,
+    recurringInterval: row.recurringInterval ?? null,
     status: row.status,
     createdAt: row.createdAt?.toISOString?.() ?? null,
     updatedAt: row.updatedAt?.toISOString?.() ?? null,
@@ -89,12 +101,15 @@ projects.get(
       .innerJoin('project', 'project.id', 'listing.projectId')
       .innerJoin('user', 'user.id', 'project.userId')
       .leftJoin('worker', 'worker.projectId', 'project.id')
+      .leftJoin('product_price', 'product_price.id', 'listing.priceId')
       .select([
         'listing.id',
         'listing.projectId',
         'listing.title',
         'listing.description',
         'listing.imageUrl',
+        'listing.productId',
+        'listing.priceId',
         'listing.status',
         'listing.createdAt',
         'listing.updatedAt',
@@ -103,6 +118,9 @@ projects.get(
         'user.image as sellerImage',
         'worker.scriptName as workerScriptName',
         'worker.status as workerStatus',
+        'product_price.priceAmount',
+        'product_price.priceCurrency',
+        'product_price.recurringInterval',
       ])
       .where('listing.status', '=', 'active')
       .where('project.deletedAt', 'is', null)
@@ -137,12 +155,15 @@ projects.get(
       .innerJoin('project', 'project.id', 'listing.projectId')
       .innerJoin('user', 'user.id', 'project.userId')
       .leftJoin('worker', 'worker.projectId', 'project.id')
+      .leftJoin('product_price', 'product_price.id', 'listing.priceId')
       .select([
         'listing.id',
         'listing.projectId',
         'listing.title',
         'listing.description',
         'listing.imageUrl',
+        'listing.productId',
+        'listing.priceId',
         'listing.status',
         'listing.createdAt',
         'listing.updatedAt',
@@ -151,6 +172,9 @@ projects.get(
         'user.image as sellerImage',
         'worker.scriptName as workerScriptName',
         'worker.status as workerStatus',
+        'product_price.priceAmount',
+        'product_price.priceCurrency',
+        'product_price.recurringInterval',
       ])
       .where('listing.id', '=', id)
       .where('listing.status', '=', 'active')
@@ -413,8 +437,23 @@ projects.get('/:id/listing', zValidator('param', idParam), async (c) => {
 
   const listing = await db
     .selectFrom('listing')
-    .selectAll()
-    .where('projectId', '=', id)
+    .leftJoin('product_price', 'product_price.id', 'listing.priceId')
+    .select([
+      'listing.id',
+      'listing.projectId',
+      'listing.title',
+      'listing.description',
+      'listing.imageUrl',
+      'listing.productId',
+      'listing.priceId',
+      'listing.status',
+      'listing.createdAt',
+      'listing.updatedAt',
+      'product_price.priceAmount',
+      'product_price.priceCurrency',
+      'product_price.recurringInterval',
+    ])
+    .where('listing.projectId', '=', id)
     .executeTakeFirst()
 
   if (!listing) return c.json({ listing: null })
@@ -428,7 +467,7 @@ projects.post(
   zValidator('json', listingBody),
   async (c) => {
     const { id } = c.req.valid('param')
-    const { title, description, imageUrl } = c.req.valid('json')
+    const { title, description, imageUrl, productId, priceId } = c.req.valid('json')
     const project = await getProjectWithAuth(id, c.get('user')!)
 
     const now = new Date()
@@ -447,6 +486,8 @@ projects.post(
           title: nextTitle,
           description,
           imageUrl: imageUrl ?? null,
+          productId: productId ?? null,
+          priceId: priceId ?? null,
           status: 'active',
           updatedAt: now,
         })
@@ -464,6 +505,8 @@ projects.post(
         title: nextTitle,
         description,
         imageUrl: imageUrl ?? null,
+        productId: productId ?? null,
+        priceId: priceId ?? null,
         status: 'active',
         createdAt: now,
         updatedAt: now,
@@ -838,6 +881,7 @@ projects.get('/:id/deployments', zValidator('param', idParam), async (c) => {
       'rollbackOf',
       'scriptName',
       'envSnapshot',
+      'screenshotUrl',
     ])
     .where('projectId', '=', id)
     .orderBy('createdAt', 'desc')
@@ -855,6 +899,7 @@ projects.get('/:id/deployments', zValidator('param', idParam), async (c) => {
     rollbackOf: row.rollbackOf ?? null,
     scriptName: row.scriptName,
     envSnapshot: row.envSnapshot ?? null,
+    screenshotUrl: row.screenshotUrl ?? null,
   }))
 
   return c.json(response)

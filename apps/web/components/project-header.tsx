@@ -494,17 +494,25 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           </DropdownMenu>
 
           {/* Sell */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button variant="default" disabled aria-label="Set up payments">
-                  <Tag className="size-4" weight="fill" />
-                  <span className="hidden sm:inline">Sell</span>
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Coming soon</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="default"
+            disabled={!projectId}
+            aria-label="List on marketplace"
+            onClick={() => {
+              if (!projectId) return
+              if (!workerName) {
+                toast('Publish your app first before listing', {
+                  icon: '\uD83D\uDE80',
+                  position: 'top-right',
+                })
+                return
+              }
+              setIsSellOpen(true)
+            }}
+          >
+            <Tag className="size-4" weight="fill" />
+            <span className="hidden sm:inline">Sell</span>
+          </Button>
 
           {/* Status indicator */}
           {(isDeployed || isFailed) && (
@@ -856,6 +864,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         onOpenChange={setIsSellOpen}
         projectId={projectId}
         projectName={project?.name}
+        screenshotUrl={latestDeployment?.screenshotUrl}
       />
       <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
     </>

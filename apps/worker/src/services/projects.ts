@@ -258,6 +258,7 @@ export async function updateDeployment(
     cloudflareDeploymentId?: string | null
     cloudflareVersionId?: string | null
     rollbackOf?: string | null
+    screenshotUrl?: string | null
   },
 ) {
   await db
@@ -272,9 +273,18 @@ export async function updateDeployment(
       cloudflareDeploymentId: data.cloudflareDeploymentId,
       cloudflareVersionId: data.cloudflareVersionId,
       rollbackOf: data.rollbackOf,
+      screenshotUrl: data.screenshotUrl,
     })
     .where('id', '=', id)
     .execute()
+}
+
+export async function getDeployment(id: string) {
+  return db
+    .selectFrom('deployment')
+    .select(['id', 'projectId', 'scriptName', 'status', 'screenshotUrl'])
+    .where('id', '=', id)
+    .executeTakeFirst()
 }
 
 export async function isHostnameAvailable(

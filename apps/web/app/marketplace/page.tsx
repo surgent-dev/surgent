@@ -30,6 +30,14 @@ function formatDate(dateIso: string | null) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+function formatPrice(amount: number, currency: string | null) {
+  const symbol = currency === 'eur' ? '\u20AC' : currency === 'gbp' ? '\u00A3' : '$'
+  return `${symbol}${(amount / 100).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
+}
+
 export default function MarketplacePage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
@@ -45,18 +53,18 @@ export default function MarketplacePage() {
     return (
       <div className="min-h-screen bg-background">
         <header className="w-full px-6 h-14 flex items-center border-b">
-          <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
+          <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
             <Skeleton className="h-7 w-32" />
             <Skeleton className="h-8 w-8 rounded-full" />
           </div>
         </header>
-        <main className="max-w-6xl mx-auto px-6 py-6">
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <main className="max-w-7xl mx-auto px-6 py-10">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="rounded-lg border overflow-hidden">
-                <Skeleton className="aspect-video rounded-none" />
-                <div className="p-4 space-y-2">
-                  <Skeleton className="h-4 w-32" />
+              <div key={i} className="space-y-3">
+                <Skeleton className="aspect-[16/10] rounded-md" />
+                <div className="space-y-2 px-0.5">
+                  <Skeleton className="h-4 w-40" />
                   <Skeleton className="h-3 w-full" />
                 </div>
               </div>
@@ -70,7 +78,7 @@ export default function MarketplacePage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="w-full px-6 h-14 flex items-center border-b">
-        <div className="max-w-6xl mx-auto w-full flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
               <Image
@@ -105,58 +113,78 @@ export default function MarketplacePage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-6">
-        <div className="mb-6">
-          <p className="text-xs text-muted-foreground">Browse templates from other builders</p>
+      <main className="max-w-7xl mx-auto px-6 py-10">
+        <div className="mb-8">
+          <h1 className="text-lg font-semibold tracking-tight">Marketplace</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Browse templates and projects from other builders
+          </p>
         </div>
 
         {listings.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-10 text-center bg-muted/10">
+          <div className="rounded-2xl border border-dashed p-16 text-center">
             <p className="text-sm text-muted-foreground">
               No listings yet. Deploy a project to list it here.
             </p>
           </div>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {listings.map((listing) => (
               <Link
                 key={listing.id || listing.projectId}
-                href={`/marketplace/${listing.id}`}
-                className="group rounded-lg border bg-card overflow-hidden hover:border-foreground/15 transition-shadow duration-200 hover:shadow-md"
+                href={`/marketplace/${listing.id ?? listing.projectId}`}
+                className="group block"
               >
-                {listing.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={listing.imageUrl}
-                    alt={listing.title}
-                    className="w-full aspect-video object-cover border-b"
-                  />
-                ) : (
-                  <div className="w-full aspect-video bg-muted/30 border-b flex items-center justify-center">
-                    <span className="text-xs text-muted-foreground/40">No preview</span>
-                  </div>
-                )}
-                <div className="p-4">
-                  <h2 className="text-sm font-medium truncate group-hover:text-foreground">
-                    {listing.title}
-                  </h2>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                    {listing.description}
-                  </p>
-
-                  <div className="flex items-center justify-between mt-3 gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <Avatar className="h-5 w-5">
-                        <AvatarImage src={listing.sellerImage || undefined} />
-                        <AvatarFallback className="text-[9px]">
-                          {listing.sellerName?.charAt(0)?.toUpperCase() || 'S'}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-xs text-muted-foreground truncate">
-                        {listing.sellerName}
-                      </span>
+                {/* Screenshot */}
+                <div className="rounded-md overflow-hidden border border-border/60">
+                  {listing.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={listing.imageUrl}
+                      alt={listing.title}
+                      className="w-full h-auto block"
+                    />
+                  ) : (
+                    <div className="w-full aspect-[16/10] flex items-center justify-center bg-muted/30">
+                      <span className="text-xs text-muted-foreground/40">No preview</span>
                     </div>
-                    <span className="text-[11px] text-muted-foreground/60 shrink-0">
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="pt-3 px-0.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <h2 className="text-[15px] font-semibold leading-snug truncate">
+                      {listing.title}
+                    </h2>
+                    {listing.priceAmount != null && listing.priceAmount > 0 ? (
+                      <span className="text-xs font-semibold tabular-nums shrink-0 rounded-full bg-foreground/[0.06] px-2.5 py-1">
+                        {formatPrice(listing.priceAmount, listing.priceCurrency)}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium shrink-0 rounded-full bg-emerald-500/10 text-emerald-600 px-2.5 py-1">
+                        Free
+                      </span>
+                    )}
+                  </div>
+
+                  {listing.description && (
+                    <p className="text-[13px] text-muted-foreground mt-1 line-clamp-1">
+                      {listing.description}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-2 mt-3">
+                    <Avatar className="h-5 w-5">
+                      <AvatarImage src={listing.sellerImage || undefined} />
+                      <AvatarFallback className="text-[9px]">
+                        {listing.sellerName?.charAt(0)?.toUpperCase() || 'S'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {listing.sellerName}
+                    </span>
+                    <span className="text-xs text-muted-foreground/40 shrink-0 ml-auto">
                       {formatDate(listing.updatedAt)}
                     </span>
                   </div>

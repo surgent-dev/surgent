@@ -1,6 +1,9 @@
 import { inngest } from '../client'
 import { deployProject } from '@/controllers/projects'
 import * as ProjectService from '@/services/projects'
+import { captureScreenshot } from '@/apis/browser-rendering'
+import { storage } from '@/lib/storage'
+import { config } from '@/lib/config'
 import { createLogger } from '@/lib/logger'
 
 const log = createLogger('inngest')
@@ -47,6 +50,26 @@ export const deployProjectFn = inngest.createFunction(
 
     await step.run('deploy', async () => {
       await deployProject({ projectId, deployName, deploymentId })
+    })
+
+    // Capture screenshot of the deployed site (best-effort, non-blocking)
+    await step.run('capture-screenshot', async () => {
+      const deployment = await ProjectService.getDeployment(deploymentId)
+      if (!deployment || deployment.status !== 'deployed' || !deployment.scriptName) return
+
+      const siteUrl = `https://${deployment.scriptName}.${config.cloudflare.deployDomain}`
+
+      try {
+        const buffer = await captureScreenshot({ url: siteUrl })
+        const key = storage.generateKey(projectId, `deploy-${deploymentId.slice(0, 8)}.jpg`)
+        await storage.upload(key, buffer, 'image/jpeg')
+        const url = storage.getPublicUrl(key) || (await storage.getSignedUrl(key))
+        await ProjectService.updateDeployment(deploymentId, { screenshotUrl: url })
+        log.info({ projectId, deploymentId }, 'screenshot captured')
+      } catch (err) {
+        log.warn({ projectId, deploymentId, error: (err as Error).message }, 'screenshot failed')
+        // Don't throw — screenshot failure shouldn't fail the deployment
+      }
     })
 
     return { projectId, deploymentId }
