@@ -583,9 +583,14 @@ export const WebPreviewBody = ({
   // Delayed fallback for templates that don't send preview-ready.
   const handleLoad: ComponentProps<'iframe'>['onLoad'] = (event) => {
     onLoad?.(event)
+    // Cancel watchdog — iframe HTML has loaded, no need to retry or fail
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current)
+      watchdogRef.current = null
+    }
     if (onLoadFallbackRef.current) clearTimeout(onLoadFallbackRef.current)
     onLoadFallbackRef.current = setTimeout(() => {
-      setStatus((prev) => (prev === 'loading' ? 'ready' : prev))
+      setStatus((prev) => (prev === 'loading' || prev === 'failed' ? 'ready' : prev))
     }, ONLOAD_FALLBACK_MS)
   }
 
