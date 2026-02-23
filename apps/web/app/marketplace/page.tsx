@@ -62,7 +62,7 @@ export default function MarketplacePage() {
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="space-y-3">
-                <Skeleton className="aspect-[16/10] rounded-md" />
+                <Skeleton className="aspect-[16/9] rounded-md" />
                 <div className="space-y-2 px-0.5">
                   <Skeleton className="h-4 w-40" />
                   <Skeleton className="h-3 w-full" />
@@ -136,16 +136,16 @@ export default function MarketplacePage() {
                 className="group block"
               >
                 {/* Screenshot */}
-                <div className="rounded-md overflow-hidden border border-border/60">
+                <div className="rounded-md overflow-hidden border border-border/60 aspect-[16/9] bg-muted/30">
                   {listing.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={listing.imageUrl}
                       alt={listing.title}
-                      className="w-full h-auto block"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full aspect-[16/10] flex items-center justify-center bg-muted/30">
+                    <div className="w-full h-full flex items-center justify-center">
                       <span className="text-xs text-muted-foreground/40">No preview</span>
                     </div>
                   )}

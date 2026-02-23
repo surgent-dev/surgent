@@ -238,7 +238,7 @@ export default function SellDialog({
                   }}
                   onClick={openFilePicker}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-2 h-36 rounded-lg border-2 border-dashed cursor-pointer transition-colors',
+                    'flex flex-col items-center justify-center gap-2 aspect-[16/9] rounded-lg border-2 border-dashed cursor-pointer transition-colors',
                     dragging
                       ? 'border-foreground/40 bg-muted/40'
                       : 'border-border hover:border-muted-foreground/40',
@@ -255,7 +255,7 @@ export default function SellDialog({
                   </div>
                 </div>
               ) : (
-                <div className="relative group rounded-lg overflow-hidden border h-36">
+                <div className="relative group rounded-lg overflow-hidden border aspect-[16/9]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={imagePreview} alt="Cover" className="w-full h-full object-cover" />
                   {uploading && (
@@ -414,10 +414,10 @@ export default function SellDialog({
                   <img
                     src={imagePreview}
                     alt="Preview"
-                    className="w-full aspect-[16/10] object-cover"
+                    className="w-full aspect-[16/9] object-cover"
                   />
                 ) : (
-                  <div className="w-full aspect-[16/10] bg-muted/40 dark:bg-muted/20 flex items-center justify-center">
+                  <div className="w-full aspect-[16/9] bg-muted/40 dark:bg-muted/20 flex items-center justify-center">
                     <ImageIcon className="size-6 text-muted-foreground/15" weight="duotone" />
                   </div>
                 )}

@@ -20,8 +20,8 @@ interface ScreenshotOptions {
  */
 export async function captureScreenshot({
   url,
-  width = 1280,
-  height = 720,
+  width = 1536,
+  height = 864,
   deviceScaleFactor = 2,
   quality = 90,
 }: ScreenshotOptions): Promise<Buffer> {
