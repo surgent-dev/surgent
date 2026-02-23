@@ -142,7 +142,7 @@ export default function MarketplacePage() {
                     <img
                       src={listing.imageUrl}
                       alt={listing.title}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover object-top"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
