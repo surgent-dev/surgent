@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import Image from 'next/image'
@@ -21,9 +20,7 @@ import {
   Envelope,
   TelegramLogo,
   Headset,
-  Storefront,
   Globe,
-  UploadSimple,
   Tag,
   CircleNotch,
   CheckCircle,
@@ -48,8 +45,6 @@ import {
   useLatestDeploymentQuery,
   useHostnameAvailability,
 } from '@/queries/projects'
-import { useProjectListingQuery, useUpsertProjectListing } from '@/queries/marketplace'
-import { uploadFile, fileToDataUrl } from '@/lib/upload'
 import { http } from '@/lib/http'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
@@ -118,20 +113,11 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const [isDeploying, setIsDeploying] = useState(false)
   const [downloading, setDownloading] = useState(false)
 
-  // Screenshot upload
-  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
-  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
   // Queries & mutations
   const deployProject = useDeployProject()
   const renameProject = useRenameProject()
   useGitHubStatus(projectId, { enabled: isGitHubDialogOpen })
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
-  const { data: projectListing } = useProjectListingQuery(projectId, isPublishOpen)
-  const upsertListing = useUpsertProjectListing()
   const updateVisibility = useUpdateProjectVisibility()
 
   // Toast when deployment completes
@@ -161,16 +147,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const isFailed = workerStatus === 'error'
   const isDeploymentInProgress =
     latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status)
-  const isProjectListed = projectListing?.status === 'active'
-
-  // Sync screenshot from existing listing
-  useEffect(() => {
-    if (projectListing?.imageUrl) {
-      setScreenshotUrl(projectListing.imageUrl)
-      setScreenshotPreview(projectListing.imageUrl)
-    }
-  }, [projectListing])
-
   // Hostname availability check
   const sanitizedHostname = sanitizeHostname(hostnameInput)
   const isNewHostname = !workerName || sanitizedHostname !== workerName
@@ -289,65 +265,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     setPendingHostname(name)
     handleDeploy(name)
   }
-
-  const handleScreenshotUpload = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file', { position: 'top-right' })
-      return
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image must be under 10MB', { position: 'top-right' })
-      return
-    }
-
-    setScreenshotPreview(await fileToDataUrl(file))
-    setIsUploading(true)
-
-    try {
-      const { url } = await uploadFile(file)
-      setScreenshotUrl(url)
-    } catch {
-      toast.error('Failed to upload screenshot', { position: 'top-right' })
-      setScreenshotPreview(null)
-      setScreenshotUrl(null)
-    } finally {
-      setIsUploading(false)
-    }
-  }, [])
-
-  const handleListOnMarketplace = () => {
-    if (!projectId || !screenshotUrl) return
-    upsertListing.mutate(
-      {
-        projectId,
-        title: project?.name || 'Untitled',
-        description: `${project?.name || 'Project'} — built and deployed on Surgent`,
-        imageUrl: screenshotUrl,
-      },
-      {
-        onSuccess: () => toast.success('Listed on marketplace', { position: 'top-right' }),
-        onError: () => toast.error('Failed to list', { position: 'top-right' }),
-      },
-    )
-  }
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      setIsDragging(false)
-      const file = e.dataTransfer.files[0]
-      if (file) handleScreenshotUpload(file)
-    },
-    [handleScreenshotUpload],
-  )
-
-  const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (file) handleScreenshotUpload(file)
-    },
-    [handleScreenshotUpload],
-  )
 
   return (
     <>
@@ -724,120 +641,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     </TooltipContent>
                   </Tooltip>
                 </div>
-              </div>
-
-              {/* Marketplace */}
-              <div className="border-t px-3 py-3 space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <Storefront className="size-3.5 text-muted-foreground/70" weight="duotone" />
-                  <span className="text-xs font-medium text-muted-foreground">Marketplace</span>
-                  {isProjectListed && (
-                    <span className="ml-auto text-[10px] font-medium text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
-                      Listed
-                    </span>
-                  )}
-                </div>
-
-                {/* Screenshot upload zone */}
-                <div className="relative">
-                  {!screenshotPreview ? (
-                    <div
-                      onDragOver={(e) => {
-                        if (!workerName) return
-                        e.preventDefault()
-                        setIsDragging(true)
-                      }}
-                      onDragLeave={() => setIsDragging(false)}
-                      onDrop={workerName ? handleDrop : undefined}
-                      onClick={() => workerName && fileInputRef.current?.click()}
-                      className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed py-4 transition-colors ${
-                        !workerName
-                          ? 'border-muted-foreground/10 cursor-default'
-                          : isDragging
-                            ? 'border-brand bg-brand/5 cursor-pointer'
-                            : 'border-muted-foreground/20 hover:border-muted-foreground/40 cursor-pointer'
-                      }`}
-                    >
-                      <UploadSimple
-                        className={`size-5 ${!workerName ? 'text-muted-foreground/20' : 'text-muted-foreground/50'}`}
-                        weight="duotone"
-                      />
-                      <span
-                        className={`text-[11px] ${!workerName ? 'text-muted-foreground/30' : 'text-muted-foreground'}`}
-                      >
-                        Drop screenshot or click to upload
-                      </span>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleFileSelect}
-                      />
-                    </div>
-                  ) : (
-                    <div className="relative group rounded-lg overflow-hidden border bg-muted/30">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={screenshotPreview}
-                        alt="Screenshot preview"
-                        className="w-full h-28 object-cover"
-                      />
-                      {isUploading && (
-                        <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                          <CircleNotch className="size-5 animate-spin text-brand" />
-                        </div>
-                      )}
-                      {!isUploading && (
-                        <button
-                          onClick={() => {
-                            setScreenshotPreview(null)
-                            setScreenshotUrl(null)
-                            if (fileInputRef.current) fileInputRef.current.value = ''
-                          }}
-                          className="absolute top-1.5 right-1.5 p-1 rounded-md bg-background/80 hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="size-3" weight="bold" />
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Deploy first overlay */}
-                  {!workerName && !screenshotPreview && (
-                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/60">
-                      <span className="text-[11px] font-medium text-muted-foreground">
-                        Deploy your project first
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* List / View button */}
-                {isProjectListed ? (
-                  <Button className="w-full h-8 text-xs" variant="outline" asChild>
-                    <Link href={`/marketplace/${projectListing?.id}`}>
-                      <ArrowSquareOut className="size-3 mr-1.5" />
-                      View in Marketplace
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button
-                    className="w-full h-8 text-xs"
-                    variant="outline"
-                    disabled={
-                      !workerName || !screenshotUrl || isUploading || upsertListing.isPending
-                    }
-                    onClick={handleListOnMarketplace}
-                  >
-                    {upsertListing.isPending ? (
-                      <CircleNotch className="size-3 animate-spin mr-1.5" />
-                    ) : (
-                      <Storefront className="size-3 mr-1.5" weight="fill" />
-                    )}
-                    List on Marketplace
-                  </Button>
-                )}
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
