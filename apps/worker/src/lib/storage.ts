@@ -115,21 +115,6 @@ export const storage = {
     return `${base.replace(/\/$/, '')}/${key}`
   },
 
-  /** Convert a signed R2 URL to a permanent public URL */
-  normalizeUrl(url: string): string {
-    const base = config.uploads.publicUrl
-    if (!base) return url
-    if (url.startsWith(base)) return url
-    const endpoint = config.uploads.endpoint
-    if (endpoint && url.includes(new URL(endpoint).hostname)) {
-      try {
-        const key = new URL(url).pathname.split('/').slice(2).join('/')
-        if (key) return `${base.replace(/\/$/, '')}/${key}`
-      } catch {}
-    }
-    return url
-  },
-
   generateKey(userId: string, filename: string): string {
     const timestamp = Date.now()
     const random = Math.random().toString(36).slice(2, 8)
