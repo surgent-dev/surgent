@@ -322,7 +322,7 @@ export default function DashboardPage() {
           </Link>
 
           <div className="flex items-center gap-3">
-            {credits.hasCustomer && !credits.unlimited && (
+            {credits.hasCustomer && !credits.unlimited && !credits.isMaxPlan && (
               <button
                 onClick={() => credits.setPlanDialogOpen(true)}
                 className="inline-flex items-center gap-1.5 rounded-full border border-brand/20 bg-brand/8 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/12 active:translate-y-px transition-all duration-100"
@@ -370,13 +370,15 @@ export default function DashboardPage() {
                           style={{ width: `${credits.usedPercent}%` }}
                         />
                       </div>
-                      <button
-                        onClick={() => credits.setPlanDialogOpen(true)}
-                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/20 bg-brand/8 px-2.5 py-1.5 text-[11px] font-medium text-brand hover:bg-brand/12 active:translate-y-px transition-all duration-100"
-                      >
-                        <Lightning className="size-3" weight="fill" />
-                        Upgrade
-                      </button>
+                      {!credits.isMaxPlan && (
+                        <button
+                          onClick={() => credits.setPlanDialogOpen(true)}
+                          className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/20 bg-brand/8 px-2.5 py-1.5 text-[11px] font-medium text-brand hover:bg-brand/12 active:translate-y-px transition-all duration-100"
+                        >
+                          <Lightning className="size-3" weight="fill" />
+                          Upgrade
+                        </button>
+                      )}
                     </div>
                     <DropdownMenuSeparator />
                   </>

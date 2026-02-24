@@ -21,6 +21,17 @@ export function useCredits() {
   const unlimited = feature?.unlimited ?? false
   const remaining = total > 0 ? Math.max((balance / total) * 100, 0) : 0
 
+  // Determine if user is on the highest plan (no upgrade available)
+  const activeProduct = ctx.customer?.products?.find(
+    (p: { status: string; is_add_on: boolean; is_default: boolean }) =>
+      p.status === 'active' && !p.is_add_on && !p.is_default,
+  )
+  const isMaxPlan =
+    activeProduct?.id?.toLowerCase().includes('max') ||
+    activeProduct?.name?.toLowerCase().includes('max') ||
+    activeProduct?.group?.toLowerCase().includes('max') ||
+    false
+
   const nextResetAt = feature?.next_reset_at
     ? feature.next_reset_at < 10_000_000_000
       ? feature.next_reset_at * 1000
@@ -62,6 +73,7 @@ export function useCredits() {
     renewLabel,
     hoursUntilRenew,
     hasCustomer: !!ctx.customer,
+    isMaxPlan,
     gate,
     planDialogOpen,
     setPlanDialogOpen,

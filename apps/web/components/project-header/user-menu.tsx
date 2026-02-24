@@ -80,13 +80,15 @@ export default function UserMenu({ onUpgrade }: UserMenuProps) {
                   style={{ width: `${credits.usedPercent}%` }}
                 />
               </div>
-              <button
-                onClick={() => onUpgrade?.()}
-                className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/20 bg-brand/8 px-2.5 py-1.5 text-[11px] font-medium text-brand hover:bg-brand/12 active:translate-y-px transition-all duration-100"
-              >
-                <Lightning className="size-3" weight="fill" />
-                Upgrade
-              </button>
+              {!credits.isMaxPlan && (
+                <button
+                  onClick={() => onUpgrade?.()}
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/20 bg-brand/8 px-2.5 py-1.5 text-[11px] font-medium text-brand hover:bg-brand/12 active:translate-y-px transition-all duration-100"
+                >
+                  <Lightning className="size-3" weight="fill" />
+                  Upgrade
+                </button>
+              )}
             </div>
             <div className="h-px bg-border" />
           </>
