@@ -646,7 +646,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           </DropdownMenu>
         </div>
 
-        <UserMenu />
+        <UserMenu onUpgrade={() => credits.setPlanDialogOpen(true)} />
       </header>
 
       {/* Dialogs */}

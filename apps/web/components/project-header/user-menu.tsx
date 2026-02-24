@@ -22,7 +22,11 @@ interface User {
   image?: string
 }
 
-export default function UserMenu() {
+interface UserMenuProps {
+  onUpgrade?: () => void
+}
+
+export default function UserMenu({ onUpgrade }: UserMenuProps) {
   const router = useRouter()
   const { setTheme, resolvedTheme } = useTheme()
   const credits = useCredits()
@@ -77,7 +81,7 @@ export default function UserMenu() {
                 />
               </div>
               <button
-                onClick={() => credits.setPlanDialogOpen(true)}
+                onClick={() => onUpgrade?.()}
                 className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/20 bg-brand/8 px-2.5 py-1.5 text-[11px] font-medium text-brand hover:bg-brand/12 active:translate-y-px transition-all duration-100"
               >
                 <Lightning className="size-3" weight="fill" />
