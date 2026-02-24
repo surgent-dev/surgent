@@ -9,6 +9,7 @@ import { requireAuth } from '../middleware/auth'
 import { auth } from '@/lib/auth'
 import { config } from '@/lib/config'
 import { sanitizeHostname, getSandboxPreviewUrl } from '@/lib/utils'
+import { storage } from '@/lib/storage'
 import {
   createDeploymentRecord,
   undeployProject,
@@ -75,7 +76,7 @@ function serializeListing(row: {
     projectId: row.projectId,
     title: row.title,
     description: row.description,
-    imageUrl: row.imageUrl,
+    imageUrl: row.imageUrl ? storage.normalizeUrl(row.imageUrl) : null,
     productId: row.productId ?? null,
     priceId: row.priceId ?? null,
     priceAmount: row.priceAmount ?? null,
