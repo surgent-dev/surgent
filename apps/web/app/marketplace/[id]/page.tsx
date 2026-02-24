@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ExternalLink } from 'lucide-react'
+import { Check, CreditCard, ExternalLink, Loader2 } from 'lucide-react'
+import { toast } from 'react-hot-toast'
 import { authClient } from '@/lib/auth-client'
+import { http } from '@/lib/http'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -39,6 +41,7 @@ export default function ListingPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
+  const [buying, setBuying] = useState(false)
   const { data: listing, isLoading, error } = useMarketplaceListingQuery(id)
 
   useEffect(() => {
@@ -46,6 +49,38 @@ export default function ListingPage() {
       if (data?.user) setUser(data.user as User)
     })
   }, [])
+
+  const handleBuy = async () => {
+    if (!listing) return
+
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    if (!listing.priceId) return
+
+    setBuying(true)
+    try {
+      const response = await http
+        .post('api/projects/marketplace/checkout', {
+          json: {
+            listingId: listing.id,
+            redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/marketplace/${id}`,
+          },
+        })
+        .json<{ id: string; sessionId: string; purchaseUrl: string | null }>()
+
+      if (response.purchaseUrl) {
+        window.open(response.purchaseUrl, '_blank', 'noopener')
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong'
+      toast.error(message)
+    } finally {
+      setBuying(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -172,16 +207,37 @@ export default function ListingPage() {
         </div>
 
         {/* Actions */}
-        {listing.liveUrl && (
-          <div className="mt-5">
+        <div className="mt-5 flex items-center gap-3">
+          {listing.purchased ? (
+            <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-emerald-500/10 text-emerald-600 text-xs font-medium">
+              <Check className="size-3.5" />
+              Purchased
+            </span>
+          ) : listing.priceId && listing.priceAmount != null && listing.priceAmount > 0 ? (
+            <Button size="sm" className="h-9 text-xs" onClick={handleBuy} disabled={buying}>
+              {buying ? (
+                <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <CreditCard className="size-3.5 mr-1.5" />
+              )}
+              {buying
+                ? 'Processing...'
+                : `Buy for ${formatPrice(listing.priceAmount, listing.priceCurrency)}`}
+            </Button>
+          ) : (
+            <Button size="sm" className="h-9 text-xs">
+              Use Template
+            </Button>
+          )}
+          {listing.liveUrl && (
             <Button asChild variant="outline" size="sm" className="h-9 text-xs">
               <a href={listing.liveUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
                 Live demo
               </a>
             </Button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Description */}
         {listing.description && (

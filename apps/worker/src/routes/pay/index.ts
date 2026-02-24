@@ -824,7 +824,7 @@ pay.post('/checkout', zValidator('json', checkoutBodySchema), async (c) => {
   }
 
   // Resolve pricing from DB when priceId is provided
-  let title = body.title || 'Payment'
+  let title = (body.title || 'Payment').slice(0, 30)
   let amountCents = body.amount || 0
   let currency = body.currency
   let planType = body.planType
@@ -853,7 +853,7 @@ pay.post('/checkout', zValidator('json', checkoutBodySchema), async (c) => {
 
     amountCents = price.priceAmount
     currency = price.priceCurrency
-    title = product.name || title
+    title = (product.name || title).slice(0, 30)
     planType = price.recurringInterval ? 'renewal' : 'one_time'
     recurringInterval = price.recurringInterval
     productId = product.id || undefined

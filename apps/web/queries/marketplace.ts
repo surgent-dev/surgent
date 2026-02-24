@@ -23,6 +23,7 @@ const MarketplaceListingSchema = ListingSchema.extend({
   sellerName: z.string(),
   sellerImage: z.string().nullable(),
   liveUrl: z.string().nullable(),
+  purchased: z.boolean().optional(),
 })
 
 const MarketplaceListingsSchema = z.array(MarketplaceListingSchema)

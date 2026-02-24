@@ -8,6 +8,8 @@ import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../middleware/auth'
 import { auth } from '@/lib/auth'
 import { config } from '@/lib/config'
+import { getAccountForUser, getClient } from '@/lib/pay/utils'
+import type { PayEnv } from '@/lib/pay/types'
 import { sanitizeHostname, getSandboxPreviewUrl } from '@/lib/utils'
 import {
   createDeploymentRecord,
@@ -183,16 +185,230 @@ projects.get(
 
     if (!row) return c.json({ error: 'Listing not found' }, 404)
 
+    // Check if the logged-in user has purchased this listing
+    let purchased = false
+    const user = c.get('user')
+    if (user) {
+      const completedCheckout = await db
+        .selectFrom('pay_checkout_session')
+        .select('id')
+        .where('userId', '=', user.id)
+        .where('projectId', '=', row.projectId)
+        .where('status', '=', 'completed')
+        .executeTakeFirst()
+      purchased = Boolean(completedCheckout)
+    }
+
     return c.json({
       ...serializeListing(row),
       projectName: row.projectName,
       sellerName: row.sellerName,
       sellerImage: row.sellerImage,
+      purchased,
       liveUrl:
         row.workerScriptName && row.workerStatus === 'active'
           ? `https://${row.workerScriptName}.surgent.site`
           : null,
     })
+  },
+)
+
+// POST /projects/marketplace/checkout - Create checkout for a marketplace listing (buyer flow)
+const marketplaceCheckoutBody = z.object({
+  listingId: z.string().uuid(),
+  redirectUrl: z.string().url().optional(),
+})
+
+projects.post('/marketplace/checkout', zValidator('json', marketplaceCheckoutBody), async (c) => {
+  const session = c.get('session')
+  const user = c.get('user')
+  if (!session || !user) return c.json({ error: 'Unauthorized' }, 401)
+
+  const body = c.req.valid('json')
+
+  // Look up the active listing with its price
+  const listing = await db
+    .selectFrom('listing')
+    .innerJoin('product_price', 'product_price.id', 'listing.priceId')
+    .innerJoin('product', 'product.id', 'listing.productId')
+    .select([
+      'listing.id',
+      'listing.projectId',
+      'listing.title',
+      'listing.productId',
+      'listing.priceId',
+      'product.name as productName',
+      'product.env as productEnv',
+      'product_price.priceAmount',
+      'product_price.priceCurrency',
+      'product_price.recurringInterval',
+    ])
+    .where('listing.id', '=', body.listingId)
+    .where('listing.status', '=', 'active')
+    .executeTakeFirst()
+
+  if (!listing) return c.json({ error: 'Listing not found or has no price' }, 404)
+  if (!listing.priceId) return c.json({ error: 'Listing has no price configured' }, 400)
+
+  const env: PayEnv = (listing.productEnv as PayEnv) || 'live'
+
+  // Resolve the SELLER's pay account via projectId
+  const account = await getAccountForUser({ projectId: listing.projectId, env })
+  const companyId = account.whopCompanyId
+
+  const checkoutId = crypto.randomUUID()
+  const now = new Date()
+  const amountCents = listing.priceAmount
+  const currency = listing.priceCurrency
+  const amount = amountCents / 100
+  const title = (listing.productName || listing.title).slice(0, 30)
+  const planType = listing.recurringInterval ? 'renewal' : 'one_time'
+
+  const base = config.whop?.redirectBaseUrl || config.server?.clientOrigin || ''
+  const redirectUrl = body.redirectUrl || `${base}/marketplace/${listing.id}`
+  const metadata = {
+    session_id: checkoutId,
+    project_id: listing.projectId,
+    product_id: listing.productId,
+    listing_id: listing.id,
+    customer_id: user.id,
+    customer_email: user.email,
+    customer_name: user.name || undefined,
+    redirect_url: redirectUrl,
+  }
+
+  // Reserve checkout session — userId is the BUYER
+  await db
+    .insertInto('pay_checkout_session')
+    .values({
+      id: checkoutId,
+      projectId: listing.projectId,
+      userId: user.id,
+      accountId: account.id,
+      env,
+      whopCompanyId: companyId,
+      whopCheckoutId: null,
+      purchaseUrl: null,
+      mode: 'payment',
+      planType,
+      status: 'creating',
+      amount: amountCents,
+      currency: currency.toLowerCase(),
+      idempotencyKey: null,
+      metadata,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .execute()
+
+  const plan =
+    planType === 'renewal'
+      ? {
+          company_id: companyId,
+          currency: currency.toLowerCase(),
+          plan_type: 'renewal' as const,
+          renewal_price: amount,
+          billing_period: 30,
+          product: { title, external_identifier: listing.productId || 'unknown' },
+        }
+      : {
+          company_id: companyId,
+          currency: currency.toLowerCase(),
+          plan_type: 'one_time' as const,
+          initial_price: amount,
+          title,
+        }
+
+  const client = getClient(env)
+  let checkout: { id: string; purchase_url?: string }
+  try {
+    checkout = await client.createCheckoutConfiguration({
+      mode: 'payment',
+      plan,
+      redirect_url: redirectUrl,
+      metadata,
+    })
+  } catch (err) {
+    await db
+      .updateTable('pay_checkout_session')
+      .set({ status: 'failed', updatedAt: new Date() })
+      .where('id', '=', checkoutId)
+      .execute()
+    throw err
+  }
+
+  await db
+    .updateTable('pay_checkout_session')
+    .set({
+      whopCheckoutId: checkout.id,
+      purchaseUrl: checkout.purchase_url || null,
+      status: 'open',
+      updatedAt: new Date(),
+    })
+    .where('id', '=', checkoutId)
+    .execute()
+
+  return c.json({
+    id: checkoutId,
+    sessionId: checkout.id,
+    purchaseUrl: checkout.purchase_url || null,
+    status: 'open',
+  })
+})
+
+// GET /projects/marketplace/purchased/:listingId - Check if logged-in user purchased a listing
+projects.get(
+  '/marketplace/purchased/:listingId',
+  zValidator('param', z.object({ listingId: z.string().uuid() })),
+  async (c) => {
+    const session = c.get('session')
+    const user = c.get('user')
+    if (!session || !user) return c.json({ purchased: false })
+
+    const { listingId } = c.req.valid('param')
+
+    const listing = await db
+      .selectFrom('listing')
+      .select(['projectId', 'productId'])
+      .where('id', '=', listingId)
+      .executeTakeFirst()
+
+    if (!listing) return c.json({ purchased: false })
+
+    // Check 1: completed checkout session (direct, most reliable)
+    const completedCheckout = await db
+      .selectFrom('pay_checkout_session')
+      .select('id')
+      .where('userId', '=', user.id)
+      .where('projectId', '=', listing.projectId)
+      .where('status', '=', 'completed')
+      .executeTakeFirst()
+
+    if (completedCheckout) return c.json({ purchased: true })
+
+    // Check 2: pay_customer → pay_payment (for SDK/webhook-created records)
+    if (listing.productId) {
+      const customer = await db
+        .selectFrom('pay_customer')
+        .select('id')
+        .where('projectId', '=', listing.projectId)
+        .where('externalId', '=', user.id)
+        .executeTakeFirst()
+
+      if (customer) {
+        const payment = await db
+          .selectFrom('pay_payment')
+          .select('id')
+          .where('customerId', '=', customer.id)
+          .where('projectId', '=', listing.projectId)
+          .where('status', '=', 'succeeded')
+          .executeTakeFirst()
+
+        if (payment) return c.json({ purchased: true })
+      }
+    }
+
+    return c.json({ purchased: false })
   },
 )
 
