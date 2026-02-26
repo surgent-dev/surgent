@@ -31,7 +31,6 @@ import { createGitHubApp, GitHubService, getValidUserToken } from '@/apis/github
 import {
   isHostnameAvailable,
   getProjectWithAuth,
-  countProjectsByOrganizationId,
   createProject,
   updateProjectStatus,
   updateDeployment,
@@ -48,7 +47,6 @@ const log = createLogger('projects')
 const projects = new Hono<AppContext>()
 
 const idParam = z.object({ id: z.string().uuid() })
-const MAX_PROJECTS_PER_ORG = 2
 const listingBody = z.object({
   title: z.string().trim().min(3).max(80).optional(),
   description: z.string().trim().min(1).max(4000),
@@ -103,6 +101,7 @@ projects.get(
       .innerJoin('project', 'project.id', 'listing.projectId')
       .innerJoin('user', 'user.id', 'project.userId')
       .leftJoin('worker', 'worker.projectId', 'project.id')
+      .leftJoin('product', 'product.id', 'listing.productId')
       .leftJoin('product_price', 'product_price.id', 'listing.priceId')
       .select([
         'listing.id',
@@ -126,6 +125,7 @@ projects.get(
       ])
       .where('listing.status', '=', 'active')
       .where('project.deletedAt', 'is', null)
+      .where((eb) => eb.or([eb('listing.productId', 'is', null), eb('product.env', '=', 'live')]))
       .orderBy('listing.updatedAt', 'desc')
       .limit(limit ?? 48)
       .execute()
@@ -157,6 +157,7 @@ projects.get(
       .innerJoin('project', 'project.id', 'listing.projectId')
       .innerJoin('user', 'user.id', 'project.userId')
       .leftJoin('worker', 'worker.projectId', 'project.id')
+      .leftJoin('product', 'product.id', 'listing.productId')
       .leftJoin('product_price', 'product_price.id', 'listing.priceId')
       .select([
         'listing.id',
@@ -181,6 +182,7 @@ projects.get(
       .where('listing.id', '=', id)
       .where('listing.status', '=', 'active')
       .where('project.deletedAt', 'is', null)
+      .where((eb) => eb.or([eb('listing.productId', 'is', null), eb('product.env', '=', 'live')]))
       .executeTakeFirst()
 
     if (!row) return c.json({ error: 'Listing not found' }, 404)
@@ -355,62 +357,6 @@ projects.post('/marketplace/checkout', zValidator('json', marketplaceCheckoutBod
     status: 'open',
   })
 })
-
-// GET /projects/marketplace/purchased/:listingId - Check if logged-in user purchased a listing
-projects.get(
-  '/marketplace/purchased/:listingId',
-  zValidator('param', z.object({ listingId: z.string().uuid() })),
-  async (c) => {
-    const session = c.get('session')
-    const user = c.get('user')
-    if (!session || !user) return c.json({ purchased: false })
-
-    const { listingId } = c.req.valid('param')
-
-    const listing = await db
-      .selectFrom('listing')
-      .select(['projectId', 'productId'])
-      .where('id', '=', listingId)
-      .executeTakeFirst()
-
-    if (!listing) return c.json({ purchased: false })
-
-    // Check 1: completed checkout session (direct, most reliable)
-    const completedCheckout = await db
-      .selectFrom('pay_checkout_session')
-      .select('id')
-      .where('userId', '=', user.id)
-      .where('projectId', '=', listing.projectId)
-      .where('status', '=', 'completed')
-      .executeTakeFirst()
-
-    if (completedCheckout) return c.json({ purchased: true })
-
-    // Check 2: pay_customer → pay_payment (for SDK/webhook-created records)
-    if (listing.productId) {
-      const customer = await db
-        .selectFrom('pay_customer')
-        .select('id')
-        .where('projectId', '=', listing.projectId)
-        .where('externalId', '=', user.id)
-        .executeTakeFirst()
-
-      if (customer) {
-        const payment = await db
-          .selectFrom('pay_payment')
-          .select('id')
-          .where('customerId', '=', customer.id)
-          .where('projectId', '=', listing.projectId)
-          .where('status', '=', 'succeeded')
-          .executeTakeFirst()
-
-        if (payment) return c.json({ purchased: true })
-      }
-    }
-
-    return c.json({ purchased: false })
-  },
-)
 
 // GET /projects/recent - Recently deployed public projects
 projects.get(
@@ -686,6 +632,23 @@ projects.post(
     const { title, description, imageUrl, productId, priceId } = c.req.valid('json')
     const project = await getProjectWithAuth(id, c.get('user')!)
 
+    // Paid listing — verify seller has a live pay account
+    if (priceId) {
+      const liveAccount = await db
+        .selectFrom('pay_account')
+        .select('id')
+        .where('userId', '=', project.userId)
+        .where('env', '=', 'live')
+        .where('status', '!=', 'disconnected')
+        .executeTakeFirst()
+      if (!liveAccount) {
+        return c.json(
+          { error: 'Connect a payment account in the Payments tab before listing a paid template' },
+          400,
+        )
+      }
+    }
+
     const now = new Date()
     const nextTitle = title || project.name
 
@@ -881,13 +844,11 @@ projects.post(
         return c.json({ error: 'Forbidden' }, 403)
       }
 
-      const projectCount = await countProjectsByOrganizationId(organizationId)
       const access = await auth.api.check({
-        body: { featureId: 'ai_credits' },
+        body: { featureId: 'projects' },
         headers: c.req.raw.headers,
       })
-      const limit = access?.unlimited ? Infinity : MAX_PROJECTS_PER_ORG
-      if (projectCount >= limit) {
+      if (!access?.allowed) {
         return c.json(
           { error: 'Project limit reached. Please upgrade your plan to create more projects.' },
           402,

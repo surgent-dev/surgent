@@ -38,7 +38,6 @@ const log = createLogger('projects')
 // Constants
 // ============================================================================
 
-const MAX_PROJECTS_PER_ORG = 2
 const PREVIEW_PORT = 3000
 
 const DEFAULT_WORKER = `export default {
