@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { entriClient } from '@/lib/entri/client'
 import { generateEntriToken } from '@/lib/entri/jwt'
 import { getDomainProvider, expandDomainQuery } from '@/lib/domains'
+import { connectCustomDomain, disconnectCustomDomain } from '@/lib/cloudflare/custom-hostnames'
 import { config } from '@/lib/config'
 import { HttpError } from '@/lib/errors'
 import { createLogger } from '@/lib/logger'
@@ -36,24 +37,20 @@ domains.post(
     const { domain } = c.req.valid('json')
     const provider = getDomainProvider()
 
-    // Namecheap can check multiple TLDs at once via expandDomainQuery;
-    // Entri expects a single FQDN (the frontend already appends the TLD).
-    if (provider.name === 'namecheap' && !domain.includes('.')) {
-      const domains = expandDomainQuery(domain)
-      const results = await provider.checkAvailability(domains)
-      return c.json(results)
-    }
+    // Expand bare queries (e.g. "coolapp") into multiple TLDs.
+    // If the query already has a dot (e.g. "coolapp.com"), check just that one.
+    const domainsToCheck = domain.includes('.') ? [domain] : expandDomainQuery(domain)
+    const results = await provider.checkAvailability(domainsToCheck)
 
-    const results = await provider.checkAvailability([domain])
-    // For backwards-compat with the frontend, return the single result directly
-    // when checking a single domain (Entri path).
-    return c.json(results[0])
+    return c.json(results)
   },
 )
 
 /**
  * POST /api/domains/init-purchase
- * Generate Entri JWT and config to launch the Sell modal
+ * Initialize domain purchase flow.
+ * - Entri: returns JWT + config to launch the Entri modal on the frontend
+ * - Namecheap: registers the domain server-side and sets DNS records
  */
 domains.post(
   '/init-purchase',
@@ -95,8 +92,6 @@ domains.post(
       throw new HttpError(409, 'Project already has a domain')
     }
 
-    const token = await generateEntriToken(user.id)
-
     // Get worker script name for DNS target
     const worker = await db
       .selectFrom('worker')
@@ -113,6 +108,102 @@ domains.post(
       { type: 'CNAME', host: '@', value: dnsTarget, ttl: 300 },
       { type: 'CNAME', host: 'www', value: dnsTarget, ttl: 300 },
     ]
+
+    const provider = getDomainProvider()
+
+    // ── Namecheap: register server-side ──────────────────────
+    if (provider.name === 'namecheap') {
+      if (!suggestedDomain) throw new HttpError(400, 'Domain name is required')
+
+      // Create pending domain record
+      const now = new Date()
+      const domain = await db
+        .insertInto('domain')
+        .values({
+          projectId,
+          userId: user.id,
+          organizationId: session.activeOrganizationId,
+          domainName: suggestedDomain,
+          status: 'purchasing',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning(['id'])
+        .executeTakeFirst()
+
+      log.info(
+        { projectId, domainId: domain?.id, suggestedDomain, provider: 'namecheap' },
+        'domain purchase started',
+      )
+
+      try {
+        const result = await provider.registerDomain(suggestedDomain, 1, {
+          firstName: user.name?.split(' ')[0] || 'Domain',
+          lastName: user.name?.split(' ').slice(1).join(' ') || 'Owner',
+          address1: '123 Main St',
+          city: 'San Francisco',
+          stateProvince: 'CA',
+          postalCode: '94105',
+          country: 'US',
+          phone: '+1.5555555555',
+          email: user.email,
+        })
+
+        if (!result.registered) {
+          await db
+            .updateTable('domain')
+            .set({ status: 'error', updatedAt: new Date() })
+            .where('id', '=', domain!.id)
+            .execute()
+          throw new HttpError(500, 'Domain registration failed')
+        }
+
+        // Set DNS records at the registrar
+        try {
+          await provider.setDnsRecords(suggestedDomain, dnsRecords)
+        } catch (dnsErr) {
+          log.warn({ err: dnsErr, suggestedDomain }, 'DNS setup failed, domain still purchased')
+        }
+
+        // Connect to Cloudflare: custom hostname + KV dispatch mapping
+        let cfCustomDomainId: string | null = null
+        if (worker?.scriptName) {
+          cfCustomDomainId = await connectCustomDomain(suggestedDomain, worker.scriptName)
+        }
+
+        await db
+          .updateTable('domain')
+          .set({
+            status: worker?.scriptName ? 'active' : 'dns_configuring',
+            registrar: 'namecheap',
+            cfCustomDomainId,
+            purchasedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where('id', '=', domain!.id)
+          .execute()
+
+        return c.json({
+          domainId: domain!.id,
+          domainName: suggestedDomain,
+          provider: 'namecheap',
+          registered: true,
+          dnsRecords,
+        })
+      } catch (err) {
+        if (err instanceof HttpError) throw err
+        log.error({ err, suggestedDomain }, 'namecheap registration error')
+        await db
+          .updateTable('domain')
+          .set({ status: 'error', updatedAt: new Date() })
+          .where('id', '=', domain!.id)
+          .execute()
+        throw new HttpError(500, 'Domain registration failed')
+      }
+    }
+
+    // ── Entri: return config for frontend modal ──────────────
+    const token = await generateEntriToken(user.id)
 
     // Create pending domain record
     const now = new Date()
@@ -178,6 +269,34 @@ domains.get('/:projectId', async (c) => {
     .orderBy('createdAt', 'desc')
     .execute()
 
+  // Auto-connect: if any domain is stuck in dns_configuring and the project
+  // now has a deployed worker, wire it up to Cloudflare and mark it active.
+  const configuringDomains = result.filter((d) => d.status === 'dns_configuring')
+  if (configuringDomains.length > 0) {
+    const worker = await db
+      .selectFrom('worker')
+      .select(['scriptName', 'status'])
+      .where('projectId', '=', projectId)
+      .executeTakeFirst()
+
+    if (worker?.scriptName && worker.status === 'active') {
+      for (const d of configuringDomains) {
+        try {
+          const cfId = await connectCustomDomain(d.domainName, worker.scriptName)
+          await db
+            .updateTable('domain')
+            .set({ status: 'active', cfCustomDomainId: cfId, updatedAt: new Date() })
+            .where('id', '=', d.id)
+            .execute()
+          d.status = 'active'
+          log.info({ domainId: d.id, domainName: d.domainName }, 'auto-connected domain to worker')
+        } catch (err) {
+          log.warn({ err, domainId: d.id }, 'auto-connect failed, will retry on next poll')
+        }
+      }
+    }
+  }
+
   return c.json({
     domains: result.map((d) => ({
       id: d.id,
@@ -210,6 +329,9 @@ domains.delete('/:projectId/:domainId', async (c) => {
     .executeTakeFirst()
 
   if (!domain) throw new HttpError(404, 'Domain not found')
+
+  // Disconnect from Cloudflare (custom hostname + KV mapping)
+  await disconnectCustomDomain(domain.domainName, domain.cfCustomDomainId)
 
   await db.deleteFrom('domain').where('id', '=', domainId).execute()
 
@@ -385,13 +507,30 @@ async function processDomainWebhook(payload: any) {
       payload.dns_status === 'configured' ||
       eventType === 'domainPurchased'
 
+    const finalDomainName = domainName || domainRecord.domainName
+
+    // Connect to Cloudflare if the domain is ready
+    let cfCustomDomainId: string | null = null
+    if (propagationOk && domainRecord.projectId) {
+      const worker = await db
+        .selectFrom('worker')
+        .select('scriptName')
+        .where('projectId', '=', domainRecord.projectId)
+        .executeTakeFirst()
+
+      if (worker?.scriptName) {
+        cfCustomDomainId = await connectCustomDomain(finalDomainName, worker.scriptName)
+      }
+    }
+
     await db
       .updateTable('domain')
       .set({
-        domainName: domainName || domainRecord.domainName,
+        domainName: finalDomainName,
         status: propagationOk ? 'active' : 'dns_configuring',
         registrar: payload.provider || payload.registrar || null,
         entriFlowId: payload.id || null,
+        cfCustomDomainId,
         purchasedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -401,8 +540,9 @@ async function processDomainWebhook(payload: any) {
     log.info(
       {
         domainId: domainRecord.id,
-        domainName,
+        domainName: finalDomainName,
         status: propagationOk ? 'active' : 'dns_configuring',
+        cfCustomDomainId,
       },
       '[ENTRI-WEBHOOK] domain updated',
     )
@@ -431,19 +571,43 @@ async function processDomainWebhook(payload: any) {
 
     log.warn({ userId, domainName, eventType }, '[ENTRI-WEBHOOK] domain purchase failed')
   } else if (eventType === 'dns.propagated' || eventType === 'dnsConfigured') {
-    // DNS propagation complete — mark as active
+    // DNS propagation complete — mark as active and wire up Cloudflare
     if (domainName) {
+      const domainRecord = await db
+        .selectFrom('domain')
+        .selectAll()
+        .where('domainName', '=', domainName)
+        .where('status', '=', 'dns_configuring')
+        .executeTakeFirst()
+
+      let cfId: string | null = null
+      if (domainRecord?.projectId) {
+        const worker = await db
+          .selectFrom('worker')
+          .select('scriptName')
+          .where('projectId', '=', domainRecord.projectId)
+          .executeTakeFirst()
+
+        if (worker?.scriptName) {
+          cfId = await connectCustomDomain(domainName, worker.scriptName)
+        }
+      }
+
       await db
         .updateTable('domain')
         .set({
           status: 'active',
+          cfCustomDomainId: cfId,
           updatedAt: new Date(),
         })
         .where('domainName', '=', domainName)
         .where('status', '=', 'dns_configuring')
         .execute()
 
-      log.info({ domainName }, '[ENTRI-WEBHOOK] DNS propagated, domain active')
+      log.info(
+        { domainName, cfCustomDomainId: cfId },
+        '[ENTRI-WEBHOOK] DNS propagated, domain active',
+      )
     }
   } else {
     log.info({ eventType }, '[ENTRI-WEBHOOK] unhandled event type')

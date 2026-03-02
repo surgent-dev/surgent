@@ -262,7 +262,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const handlePublishOpenChange = (open: boolean) => {
     setIsPublishOpen(open)
     if (open) {
-      setHostnameInput(workerName || '')
+      // Pre-fill with existing worker name, or generate a slug from the project name
+      const defaultHostname = workerName || sanitizeHostname(project?.name || '')
+      setHostnameInput(defaultHostname)
       setIsEditingHostname(false)
     }
   }
@@ -606,7 +608,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               </div>
 
               {/* Custom Domain */}
-              {workerName && (
+              {
                 <div className="border-t px-3 py-2.5">
                   {activeDomain ? (
                     <div className="flex items-center gap-2">
@@ -665,7 +667,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     </button>
                   )}
                 </div>
-              )}
+              }
 
               {/* Visibility */}
               <div className="border-t px-3 py-2.5">

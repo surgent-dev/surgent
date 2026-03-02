@@ -6,6 +6,7 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
     "@types/node": "^18.0.0",
     "typescript": "^5.9.2",
     "wrangler": "^4.54.0"

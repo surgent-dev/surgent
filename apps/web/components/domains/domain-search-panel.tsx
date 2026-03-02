@@ -12,6 +12,7 @@ import {
   useOnDomainPurchased,
   useRemoveDomain,
 } from '@/queries/domains'
+import type { DomainAvailability } from '@/queries/domains'
 
 declare global {
   interface Window {
@@ -27,6 +28,7 @@ interface DomainSearchPanelProps {
 
 export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
   const [searchInput, setSearchInput] = useState('')
+  const [purchasingDomain, setPurchasingDomain] = useState<string | null>(null)
 
   const { data: domainsData, isLoading: domainsLoading } = useProjectDomains(projectId)
   const checkAvailability = useCheckDomainAvailability()
@@ -44,55 +46,68 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
 
   const handleSearch = useCallback(() => {
     if (!searchInput.trim()) return
-    const domain = searchInput.includes('.') ? searchInput.trim() : `${searchInput.trim()}.com`
-    checkAvailability.mutate(domain)
+    // Send the raw query — backend expands bare queries into multiple TLDs
+    checkAvailability.mutate(searchInput.trim())
   }, [searchInput, checkAvailability])
 
-  const handlePurchase = useCallback(async () => {
-    if (!checkAvailability.data?.domain) return
+  const handlePurchase = useCallback(
+    async (domain: DomainAvailability) => {
+      setPurchasingDomain(domain.domain)
 
-    const config = await initPurchase.mutateAsync({
-      projectId,
-      suggestedDomain: checkAvailability.data.domain,
-    })
+      try {
+        const config = await initPurchase.mutateAsync({
+          projectId,
+          suggestedDomain: domain.domain,
+        })
 
-    // Dev mode: skip Entri modal and instantly activate via mock endpoint
-    if (config.devMode) {
-      await mockPurchase.mutateAsync({
-        domainId: config.domainId,
-        domainName: checkAvailability.data.domain,
-      })
-      return
-    }
+        // Namecheap provider — purchase happens server-side, we're done
+        if ((config as any).provider === 'namecheap') {
+          onPurchased(projectId, domain.domain)
+          return
+        }
 
-    if (!window.entri) {
-      window.open(
-        `https://app.goentri.com/sell?domain=${encodeURIComponent(config.prefilledDomain || '')}`,
-        '_blank',
-      )
-      return
-    }
+        // Dev mode: skip Entri modal and instantly activate via mock endpoint
+        if (config.devMode) {
+          await mockPurchase.mutateAsync({
+            domainId: config.domainId,
+            domainName: domain.domain,
+          })
+          return
+        }
 
-    window.entri.showEntri({
-      applicationId: config.applicationId,
-      token: config.token,
-      prefilledDomain: config.prefilledDomain,
-      dnsRecords: config.dnsRecords,
-      userId: config.contact.email,
-      contact: config.contact,
-      whiteLabel: {
-        hideEntriLogo: true,
-        customCta: 'Get this domain',
-        theme: { primaryColor: '#6366f1' },
-      },
-      onSuccess: (data: { domain?: string }) => {
-        onPurchased(projectId, data.domain || config.prefilledDomain || '')
-      },
-      onError: (err: unknown) => {
-        console.error('Entri purchase error:', err)
-      },
-    })
-  }, [checkAvailability.data, projectId, initPurchase, mockPurchase, onPurchased])
+        if (!window.entri) {
+          window.open(
+            `https://app.goentri.com/sell?domain=${encodeURIComponent(config.prefilledDomain || '')}`,
+            '_blank',
+          )
+          return
+        }
+
+        window.entri.showEntri({
+          applicationId: config.applicationId,
+          token: config.token,
+          prefilledDomain: config.prefilledDomain,
+          dnsRecords: config.dnsRecords,
+          userId: config.contact.email,
+          contact: config.contact,
+          whiteLabel: {
+            hideEntriLogo: true,
+            customCta: 'Get this domain',
+            theme: { primaryColor: '#6366f1' },
+          },
+          onSuccess: (data: { domain?: string }) => {
+            onPurchased(projectId, data.domain || config.prefilledDomain || '')
+          },
+          onError: (err: unknown) => {
+            console.error('Entri purchase error:', err)
+          },
+        })
+      } finally {
+        setPurchasingDomain(null)
+      }
+    },
+    [projectId, initPurchase, mockPurchase, onPurchased],
+  )
 
   // Existing active domain
   if (activeDomain) {
@@ -169,6 +184,9 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
   }
 
   // Search & purchase flow
+  const results = checkAvailability.data
+  const availableCount = results?.filter((r) => r.available).length ?? 0
+
   return (
     <div className="px-5 py-4 space-y-3">
       <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider font-medium">
@@ -181,7 +199,7 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
         <div className="relative flex-1">
           <input
             type="text"
-            placeholder="e.g. myapp.com"
+            placeholder="e.g. myapp or myapp.com"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -203,47 +221,58 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
         </Button>
       </div>
 
-      {/* Result */}
-      {checkAvailability.data && (
-        <div
-          className={`flex items-center justify-between h-10 px-3 rounded-lg border text-sm ${
-            checkAvailability.data.available
-              ? 'border-emerald-500/30 bg-emerald-500/5'
-              : 'border-destructive/30 bg-destructive/5'
-          }`}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {checkAvailability.data.available ? (
-              <Check className="size-4 text-emerald-500 shrink-0" weight="bold" />
-            ) : (
-              <X className="size-4 text-destructive shrink-0" weight="bold" />
-            )}
-            <span className="font-mono truncate">{checkAvailability.data.domain}</span>
-            <span className="text-xs text-muted-foreground shrink-0">
-              {checkAvailability.data.available ? 'Available' : 'Unavailable'}
+      {/* Results list */}
+      {results && results.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground/60">
+            <span>
+              {availableCount} of {results.length} available
             </span>
           </div>
-
-          {checkAvailability.data.available && (
-            <Button
-              size="sm"
-              className="h-7 text-xs ml-2 shrink-0"
-              onClick={handlePurchase}
-              disabled={initPurchase.isPending || mockPurchase.isPending}
-            >
-              {initPurchase.isPending || mockPurchase.isPending ? (
-                <Loader2 className="size-3 animate-spin mr-1" />
-              ) : null}
-              Purchase
-            </Button>
-          )}
+          <div className="max-h-64 overflow-y-auto space-y-1 rounded-lg border border-border/40 p-1.5">
+            {results.map((result) => {
+              const isPurchasing = purchasingDomain === result.domain
+              return (
+                <div
+                  key={result.domain}
+                  className={`flex items-center gap-2 h-9 px-3 rounded-md text-sm transition-colors ${
+                    result.available ? 'hover:bg-emerald-500/5' : 'opacity-50'
+                  }`}
+                >
+                  {result.available ? (
+                    <Check className="size-3.5 text-emerald-500 shrink-0" weight="bold" />
+                  ) : (
+                    <X className="size-3.5 text-muted-foreground/40 shrink-0" weight="bold" />
+                  )}
+                  <span className="font-mono text-[13px] flex-1 truncate">{result.domain}</span>
+                  {result.price != null && (
+                    <span className="text-[11px] text-muted-foreground/60 shrink-0">
+                      ${result.price.toFixed(2)}
+                    </span>
+                  )}
+                  {result.available ? (
+                    <Button
+                      size="sm"
+                      className="h-6 text-[11px] px-2.5 shrink-0"
+                      onClick={() => handlePurchase(result)}
+                      disabled={isPurchasing || initPurchase.isPending || mockPurchase.isPending}
+                    >
+                      {isPurchasing ? <Loader2 className="size-3 animate-spin" /> : 'Get'}
+                    </Button>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground/40 shrink-0">Taken</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
       {/* Hint */}
-      {!checkAvailability.data && (
+      {!results && (
         <p className="text-[11px] text-muted-foreground/60">
-          Search for a domain to purchase and connect to your project.
+          Search for a domain name to see availability across popular TLDs.
         </p>
       )}
     </div>

@@ -4,9 +4,10 @@ import { toast } from 'react-hot-toast'
 
 // Types
 
-interface DomainAvailability {
+export interface DomainAvailability {
   domain: string
   available: boolean
+  price?: number
   reason: 'AVAILABLE' | 'UNAVAILABLE' | 'UNSUPPORTED_TLD' | 'ERROR'
   checkedAt: string
 }
@@ -52,7 +53,9 @@ export function useProjectDomains(projectId?: string) {
 export function useCheckDomainAvailability() {
   return useMutation({
     mutationFn: (domain: string) =>
-      http.post('api/domains/check-availability', { json: { domain } }).json<DomainAvailability>(),
+      http
+        .post('api/domains/check-availability', { json: { domain } })
+        .json<DomainAvailability[]>(),
     onError: () => {
       toast.error('Failed to check domain availability')
     },

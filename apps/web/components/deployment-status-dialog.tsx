@@ -239,7 +239,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
         </div>
 
         {/* Custom Domain */}
-        {projectId && isLive && (
+        {projectId && (
           <div className="border-b">
             <DomainSearchPanel projectId={projectId} />
           </div>
