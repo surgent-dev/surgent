@@ -103,6 +103,14 @@ export const config = {
   autumn: {
     secretKey: env.AUTUMN_SECRET_KEY,
   },
+  domainProvider: (env.DOMAIN_PROVIDER || 'entri') as 'entri' | 'namecheap',
+  namecheap: {
+    apiUser: env.NAMECHEAP_API_USER || '',
+    apiKey: env.NAMECHEAP_API_KEY || '',
+    userName: env.NAMECHEAP_USERNAME || '',
+    clientIp: env.NAMECHEAP_CLIENT_IP || '',
+    sandbox: env.NAMECHEAP_SANDBOX !== 'false',
+  },
   entri: {
     applicationId: env.ENTRI_APP_ID,
     secret: env.ENTRI_SECRET,

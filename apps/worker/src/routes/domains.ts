@@ -5,6 +5,7 @@ import { requireAuth } from '@/middleware/auth'
 import { db } from '@/lib/db'
 import { entriClient } from '@/lib/entri/client'
 import { generateEntriToken } from '@/lib/entri/jwt'
+import { getDomainProvider, expandDomainQuery } from '@/lib/domains'
 import { config } from '@/lib/config'
 import { HttpError } from '@/lib/errors'
 import { createLogger } from '@/lib/logger'
@@ -20,7 +21,8 @@ domains.use('/*', requireAuth)
 
 /**
  * POST /api/domains/check-availability
- * Check if a domain is available for purchase via Entri
+ * Check if a domain is available for purchase.
+ * Uses the configured domain provider (entri or namecheap).
  */
 domains.post(
   '/check-availability',
@@ -32,8 +34,20 @@ domains.post(
   ),
   async (c) => {
     const { domain } = c.req.valid('json')
-    const result = await entriClient.checkAvailability(domain)
-    return c.json(result)
+    const provider = getDomainProvider()
+
+    // Namecheap can check multiple TLDs at once via expandDomainQuery;
+    // Entri expects a single FQDN (the frontend already appends the TLD).
+    if (provider.name === 'namecheap' && !domain.includes('.')) {
+      const domains = expandDomainQuery(domain)
+      const results = await provider.checkAvailability(domains)
+      return c.json(results)
+    }
+
+    const results = await provider.checkAvailability([domain])
+    // For backwards-compat with the frontend, return the single result directly
+    // when checking a single domain (Entri path).
+    return c.json(results[0])
   },
 )
 
