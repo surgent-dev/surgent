@@ -844,11 +844,13 @@ projects.post(
         return c.json({ error: 'Forbidden' }, 403)
       }
 
-      const access = await auth.api.check({
-        body: { featureId: 'projects' },
-        headers: c.req.raw.headers,
-      })
-      if (!access?.allowed) {
+      const access = await auth.api
+        .check({
+          body: { featureId: 'projects' },
+          headers: c.req.raw.headers,
+        })
+        .catch(() => null)
+      if (access && !access.allowed) {
         return c.json(
           { error: 'Project limit reached. Please upgrade your plan to create more projects.' },
           402,
