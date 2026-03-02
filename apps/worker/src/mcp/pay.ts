@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import {
   requiredId,
   hashApiKey,
+  normalizeSlug,
   getProductsWithPrices,
   resolveActiveAccountId,
 } from '@/lib/pay/utils'
@@ -136,6 +137,155 @@ REQUIRES _meta.context with apiKey (project-scoped API key).`,
         })
 
         return ok({ products: result, env })
+      } catch (e) {
+        return err(errMsg(e))
+      }
+    },
+  )
+
+  server.registerTool(
+    'create_product_with_price',
+    {
+      title: 'Create Product with Price',
+      description: `Create a new product and its price in a single step.
+
+Use this to set up a purchasable item. Creates both the product record and an initial price.
+
+Input:
+- name: Product display name
+- slug: URL-friendly identifier (must be unique per project)
+- description: Optional product description
+- price: Amount in minor units (cents). 999 = $9.99
+- priceCurrency: 3-letter ISO code (default "usd")
+- recurringInterval: "week", "month", or "year" for subscriptions. Omit for one-time.
+
+Returns:
+- product: { productId, productGroup, slug }
+- price: { priceId, priceAmount, priceCurrency, recurringInterval }
+
+REQUIRES _meta.context with apiKey (project-scoped API key).`,
+      inputSchema: {
+        ...envSchema,
+        name: z.string().min(1).max(200).describe('Product name'),
+        slug: z.string().min(1).max(200).describe('URL-friendly slug for the product'),
+        description: z.string().max(2000).optional().describe('Product description'),
+        price: z
+          .number()
+          .int()
+          .positive()
+          .describe('Price amount in minor units (cents). e.g. 999 = $9.99'),
+        priceCurrency: z
+          .string()
+          .length(3)
+          .default('usd')
+          .describe('ISO currency code (e.g. "usd", "eur")'),
+        recurringInterval: z
+          .enum(['week', 'month', 'year'])
+          .optional()
+          .describe('Billing interval for subscriptions. Omit for one-time payments.'),
+      },
+    },
+    async (args, extra) => {
+      const ctx = getContext(extra)
+      if (!ctx?.apiKey) return err('Missing apiKey in context')
+
+      try {
+        const scope = await resolveProjectId(ctx.apiKey)
+        if (!scope) return err('Invalid API key')
+        const env = (args.env as PayEnv) || scope.env
+
+        const slug = normalizeSlug(args.slug)
+        if (!slug) return err('Invalid slug')
+
+        const accountId = await resolveActiveAccountId(scope.projectId, env)
+        if (!accountId) return err('No active payment account found. Connect one first.')
+
+        const existingSlug = await db
+          .selectFrom('product')
+          .select('id')
+          .where('projectId', '=', scope.projectId)
+          .where('env', '=', env)
+          .where('slug', '=', slug)
+          .executeTakeFirst()
+        if (existingSlug) return err('Product with this slug already exists in project')
+
+        const productGroup = slug
+
+        const result = await db.transaction().execute(async (trx) => {
+          const versions = await trx
+            .selectFrom('product')
+            .select('version')
+            .where('projectId', '=', scope.projectId)
+            .where('env', '=', env)
+            .where('productGroup', '=', productGroup)
+            .forUpdate()
+            .execute()
+          const version = versions.reduce((max, r) => Math.max(max, r.version || 0), 0) + 1
+          const now = new Date()
+
+          const insertedProduct = await trx
+            .insertInto('product')
+            .values({
+              productGroup,
+              projectId: scope.projectId,
+              accountId,
+              name: args.name,
+              description: args.description || null,
+              slug,
+              version,
+              isDefault: false,
+              isArchived: false,
+              processor: 'whop',
+              env,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow()
+
+          const productId = requiredId(insertedProduct.id, 'product')
+
+          const insertedPrice = await trx
+            .insertInto('product_price')
+            .values({
+              productId,
+              name: args.name,
+              description: args.description || null,
+              slug: null,
+              priceAmount: args.price,
+              priceCurrency: args.priceCurrency.toLowerCase(),
+              recurringInterval: args.recurringInterval || null,
+              isDefault: true,
+              processor: 'whop',
+              createdAt: now,
+              updatedAt: now,
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow()
+
+          return {
+            productId,
+            productGroup,
+            slug,
+            version,
+            priceId: requiredId(insertedPrice.id, 'product price'),
+          }
+        })
+
+        return ok({
+          message: 'Product and price created successfully',
+          product: {
+            productId: result.productId,
+            productGroup: result.productGroup,
+            slug: result.slug,
+          },
+          price: {
+            priceId: result.priceId,
+            priceAmount: args.price,
+            priceCurrency: args.priceCurrency.toLowerCase(),
+            recurringInterval: args.recurringInterval || null,
+          },
+        })
       } catch (e) {
         return err(errMsg(e))
       }

@@ -570,23 +570,27 @@ pay.post(
     const userId = auth.userId
     const now = new Date()
 
-    // Check if user already has an active account for this env
-    const existing = await db
+    const existingAccounts = await db
       .selectFrom('pay_account')
       .selectAll()
       .where('userId', '=', userId)
-      .where('env', '=', auth.env)
       .where('status', '!=', 'disconnected')
-      .executeTakeFirst()
+      .execute()
 
-    if (existing) {
+    const existing = {
+      test: existingAccounts.find((a) => a.env === 'test'),
+      live: existingAccounts.find((a) => a.env === 'live'),
+    }
+
+    if (existing.test && existing.live) {
+      const account = existing[auth.env]!
       return c.json({
-        accountId: requiredId(existing.id, 'account'),
-        processorAccountId: existing.whopCompanyId,
-        status: normalizeAccountStatus(existing.status),
-        id: existing.id,
-        companyId: existing.whopCompanyId,
-        title: existing.title,
+        accountId: requiredId(account.id, 'account'),
+        processorAccountId: account.whopCompanyId,
+        status: normalizeAccountStatus(account.status),
+        id: account.id,
+        companyId: account.whopCompanyId,
+        title: account.title,
       })
     }
 
@@ -613,53 +617,72 @@ pay.post(
       })
     }
 
-    // Create new Whop company and account
     const companyTitle = body.title || body.companyName
     if (!companyTitle) return c.json({ error: 'title or companyName is required' }, 400)
 
     const projectId = body.projectId || query.projectId || auth.projectId
-    const client = getClient(auth.env)
-    const company = await client.createCompany({
-      title: companyTitle,
-      email: body.email,
-      metadata: {
-        internal_user_id: userId,
-        project_id: projectId || null,
-        country: (body.country || 'us').toLowerCase(),
-        business_type: body.businessType || null,
-      },
-    })
+    const companyMeta = {
+      internal_user_id: userId,
+      project_id: projectId || null,
+      country: (body.country || 'us').toLowerCase(),
+      business_type: body.businessType || null,
+    }
+
+    const [testCompany, liveCompany] = await Promise.all([
+      existing.test
+        ? null
+        : getClient('test').createCompany({
+            title: companyTitle,
+            email: body.email,
+            metadata: companyMeta,
+          }),
+      existing.live
+        ? null
+        : getClient('live').createCompany({
+            title: companyTitle,
+            email: body.email,
+            metadata: companyMeta,
+          }),
+    ])
 
     const accountMeta = {
       email: body.email || null,
-      title: company.title,
+      title: companyTitle,
       country: (body.country || 'us').toLowerCase(),
       businessType: body.businessType || null,
     }
 
-    // Disconnect any previous account for this user+env before inserting
-    await db
-      .updateTable('pay_account')
-      .set({ status: 'disconnected', updatedAt: now })
-      .where('userId', '=', userId)
-      .where('env', '=', auth.env)
-      .where('status', '!=', 'disconnected')
-      .execute()
+    const makeRow = (company: NonNullable<typeof testCompany>, env: 'test' | 'live') => ({
+      userId,
+      whopCompanyId: company.id,
+      title: company.title,
+      status: 'connected' as const,
+      metadata: accountMeta,
+      env,
+      createdAt: now,
+      updatedAt: now,
+    })
 
-    const account = await db
-      .insertInto('pay_account')
-      .values({
-        userId,
-        whopCompanyId: company.id,
-        title: company.title,
-        status: 'connected',
-        metadata: accountMeta,
-        env: auth.env,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow()
+    const inserted = await db.transaction().execute(async (trx) => {
+      const inserts = [
+        testCompany &&
+          trx
+            .insertInto('pay_account')
+            .values(makeRow(testCompany, 'test'))
+            .returningAll()
+            .executeTakeFirstOrThrow(),
+        liveCompany &&
+          trx
+            .insertInto('pay_account')
+            .values(makeRow(liveCompany, 'live'))
+            .returningAll()
+            .executeTakeFirstOrThrow(),
+      ].filter(Boolean)
+      const rows = await Promise.all(inserts)
+      return { test: rows.find((r) => r.env === 'test'), live: rows.find((r) => r.env === 'live') }
+    })
+
+    const account = (existing[auth.env] ?? inserted[auth.env])!
 
     return c.json({
       accountId: requiredId(account.id, 'account'),

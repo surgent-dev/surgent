@@ -3,10 +3,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Tag, UploadSimple, X, CircleNotch, Image as ImageIcon } from '@phosphor-icons/react'
 import { toast } from 'react-hot-toast'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { useCreateProduct, useCreatePrice } from '@/queries/products'
+import { payHttpLive } from '@/lib/http'
+import { authClient } from '@/lib/auth-client'
 import { useUpsertProjectListing } from '@/queries/marketplace'
 import { uploadFile, fileToDataUrl } from '@/lib/upload'
 
@@ -68,17 +70,49 @@ export default function SellDialog({
   const [imageCleared, setImageCleared] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const createProduct = useCreateProduct(projectId)
-  const createPrice = useCreatePrice(projectId)
   const upsertListing = useUpsertProjectListing()
+  const queryClient = useQueryClient()
 
-  const isSubmitting = createProduct.isPending || createPrice.isPending || upsertListing.isPending
+  const { data: liveAccounts } = useQuery({
+    queryKey: ['surpay-accounts', 'live'],
+    queryFn: () => payHttpLive.get('accounts').json<{ id: string }[]>(),
+    enabled: open,
+    staleTime: 30_000,
+  })
+  const hasLiveAccount = (liveAccounts?.length ?? 0) > 0
+
+  const [companyName, setCompanyName] = useState('')
+  const [connecting, setConnecting] = useState(false)
+
+  const handleConnect = async () => {
+    if (!companyName.trim()) return
+    setConnecting(true)
+    try {
+      const { data } = await authClient.getSession()
+      await payHttpLive
+        .post('accounts/connect/whop', {
+          json: { email: data?.user?.email, title: companyName.trim(), country: 'us' },
+        })
+        .json()
+      queryClient.invalidateQueries({ queryKey: ['surpay-accounts'] })
+      toast.success('Payment account connected', { position: 'top-right' })
+      setCompanyName('')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to connect', {
+        position: 'top-right',
+      })
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  const [submitting, setSubmitting] = useState(false)
   const hasPaidPrice = listingType === 'paid' && price && parseFloat(price) > 0
   const canSubmit =
     name.trim() &&
-    !isSubmitting &&
+    !submitting &&
     !uploading &&
-    (listingType === 'free' || (price && parseFloat(price) > 0))
+    (listingType === 'free' || (price && parseFloat(price) > 0 && hasLiveAccount))
 
   const currencySymbol = currencies.find((c) => c.value === currency)?.symbol || '$'
 
@@ -99,6 +133,7 @@ export default function SellDialog({
     setImagePreview(null)
     setImageUrl(null)
     setImageCleared(false)
+    setCompanyName('')
   }
 
   const handleImage = useCallback(async (file: File) => {
@@ -130,23 +165,31 @@ export default function SellDialog({
     const trimmedName = name.trim()
     const trimmedDesc = description.trim() || `${trimmedName} — built on Surgent`
 
+    setSubmitting(true)
     try {
       let productId: string | undefined
       let priceId: string | undefined
 
       if (hasPaidPrice) {
         const slug = nameToSlug(trimmedName)
-        const product = await createProduct.mutateAsync({
-          productGroup: slug,
-          name: trimmedName,
-          slug,
-          description: trimmedDesc,
-        })
-        const priceResult = await createPrice.mutateAsync({
-          productGroup: product.productGroup,
-          price: Math.round(parseFloat(price) * 100),
-          priceCurrency: currency,
-        })
+        const product = await payHttpLive
+          .post('product', {
+            searchParams: { projectId },
+            json: { productGroup: slug, name: trimmedName, slug, description: trimmedDesc },
+          })
+          .json<{ productId: string; productGroup: string }>()
+
+        const priceResult = await payHttpLive
+          .post('product/price', {
+            searchParams: { projectId },
+            json: {
+              productGroup: product.productGroup,
+              price: Math.round(parseFloat(price) * 100),
+              priceCurrency: currency,
+            },
+          })
+          .json<{ productPriceId: string }>()
+
         productId = product.productId
         priceId = priceResult.productPriceId
       }
@@ -169,6 +212,8 @@ export default function SellDialog({
       toast.error(err instanceof Error ? err.message : 'Failed to create listing', {
         position: 'top-right',
       })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -334,7 +379,29 @@ export default function SellDialog({
                   </button>
                 </div>
 
-                {listingType === 'paid' && (
+                {listingType === 'paid' && !hasLiveAccount && (
+                  <div className="flex gap-2">
+                    <input
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      placeholder="Company name"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && companyName.trim()) handleConnect()
+                      }}
+                      className={field}
+                    />
+                    <Button
+                      size="sm"
+                      className="h-10 px-4 shrink-0"
+                      disabled={!companyName.trim() || connecting}
+                      onClick={handleConnect}
+                    >
+                      {connecting ? <CircleNotch className="size-3.5 animate-spin" /> : 'Connect'}
+                    </Button>
+                  </div>
+                )}
+
+                {listingType === 'paid' && hasLiveAccount && (
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
@@ -368,7 +435,9 @@ export default function SellDialog({
                 <p className="text-[11px] text-muted-foreground/50">
                   {listingType === 'free'
                     ? 'Anyone can access your project for free.'
-                    : 'Buyers pay once to get access to your project.'}
+                    : !hasLiveAccount
+                      ? 'Create a payment account to start selling.'
+                      : 'Buyers pay once to get access to your project.'}
                 </p>
               </div>
             </div>
@@ -384,7 +453,7 @@ export default function SellDialog({
                 Cancel
               </Button>
               <Button className="flex-1 h-9" disabled={!canSubmit} onClick={handleSubmit}>
-                {isSubmitting ? (
+                {submitting ? (
                   <CircleNotch className="size-4 animate-spin" />
                 ) : listingType === 'paid' ? (
                   'List for sale'
