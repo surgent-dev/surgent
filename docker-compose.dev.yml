@@ -31,5 +31,17 @@ services:
       timeout: 5s
       retries: 5
 
+  inngest:
+    image: inngest/inngest:latest
+    container_name: inngest-dev
+    restart: unless-stopped
+    ports:
+      - '8288:8288'
+    environment:
+      INNGEST_EVENT_KEY: local
+      INNGEST_SIGNING_KEY: local
+      INNGEST_LOG_LEVEL: info
+    command: inngest dev -u http://host.docker.internal:4000/api/inngest --no-discovery
+
 volumes:
   postgres_data:
