@@ -45,6 +45,7 @@ import {
   useLatestDeploymentQuery,
   useHostnameAvailability,
 } from '@/queries/projects'
+import { useProjectDomains } from '@/queries/domains'
 import { http } from '@/lib/http'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
@@ -119,6 +120,15 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   useGitHubStatus(projectId, { enabled: isGitHubDialogOpen })
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
   const updateVisibility = useUpdateProjectVisibility()
+  const { data: domainsData } = useProjectDomains(projectId)
+
+  // Domain states
+  const activeDomain = domainsData?.domains?.find(
+    (d) => d.status === 'active' || d.status === 'dns_configuring',
+  )
+  const pendingDomain = domainsData?.domains?.find(
+    (d) => d.status === 'pending' || d.status === 'purchasing',
+  )
 
   // Toast when deployment completes
   const prevStatusRef = useRef<string | null>(null)
@@ -594,6 +604,68 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     </p>
                   )}
               </div>
+
+              {/* Custom Domain */}
+              {workerName && (
+                <div className="border-t px-3 py-2.5">
+                  {activeDomain ? (
+                    <div className="flex items-center gap-2">
+                      <Globe
+                        className="size-3.5 text-muted-foreground/70 shrink-0"
+                        weight="duotone"
+                      />
+                      <span
+                        className={`size-1.5 rounded-full shrink-0 ${activeDomain.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}
+                      />
+                      <span className="font-mono text-xs truncate flex-1">
+                        {activeDomain.domainName}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {activeDomain.status === 'active' ? 'Live' : 'Configuring'}
+                      </span>
+                      {activeDomain.status === 'active' && (
+                        <a
+                          href={`https://${activeDomain.domainName}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={iconBtn}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ArrowSquareOut className="size-3.5 text-muted-foreground" />
+                        </a>
+                      )}
+                    </div>
+                  ) : pendingDomain ? (
+                    <div className="flex items-center gap-2">
+                      <Globe
+                        className="size-3.5 text-muted-foreground/70 shrink-0"
+                        weight="duotone"
+                      />
+                      <CircleNotch className="size-3 animate-spin text-muted-foreground shrink-0" />
+                      <span className="font-mono text-xs truncate flex-1">
+                        {pendingDomain.domainName}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {pendingDomain.status === 'purchasing' ? 'Purchasing' : 'Pending'}
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      className="flex items-center gap-2 w-full text-left hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        setIsPublishOpen(false)
+                        setIsDeploymentStatusOpen(true)
+                      }}
+                    >
+                      <Globe
+                        className="size-3.5 text-muted-foreground/70 shrink-0"
+                        weight="duotone"
+                      />
+                      <span className="text-xs text-muted-foreground">Add custom domain</span>
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Visibility */}
               <div className="border-t px-3 py-2.5">
