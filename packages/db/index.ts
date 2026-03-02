@@ -20,4 +20,7 @@ export type {
   DeploymentTable,
   ListingTable,
   EnvDestination,
+  DomainTable,
+  DomainStatus,
+  DomainWebhookEventTable,
 } from './src/types'

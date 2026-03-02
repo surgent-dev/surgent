@@ -1,6 +1,7 @@
 import './globals.css'
 import Providers from '@/components/providers'
 import { Inter, JetBrains_Mono, Instrument_Serif } from 'next/font/google'
+import Script from 'next/script'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata = {
@@ -45,6 +46,7 @@ export default function RootLayout({
       >
         <Providers>{children}</Providers>
         <Toaster position="top-right" />
+        <Script src="https://cdn.goentri.com/entri.js" strategy="lazyOnload" />
       </body>
     </html>
   )

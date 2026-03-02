@@ -103,6 +103,13 @@ export const config = {
   autumn: {
     secretKey: env.AUTUMN_SECRET_KEY,
   },
+  entri: {
+    applicationId: env.ENTRI_APP_ID,
+    secret: env.ENTRI_SECRET,
+    apiKey: env.ENTRI_API_KEY,
+    webhookSecret: env.ENTRI_WEBHOOK_SECRET,
+    devMode: env.ENTRI_DEV_MODE === 'true' || (!env.ENTRI_API_KEY && env.NODE_ENV !== 'production'),
+  },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
     baseUrl: env.OPENCODE_BASE_URL,
