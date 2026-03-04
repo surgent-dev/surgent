@@ -1,33 +1,38 @@
 import { config } from '../config'
+import { createLogger } from '../logger'
 
-export async function generateEntriToken(userId: string): Promise<string> {
+const log = createLogger('entri')
+
+/**
+ * Fetch a JWT from the Entri API.
+ * Docs: https://developers.entri.com/docs/install
+ */
+export async function generateEntriToken(_userId: string): Promise<string> {
+  const applicationId = config.entri.applicationId
   const secret = config.entri.secret
-  if (!secret) throw new Error('ENTRI_SECRET not configured')
 
-  const header = { alg: 'HS256', typ: 'JWT' }
-  const now = Math.floor(Date.now() / 1000)
-  const payload = {
-    applicationId: config.entri.applicationId,
-    userId,
-    iat: now,
-    exp: now + 3600, // 1 hour
+  if (!applicationId || !secret) {
+    throw new Error('ENTRI_APP_ID and ENTRI_SECRET must be configured')
   }
 
-  const encode = (obj: unknown) => Buffer.from(JSON.stringify(obj)).toString('base64url')
+  const res = await fetch('https://api.goentri.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ applicationId, secret }),
+    signal: AbortSignal.timeout(15_000),
+  })
 
-  const headerB64 = encode(header)
-  const payloadB64 = encode(payload)
-  const data = `${headerB64}.${payloadB64}`
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    log.error({ status: res.status, body: text }, 'failed to fetch Entri token')
+    throw new Error(`Failed to fetch Entri token: ${res.status}`)
+  }
 
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data))
-  const sigB64 = Buffer.from(sig).toString('base64url')
+  const data = (await res.json()) as { auth_token: string }
 
-  return `${data}.${sigB64}`
+  if (!data.auth_token) {
+    throw new Error('Entri API did not return an auth_token')
+  }
+
+  return data.auth_token
 }

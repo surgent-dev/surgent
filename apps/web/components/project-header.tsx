@@ -25,6 +25,7 @@ import {
   CircleNotch,
   CheckCircle,
   XCircle,
+  Trash,
 } from '@phosphor-icons/react'
 import { useCustomer } from 'autumn-js/react'
 import { useCredits } from '@/hooks/use-credits'
@@ -45,7 +46,7 @@ import {
   useLatestDeploymentQuery,
   useHostnameAvailability,
 } from '@/queries/projects'
-import { useProjectDomains } from '@/queries/domains'
+import { useProjectDomains, useRemoveDomain } from '@/queries/domains'
 import { http } from '@/lib/http'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
@@ -121,14 +122,17 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
   const updateVisibility = useUpdateProjectVisibility()
   const { data: domainsData } = useProjectDomains(projectId)
+  const removeDomain = useRemoveDomain()
 
   // Domain states
-  const activeDomain = domainsData?.domains?.find(
-    (d) => d.status === 'active' || d.status === 'dns_configuring',
-  )
+  const activeDomain = domainsData?.domains?.find((d) => d.status === 'active')
+  const configuringDomain = domainsData?.domains?.find((d) => d.status === 'dns_configuring')
   const pendingDomain = domainsData?.domains?.find(
     (d) => d.status === 'pending' || d.status === 'purchasing',
   )
+  const errorDomain = domainsData?.domains?.find((d) => d.status === 'error')
+  // For display: pick the most relevant domain to show
+  const displayDomain = activeDomain || configuringDomain || pendingDomain || errorDomain
 
   // Toast when deployment completes
   const prevStatusRef = useRef<string | null>(null)
@@ -616,40 +620,72 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                         className="size-3.5 text-muted-foreground/70 shrink-0"
                         weight="duotone"
                       />
-                      <span
-                        className={`size-1.5 rounded-full shrink-0 ${activeDomain.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}
-                      />
+                      <span className="size-1.5 rounded-full shrink-0 bg-emerald-500" />
                       <span className="font-mono text-xs truncate flex-1">
                         {activeDomain.domainName}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {activeDomain.status === 'active' ? 'Live' : 'Configuring'}
-                      </span>
-                      {activeDomain.status === 'active' && (
-                        <a
-                          href={`https://${activeDomain.domainName}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={iconBtn}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <ArrowSquareOut className="size-3.5 text-muted-foreground" />
-                        </a>
-                      )}
+                      <span className="text-[10px] text-emerald-600">Live</span>
+                      <a
+                        href={`https://${activeDomain.domainName}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={iconBtn}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ArrowSquareOut className="size-3.5 text-muted-foreground" />
+                      </a>
                     </div>
-                  ) : pendingDomain ? (
+                  ) : displayDomain ? (
                     <div className="flex items-center gap-2">
                       <Globe
                         className="size-3.5 text-muted-foreground/70 shrink-0"
                         weight="duotone"
                       />
-                      <CircleNotch className="size-3 animate-spin text-muted-foreground shrink-0" />
-                      <span className="font-mono text-xs truncate flex-1">
-                        {pendingDomain.domainName}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {pendingDomain.status === 'purchasing' ? 'Purchasing' : 'Pending'}
-                      </span>
+                      {displayDomain.status === 'error' ? (
+                        <>
+                          <span className="size-1.5 rounded-full shrink-0 bg-red-500" />
+                          <span className="font-mono text-xs truncate flex-1">
+                            {displayDomain.domainName}
+                          </span>
+                          <span className="text-[10px] text-red-500">Failed</span>
+                        </>
+                      ) : displayDomain.status === 'dns_configuring' ? (
+                        <>
+                          <span className="size-1.5 rounded-full shrink-0 bg-amber-500 animate-pulse" />
+                          <span className="font-mono text-xs truncate flex-1">
+                            {displayDomain.domainName}
+                          </span>
+                          <span className="text-[10px] text-amber-600">Configuring</span>
+                        </>
+                      ) : (
+                        <>
+                          <CircleNotch className="size-3 animate-spin text-muted-foreground shrink-0" />
+                          <span className="font-mono text-xs truncate flex-1">
+                            {displayDomain.domainName === 'pending'
+                              ? 'Processing...'
+                              : displayDomain.domainName}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {displayDomain.status === 'purchasing' ? 'Purchasing' : 'Pending'}
+                          </span>
+                        </>
+                      )}
+                      <button
+                        className={`${iconBtn} hover:!text-destructive`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (displayDomain.projectId) {
+                            removeDomain.mutate({
+                              projectId: displayDomain.projectId,
+                              domainId: displayDomain.id,
+                            })
+                          }
+                        }}
+                        disabled={removeDomain.isPending}
+                        title="Remove domain"
+                      >
+                        <Trash className="size-3.5" />
+                      </button>
                     </div>
                   ) : (
                     <button

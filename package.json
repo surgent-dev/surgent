@@ -44,6 +44,7 @@
     "@opencode-ai/sdk": "0.15.31",
     "ai": "5.0.97",
     "convex": "1.31.6",
+    "entrijs": "1.0.0",
     "monaco-themes": "0.4.8"
   },
   "prettier": {

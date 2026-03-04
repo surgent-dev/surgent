@@ -20,21 +20,20 @@ export { expandDomainQuery } from './namecheap'
 
 let cached: DomainProvider | null = null
 
-export function getDomainProvider(): DomainProvider {
+export async function getDomainProvider(): Promise<DomainProvider> {
   if (cached) return cached
 
   const provider = config.domainProvider
 
   switch (provider) {
     case 'namecheap': {
-      const { NamecheapProvider } = require('./namecheap') as typeof import('./namecheap')
+      const { NamecheapProvider } = await import('./namecheap')
       cached = new NamecheapProvider()
       break
     }
     case 'entri':
     default: {
-      // Wrap the existing EntriClient in a DomainProvider-compatible adapter
-      const { EntriDomainProvider } = require('./entri-adapter') as typeof import('./entri-adapter')
+      const { EntriDomainProvider } = await import('./entri-adapter')
       cached = new EntriDomainProvider()
       break
     }

@@ -22,6 +22,15 @@ interface EntriPurchaseConfig {
   contact: { email: string; firstName: string; lastName: string }
 }
 
+export interface EntriConnectConfig {
+  token: string
+  applicationId: string
+  dnsRecords: Array<{ type: string; host: string; value: string; ttl: number }>
+  domainId: string
+  prefilledDomain: string
+  userId: string
+}
+
 export interface Domain {
   id: string
   projectId: string | null
@@ -35,12 +44,14 @@ export interface Domain {
 
 // Hooks
 
-export function useProjectDomains(projectId?: string) {
+export function useProjectDomains(projectId?: string, fastPoll?: boolean) {
   return useQuery({
     queryKey: ['domains', projectId],
     queryFn: () => http.get(`api/domains/${projectId}`).json<{ domains: Domain[] }>(),
     enabled: Boolean(projectId),
     refetchInterval: (query) => {
+      // Fast poll after purchase/connect attempt (waiting for webhook to create record)
+      if (fastPoll) return 2000
       const domains = query.state.data?.domains
       const hasPending = domains?.some((d) =>
         ['pending', 'purchasing', 'dns_configuring'].includes(d.status),
@@ -68,6 +79,30 @@ export function useInitDomainPurchase() {
       http.post('api/domains/init-purchase', { json: params }).json<EntriPurchaseConfig>(),
     onError: () => {
       toast.error('Failed to initialize domain purchase')
+    },
+  })
+}
+
+export function useInitDomainConnect() {
+  return useMutation({
+    mutationFn: (params: { projectId: string; domain: string }) =>
+      http.post('api/domains/init-connect', { json: params }).json<EntriConnectConfig>(),
+    onError: () => {
+      toast.error('Failed to initialize domain connection')
+    },
+  })
+}
+
+export function useRetryDomainConnect() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: { projectId: string; domainId: string }) =>
+      http.post('api/domains/retry-connect', { json: params }).json<EntriConnectConfig>(),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['domains', vars.projectId] })
+    },
+    onError: () => {
+      toast.error('Failed to retry domain connection')
     },
   })
 }
