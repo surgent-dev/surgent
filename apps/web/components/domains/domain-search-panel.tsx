@@ -12,7 +12,7 @@ import {
   Warning,
 } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
-import { showEntri, purchaseDomain } from 'entrijs'
+import { showEntri, purchaseDomain, type EntriConfig } from 'entrijs'
 import {
   useInitDomainPurchase,
   useInitDomainConnect,
@@ -98,14 +98,14 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
     try {
       const config = await initPurchase.mutateAsync({ projectId })
 
-      if ((config as any).provider === 'namecheap') {
-        onPurchased(projectId, (config as any).domainName || '')
+      if ('provider' in config && config.provider === 'namecheap') {
+        onPurchased(projectId, 'domainName' in config ? String(config.domainName) : '')
         return
       }
 
       if (config.devMode) return
 
-      await purchaseDomain({
+      const sellConfig: EntriConfig & { debugMode?: boolean } = {
         applicationId: config.applicationId,
         token: config.token,
         dnsRecords: config.dnsRecords,
@@ -116,7 +116,8 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
           sell: { contact: config.contact },
           theme: { primary: '#6366f1', onPrimary: '#ffffff' },
         },
-      } as any)
+      }
+      await purchaseDomain(sellConfig)
 
       startAwaitingWebhook()
     } finally {

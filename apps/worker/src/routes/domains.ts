@@ -484,7 +484,8 @@ domains.delete('/:projectId/:domainId', async (c) => {
     .where('userId', '=', user.id)
     .executeTakeFirst()
 
-  if (!domain) throw new HttpError(404, 'Domain not found')
+  // Already deleted (duplicate request) — return success idempotently
+  if (!domain) return c.json({ deleted: true })
 
   // Disconnect from Cloudflare (custom hostname + KV mapping)
   await disconnectCustomDomain(domain.domainName, domain.cfCustomDomainId)
@@ -554,7 +555,7 @@ export const domainWebhooks = new Hono<AppContext>()
  * POST /api/domains/webhooks/entri
  * Receives domain purchase/DNS events from Entri
  */
-domainWebhooks.post('/webhooks/entri', async (c) => {
+domainWebhooks.post('/webhooks/:provider', async (c) => {
   const body = await c.req.text()
   const signature = c.req.header('x-entri-signature') || ''
   const webhookSecret = config.entri.webhookSecret

@@ -30,7 +30,13 @@ export async function generateEntriToken(_userId: string): Promise<string> {
 
   const data = (await res.json()) as { auth_token: string }
 
+  log.info(
+    { applicationId, hasToken: !!data.auth_token, tokenPreview: data.auth_token?.slice(0, 20) },
+    'Entri token response',
+  )
+
   if (!data.auth_token) {
+    log.error({ data }, 'Entri API did not return an auth_token')
     throw new Error('Entri API did not return an auth_token')
   }
 
