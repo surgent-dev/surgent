@@ -3,6 +3,7 @@ import { type Kysely, sql } from 'kysely'
 export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable('domain')
+    .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('projectId', 'uuid', (col) => col.references('project.id').onDelete('set null'))
     .addColumn('userId', 'uuid', (col) => col.references('user.id').onDelete('cascade').notNull())
@@ -18,19 +19,17 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('updatedAt', 'timestamptz', (col) => col.defaultTo(sql`now()`).notNull())
     .execute()
 
-  await db.schema.createIndex('domain_project_id_idx').on('domain').column('projectId').execute()
+  await sql`CREATE INDEX IF NOT EXISTS domain_project_id_idx ON domain ("projectId")`.execute(db)
 
-  await db.schema.createIndex('domain_user_id_idx').on('domain').column('userId').execute()
+  await sql`CREATE INDEX IF NOT EXISTS domain_user_id_idx ON domain ("userId")`.execute(db)
 
-  await db.schema
-    .createIndex('domain_domain_name_unique')
-    .on('domain')
-    .column('domainName')
-    .unique()
-    .execute()
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS domain_domain_name_unique ON domain ("domainName")`.execute(
+    db,
+  )
 
   await db.schema
     .createTable('domain_webhook_event')
+    .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('entriEventId', 'varchar(255)')
     .addColumn('eventType', 'varchar(100)', (col) => col.notNull())
@@ -42,11 +41,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('processedAt', 'timestamptz')
     .execute()
 
-  await db.schema
-    .createIndex('domain_webhook_event_status_idx')
-    .on('domain_webhook_event')
-    .columns(['status', 'createdAt'])
-    .execute()
+  await sql`CREATE INDEX IF NOT EXISTS domain_webhook_event_status_idx ON domain_webhook_event (status, "createdAt")`.execute(
+    db,
+  )
 }
 
 export async function down(db: Kysely<any>): Promise<void> {

@@ -9,11 +9,13 @@ import {
   ShoppingCart,
   ArrowClockwise,
   Warning,
+  Link,
 } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { showEntri, purchaseDomain, type EntriConfig } from 'entrijs'
 import {
   useInitDomainPurchase,
+  useInitDomainConnect,
   useRetryDomainConnect,
   useProjectDomains,
   useOnDomainPurchased,
@@ -59,7 +61,10 @@ interface DomainSearchPanelProps {
 }
 
 export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
+  const [mode, setMode] = useState<'buy' | 'connect'>('buy')
   const [launching, setLaunching] = useState(false)
+  const [connecting, setConnecting] = useState(false)
+  const [connectInput, setConnectInput] = useState('')
   const [retrying, setRetrying] = useState(false)
   const [awaitingWebhook, setAwaitingWebhook] = useState(false)
   const awaitingTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -69,6 +74,7 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
     awaitingWebhook,
   )
   const initPurchase = useInitDomainPurchase()
+  const initConnect = useInitDomainConnect()
   const retryConnect = useRetryDomainConnect()
   const removeDomain = useRemoveDomain()
   const onPurchased = useOnDomainPurchased()
@@ -137,9 +143,7 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
         dnsRecords: config.dnsRecords,
         userId: config.contact.email,
         whiteLabel: {
-          hideEntriLogo: true,
           sell: { contact: config.contact },
-          theme: { primary: '#6366f1', onPrimary: '#ffffff' },
         },
       }
       await purchaseDomain(sellConfig)
@@ -149,6 +153,35 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
       setLaunching(false)
     }
   }, [projectId, initPurchase, startAwaitingWebhook, onPurchased])
+
+  // Launch Entri Connect modal for an existing domain
+  const handleConnect = useCallback(async () => {
+    if (!connectInput.trim()) return
+    setConnecting(true)
+    try {
+      const config = await initConnect.mutateAsync({
+        projectId,
+        domain: connectInput.trim(),
+      })
+
+      try {
+        await showEntri({
+          applicationId: config.applicationId,
+          token: config.token,
+          prefilledDomain: config.prefilledDomain,
+          dnsRecords: config.dnsRecords,
+          userId: config.userId,
+        })
+      } catch (entriErr) {
+        console.error('Entri Connect error:', entriErr)
+      }
+
+      startAwaitingWebhook()
+      setConnectInput('')
+    } finally {
+      setConnecting(false)
+    }
+  }, [projectId, connectInput, initConnect, startAwaitingWebhook])
 
   // Retry Entri Connect for stuck/error domain
   const handleRetryConnect = useCallback(
@@ -380,7 +413,7 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
     )
   }
 
-  // ─── No domain — show Buy domain ────────────────────────────
+  // ─── No domain — show Buy / Connect options ─────────────────
   return (
     <div className="px-5 py-4 space-y-3">
       <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider font-medium">
@@ -388,21 +421,79 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
         Add a Custom Domain
       </div>
 
-      <Button
-        className="w-full h-9"
-        onClick={handleBuyDomain}
-        disabled={launching || initPurchase.isPending}
-      >
-        {launching || initPurchase.isPending ? (
-          <Loader2 className="size-3.5 animate-spin mr-2" />
-        ) : (
-          <ShoppingCart className="size-3.5 mr-2" weight="bold" />
-        )}
-        Search & buy a domain
-      </Button>
-      <p className="text-[11px] text-muted-foreground/60">
-        Find and purchase a new domain. DNS will be configured automatically.
-      </p>
+      {/* Tab toggle */}
+      <div className="flex rounded-lg border bg-muted/50 p-0.5">
+        <button
+          type="button"
+          onClick={() => setMode('buy')}
+          className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
+            mode === 'buy'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Buy a domain
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('connect')}
+          className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
+            mode === 'connect'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Connect existing
+        </button>
+      </div>
+
+      {mode === 'buy' ? (
+        <>
+          <Button
+            className="w-full h-9"
+            onClick={handleBuyDomain}
+            disabled={launching || initPurchase.isPending}
+          >
+            {launching || initPurchase.isPending ? (
+              <Loader2 className="size-3.5 animate-spin mr-2" />
+            ) : (
+              <ShoppingCart className="size-3.5 mr-2" weight="bold" />
+            )}
+            Search & buy a domain
+          </Button>
+          <p className="text-[11px] text-muted-foreground/60">
+            Find and purchase a new domain. DNS will be configured automatically.
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={connectInput}
+              onChange={(e) => setConnectInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+              placeholder="e.g. myapp.com"
+              className="flex-1 h-9 px-3 rounded-md border bg-background text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+            />
+            <Button
+              className="h-9"
+              onClick={handleConnect}
+              disabled={connecting || initConnect.isPending || !connectInput.trim()}
+            >
+              {connecting || initConnect.isPending ? (
+                <Loader2 className="size-3.5 animate-spin mr-2" />
+              ) : (
+                <Link className="size-3.5 mr-2" weight="bold" />
+              )}
+              Connect
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground/60">
+            Enter a domain you already own. You&apos;ll be guided to configure DNS records.
+          </p>
+        </>
+      )}
     </div>
   )
 }

@@ -409,8 +409,10 @@ domains.get('/:projectId', async (c) => {
     .orderBy('createdAt', 'desc')
     .execute()
 
-  // Auto-connect: if any domain is stuck in dns_configuring and the project
-  // now has a deployed worker, wire it up to Cloudflare and mark it active.
+  // Auto-connect: if a domain has DNS verified (webhook confirmed propagation)
+  // but hasn't been wired to Cloudflare yet, connect it now.
+  // IMPORTANT: Only auto-connect when dnsVerified=true — we must not mark
+  // domains as "active" before DNS actually points to us.
   const configuringDomains = result.filter((d) => d.status === 'dns_configuring')
   if (configuringDomains.length > 0) {
     const worker = await db
@@ -421,7 +423,10 @@ domains.get('/:projectId', async (c) => {
 
     if (worker?.scriptName) {
       for (const d of configuringDomains) {
-        // Skip if already has a CF hostname (avoid duplicate calls on page refresh)
+        // Only auto-connect if DNS has been verified by a webhook
+        if (!d.dnsVerified) continue
+
+        // Skip if already fully connected
         if (d.cfCustomDomainId && d.kvMapped) continue
 
         // Throttle: skip if last update was <60s ago (prevents rapid re-attempts)
@@ -443,7 +448,6 @@ domains.get('/:projectId', async (c) => {
                 status: 'active',
                 cfCustomDomainId: result.customHostnameId,
                 kvMapped: true,
-                dnsVerified: true,
                 lastError: null,
                 updatedAt: new Date(),
               })

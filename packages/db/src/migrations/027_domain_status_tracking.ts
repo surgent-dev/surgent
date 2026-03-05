@@ -1,22 +1,16 @@
 import { type Kysely, sql } from 'kysely'
 
 export async function up(db: Kysely<any>): Promise<void> {
-  await db.schema
-    .alterTable('domain')
-    .addColumn('dnsVerified', 'boolean', (col) => col.defaultTo(false).notNull())
-    .execute()
-
-  await db.schema
-    .alterTable('domain')
-    .addColumn('kvMapped', 'boolean', (col) => col.defaultTo(false).notNull())
-    .execute()
-
-  await db.schema.alterTable('domain').addColumn('lastError', 'text').execute()
-
-  await db.schema
-    .alterTable('domain')
-    .addColumn('logs', 'jsonb', (col) => col.defaultTo(sql`'[]'::jsonb`).notNull())
-    .execute()
+  await sql`ALTER TABLE domain ADD COLUMN IF NOT EXISTS "dnsVerified" boolean NOT NULL DEFAULT false`.execute(
+    db,
+  )
+  await sql`ALTER TABLE domain ADD COLUMN IF NOT EXISTS "kvMapped" boolean NOT NULL DEFAULT false`.execute(
+    db,
+  )
+  await sql`ALTER TABLE domain ADD COLUMN IF NOT EXISTS "lastError" text`.execute(db)
+  await sql`ALTER TABLE domain ADD COLUMN IF NOT EXISTS logs jsonb NOT NULL DEFAULT '[]'::jsonb`.execute(
+    db,
+  )
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
