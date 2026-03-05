@@ -6,7 +6,7 @@ import {
   WebPreviewUrl,
   WebPreviewBody,
 } from '@/components/agent/web-preview'
-import { useEffect, useState, type ElementType } from 'react'
+import { useEffect, type ElementType } from 'react'
 import {
   X,
   Database,
@@ -31,19 +31,13 @@ import {
   type ConvexDashboardCredentials,
 } from '@/queries/projects'
 
-import {
-  useSurpayAccounts,
-  useSurpayDisconnect,
-  useWhopConnect,
-  type SurpayAccount,
-} from '@/queries/surpay'
-import { usePayEnv } from '@/stores/pay-env'
+import { useSurpayAccounts } from '@/queries/surpay'
 import { useSessionDiff } from '@/queries/chats'
 import { useSandbox } from '@/hooks/use-sandbox'
 
 import DiffView from '@/components/diff/diff-view'
-import { ProductsSection } from '@/components/payments/products-section'
-import { parseConnectError } from '@/components/payments/utils'
+import { PaymentsDashboard } from '@/components/payments/payments-dashboard'
+import { SettingsTab } from '@/components/project/settings-tab'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   DropdownMenu,
@@ -52,25 +46,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-
-import { toast } from 'react-hot-toast'
 import { cn } from '@/lib/utils'
-import { authClient } from '@/lib/auth-client'
 import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
 import { FunLoadingState } from '@/components/ui/fun-loading'
 import { PreviewErrorOverlay } from '@/components/agent/preview-error-overlay'
-import { EnvVarsContent } from '@/components/env-vars-content'
 
-export interface PreviewTab {
+export interface ProjectTab {
   id: string
   type: 'preview' | 'changes' | 'convex' | 'logs' | 'payments' | 'settings'
   title: string
@@ -82,7 +63,7 @@ export interface PreviewTab {
   convexEnvs?: ('development' | 'production')[]
 }
 
-const DEFAULT_TABS: PreviewTab[] = [{ id: 'preview', type: 'preview', title: 'Preview' }]
+const DEFAULT_TABS: ProjectTab[] = [{ id: 'preview', type: 'preview', title: 'Preview' }]
 
 function EmptyState({
   title,
@@ -104,35 +85,11 @@ function EmptyState({
   )
 }
 
-const formatStatus = (status: string) => status.replace(/[_-]/g, ' ')
-
-const getStatusTone = (status: string) => {
-  const value = status.toLowerCase()
-  if (['ready', 'running', 'connected', 'online', 'ok', 'healthy'].includes(value))
-    return 'text-success'
-  if (['warning', 'degraded'].includes(value)) return 'text-warning'
-  if (['error', 'failed', 'offline', 'disconnected', 'down'].includes(value))
-    return 'text-destructive'
-  return 'text-muted-foreground'
-}
-
-const getStatusDot = (status: string) => {
-  const value = status.toLowerCase()
-  if (['ready', 'running', 'connected', 'online', 'ok', 'healthy'].includes(value))
-    return 'bg-success'
-  if (['warning', 'degraded'].includes(value)) return 'bg-warning'
-  if (['error', 'failed', 'offline', 'disconnected', 'down'].includes(value))
-    return 'bg-destructive'
-  return 'bg-muted-foreground/40'
-}
-
-// Wrapper for backwards compatibility (ignores old props, uses fun loading)
 function LoadingState(_props: { icon?: typeof Database; message?: string }) {
   return <FunLoadingState />
 }
 
-// Navigation controls for the tab bar (only shown when preview is active)
-function PreviewNavControls() {
+function BrowserNavControls() {
   return (
     <div className="flex min-w-0 items-center gap-2 px-2">
       <WebPreviewNavButtons />
@@ -229,176 +186,6 @@ function LogsContent({
   )
 }
 
-function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: SurpayAccount }) {
-  const [companyName, setCompanyName] = useState('')
-  const whopConnect = useWhopConnect()
-  const env = usePayEnv((s) => s.env)
-  const isLive = env === 'live'
-
-  const handleReconnect = async () => {
-    if (!disconnectedAccount) return
-    try {
-      await whopConnect.mutateAsync({
-        accountId: disconnectedAccount.id,
-        data: {
-          email: disconnectedAccount.data.email || '',
-          title: disconnectedAccount.data.title || '',
-          country: disconnectedAccount.data.country || 'us',
-        },
-      })
-      toast.success('Payment account reconnected')
-    } catch (err: any) {
-      toast.error(parseConnectError(err, 'Failed to reconnect account'))
-    }
-  }
-
-  const handleCreate = async () => {
-    if (!companyName.trim()) return
-    let session
-    try {
-      session = await authClient.getSession()
-    } catch {
-      toast.error('Failed to get session')
-      return
-    }
-    const email = session.data?.user?.email
-    if (!email) {
-      toast.error('Unable to get user email')
-      return
-    }
-    try {
-      await whopConnect.mutateAsync({
-        data: { email, title: companyName.trim(), country: 'us' },
-      })
-      toast.success('Payment account created')
-      setCompanyName('')
-    } catch (err: any) {
-      toast.error(parseConnectError(err, 'Failed to create account'))
-    }
-  }
-
-  return (
-    <div className="w-full h-full flex items-center justify-center p-8">
-      <div className="flex flex-col items-center w-full max-w-[300px] text-center">
-        <div className="size-11 rounded-xl bg-[var(--brand)]/10 flex items-center justify-center mb-5">
-          <CircleDollarSign className="size-5 text-[var(--brand)]" strokeWidth={1.5} />
-        </div>
-
-        <p className="text-[15px] font-semibold mb-1">Payments</p>
-        <p className="text-[13px] text-muted-foreground leading-relaxed mb-6">
-          Accept payments and manage revenue from your AI agents.
-        </p>
-
-        {disconnectedAccount ? (
-          <button
-            type="button"
-            onClick={handleReconnect}
-            disabled={whopConnect.isPending}
-            className="flex items-center gap-3 w-full p-3 rounded-lg border hover:bg-muted/50 transition-colors disabled:opacity-50"
-          >
-            <div className="size-8 rounded-md border bg-muted/40 grid place-items-center shrink-0">
-              <CircleDollarSign className="size-5 text-muted-foreground" strokeWidth={1.5} />
-            </div>
-            <div className="text-left min-w-0 flex-1">
-              <div className="text-sm font-medium truncate">
-                {disconnectedAccount.data.title || 'Untitled'}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {whopConnect.isPending ? 'Reconnecting...' : 'Tap to reconnect'}
-              </div>
-            </div>
-            <span
-              className={cn(
-                'shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium',
-                isLive ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600',
-              )}
-            >
-              {isLive ? 'Live' : 'Sandbox'}
-            </span>
-          </button>
-        ) : (
-          <div className="w-full space-y-2.5">
-            <Input
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Company name"
-              className="h-9"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && companyName.trim()) handleCreate()
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleCreate}
-              disabled={!companyName.trim() || whopConnect.isPending}
-              className="w-full h-9 text-[13px] font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary-hover transition-all duration-100 disabled:opacity-40 flex items-center justify-center"
-            >
-              {whopConnect.isPending ? 'Creating...' : 'Create Account'}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function PaymentsContent({ projectId }: { projectId?: string }) {
-  const { data: accounts, isLoading } = useSurpayAccounts()
-  const disconnect = useSurpayDisconnect()
-  const [disconnectOpen, setDisconnectOpen] = useState(false)
-
-  if (isLoading) {
-    return <LoadingState icon={CircleDollarSign} message="Loading payment accounts..." />
-  }
-
-  const account = accounts?.find((a) => a.status === 'connected')
-  const disconnected = accounts?.find((a) => a.status === 'disconnected')
-
-  if (!account) {
-    return <ConnectPaymentsView disconnectedAccount={disconnected} />
-  }
-
-  return (
-    <>
-      <ProductsSection
-        projectId={projectId!}
-        isConnected
-        processor={account.processor}
-        accountData={account.data}
-        accountId={account.id}
-        onDisconnect={() => setDisconnectOpen(true)}
-        isDisconnecting={disconnect.isPending}
-      />
-
-      <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Disconnect Payment Account</DialogTitle>
-            <DialogDescription>This will disable payment processing.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDisconnectOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={disconnect.isPending}
-              onClick={() => {
-                disconnect.mutate(
-                  { accountId: account.id },
-                  { onSuccess: () => setDisconnectOpen(false) },
-                )
-              }}
-            >
-              {disconnect.isPending ? 'Disconnecting...' : 'Disconnect'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  )
-}
-
 function SandboxPausedContent({
   onActivate,
   isActivating,
@@ -436,8 +223,7 @@ function SandboxPausedContent({
   )
 }
 
-// Get icon for tab type
-function getTabIcon(type: PreviewTab['type']) {
+function getTabIcon(type: ProjectTab['type']) {
   switch (type) {
     case 'preview':
       return Monitor
@@ -454,7 +240,6 @@ function getTabIcon(type: PreviewTab['type']) {
   }
 }
 
-// Tab button component
 function TabButton({
   tab,
   isActive,
@@ -464,7 +249,7 @@ function TabButton({
   connectedProcessor,
   onConvexEnvChange,
 }: {
-  tab: PreviewTab
+  tab: ProjectTab
   isActive: boolean
   onSelect: () => void
   onClose?: () => void
@@ -565,19 +350,19 @@ function TabButton({
   )
 }
 
-interface PreviewPanelProps {
+interface ProjectToolsProps {
   projectId?: string
   project?: any
   onPreviewUrl?: (url: string | null) => void
-  tabs?: PreviewTab[]
+  tabs?: ProjectTab[]
   activeTabId?: string
   onTabChange?: (tabId: string) => void
   onCloseTab?: (tabId: string) => void
-  onAddTab?: (type: PreviewTab['type']) => void
+  onAddTab?: (type: ProjectTab['type']) => void
   onConvexEnvChange?: (env: 'development' | 'production') => void
 }
 
-export default function PreviewPanel({
+export default function ProjectTools({
   projectId,
   project,
   onPreviewUrl,
@@ -587,7 +372,7 @@ export default function PreviewPanel({
   onCloseTab,
   onAddTab,
   onConvexEnvChange,
-}: PreviewPanelProps) {
+}: ProjectToolsProps) {
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const tab = activeTab ?? tabs[0]
   const type = tab?.type ?? 'preview'
@@ -595,12 +380,10 @@ export default function PreviewPanel({
   const setPulsePaymentsTab = useSandbox((s) => s.setPulsePaymentsTab)
   const activeSessionId = useSandbox((s) => (projectId ? s.activeSessionId[projectId] : undefined))
 
-  // Fetch payment accounts to show provider logo in tab
   const { data: paymentAccounts } = useSurpayAccounts()
   const connectedPaymentAccount = paymentAccounts?.find((a) => a.status === 'connected')
   const connectedProcessor = connectedPaymentAccount?.processor
 
-  // Fetch diffs for changes tab
   const shouldFetchDiffs = type === 'changes' && !tab?.diffs
   const diffSessionId = shouldFetchDiffs ? tab?.sessionId || activeSessionId : undefined
   const diffMessageId = shouldFetchDiffs ? tab?.messageId : undefined
@@ -613,7 +396,6 @@ export default function PreviewPanel({
   const hasLogs = tabs.some((tab) => tab.type === 'logs')
   const hasPayments = tabs.some((tab) => tab.type === 'payments')
 
-  // Get convex environment from active tab
   const convexEnv = tab?.convexEnv ?? 'development'
   const { data: convexCredentials, isLoading: convexLoading } = useConvexDashboardQuery(
     projectId,
@@ -629,9 +411,7 @@ export default function PreviewPanel({
   const url = project?.sandbox?.url
   const { data: health } = useSandboxHealthQuery(projectId, type === 'preview')
 
-  // Ready only when URL exists AND health confirms sandbox is running
   const ready = Boolean(url) && health?.status === 'running'
-  // Down only when health confirms sandbox is paused (show activate button)
   const down = health?.status === 'paused'
 
   const { mutate: activate, isPending: activating } = useActivateProject()
@@ -644,7 +424,7 @@ export default function PreviewPanel({
     onPreviewUrl?.(u || null)
   }
 
-  const nav = type === 'preview' && ready && !down
+  const showBrowserNav = type === 'preview' && ready && !down
 
   const addTabMenu = onAddTab ? (
     <DropdownMenu>
@@ -721,9 +501,9 @@ export default function PreviewPanel({
           />
         )
       case 'payments':
-        return <PaymentsContent projectId={projectId} />
+        return <PaymentsDashboard projectId={projectId} />
       case 'settings':
-        return <EnvVarsContent projectId={projectId} />
+        return <SettingsTab projectId={projectId} />
     }
   })()
 
@@ -749,10 +529,9 @@ export default function PreviewPanel({
           ))}
           {addTabMenu}
         </div>
-        {/* Nav controls - only render inside WebPreview context */}
-        {nav && (
+        {showBrowserNav && (
           <div className="flex items-center pr-2">
-            <PreviewNavControls />
+            <BrowserNavControls />
           </div>
         )}
       </div>
@@ -765,7 +544,6 @@ export default function PreviewPanel({
     </div>
   )
 
-  // Always wrap in WebPreview when we have a preview URL - keeps context stable
   if (url) {
     return (
       <WebPreview

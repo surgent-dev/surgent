@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowUpFromLine, Loader2, Plus } from 'lucide-react'
+import { ArrowUpFromLine, CircleDollarSign, Loader2, Plus } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import {
   useProducts,
@@ -13,11 +13,18 @@ import {
 import { useTransactions } from '@/queries/transactions'
 import { useCustomers } from '@/queries/customers'
 import { useSubscriptions } from '@/queries/subscriptions'
+import {
+  useSurpayAccounts,
+  useSurpayDisconnect,
+  useWhopConnect,
+  type SurpayAccount,
+} from '@/queries/surpay'
+import { usePayEnv } from '@/stores/pay-env'
+import { parseConnectError } from '@/components/payments/utils'
 import { CreateProductSheet } from './create-product-sheet'
 import { CreatePriceDialog } from './create-price-dialog'
 import { EditProductDialog } from './edit-product-dialog'
 import { Sidebar, type ViewType, type AccountData } from './sidebar'
-import { usePayEnv } from '@/stores/pay-env'
 import { DashboardView } from './dashboard-view'
 import { ProductsView } from './products-view'
 import { TransactionsView } from './transactions-view'
@@ -26,10 +33,134 @@ import { SubscriptionsView } from './subscriptions-view'
 import { SettingsView } from './settings-view'
 import { payHttp } from '@/lib/http'
 import { cn } from '@/lib/utils'
+import { authClient } from '@/lib/auth-client'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { FunLoadingState } from '@/components/ui/fun-loading'
 
-export function ProductsSection({
+function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: SurpayAccount }) {
+  const [companyName, setCompanyName] = useState('')
+  const whopConnect = useWhopConnect()
+  const env = usePayEnv((s) => s.env)
+  const isLive = env === 'live'
+
+  const handleReconnect = async () => {
+    if (!disconnectedAccount) return
+    try {
+      await whopConnect.mutateAsync({
+        accountId: disconnectedAccount.id,
+        data: {
+          email: disconnectedAccount.data.email || '',
+          title: disconnectedAccount.data.title || '',
+          country: disconnectedAccount.data.country || 'us',
+        },
+      })
+      toast.success('Payment account reconnected')
+    } catch (err: any) {
+      toast.error(parseConnectError(err, 'Failed to reconnect account'))
+    }
+  }
+
+  const handleCreate = async () => {
+    if (!companyName.trim()) return
+    let session
+    try {
+      session = await authClient.getSession()
+    } catch {
+      toast.error('Failed to get session')
+      return
+    }
+    const email = session.data?.user?.email
+    if (!email) {
+      toast.error('Unable to get user email')
+      return
+    }
+    try {
+      await whopConnect.mutateAsync({
+        data: { email, title: companyName.trim(), country: 'us' },
+      })
+      toast.success('Payment account created')
+      setCompanyName('')
+    } catch (err: any) {
+      toast.error(parseConnectError(err, 'Failed to create account'))
+    }
+  }
+
+  return (
+    <div className="w-full h-full flex items-center justify-center p-8">
+      <div className="flex flex-col items-center w-full max-w-[300px] text-center">
+        <div className="size-11 rounded-xl bg-[var(--brand)]/10 flex items-center justify-center mb-5">
+          <CircleDollarSign className="size-5 text-[var(--brand)]" strokeWidth={1.5} />
+        </div>
+
+        <p className="text-[15px] font-semibold mb-1">Payments</p>
+        <p className="text-[13px] text-muted-foreground leading-relaxed mb-6">
+          Accept payments and manage revenue from your AI agents.
+        </p>
+
+        {disconnectedAccount ? (
+          <button
+            type="button"
+            onClick={handleReconnect}
+            disabled={whopConnect.isPending}
+            className="flex items-center gap-3 w-full p-3 rounded-lg border hover:bg-muted/50 transition-colors disabled:opacity-50"
+          >
+            <div className="size-8 rounded-md border bg-muted/40 grid place-items-center shrink-0">
+              <CircleDollarSign className="size-5 text-muted-foreground" strokeWidth={1.5} />
+            </div>
+            <div className="text-left min-w-0 flex-1">
+              <div className="text-sm font-medium truncate">
+                {disconnectedAccount.data.title || 'Untitled'}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {whopConnect.isPending ? 'Reconnecting...' : 'Tap to reconnect'}
+              </div>
+            </div>
+            <span
+              className={cn(
+                'shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium',
+                isLive ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600',
+              )}
+            >
+              {isLive ? 'Live' : 'Sandbox'}
+            </span>
+          </button>
+        ) : (
+          <div className="w-full space-y-2.5">
+            <Input
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder="Company name"
+              className="h-9"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && companyName.trim()) handleCreate()
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={!companyName.trim() || whopConnect.isPending}
+              className="w-full h-9 text-[13px] font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary-hover transition-all duration-100 disabled:opacity-40 flex items-center justify-center"
+            >
+              {whopConnect.isPending ? 'Creating...' : 'Create Account'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ConnectedDashboard({
   projectId,
-  isConnected = false,
   processor,
   accountData,
   accountId,
@@ -37,7 +168,6 @@ export function ProductsSection({
   isDisconnecting,
 }: {
   projectId: string
-  isConnected?: boolean
   processor?: string
   accountData?: AccountData
   accountId?: string
@@ -132,7 +262,7 @@ export function ProductsSection({
         subscriptionCount={subscriptions.length}
         customerCount={customers.length}
         transactionCount={transactions.length}
-        isConnected={isConnected}
+        isConnected
         processor={processor}
         accountData={accountData}
         onOpenPayoutsPortal={openPayoutPortal}
@@ -239,7 +369,7 @@ export function ProductsSection({
           )}
           {view === 'settings' && (
             <SettingsView
-              isConnected={isConnected}
+              isConnected
               processor={processor}
               onDisconnect={onDisconnect}
               isDisconnecting={isDisconnecting}
@@ -272,5 +402,61 @@ export function ProductsSection({
         />
       )}
     </div>
+  )
+}
+
+export function PaymentsDashboard({ projectId }: { projectId?: string }) {
+  const { data: accounts, isLoading } = useSurpayAccounts()
+  const disconnect = useSurpayDisconnect()
+  const [disconnectOpen, setDisconnectOpen] = useState(false)
+
+  if (isLoading) {
+    return <FunLoadingState />
+  }
+
+  const account = accounts?.find((a) => a.status === 'connected')
+  const disconnected = accounts?.find((a) => a.status === 'disconnected')
+
+  if (!account) {
+    return <ConnectPaymentsView disconnectedAccount={disconnected} />
+  }
+
+  return (
+    <>
+      <ConnectedDashboard
+        projectId={projectId!}
+        processor={account.processor}
+        accountData={account.data}
+        accountId={account.id}
+        onDisconnect={() => setDisconnectOpen(true)}
+        isDisconnecting={disconnect.isPending}
+      />
+
+      <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Disconnect Payment Account</DialogTitle>
+            <DialogDescription>This will disable payment processing.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisconnectOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={disconnect.isPending}
+              onClick={() => {
+                disconnect.mutate(
+                  { accountId: account.id },
+                  { onSuccess: () => setDisconnectOpen(false) },
+                )
+              }}
+            >
+              {disconnect.isPending ? 'Disconnecting...' : 'Disconnect'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
