@@ -197,10 +197,6 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
             prefilledDomain: config.prefilledDomain,
             dnsRecords: config.dnsRecords,
             userId: config.userId,
-            whiteLabel: {
-              hideEntriLogo: true,
-              theme: { primary: '#6366f1', onPrimary: '#ffffff' },
-            },
           })
         } catch (entriErr) {
           console.error('Entri Connect retry error:', entriErr)
