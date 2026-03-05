@@ -20,7 +20,41 @@ import {
   useProjectDomains,
   useOnDomainPurchased,
   useRemoveDomain,
+  type DomainLogEntry,
 } from '@/queries/domains'
+import { CheckCircle, XCircle, Clock } from '@phosphor-icons/react'
+
+function DomainLogs({ logs }: { logs?: DomainLogEntry[] }) {
+  if (!logs || logs.length === 0) return null
+
+  return (
+    <details className="group">
+      <summary className="text-[11px] text-muted-foreground/60 cursor-pointer hover:text-muted-foreground select-none">
+        Activity log ({logs.length})
+      </summary>
+      <div className="mt-1.5 space-y-0.5 max-h-32 overflow-y-auto">
+        {logs.map((entry, i) => (
+          <div key={i} className="flex items-start gap-1.5 text-[10px] text-muted-foreground/80">
+            {entry.success === true ? (
+              <CheckCircle className="size-3 text-emerald-500 shrink-0 mt-0.5" weight="fill" />
+            ) : entry.success === false ? (
+              <XCircle className="size-3 text-red-500 shrink-0 mt-0.5" weight="fill" />
+            ) : (
+              <Clock className="size-3 text-muted-foreground/40 shrink-0 mt-0.5" weight="fill" />
+            )}
+            <span className="flex-1 break-words">{entry.detail || entry.event}</span>
+            <span className="text-muted-foreground/40 shrink-0 tabular-nums">
+              {new Date(entry.timestamp).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+          </div>
+        ))}
+      </div>
+    </details>
+  )
+}
 
 type DomainMode = 'buy' | 'connect'
 
@@ -212,6 +246,7 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
             <Trash className="size-3.5" />
           </button>
         </div>
+        <DomainLogs logs={activeDomain.logs} />
       </div>
     )
   }
@@ -267,6 +302,12 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
             over.
           </p>
         )}
+        {configuringDomain.lastError && (
+          <p className="text-[11px] text-red-500/80 bg-red-500/5 px-2 py-1 rounded">
+            {configuringDomain.lastError}
+          </p>
+        )}
+        <DomainLogs logs={configuringDomain.logs} />
         <div className="flex gap-2">
           <Button
             size="sm"
@@ -311,8 +352,10 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
           <span className="text-[11px] text-red-500/80">Failed</span>
         </div>
         <p className="text-[11px] text-red-500/80">
-          Domain setup failed. Retry to try again, or remove and start fresh.
+          {errorDomain.lastError ||
+            'Domain setup failed. Retry to try again, or remove and start fresh.'}
         </p>
+        <DomainLogs logs={errorDomain.logs} />
         <div className="flex gap-2">
           <Button
             size="sm"

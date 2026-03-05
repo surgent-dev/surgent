@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
+import { sql } from 'kysely'
 import { requireAuth } from '@/middleware/auth'
 import { db } from '@/lib/db'
-import { entriClient } from '@/lib/entri/client'
 import { generateEntriToken } from '@/lib/entri/jwt'
 import { getDomainProvider, expandDomainQuery } from '@/lib/domains'
 import { connectCustomDomain, disconnectCustomDomain } from '@/lib/cloudflare/custom-hostnames'
@@ -11,8 +11,32 @@ import { config } from '@/lib/config'
 import { HttpError } from '@/lib/errors'
 import { createLogger } from '@/lib/logger'
 import type { AppContext } from '@/types/application'
+import type { DomainLogEntry } from '@repo/db'
 
 const log = createLogger('domains')
+
+/** Append a log entry to a domain's logs JSONB column. */
+async function appendDomainLog(
+  domainId: string,
+  event: string,
+  detail?: string,
+  success?: boolean,
+) {
+  const entry: DomainLogEntry = {
+    timestamp: new Date().toISOString(),
+    event,
+    ...(detail !== undefined && { detail }),
+    ...(success !== undefined && { success }),
+  }
+  await db
+    .updateTable('domain')
+    .set({
+      logs: sql`COALESCE(logs, '[]'::jsonb) || ${JSON.stringify([entry])}::jsonb`,
+      updatedAt: new Date(),
+    })
+    .where('id', '=', domainId)
+    .execute()
+}
 
 const domains = new Hono<AppContext>()
 
@@ -131,6 +155,11 @@ domains.post(
         .returning(['id'])
         .executeTakeFirst()
 
+      await appendDomainLog(
+        domain!.id,
+        'purchase_started',
+        `Purchasing ${suggestedDomain} via Namecheap`,
+      )
       log.info(
         { projectId, domainId: domain?.id, suggestedDomain, provider: 'namecheap' },
         'domain purchase started',
@@ -167,21 +196,49 @@ domains.post(
 
         // Connect to Cloudflare: custom hostname + KV dispatch mapping
         let cfCustomDomainId: string | null = null
+        let kvMapped = false
+        let lastError: string | null = null
+
         if (worker?.scriptName) {
-          cfCustomDomainId = await connectCustomDomain(suggestedDomain, worker.scriptName)
+          await appendDomainLog(
+            domain!.id,
+            'cloudflare_connect_start',
+            `Connecting ${suggestedDomain} → ${worker.scriptName}`,
+          )
+          const result = await connectCustomDomain(suggestedDomain, worker.scriptName)
+          cfCustomDomainId = result.customHostnameId
+          kvMapped = result.kvMapped
+          lastError = result.error
+          await appendDomainLog(
+            domain!.id,
+            'cloudflare_connect_done',
+            result.error || 'Connected successfully',
+            !result.error,
+          )
         }
+
+        const finalStatus = kvMapped ? 'active' : worker?.scriptName ? 'error' : 'dns_configuring'
 
         await db
           .updateTable('domain')
           .set({
-            status: worker?.scriptName ? 'active' : 'dns_configuring',
+            status: finalStatus,
             registrar: 'namecheap',
             cfCustomDomainId,
+            kvMapped,
+            lastError,
             purchasedAt: new Date(),
             updatedAt: new Date(),
           })
           .where('id', '=', domain!.id)
           .execute()
+
+        await appendDomainLog(
+          domain!.id,
+          'status_change',
+          `Status set to ${finalStatus}`,
+          finalStatus === 'active',
+        )
 
         return c.json({
           domainId: domain!.id,
@@ -309,6 +366,7 @@ domains.post(
       .returning(['id'])
       .executeTakeFirst()
 
+    await appendDomainLog(domainRecord!.id, 'connect_initiated', `DNS setup started for ${domain}`)
     log.info({ projectId, domainId: domainRecord?.id, domain }, 'domain connect initialized')
 
     return c.json({
@@ -327,7 +385,6 @@ domains.post(
  * List domains for a project
  */
 domains.get('/:projectId', async (c) => {
-  const user = c.get('user')!
   const session = c.get('session')!
   const projectId = c.req.param('projectId')
 
@@ -365,15 +422,54 @@ domains.get('/:projectId', async (c) => {
     if (worker?.scriptName) {
       for (const d of configuringDomains) {
         try {
-          const cfId = await connectCustomDomain(d.domainName, worker.scriptName)
-          await db
-            .updateTable('domain')
-            .set({ status: 'active', cfCustomDomainId: cfId, updatedAt: new Date() })
-            .where('id', '=', d.id)
-            .execute()
-          d.status = 'active'
-          log.info({ domainId: d.id, domainName: d.domainName }, 'auto-connected domain to worker')
+          await appendDomainLog(
+            d.id,
+            'auto_connect_start',
+            `Worker ${worker.scriptName} detected, connecting`,
+          )
+          const result = await connectCustomDomain(d.domainName, worker.scriptName)
+
+          if (result.kvMapped) {
+            await db
+              .updateTable('domain')
+              .set({
+                status: 'active',
+                cfCustomDomainId: result.customHostnameId,
+                kvMapped: true,
+                dnsVerified: true,
+                lastError: null,
+                updatedAt: new Date(),
+              })
+              .where('id', '=', d.id)
+              .execute()
+            d.status = 'active'
+            await appendDomainLog(d.id, 'auto_connect_done', 'Domain is now live', true)
+            log.info(
+              { domainId: d.id, domainName: d.domainName },
+              'auto-connected domain to worker',
+            )
+          } else {
+            await db
+              .updateTable('domain')
+              .set({
+                status: 'error',
+                cfCustomDomainId: result.customHostnameId,
+                lastError: result.error,
+                updatedAt: new Date(),
+              })
+              .where('id', '=', d.id)
+              .execute()
+            d.status = 'error'
+            await appendDomainLog(
+              d.id,
+              'auto_connect_failed',
+              result.error || 'KV mapping failed',
+              false,
+            )
+            log.warn({ domainId: d.id, error: result.error }, 'auto-connect partial failure')
+          }
         } catch (err) {
+          await appendDomainLog(d.id, 'auto_connect_error', String(err))
           log.warn({ err, domainId: d.id }, 'auto-connect failed, will retry on next poll')
         }
       }
@@ -387,6 +483,10 @@ domains.get('/:projectId', async (c) => {
       domainName: d.domainName,
       status: d.status,
       registrar: d.registrar,
+      dnsVerified: d.dnsVerified,
+      kvMapped: d.kvMapped,
+      lastError: d.lastError,
+      logs: d.logs ?? [],
       purchasedAt: d.purchasedAt?.toISOString() ?? null,
       expiresAt: d.expiresAt?.toISOString() ?? null,
       createdAt: d.createdAt.toISOString(),
@@ -449,11 +549,16 @@ domains.post(
     if (domainRecord.status === 'error') {
       await db
         .updateTable('domain')
-        .set({ status: 'dns_configuring', updatedAt: new Date() })
+        .set({ status: 'dns_configuring', lastError: null, updatedAt: new Date() })
         .where('id', '=', domainId)
         .execute()
     }
 
+    await appendDomainLog(
+      domainId,
+      'retry_connect',
+      `User retried DNS setup (was ${domainRecord.status})`,
+    )
     log.info({ projectId, domainId, domainName: domainRecord.domainName }, 'domain connect retry')
 
     return c.json({
@@ -488,6 +593,7 @@ domains.delete('/:projectId/:domainId', async (c) => {
   if (!domain) return c.json({ deleted: true })
 
   // Disconnect from Cloudflare (custom hostname + KV mapping)
+  await appendDomainLog(domainId, 'domain_removing', 'User requested domain removal')
   await disconnectCustomDomain(domain.domainName, domain.cfCustomDomainId)
 
   await db.deleteFrom('domain').where('id', '=', domainId).execute()
@@ -759,13 +865,37 @@ async function processDomainWebhook(payload: any) {
           .executeTakeFirst()
 
         if (worker?.scriptName) {
-          const cfId = await connectCustomDomain(finalDomainName, worker.scriptName)
+          await appendDomainLog(
+            newRecord.id!,
+            'webhook_cloudflare_connect',
+            `Webhook triggered CF connect: ${finalDomainName} → ${worker.scriptName}`,
+          )
+          const result = await connectCustomDomain(finalDomainName, worker.scriptName)
+          const status = result.kvMapped ? 'active' : 'error'
           await db
             .updateTable('domain')
-            .set({ cfCustomDomainId: cfId })
+            .set({
+              cfCustomDomainId: result.customHostnameId,
+              kvMapped: result.kvMapped,
+              dnsVerified: true,
+              lastError: result.error,
+              status,
+            })
             .where('id', '=', newRecord.id)
             .execute()
+          await appendDomainLog(
+            newRecord.id!,
+            'webhook_cloudflare_result',
+            result.error || 'Connected',
+            !result.error,
+          )
         }
+      } else if (newRecord?.id) {
+        await appendDomainLog(
+          newRecord.id,
+          'webhook_domain_created',
+          `Domain record created (DNS ${propagationOk ? 'ok' : 'pending'})`,
+        )
       }
 
       log.info(
@@ -781,6 +911,15 @@ async function processDomainWebhook(payload: any) {
 
     // Connect to Cloudflare if the domain is ready
     let cfCustomDomainId: string | null = null
+    let kvMapped = false
+    let lastError: string | null = null
+
+    await appendDomainLog(
+      domainRecord!.id,
+      'webhook_received',
+      `Event: ${eventType}, DNS propagation: ${propagationOk ? 'ok' : 'pending'}`,
+    )
+
     if (propagationOk && domainRecord!.projectId) {
       const worker = await db
         .selectFrom('worker')
@@ -789,30 +928,57 @@ async function processDomainWebhook(payload: any) {
         .executeTakeFirst()
 
       if (worker?.scriptName) {
-        cfCustomDomainId = await connectCustomDomain(finalDomainName, worker.scriptName)
+        await appendDomainLog(
+          domainRecord!.id,
+          'webhook_cloudflare_connect',
+          `Connecting ${finalDomainName} → ${worker.scriptName}`,
+        )
+        const result = await connectCustomDomain(finalDomainName, worker.scriptName)
+        cfCustomDomainId = result.customHostnameId
+        kvMapped = result.kvMapped
+        lastError = result.error
+        await appendDomainLog(
+          domainRecord!.id,
+          'webhook_cloudflare_result',
+          result.error || 'Connected',
+          !result.error,
+        )
       }
     }
+
+    const finalStatus = propagationOk ? (kvMapped ? 'active' : 'error') : 'dns_configuring'
 
     await db
       .updateTable('domain')
       .set({
         domainName: finalDomainName,
-        status: propagationOk ? 'active' : 'dns_configuring',
+        status: finalStatus,
         registrar: payload.provider || payload.registrar || null,
         entriFlowId: payload.id || null,
         cfCustomDomainId,
+        kvMapped,
+        dnsVerified: propagationOk,
+        lastError,
         purchasedAt: new Date(),
         updatedAt: new Date(),
       })
       .where('id', '=', domainRecord!.id)
       .execute()
 
+    await appendDomainLog(
+      domainRecord!.id,
+      'status_change',
+      `Status → ${finalStatus}`,
+      finalStatus === 'active',
+    )
+
     log.info(
       {
         domainId: domainRecord?.id,
         domainName: finalDomainName,
-        status: propagationOk ? 'active' : 'dns_configuring',
+        status: finalStatus,
         cfCustomDomainId,
+        kvMapped,
       },
       '[ENTRI-WEBHOOK] domain updated',
     )
@@ -826,18 +992,32 @@ async function processDomainWebhook(payload: any) {
         .execute()
     }
   } else if (eventType === 'domain.failed' || eventType === 'domainFailed') {
+    const failReason =
+      payload.error || payload.reason || 'Domain setup failed (provider reported failure)'
+
     // Mark domain as error — check by domain name first (Connect), then by userId (Sell)
     if (domainName) {
+      const failedDomain = await db
+        .selectFrom('domain')
+        .select('id')
+        .where('domainName', '=', domainName)
+        .where('status', 'in', ['pending', 'purchasing', 'dns_configuring'])
+        .executeTakeFirst()
+
+      if (failedDomain) {
+        await appendDomainLog(failedDomain.id, 'domain_failed', failReason, false)
+      }
+
       await db
         .updateTable('domain')
-        .set({ status: 'error', updatedAt: new Date() })
+        .set({ status: 'error', lastError: failReason, updatedAt: new Date() })
         .where('domainName', '=', domainName)
         .where('status', 'in', ['pending', 'purchasing', 'dns_configuring'])
         .execute()
     } else if (userId) {
       await db
         .updateTable('domain')
-        .set({ status: 'error', updatedAt: new Date() })
+        .set({ status: 'error', lastError: failReason, updatedAt: new Date() })
         .where('userId', '=', userId)
         .where('status', 'in', ['pending', 'purchasing', 'dns_configuring'])
         .execute()
@@ -845,7 +1025,7 @@ async function processDomainWebhook(payload: any) {
 
     log.warn({ userId, domainName, eventType }, '[ENTRI-WEBHOOK] domain setup failed')
   } else if (eventType === 'dns.propagated' || eventType === 'dnsConfigured') {
-    // DNS propagation complete — mark as active and wire up Cloudflare
+    // DNS propagation complete — wire up Cloudflare
     if (domainName) {
       const domainRecord = await db
         .selectFrom('domain')
@@ -854,7 +1034,14 @@ async function processDomainWebhook(payload: any) {
         .where('status', '=', 'dns_configuring')
         .executeTakeFirst()
 
+      if (domainRecord) {
+        await appendDomainLog(domainRecord.id, 'dns_propagated', 'DNS records verified by provider')
+      }
+
       let cfId: string | null = null
+      let kvMapped = false
+      let lastError: string | null = null
+
       if (domainRecord?.projectId) {
         const worker = await db
           .selectFrom('worker')
@@ -863,24 +1050,52 @@ async function processDomainWebhook(payload: any) {
           .executeTakeFirst()
 
         if (worker?.scriptName) {
-          cfId = await connectCustomDomain(domainName, worker.scriptName)
+          await appendDomainLog(
+            domainRecord.id,
+            'dns_cloudflare_connect',
+            `Connecting ${domainName} → ${worker.scriptName}`,
+          )
+          const result = await connectCustomDomain(domainName, worker.scriptName)
+          cfId = result.customHostnameId
+          kvMapped = result.kvMapped
+          lastError = result.error
+          await appendDomainLog(
+            domainRecord.id,
+            'dns_cloudflare_result',
+            result.error || 'Connected',
+            !result.error,
+          )
         }
       }
+
+      const finalStatus = kvMapped ? 'active' : 'error'
 
       await db
         .updateTable('domain')
         .set({
-          status: 'active',
+          status: finalStatus,
           cfCustomDomainId: cfId,
+          dnsVerified: true,
+          kvMapped,
+          lastError,
           updatedAt: new Date(),
         })
         .where('domainName', '=', domainName)
         .where('status', '=', 'dns_configuring')
         .execute()
 
+      if (domainRecord) {
+        await appendDomainLog(
+          domainRecord.id,
+          'status_change',
+          `Status → ${finalStatus}`,
+          finalStatus === 'active',
+        )
+      }
+
       log.info(
-        { domainName, cfCustomDomainId: cfId },
-        '[ENTRI-WEBHOOK] DNS propagated, domain active',
+        { domainName, cfCustomDomainId: cfId, kvMapped, status: finalStatus },
+        '[ENTRI-WEBHOOK] DNS propagated',
       )
     }
   } else {

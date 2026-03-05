@@ -22,5 +22,6 @@ export type {
   EnvDestination,
   DomainTable,
   DomainStatus,
+  DomainLogEntry,
   DomainWebhookEventTable,
 } from './src/types'

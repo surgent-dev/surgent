@@ -31,12 +31,23 @@ export interface EntriConnectConfig {
   userId: string
 }
 
+export interface DomainLogEntry {
+  timestamp: string
+  event: string
+  detail?: string
+  success?: boolean
+}
+
 export interface Domain {
   id: string
   projectId: string | null
   domainName: string
   status: 'pending' | 'purchasing' | 'dns_configuring' | 'active' | 'error'
   registrar: string | null
+  dnsVerified: boolean
+  kvMapped: boolean
+  lastError: string | null
+  logs: DomainLogEntry[]
   purchasedAt: string | null
   expiresAt: string | null
   createdAt: string

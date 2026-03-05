@@ -121,35 +121,46 @@ export async function deleteDomainMapping(domain: string): Promise<void> {
 
 // ── Combined helper ─────────────────────────────────────────
 
+export interface ConnectDomainResult {
+  customHostnameId: string | null
+  kvMapped: boolean
+  error: string | null
+}
+
 /**
  * Full wiring: register the custom hostname with Cloudflare AND write the
  * KV mapping so the dispatch worker can route traffic.
- *
- * Returns the Cloudflare Custom Hostname ID.
  */
 export async function connectCustomDomain(
   domain: string,
   scriptName: string,
-): Promise<string | null> {
+): Promise<ConnectDomainResult> {
   let customHostnameId: string | null = null
+  let kvMapped = false
+  let error: string | null = null
 
   // 1. Create Custom Hostname (if zone is configured)
   if (config.cloudflare.zoneId) {
     try {
       customHostnameId = await createCustomHostname(domain)
-    } catch (err) {
+    } catch (err: any) {
+      const msg = err?.message || 'Unknown CF error'
       log.error({ err, domain }, 'failed to create custom hostname (continuing with KV only)')
+      error = `Custom hostname: ${msg}`
     }
   }
 
   // 2. Write KV mapping (dispatch worker routing)
   try {
     await setDomainMapping(domain, scriptName)
-  } catch (err) {
+    kvMapped = true
+  } catch (err: any) {
+    const msg = err?.message || 'Unknown KV error'
     log.error({ err, domain, scriptName }, 'failed to write KV domain mapping')
+    error = error ? `${error}; KV mapping: ${msg}` : `KV mapping: ${msg}`
   }
 
-  return customHostnameId
+  return { customHostnameId, kvMapped, error }
 }
 
 /**

@@ -675,6 +675,13 @@ export interface PayCustomerTable {
 
 export type DomainStatus = 'pending' | 'purchasing' | 'dns_configuring' | 'active' | 'error'
 
+export interface DomainLogEntry {
+  timestamp: string
+  event: string
+  detail?: string
+  success?: boolean
+}
+
 export interface DomainTable {
   id: Generated<string>
   projectId: string | null
@@ -685,6 +692,10 @@ export interface DomainTable {
   registrar: string | null
   entriFlowId: string | null
   cfCustomDomainId: string | null
+  dnsVerified: Generated<boolean>
+  kvMapped: Generated<boolean>
+  lastError: string | null
+  logs: Generated<DomainLogEntry[]>
   purchasedAt: Date | null
   expiresAt: Date | null
   createdAt: Generated<Date>
