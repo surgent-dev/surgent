@@ -421,6 +421,13 @@ domains.get('/:projectId', async (c) => {
 
     if (worker?.scriptName) {
       for (const d of configuringDomains) {
+        // Skip if already has a CF hostname (avoid duplicate calls on page refresh)
+        if (d.cfCustomDomainId && d.kvMapped) continue
+
+        // Throttle: skip if last update was <60s ago (prevents rapid re-attempts)
+        const lastUpdate = new Date(d.updatedAt).getTime()
+        if (Date.now() - lastUpdate < 60_000) continue
+
         try {
           await appendDomainLog(
             d.id,
@@ -617,7 +624,7 @@ domains.post(
     }),
   ),
   async (c) => {
-    if (!config.entri.devMode) {
+    if (!config.entri.devMode || process.env.NODE_ENV === 'production') {
       throw new HttpError(403, 'Mock purchase is only available in dev mode')
     }
 
@@ -747,7 +754,11 @@ async function processDomainWebhook(payload: any) {
   const domainName = payload.purchased_domains?.[0] || payload.domain
   const userId = payload.user_id
 
-  if (eventType === 'domain.added' || eventType === 'domainPurchased') {
+  if (
+    eventType === 'domain.added' ||
+    eventType === 'domain.purchased' ||
+    eventType === 'domainPurchased'
+  ) {
     if (!userId && !domainName) {
       log.warn('[ENTRI-WEBHOOK] no user_id or domain in payload')
       return
@@ -793,6 +804,7 @@ async function processDomainWebhook(payload: any) {
     const propagationOk =
       payload.propagation_status === 'success' ||
       payload.dns_status === 'configured' ||
+      eventType === 'domain.purchased' ||
       eventType === 'domainPurchased'
 
     const finalDomainName = domainName || domainRecord?.domainName

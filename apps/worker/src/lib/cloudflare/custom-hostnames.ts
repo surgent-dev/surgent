@@ -24,6 +24,43 @@ function getClient() {
   return new Cloudflare({ apiToken: config.cloudflare.apiToken })
 }
 
+// ── Startup validation ───────────────────────────────────────
+
+/**
+ * Validate that Cloudflare env vars are set and the API token works.
+ * Call once at startup to surface config issues early.
+ */
+export async function validateCloudflareConfig(): Promise<void> {
+  const { zoneId, apiToken, accountId, kvNamespaceId } = config.cloudflare
+
+  const missing: string[] = []
+  if (!zoneId) missing.push('CLOUDFLARE_ZONE_ID')
+  if (!apiToken) missing.push('CLOUDFLARE_API_TOKEN')
+  if (!accountId) missing.push('CLOUDFLARE_ACCOUNT_ID')
+  if (!kvNamespaceId) missing.push('CLOUDFLARE_DOMAIN_KV_NAMESPACE_ID')
+
+  if (missing.length > 0) {
+    log.warn(
+      { missing },
+      'Cloudflare custom domains config incomplete — custom hostnames will be skipped',
+    )
+    return
+  }
+
+  // Verify the token can access the zone (lightweight GET)
+  try {
+    const cf = getClient()
+    await cf.zones.get({ zone_id: zoneId! })
+    log.info('Cloudflare config validated — zone access OK')
+  } catch (err: any) {
+    log.error(
+      { err: err?.message, zoneId },
+      'Cloudflare API token cannot access the configured zone. ' +
+        'Ensure the token has "Zone > SSL and Certificates > Edit" permission for custom hostnames.',
+    )
+  }
+}
+
 // ── Custom Hostnames (SSL for SaaS) ─────────────────────────
 
 /**

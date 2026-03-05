@@ -131,12 +131,11 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
 
       if (config.devMode) return
 
-      const sellConfig: EntriConfig & { debugMode?: boolean } = {
+      const sellConfig: EntriConfig = {
         applicationId: config.applicationId,
         token: config.token,
         dnsRecords: config.dnsRecords,
         userId: config.contact.email,
-        debugMode: true,
         whiteLabel: {
           hideEntriLogo: true,
           sell: { contact: config.contact },

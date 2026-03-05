@@ -118,7 +118,7 @@ export const config = {
     secret: env.ENTRI_SECRET,
     apiKey: env.ENTRI_API_KEY,
     webhookSecret: env.ENTRI_WEBHOOK_SECRET,
-    devMode: env.ENTRI_DEV_MODE === 'true' || (!env.ENTRI_API_KEY && env.NODE_ENV !== 'production'),
+    devMode: env.ENTRI_DEV_MODE === 'true',
   },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
@@ -128,3 +128,26 @@ export const config = {
     configDir: env.OPENCODE_CONFIG_DIR || '/home/user/opencode-config',
   },
 } as const
+
+/**
+ * Validate that required domain-related env vars are present.
+ * Call at startup to surface config issues early.
+ */
+export function validateDomainConfig(): string[] {
+  const warnings: string[] = []
+
+  if (config.domainProvider === 'entri' && !config.entri.devMode) {
+    if (!config.entri.applicationId) warnings.push('ENTRI_APP_ID is required for Entri integration')
+    if (!config.entri.secret) warnings.push('ENTRI_SECRET is required for Entri JWT generation')
+    if (!config.entri.apiKey)
+      warnings.push('ENTRI_API_KEY is required for domain availability checks')
+    if (!config.entri.webhookSecret)
+      warnings.push('ENTRI_WEBHOOK_SECRET is required for webhook signature verification')
+  }
+
+  if (env.NODE_ENV === 'production' && !config.entri.webhookSecret) {
+    warnings.push('ENTRI_WEBHOOK_SECRET is not set — webhook signatures will not be verified')
+  }
+
+  return warnings
+}

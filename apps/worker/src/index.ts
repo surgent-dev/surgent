@@ -17,8 +17,9 @@ import domains, { domainWebhooks } from './routes/domains'
 import { serve as serveInngest } from 'inngest/hono'
 import { inngest, functions as inngestFunctions } from './inngest'
 import { auth } from './lib/auth'
-import { config } from './lib/config'
+import { config, validateDomainConfig } from './lib/config'
 import { db } from './lib/db'
+import { validateCloudflareConfig } from './lib/cloudflare/custom-hostnames'
 import { migrate } from '@repo/db'
 import {
   oauthProviderAuthServerMetadata,
@@ -239,6 +240,11 @@ const port = Number(config.server.port)
   }
 
   log.info('migrations completed successfully')
+
+  // Validate domain-related configuration
+  const domainWarnings = validateDomainConfig()
+  for (const w of domainWarnings) log.warn(w)
+  await validateCloudflareConfig()
 
   await startBoss()
 
