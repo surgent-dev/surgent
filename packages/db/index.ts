@@ -20,4 +20,5 @@ export type {
   DeploymentTable,
   ListingTable,
   EnvDestination,
+  TrustMrrStartupTable,
 } from './src/types'

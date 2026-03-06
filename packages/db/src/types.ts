@@ -44,6 +44,7 @@ export interface Database {
   pay_dispute: PayDisputeTable
   pay_transaction: PayTransactionTable
   pay_customer: PayCustomerTable
+  trustmrr_startup: TrustMrrStartupTable
 }
 
 export interface UserTable {
@@ -667,6 +668,34 @@ export interface PayCustomerTable {
   name: string | null
   metadata: Record<string, unknown>
   env: string
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface TrustMrrStartupTable {
+  slug: string
+  name: string
+  icon: string | null
+  description: string | null
+  website: string | null
+  country: string | null
+  foundedDate: Date | null
+  category: string | null
+  paymentProvider: string | null
+  targetAudience: string | null
+  revenueLast30Days: number
+  revenueMrr: number
+  revenueTotal: number
+  customers: number
+  activeSubscriptions: number
+  askingPrice: number | null
+  profitMarginLast30Days: number | null
+  growth30d: number | null
+  multiple: number | null
+  onSale: boolean
+  firstListedForSaleAt: Date | null
+  xHandle: string | null
+  syncedAt: Date
   createdAt?: Date
   updatedAt?: Date
 }
