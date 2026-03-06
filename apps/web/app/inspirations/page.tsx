@@ -13,36 +13,23 @@ import {
   TrendingUp,
   Users,
   ArrowUpRight,
-  Brain,
-  Code2,
-  ShoppingCart,
-  Megaphone,
-  PenTool,
-  GraduationCap,
-  Smartphone,
-  Heart,
-  BarChart3,
-  Palette,
-  Landmark,
   Layers,
+  Wrench,
   Share2,
   Briefcase,
-  Building2,
-  Gamepad2,
   Headphones,
   Store,
   MessageCircle,
   DollarSign,
-  Wrench,
+  Building2,
+  Gamepad2,
+  Lock,
   Plane,
   Newspaper,
   Coins,
   Cpu,
   Scale,
   Leaf,
-  Lock,
-  Zap,
-  LayoutGrid,
 } from 'lucide-react'
 import {
   AllIcon,
@@ -116,48 +103,76 @@ const CAT_ICONS: Record<string, React.ElementType> = {
 
 const CAT_COLORS: Record<string, { bg: string; icon: string; activeBg: string }> = {
   'Artificial Intelligence': {
-    bg: 'rgba(139,92,246,0.08)',
-    icon: '#a78bfa',
-    activeBg: 'rgba(139,92,246,0.15)',
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#b48efe', // Premium Violet
+    activeBg: 'rgba(180,142,254,0.1)',
   },
-  SaaS: { bg: 'rgba(59,130,246,0.08)', icon: '#60a5fa', activeBg: 'rgba(59,130,246,0.15)' },
+  SaaS: {
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#60a5fa', // Premium Blue
+    activeBg: 'rgba(96,165,250,0.1)',
+  },
   'Developer Tools': {
-    bg: 'rgba(16,185,129,0.08)',
-    icon: '#34d399',
-    activeBg: 'rgba(16,185,129,0.15)',
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#34d399', // Premium Emerald
+    activeBg: 'rgba(52,211,153,0.1)',
   },
-  Productivity: { bg: 'rgba(6,182,212,0.08)', icon: '#22d3ee', activeBg: 'rgba(6,182,212,0.15)' },
-  Marketing: { bg: 'rgba(236,72,153,0.08)', icon: '#f472b6', activeBg: 'rgba(236,72,153,0.15)' },
+  Productivity: {
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#fbbf24', // Premium Amber
+    activeBg: 'rgba(251,191,36,0.1)',
+  },
+  Marketing: {
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#f472b6', // Premium Pink
+    activeBg: 'rgba(244,114,182,0.1)',
+  },
   'Content Creation': {
-    bg: 'rgba(249,115,22,0.08)',
-    icon: '#fb923c',
-    activeBg: 'rgba(249,115,22,0.15)',
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#fb923c', // Premium Orange
+    activeBg: 'rgba(251,146,60,0.1)',
   },
-  Education: { bg: 'rgba(99,102,241,0.08)', icon: '#818cf8', activeBg: 'rgba(99,102,241,0.15)' },
+  Education: {
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#818cf8', // Premium Indigo
+    activeBg: 'rgba(129,140,248,0.1)',
+  },
   'Mobile Apps': {
-    bg: 'rgba(14,165,233,0.08)',
-    icon: '#38bdf8',
-    activeBg: 'rgba(14,165,233,0.15)',
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#38bdf8', // Premium Sky
+    activeBg: 'rgba(56,189,248,0.1)',
   },
   'Health & Fitness': {
-    bg: 'rgba(244,63,94,0.08)',
-    icon: '#fb7185',
-    activeBg: 'rgba(244,63,94,0.15)',
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#fb7185', // Premium Rose
+    activeBg: 'rgba(251,113,133,0.1)',
   },
-  Fintech: { bg: 'rgba(20,184,166,0.08)', icon: '#2dd4bf', activeBg: 'rgba(20,184,166,0.15)' },
-  Analytics: { bg: 'rgba(168,85,247,0.08)', icon: '#c084fc', activeBg: 'rgba(168,85,247,0.15)' },
+  Fintech: {
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#2dd4bf', // Premium Teal
+    activeBg: 'rgba(45,212,191,0.1)',
+  },
+  Analytics: {
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#c084fc', // Premium Purple
+    activeBg: 'rgba(192,132,252,0.1)',
+  },
   'Design Tools': {
-    bg: 'rgba(217,70,239,0.08)',
-    icon: '#e879f9',
-    activeBg: 'rgba(217,70,239,0.15)',
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#e879f9', // Premium Fuchsia
+    activeBg: 'rgba(232,121,249,0.1)',
   },
-  'E-commerce': { bg: 'rgba(245,158,11,0.08)', icon: '#fbbf24', activeBg: 'rgba(245,158,11,0.15)' },
+  'E-commerce': {
+    bg: 'rgba(255,255,255,0.02)',
+    icon: '#a3e635', // Premium Lime
+    activeBg: 'rgba(163,230,53,0.1)',
+  },
 }
 
 const DEFAULT_CAT_COLOR = {
-  bg: 'rgba(255,255,255,0.04)',
-  icon: '#888',
-  activeBg: 'rgba(255,255,255,0.08)',
+  bg: 'rgba(255,255,255,0.02)',
+  icon: '#888888',
+  activeBg: 'rgba(255,255,255,0.06)',
 }
 
 function getCatColor(cat: string | null) {
@@ -166,8 +181,8 @@ function getCatColor(cat: string | null) {
 }
 
 const REVENUE_FILTERS = [
-  { label: '$1k – $30k', value: '1k-30k', min: 1_000, max: 30_000 },
   { label: 'Top Companies', value: 'top', min: undefined, max: undefined },
+  { label: '$1k – $30k', value: '1k-30k', min: 1_000, max: 30_000 },
 ]
 
 const BENTO_CLASSES = [
@@ -188,114 +203,103 @@ const BENTO_CLASSES = [
 
 function StartupCard({ startup, index }: { startup: Startup; index: number }) {
   const hasGrowth = startup.growth30d != null && startup.growth30d > 0
-  const CatIcon = (startup.category && CAT_ICONS[startup.category]) || Layers
 
   return (
     <Link
       href={`/inspirations/${startup.slug}`}
-      className="group relative flex flex-col justify-between rounded-xl p-4 surface-card cursor-pointer transition-all duration-300 animate-fade-in-up hover:-translate-y-[2px]"
+      className="group relative flex items-center gap-4 rounded-xl p-3.5 transition-all duration-300 animate-fade-in-up border border-transparent bg-transparent hover:bg-white/[0.02]"
       style={{
         animationFillMode: 'both',
         animationDelay: `${index * 0.05}s`,
       }}
     >
-      <div>
-        <div className="flex items-start gap-3 mb-2.5">
-          <img
-            src={startup.icon!}
-            alt=""
-            className="h-10 w-10 rounded-lg object-cover"
-            style={{ boxShadow: 'var(--shadow-surface-xs)' }}
-          />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1">
-              <h3
-                className="text-[14px] text-[#fdf8f0] truncate"
-                style={{ fontWeight: 550, letterSpacing: '-0.01em' }}
-              >
-                {startup.name}
-              </h3>
-              <ArrowUpRight className="h-3 w-3 shrink-0 text-[#444] group-hover:text-[#888] transition-colors duration-150" />
-            </div>
-            {startup.website && (
-              <p
-                className="text-[11.5px] text-[#666] truncate"
-                style={{ letterSpacing: '-0.005em' }}
-              >
-                {domain(startup.website)}
-              </p>
+      <div className="flex items-center gap-4 flex-1 min-w-0">
+        <img
+          src={startup.icon!}
+          alt=""
+          className="h-12 w-12 rounded-xl object-cover shrink-0 transition-transform duration-500 group-hover:scale-[1.02]"
+          style={{ boxShadow: 'var(--shadow-surface-xs)' }}
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <h3
+              className="text-[15px] text-[#fdf8f0] truncate"
+              style={{ fontWeight: 600, letterSpacing: '-0.01em' }}
+            >
+              {startup.name}
+            </h3>
+            <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#444] group-hover:text-[#888] transition-colors duration-150" />
+            {startup.category && (
+              <span className="ml-1 text-[11px] text-[#666] bg-[rgba(255,255,255,0.03)] px-1.5 py-[1px] rounded-md border border-white/[0.03]">
+                {startup.category}
+              </span>
             )}
           </div>
+          {startup.description && (
+            <p className="text-[13px] text-[#777] truncate" style={{ letterSpacing: '-0.005em' }}>
+              {startup.description}
+            </p>
+          )}
         </div>
-
-        {startup.description && (
-          <p
-            className="text-[12.5px] text-[#777] leading-[1.55] line-clamp-2 mb-2.5"
-            style={{ letterSpacing: '-0.005em' }}
-          >
-            {startup.description}
-          </p>
-        )}
-
-        {startup.category && (
-          <span
-            className="inline-flex items-center gap-1 text-[11px] text-[#888] bg-[rgba(255,255,255,0.04)] px-2 py-[3px] rounded-md"
-            style={{ fontWeight: 480 }}
-          >
-            <CatIcon className="h-3 w-3 text-[#666]" />
-            {startup.category}
-          </span>
-        )}
       </div>
 
-      <div
-        className="flex items-end justify-between mt-3 pt-3"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
-      >
-        <div>
+      <div className="flex items-center gap-6 sm:gap-10 shrink-0 pr-2">
+        <div className="hidden sm:flex flex-col items-end min-w-[70px]">
+          <p className="text-[10px] text-[#555] uppercase tracking-wider font-semibold mb-0.5">
+            MRR
+          </p>
+          <span className="text-[14px] text-[#ddd]" style={{ fontWeight: 600 }}>
+            {startup.revenueMrr > 0 ? fmt(startup.revenueMrr) : '—'}
+          </span>
+        </div>
+
+        <div className="hidden md:flex flex-col items-end min-w-[80px]">
+          <p className="text-[10px] text-[#555] uppercase tracking-wider font-semibold mb-0.5">
+            Total Rev
+          </p>
+          <span className="text-[14px] text-[#ddd]" style={{ fontWeight: 600 }}>
+            {startup.revenueTotal > 0 ? fmt(startup.revenueTotal) : '—'}
+          </span>
+        </div>
+
+        <div className="flex flex-col items-end min-w-[90px]">
+          <p className="text-[10px] text-[#555] uppercase tracking-wider font-semibold mb-0.5">
+            30d Rev
+          </p>
           <p
-            className="text-[17px] text-[#fdf8f0] leading-none"
+            className="text-[18px] text-[#fdf8f0] leading-none flex items-center gap-1.5"
             style={{
               fontFamily: 'var(--font-geist-mono)',
-              fontWeight: 600,
+              fontWeight: 700,
               letterSpacing: '-0.02em',
             }}
           >
             {fmt(startup.revenueLast30Days)}
+            {hasGrowth && (
+              <span
+                className="text-[10px] text-[#22a06b] flex items-center bg-[#22a06b]/10 px-1 rounded"
+                style={{ fontFamily: 'var(--font-geist)', fontWeight: 600, letterSpacing: '0' }}
+                title={`${startup.growth30d!.toFixed(0)}% growth`}
+              >
+                <TrendingUp className="h-2.5 w-2.5 mr-0.5" />
+                {startup.growth30d!.toFixed(0)}%
+              </span>
+            )}
           </p>
-          <p className="text-[10px] text-[#555] mt-1" style={{ fontWeight: 450 }}>
-            /month
-          </p>
-        </div>
-        <div className="flex items-center gap-2.5">
-          {hasGrowth && (
-            <span
-              className="flex items-center gap-0.5 text-[11.5px] text-[#22a06b]"
-              style={{ fontWeight: 550 }}
-            >
-              <TrendingUp className="h-3 w-3" />
-              {startup.growth30d!.toFixed(0)}%
-            </span>
-          )}
-          {startup.customers > 0 && (
-            <span className="flex items-center gap-0.5 text-[11px] text-[#555]">
-              <Users className="h-3 w-3" />
-              {startup.customers.toLocaleString()}
-            </span>
-          )}
         </div>
       </div>
 
       {startup.onSale && startup.askingPrice != null && (
         <div
-          className="absolute top-3 right-3 text-[9.5px] text-[#22a06b] px-1.5 py-[2px] rounded-md"
+          className="absolute -top-1.5 -right-1.5 text-[9px] text-[#22a06b] px-1.5 py-[1.5px] rounded-md font-bold uppercase tracking-wider"
           style={{
             fontFamily: 'var(--font-geist-mono)',
-            fontWeight: 600,
-            background: 'rgba(34,160,107,0.06)',
+            background: 'hsl(150 60% 10%)',
+            border: '1px solid rgba(34,160,107,0.2)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
           }}
         >
-          {fmt(startup.askingPrice)}
+          For Sale
         </div>
       )}
     </Link>
@@ -328,7 +332,7 @@ function InspirationsContent() {
     })
   }, [])
 
-  const revenueFilter = searchParams.get('rev') || '1k-30k'
+  const revenueFilter = searchParams.get('rev') || 'top'
   const activeRevFilter =
     REVENUE_FILTERS.find((f) => f.value === revenueFilter) || REVENUE_FILTERS[0]
 
@@ -406,7 +410,7 @@ function InspirationsContent() {
             <div className="flex items-center gap-2.5">
               <button
                 onClick={() => router.push('/dashboard')}
-                className="text-[12px] text-[#666] hover:text-[#bbb] transition-colors"
+                className="text-[12px] text-[#666] hover:text-[#bbb] transition-colors cursor-pointer"
                 style={{ fontWeight: 480 }}
               >
                 Dashboard
@@ -424,7 +428,7 @@ function InspirationsContent() {
           ) : (
             <button
               onClick={() => router.push('/login')}
-              className="text-[12px] text-[#666] hover:text-[#bbb] transition-colors"
+              className="text-[12px] text-[#666] hover:text-[#bbb] transition-colors cursor-pointer"
               style={{ fontWeight: 480 }}
             >
               Sign in
@@ -533,63 +537,20 @@ function InspirationsContent() {
           </div>
         </div>
 
-        {/* Revenue toggle */}
-        <div
-          className="inline-flex items-center gap-0.5 p-0.5 rounded-lg mb-6 animate-fade-in-up"
-          style={{
-            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 2px rgba(0,0,0,0.15)',
-            animationDelay: '0.05s',
-            animationFillMode: 'both',
-          }}
-        >
-          {REVENUE_FILTERS.map((f) => {
-            const isActive =
-              revenueFilter === f.value || (f.value === '1k-30k' && !searchParams.get('rev'))
-            return (
-              <button
-                key={f.value}
-                onClick={() =>
-                  updateParams({
-                    rev: f.value === '1k-30k' ? undefined : f.value,
-                    page: undefined,
-                  })
-                }
-                className="text-[12px] px-3 py-1.5 rounded-md cursor-pointer transition-all duration-150"
-                style={{
-                  fontWeight: 520,
-                  letterSpacing: '-0.01em',
-                  ...(isActive
-                    ? {
-                        background: 'hsl(60 3% 18%)',
-                        color: '#fdf8f0',
-                        boxShadow: 'var(--shadow-surface-xs)',
-                      }
-                    : {
-                        background: 'transparent',
-                        color: '#666',
-                      }),
-                }}
-              >
-                {f.label}
-              </button>
-            )
-          })}
-        </div>
-
         {/* Categories Bento Grid */}
         <div
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 lg:gap-4 pb-12 mb-12"
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 lg:gap-4 pb-8 mb-8"
           style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
         >
           {/* All tile */}
           <button
             onClick={() => updateParams({ category: undefined, page: undefined })}
-            className={`group relative overflow-hidden flex flex-col items-start justify-between p-5 sm:p-6 rounded-[24px] transition-all duration-300 animate-fade-in-up cursor-pointer hover:-translate-y-1 ${BENTO_CLASSES[0]}`}
+            className={`group relative overflow-hidden flex flex-col items-start justify-between p-5 sm:p-6 rounded-[24px] transition-all duration-300 animate-fade-in-up cursor-pointer hover:bg-white/[0.04] ${BENTO_CLASSES[0]}`}
             style={{
               minHeight: '130px',
-              background: !activeCategory ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.02)',
+              background: !activeCategory ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.02)',
               border: !activeCategory
-                ? '1px solid rgba(255,255,255,0.15)'
+                ? '1px solid rgba(255,255,255,0.1)'
                 : '1px solid rgba(255,255,255,0.05)',
               boxShadow: !activeCategory
                 ? '0 0 0 1px rgba(255,255,255,0.05), 0 8px 24px -8px rgba(0,0,0,0.5)'
@@ -637,11 +598,13 @@ function InspirationsContent() {
                     page: undefined,
                   })
                 }
-                className={`group relative overflow-hidden flex flex-col items-start justify-between p-5 sm:p-6 rounded-[24px] transition-all duration-300 animate-fade-in-up cursor-pointer hover:-translate-y-1 ${BENTO_CLASSES[index] || 'col-span-1'}`}
+                className={`group relative overflow-hidden flex flex-col items-start justify-between p-5 sm:p-6 rounded-[24px] transition-all duration-300 animate-fade-in-up cursor-pointer hover:bg-white/[0.04] ${BENTO_CLASSES[index] || 'col-span-1'}`}
                 style={{
                   minHeight: '130px',
                   background: isActive ? colors.activeBg : colors.bg,
-                  border: isActive ? `1px solid ${colors.icon}40` : `1px solid ${colors.icon}15`,
+                  border: isActive
+                    ? `1px solid ${colors.icon}40`
+                    : `1px solid rgba(255,255,255,0.05)`,
                   boxShadow: isActive
                     ? `0 0 0 1px ${colors.icon}20, 0 8px 24px -8px ${colors.icon}40`
                     : 'none',
@@ -678,10 +641,53 @@ function InspirationsContent() {
           })}
         </div>
 
+        {/* Revenue toggle */}
+        <div
+          className="inline-flex items-center gap-0.5 p-0.5 rounded-lg mb-8 animate-fade-in-up"
+          style={{
+            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 2px rgba(0,0,0,0.15)',
+            animationDelay: '0.05s',
+            animationFillMode: 'both',
+          }}
+        >
+          {REVENUE_FILTERS.map((f) => {
+            const isActive =
+              revenueFilter === f.value || (f.value === 'top' && !searchParams.get('rev'))
+            return (
+              <button
+                key={f.value}
+                onClick={() =>
+                  updateParams({
+                    rev: f.value === 'top' ? undefined : f.value,
+                    page: undefined,
+                  })
+                }
+                className="text-[12px] px-3 py-1.5 rounded-md cursor-pointer transition-all duration-200 hover:text-[#bbb] hover:bg-white/[0.02]"
+                style={{
+                  fontWeight: 520,
+                  letterSpacing: '-0.01em',
+                  ...(isActive
+                    ? {
+                        background: 'hsl(60 3% 18%)',
+                        color: '#fdf8f0',
+                        boxShadow: 'var(--shadow-surface-xs)',
+                      }
+                    : {
+                        background: 'transparent',
+                        color: '#666',
+                      }),
+                }}
+              >
+                {f.label}
+              </button>
+            )
+          })}
+        </div>
+
         {/* Content */}
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {[...Array(18)].map((_, i) => (
+          <div className="flex flex-col gap-2">
+            {[...Array(15)].map((_, i) => (
               <div
                 key={i}
                 className="animate-fade-in-up"
@@ -690,7 +696,7 @@ function InspirationsContent() {
                   animationFillMode: 'both',
                 }}
               >
-                <div className="h-[210px] rounded-xl animate-pulse surface-card" />
+                <div className="h-[76px] rounded-xl animate-pulse bg-white/[0.02] border border-white/[0.02]" />
               </div>
             ))}
           </div>
@@ -702,7 +708,33 @@ function InspirationsContent() {
             <p className="text-[13px] text-[#555] mt-1">Try a different category or filter</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          <div className="flex flex-col gap-2">
+            {/* List Header */}
+            <div className="flex items-center gap-4 px-3.5 py-2 border-b border-white/[0.04] mb-2">
+              <div className="flex-1 min-w-0">
+                <span className="text-[11px] text-[#444] uppercase tracking-wider font-bold ml-16">
+                  Startup
+                </span>
+              </div>
+              <div className="flex items-center gap-6 sm:gap-10 shrink-0 pr-2">
+                <div className="hidden sm:flex flex-col items-end min-w-[70px]">
+                  <span className="text-[11px] text-[#444] uppercase tracking-wider font-bold">
+                    MRR
+                  </span>
+                </div>
+                <div className="hidden md:flex flex-col items-end min-w-[80px]">
+                  <span className="text-[11px] text-[#444] uppercase tracking-wider font-bold">
+                    Total Rev
+                  </span>
+                </div>
+                <div className="flex flex-col items-end min-w-[90px]">
+                  <span className="text-[11px] text-[#444] uppercase tracking-wider font-bold">
+                    30d Rev
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {startups.map((s, i) => (
               <StartupCard key={s.slug} startup={s} index={i} />
             ))}

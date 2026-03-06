@@ -48,29 +48,27 @@ function StatCard({
   icon: Icon,
 }: {
   label: string
-  value: string
-  sub?: string
+  value: string | React.ReactNode
+  sub?: string | React.ReactNode
   icon: React.ElementType
 }) {
   return (
-    <div className="surface-card p-5 rounded-xl">
-      <div className="flex items-center gap-2 mb-3">
-        <Icon className="h-4 w-4 text-[#555]" />
-        <p className="text-[12px] text-[#666]" style={{ fontWeight: 520 }}>
-          {label}
-        </p>
+    <div className="bg-white/[0.02] p-5 rounded-[20px] border border-white/[0.04]">
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="size-8 rounded-xl bg-white/[0.03] flex items-center justify-center border border-white/[0.02]">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <p className="text-[13px] text-muted-foreground font-medium tracking-tight">{label}</p>
       </div>
-      <p
-        className="text-[22px] text-[#fdf8f0] leading-none"
-        style={{ fontFamily: 'var(--font-geist-mono)', fontWeight: 600, letterSpacing: '-0.02em' }}
-      >
-        {value}
-      </p>
-      {sub && (
-        <p className="text-[11px] text-[#555] mt-2" style={{ fontWeight: 450 }}>
-          {sub}
-        </p>
-      )}
+      <div className="flex flex-col gap-1.5">
+        <div
+          className="text-[26px] text-foreground leading-none tracking-tighter"
+          style={{ fontFamily: 'var(--font-geist-mono)', fontWeight: 650 }}
+        >
+          {value}
+        </div>
+        {sub && <div className="text-[12px] text-muted-foreground/60 font-medium">{sub}</div>}
+      </div>
     </div>
   )
 }
@@ -78,13 +76,13 @@ function StatCard({
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div
-      className="flex items-center justify-between py-3"
+      className="flex items-center justify-between py-3.5"
       style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
     >
-      <p className="text-[12px] text-[#555]" style={{ fontWeight: 500 }}>
-        {label}
-      </p>
-      <div className="text-[13px] text-[#bbb] flex items-center gap-1.5">{children}</div>
+      <p className="text-[13px] text-muted-foreground font-medium">{label}</p>
+      <div className="text-[13px] text-foreground flex items-center gap-1.5 font-medium">
+        {children}
+      </div>
     </div>
   )
 }
@@ -197,47 +195,48 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
           <img
             src={startup.icon!}
             alt=""
-            className="h-16 w-16 rounded-2xl object-cover shrink-0 surface-card"
+            className="h-20 w-20 rounded-[20px] object-cover shrink-0 shadow-[0_2px_8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.1)] border border-white/[0.05]"
           />
-          <div className="min-w-0">
+          <div className="flex-1">
             <h1
-              className="text-[24px] sm:text-[28px] text-[#fdf8f0] mb-1.5"
+              className="text-[28px] sm:text-[32px] text-foreground mb-2"
               style={{ fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1.15 }}
             >
               {startup.name}
             </h1>
-            <div className="flex items-center gap-2.5 flex-wrap text-[13px]">
+            <div className="flex items-center gap-2.5 flex-wrap text-[13px] font-medium">
               {startup.website && (
                 <a
                   href={startup.website}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[#555] hover:text-[#999] transition-colors flex items-center gap-1"
+                  className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
                 >
+                  <Globe className="h-3.5 w-3.5" />
                   {domain(startup.website)}
-                  <ArrowUpRight className="h-3 w-3" />
+                  <ArrowUpRight className="h-3 w-3 opacity-50" />
                 </a>
               )}
               {startup.category && (
                 <>
-                  <span className="text-[#2a2a2a]">·</span>
-                  <span className="text-[#555]">{startup.category}</span>
+                  <span className="text-white/10">·</span>
+                  <span className="text-muted-foreground">{startup.category}</span>
                 </>
               )}
               {startup.country && (
                 <>
-                  <span className="text-[#2a2a2a]">·</span>
-                  <span className="text-[#555]">{startup.country}</span>
+                  <span className="text-white/10">·</span>
+                  <span className="text-muted-foreground">{startup.country}</span>
                 </>
               )}
               {startup.xHandle && (
                 <>
-                  <span className="text-[#2a2a2a]">·</span>
+                  <span className="text-white/10">·</span>
                   <a
                     href={`https://x.com/${startup.xHandle}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[#555] hover:text-[#999] transition-colors"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
                   >
                     @{startup.xHandle}
                   </a>
@@ -258,7 +257,7 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-10">
           <StatCard
             label="Revenue / mo"
             value={fmt(startup.revenueLast30Days)}
@@ -287,32 +286,29 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
             icon={Layers}
             sub="all time"
           />
-          <StatCard
-            label="Customers"
-            value={startup.customers > 0 ? startup.customers.toLocaleString() : '—'}
-            icon={Users}
-          />
         </div>
 
         {/* Details */}
-        <div className="surface-card rounded-xl p-6 mb-10">
-          <h2 className="text-[13px] text-[#fdf8f0] mb-4" style={{ fontWeight: 600 }}>
-            Details
-          </h2>
+        <div className="bg-white/[0.02] border border-white/[0.04] rounded-[24px] p-6 mb-10">
+          <h2 className="text-[14px] text-foreground mb-4 font-semibold tracking-tight">Details</h2>
           <div>
             <DetailRow label="Founded">
-              <Calendar className="h-3.5 w-3.5 text-[#444]" />
+              <Calendar className="h-4 w-4 text-muted-foreground/60" />
               {formatDate(startup.foundedDate)}
             </DetailRow>
             <DetailRow label="Payment provider">
-              <CreditCard className="h-3.5 w-3.5 text-[#444]" />
-              {startup.paymentProvider || '—'}
+              <CreditCard className="h-4 w-4 text-muted-foreground/60" />
+              <span className="capitalize">{startup.paymentProvider || '—'}</span>
             </DetailRow>
-            <DetailRow label="Audience">{startup.targetAudience || '—'}</DetailRow>
+            <DetailRow label="Audience">
+              <span className="capitalize">{startup.targetAudience || '—'}</span>
+            </DetailRow>
             <DetailRow label="Growth (30d)">
-              <span className={hasGrowth ? 'text-[#22a06b]' : hasNegGrowth ? 'text-red-400' : ''}>
-                {hasGrowth && <TrendingUp className="h-3.5 w-3.5 inline mr-1" />}
-                {hasNegGrowth && <TrendingDown className="h-3.5 w-3.5 inline mr-1" />}
+              <span
+                className={hasGrowth ? 'text-emerald-500' : hasNegGrowth ? 'text-rose-500' : ''}
+              >
+                {hasGrowth && <TrendingUp className="h-4 w-4 inline mr-1.5" />}
+                {hasNegGrowth && <TrendingDown className="h-4 w-4 inline mr-1.5" />}
                 {startup.growth30d != null
                   ? `${startup.growth30d >= 0 ? '+' : ''}${startup.growth30d.toFixed(1)}%`
                   : '—'}
@@ -379,8 +375,7 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
               href={startup.website}
               target="_blank"
               rel="noreferrer"
-              className="surface-card flex items-center justify-center gap-2 flex-1 py-3 rounded-xl text-[13px] text-[#ddd] hover:text-[#fff] transition-colors"
-              style={{ fontWeight: 550 }}
+              className="flex items-center justify-center gap-2 flex-1 py-3.5 rounded-xl text-[14px] text-foreground font-semibold bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] transition-all"
             >
               <Globe className="h-4 w-4" />
               Visit Website
@@ -390,15 +385,10 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
             href={`https://trustmrr.com/${startup.slug}`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center justify-center gap-2 flex-1 py-3 rounded-xl text-[13px] text-[#777] hover:text-[#bbb] transition-colors"
-            style={{
-              fontWeight: 550,
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.04)',
-            }}
+            className="flex items-center justify-center gap-2 flex-1 py-3.5 rounded-xl text-[14px] text-muted-foreground font-medium hover:text-foreground hover:bg-white/[0.02] transition-all"
           >
             View on TrustMRR
-            <ArrowUpRight className="h-3.5 w-3.5" />
+            <ArrowUpRight className="h-4 w-4 opacity-50" />
           </a>
         </div>
       </main>
