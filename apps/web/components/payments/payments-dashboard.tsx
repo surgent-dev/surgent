@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowUpFromLine, CircleDollarSign, Loader2, Plus } from 'lucide-react'
+import { ArrowUpFromLine, CircleDollarSign, Loader2, Plus, ArrowRight } from 'lucide-react'
+import { CircleNotch } from '@phosphor-icons/react'
 import Image from 'next/image'
 import { toast } from 'react-hot-toast'
 import {
@@ -97,57 +98,71 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
 
   return (
     <div className="w-full h-full flex items-center justify-center p-8">
-      <div className="flex flex-col items-center w-full max-w-[340px] text-center">
+      <div className="flex flex-col items-center w-full max-w-[360px]">
         {/* Integration logos */}
-        <div className="flex items-center mb-7">
-          <div className="size-14 rounded-2xl border bg-card shadow-sm grid place-items-center">
+        <div className="flex items-center mb-8">
+          <div className="size-[60px] rounded-[18px] border bg-card shadow-sm grid place-items-center">
             <Image
               src="/surgent-coin.svg"
               alt="Surgent"
-              width={28}
-              height={28}
-              className="size-7 object-contain"
+              width={32}
+              height={32}
+              className="size-8 object-contain"
             />
           </div>
-          <div className="w-8 border-t border-dashed border-border" />
-          <div className="size-14 rounded-2xl border bg-card shadow-sm grid place-items-center">
+          <div className="flex items-center w-10">
+            <div className="w-full border-t border-dashed border-border" />
+          </div>
+          <div className="size-[60px] rounded-[18px] border bg-card shadow-sm grid place-items-center">
             <Image
               src="/whop_logo_brandmark_orange.svg"
               alt="Whop"
-              width={28}
-              height={28}
-              className="size-7"
+              width={30}
+              height={30}
+              className="size-[30px]"
             />
           </div>
         </div>
 
-        <h3 className="text-lg font-semibold mb-2">Start accepting payments</h3>
-        <p className="text-[13px] text-muted-foreground leading-relaxed mb-8">
-          Surgent partners with <span className="text-foreground font-medium">Whop</span> to let you
-          sell access to your AI agents, manage subscriptions, and get paid.
-        </p>
+        <div className="text-center mb-8">
+          <h3 className="text-[20px] font-bold tracking-tight mb-2">Start accepting payments</h3>
+          <p className="text-[14px] text-muted-foreground leading-relaxed">
+            Surgent partners with <span className="text-foreground font-medium">Whop</span> to let
+            you sell access, manage subscriptions, and get paid.
+          </p>
+        </div>
 
         {disconnectedAccount ? (
           <button
             type="button"
             onClick={handleReconnect}
             disabled={whopConnect.isPending}
-            className="flex items-center gap-3 w-full p-3.5 rounded-xl border hover:bg-muted/50 transition-colors disabled:opacity-50"
+            className={cn(
+              'flex items-center gap-4 w-full p-4 rounded-[16px] text-left transition-all',
+              'bg-black/5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(255,255,255,0.05)]',
+              'hover:bg-black/10 disabled:opacity-50',
+            )}
           >
-            <div className="size-9 rounded-lg border bg-muted/40 grid place-items-center shrink-0">
-              <CircleDollarSign className="size-5 text-muted-foreground" strokeWidth={1.5} />
+            <div className="size-10 rounded-xl bg-[#FF6243]/10 grid place-items-center shrink-0">
+              <Image
+                src="/whop_logo_brandmark_orange.svg"
+                alt="Whop"
+                width={20}
+                height={20}
+                className="size-5"
+              />
             </div>
-            <div className="text-left min-w-0 flex-1">
-              <div className="text-sm font-medium truncate">
+            <div className="min-w-0 flex-1">
+              <div className="text-[14px] font-semibold truncate">
                 {disconnectedAccount.data.title || 'Untitled'}
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-[13px] text-muted-foreground mt-0.5">
                 {whopConnect.isPending ? 'Reconnecting...' : 'Tap to reconnect'}
               </div>
             </div>
             <span
               className={cn(
-                'shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium',
+                'shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
                 isLive ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600',
               )}
             >
@@ -155,23 +170,37 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
             </span>
           </button>
         ) : (
-          <div className="w-full space-y-3 mt-4">
-            <Input
+          <div className="w-full space-y-3">
+            <input
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               placeholder="Your company name"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && companyName.trim()) handleCreate()
               }}
+              className={cn(
+                'flex h-12 w-full rounded-[16px] bg-black/5 px-4 py-2 text-[14px]',
+                'text-foreground placeholder:text-muted-foreground/40',
+                'border border-transparent transition-all duration-200 outline-none',
+                'shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(255,255,255,0.05)]',
+                'hover:shadow-[inset_0_2px_4px_rgba(0,0,0,0.15),inset_0_0_0_1px_rgba(255,255,255,0.08)] hover:bg-black/10',
+                'focus:bg-black/20 focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.15),inset_0_0_0_1px_rgba(255,255,255,0.12),0_0_0_3px_rgba(255,255,255,0.05)]',
+              )}
             />
-            <button
-              type="button"
+            <Button
               onClick={handleCreate}
               disabled={!companyName.trim() || whopConnect.isPending}
-              className="w-full h-10 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary-hover transition-all duration-100 disabled:opacity-40 flex items-center justify-center"
+              className="w-full h-12 rounded-2xl font-bold text-[14px]"
             >
-              {whopConnect.isPending ? 'Creating...' : 'Get started'}
-            </button>
+              {whopConnect.isPending ? (
+                <CircleNotch className="size-4 animate-spin" />
+              ) : (
+                <>
+                  Connect Whop
+                  <ArrowRight className="size-4 ml-1.5" />
+                </>
+              )}
+            </Button>
           </div>
         )}
       </div>
