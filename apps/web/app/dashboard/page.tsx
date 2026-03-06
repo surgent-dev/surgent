@@ -57,7 +57,7 @@ function getProjectColor(id: string): string {
     hash = id.charCodeAt(i) + ((hash << 5) - hash)
   }
   const hue = Math.abs(hash) % 360
-  return `hsl(${hue}, 35%, 95%)`
+  return `hsla(${hue}, 40%, 60%, 0.1)`
 }
 
 function getProjectAccent(id: string): string {
@@ -66,7 +66,7 @@ function getProjectAccent(id: string): string {
     hash = id.charCodeAt(i) + ((hash << 5) - hash)
   }
   const hue = Math.abs(hash) % 360
-  return `hsl(${hue}, 30%, 50%)`
+  return `hsl(${hue}, 45%, 65%)`
 }
 
 // Format relative time
