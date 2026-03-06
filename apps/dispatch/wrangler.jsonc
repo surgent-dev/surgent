@@ -17,5 +17,13 @@
       "namespace": "surgent-apps-prod",
       "remote": true
     }
+  ],
+  // KV namespace for custom domain → worker script name mappings.
+  // Create with: wrangler kv namespace create DOMAIN_MAP
+  "kv_namespaces": [
+    {
+      "binding": "DOMAIN_MAP",
+      "id": "03d40922d7b34105ad2bed0648622dea"
+    }
   ]
 }

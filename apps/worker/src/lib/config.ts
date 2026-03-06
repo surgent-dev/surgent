@@ -68,6 +68,8 @@ export const config = {
     dispatchNamespace: env.DISPATCH_NAMESPACE_NAME,
     deployUrl: env.CLOUDFLARE_DEPLOY_URL,
     deployDomain: env.DEPLOY_DOMAIN || 'surgent.site',
+    zoneId: env.CLOUDFLARE_ZONE_ID,
+    kvNamespaceId: env.CLOUDFLARE_DOMAIN_KV_NAMESPACE_ID,
   },
   convex: {
     host: env.CONVEX_HOST || 'https://api.convex.dev',
@@ -103,6 +105,21 @@ export const config = {
   autumn: {
     secretKey: env.AUTUMN_SECRET_KEY,
   },
+  domainProvider: (env.DOMAIN_PROVIDER || 'entri') as 'entri' | 'namecheap',
+  namecheap: {
+    apiUser: env.NAMECHEAP_API_USER || '',
+    apiKey: env.NAMECHEAP_API_KEY || '',
+    userName: env.NAMECHEAP_USERNAME || '',
+    clientIp: env.NAMECHEAP_CLIENT_IP || '',
+    sandbox: env.NAMECHEAP_SANDBOX !== 'false',
+  },
+  entri: {
+    applicationId: env.ENTRI_APP_ID,
+    secret: env.ENTRI_SECRET,
+    apiKey: env.ENTRI_API_KEY,
+    webhookSecret: env.ENTRI_WEBHOOK_SECRET,
+    devMode: env.ENTRI_DEV_MODE === 'true',
+  },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
     baseUrl: env.OPENCODE_BASE_URL,
@@ -111,3 +128,26 @@ export const config = {
     configDir: env.OPENCODE_CONFIG_DIR || '/home/user/opencode-config',
   },
 } as const
+
+/**
+ * Validate that required domain-related env vars are present.
+ * Call at startup to surface config issues early.
+ */
+export function validateDomainConfig(): string[] {
+  const warnings: string[] = []
+
+  if (config.domainProvider === 'entri' && !config.entri.devMode) {
+    if (!config.entri.applicationId) warnings.push('ENTRI_APP_ID is required for Entri integration')
+    if (!config.entri.secret) warnings.push('ENTRI_SECRET is required for Entri JWT generation')
+    if (!config.entri.apiKey)
+      warnings.push('ENTRI_API_KEY is required for domain availability checks')
+    if (!config.entri.webhookSecret)
+      warnings.push('ENTRI_WEBHOOK_SECRET is required for webhook signature verification')
+  }
+
+  if (env.NODE_ENV === 'production' && !config.entri.webhookSecret) {
+    warnings.push('ENTRI_WEBHOOK_SECRET is not set — webhook signatures will not be verified')
+  }
+
+  return warnings
+}

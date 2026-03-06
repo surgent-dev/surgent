@@ -25,6 +25,8 @@ import {
   CircleNotch,
   CheckCircle,
   XCircle,
+  Trash,
+  Stop,
 } from '@phosphor-icons/react'
 import { useCustomer } from 'autumn-js/react'
 import { useCredits } from '@/hooks/use-credits'
@@ -40,11 +42,13 @@ import {
 import PlanDialog from '@/components/plan-dialog'
 import {
   useDeployProject,
+  useCancelDeployment,
   useRenameProject,
   useUpdateProjectVisibility,
   useLatestDeploymentQuery,
   useHostnameAvailability,
 } from '@/queries/projects'
+import { useProjectDomains, useRemoveDomain } from '@/queries/domains'
 import { http } from '@/lib/http'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
@@ -52,6 +56,7 @@ import { useGitHubStatus } from '@/queries/github'
 import UserMenu from '@/components/project-header/user-menu'
 import PayDialogs from '@/components/project-header/pay-dialogs'
 import SellDialog from '@/components/project-header/sell-dialog'
+import { PreviewButton } from '@/components/publish'
 
 // Types
 interface ProjectHeaderProps {
@@ -76,9 +81,10 @@ const STATUS_LABELS: Record<string, string> = {
   deployed: 'Deployed',
   build_failed: 'Build failed',
   deploy_failed: 'Deploy failed',
+  cancelled: 'Cancelled',
 }
 
-const TERMINAL_STATUSES = ['deployed', 'deploy_failed', 'build_failed']
+const TERMINAL_STATUSES = ['deployed', 'deploy_failed', 'build_failed', 'cancelled']
 
 function sanitizeHostname(value: string) {
   return value
@@ -114,10 +120,23 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
   // Queries & mutations
   const deployProject = useDeployProject()
+  const cancelDeployment = useCancelDeployment()
   const renameProject = useRenameProject()
   useGitHubStatus(projectId, { enabled: isGitHubDialogOpen })
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
   const updateVisibility = useUpdateProjectVisibility()
+  const { data: domainsData } = useProjectDomains(projectId)
+  const removeDomain = useRemoveDomain()
+
+  // Domain states
+  const activeDomain = domainsData?.domains?.find((d) => d.status === 'active')
+  const configuringDomain = domainsData?.domains?.find((d) => d.status === 'dns_configuring')
+  const pendingDomain = domainsData?.domains?.find(
+    (d) => d.status === 'pending' || d.status === 'purchasing',
+  )
+  const errorDomain = domainsData?.domains?.find((d) => d.status === 'error')
+  // For display: pick the most relevant domain to show
+  const displayDomain = activeDomain || configuringDomain || pendingDomain || errorDomain
 
   // Toast when deployment completes
   const prevStatusRef = useRef<string | null>(null)
@@ -131,7 +150,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, {
           position: 'top-right',
         })
-      } else {
+      } else if (curr !== 'cancelled') {
         toast.error(`Deployment failed`, { position: 'top-right' })
       }
     }
@@ -207,7 +226,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         },
       )
     },
-    [deployProject, isDeploying, projectId],
+    [deployProject, isDeploying, projectId, credits],
   )
 
   const handleDownload = useCallback(async () => {
@@ -251,7 +270,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const handlePublishOpenChange = (open: boolean) => {
     setIsPublishOpen(open)
     if (open) {
-      setHostnameInput(workerName || '')
+      // Pre-fill with existing worker name, or generate a slug from the project name
+      const defaultHostname = workerName || sanitizeHostname(project?.name || '')
+      setHostnameInput(defaultHostname)
       setIsEditingHostname(false)
     }
   }
@@ -263,6 +284,20 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
     setPendingHostname(name)
     handleDeploy(name)
+  }
+
+  const handleCancelDeploy = () => {
+    if (!projectId || !latestDeployment?.id || !isDeploymentInProgress) return
+    cancelDeployment.mutate(
+      { id: projectId, deploymentId: latestDeployment.id },
+      {
+        onSuccess: () => {
+          setIsDeploying(false)
+          toast.success('Deployment cancelled', { position: 'top-right' })
+        },
+        onError: () => toast.error('Failed to cancel', { position: 'top-right' }),
+      },
+    )
   }
 
   return (
@@ -444,20 +479,25 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             </Button>
           )}
 
+          {/* Preview */}
+          <PreviewButton />
+
           {/* Publish */}
           <DropdownMenu open={isPublishOpen} onOpenChange={handlePublishOpenChange}>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="brand"
-                disabled={!projectId || isDeploying}
-                aria-label="Publish project"
-              >
-                {isDeploying ? (
+              <Button variant="brand" disabled={!projectId} aria-label="Publish project">
+                {isDeploying || isDeploymentInProgress ? (
                   <CircleNotch className="size-4 animate-spin" />
                 ) : (
                   <RocketLaunch className="size-4" weight="fill" />
                 )}
-                <span className="hidden sm:inline">{workerName ? 'Republish' : 'Publish'}</span>
+                <span className="hidden sm:inline">
+                  {isDeploying || isDeploymentInProgress
+                    ? 'Deploying'
+                    : workerName
+                      ? 'Republish'
+                      : 'Publish'}
+                </span>
                 <CaretDown className="size-3 hidden sm:block" weight="bold" />
               </Button>
             </DropdownMenuTrigger>
@@ -574,23 +614,133 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   )}
                 </div>
 
-                {/* In-progress status */}
+                {/* In-progress status + cancel */}
                 {latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status) && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <CircleNotch className="size-3 animate-spin text-brand" />
-                    {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
+                    <CircleNotch className="size-3 animate-spin text-brand shrink-0" />
+                    <span className="flex-1">
+                      {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCancelDeploy}
+                      disabled={cancelDeployment.isPending}
+                      className="flex items-center gap-1 text-[11px] text-destructive/70 hover:text-destructive transition-colors shrink-0"
+                    >
+                      <Stop className="size-3" weight="fill" />
+                      {cancelDeployment.isPending ? 'Cancelling' : 'Cancel'}
+                    </button>
                   </div>
+                )}
+
+                {/* Cancelled status */}
+                {latestDeployment?.status === 'cancelled' && (
+                  <p className="text-xs text-muted-foreground truncate">Deployment cancelled</p>
                 )}
 
                 {/* Error status */}
                 {latestDeployment &&
                   TERMINAL_STATUSES.includes(latestDeployment.status) &&
-                  latestDeployment.status !== 'deployed' && (
+                  !['deployed', 'cancelled'].includes(latestDeployment.status) && (
                     <p className="text-xs text-destructive truncate">
                       {latestDeployment.error || 'Deployment failed'}
                     </p>
                   )}
               </div>
+
+              {/* Custom Domain */}
+              {
+                <div className="border-t px-3 py-2.5">
+                  {activeDomain ? (
+                    <div className="flex items-center gap-2">
+                      <Globe
+                        className="size-3.5 text-muted-foreground/70 shrink-0"
+                        weight="duotone"
+                      />
+                      <span className="size-1.5 rounded-full shrink-0 bg-emerald-500" />
+                      <span className="font-mono text-xs truncate flex-1">
+                        {activeDomain.domainName}
+                      </span>
+                      <span className="text-[10px] text-emerald-600">Live</span>
+                      <a
+                        href={`https://${activeDomain.domainName}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={iconBtn}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ArrowSquareOut className="size-3.5 text-muted-foreground" />
+                      </a>
+                    </div>
+                  ) : displayDomain ? (
+                    <div className="flex items-center gap-2">
+                      <Globe
+                        className="size-3.5 text-muted-foreground/70 shrink-0"
+                        weight="duotone"
+                      />
+                      {displayDomain.status === 'error' ? (
+                        <>
+                          <span className="size-1.5 rounded-full shrink-0 bg-red-500" />
+                          <span className="font-mono text-xs truncate flex-1">
+                            {displayDomain.domainName}
+                          </span>
+                          <span className="text-[10px] text-red-500">Failed</span>
+                        </>
+                      ) : displayDomain.status === 'dns_configuring' ? (
+                        <>
+                          <span className="size-1.5 rounded-full shrink-0 bg-amber-500 animate-pulse" />
+                          <span className="font-mono text-xs truncate flex-1">
+                            {displayDomain.domainName}
+                          </span>
+                          <span className="text-[10px] text-amber-600">Configuring</span>
+                        </>
+                      ) : (
+                        <>
+                          <CircleNotch className="size-3 animate-spin text-muted-foreground shrink-0" />
+                          <span className="font-mono text-xs truncate flex-1">
+                            {displayDomain.domainName === 'pending'
+                              ? 'Processing...'
+                              : displayDomain.domainName}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {displayDomain.status === 'purchasing' ? 'Purchasing' : 'Pending'}
+                          </span>
+                        </>
+                      )}
+                      <button
+                        className={`${iconBtn} hover:!text-destructive`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (displayDomain.projectId) {
+                            removeDomain.mutate({
+                              projectId: displayDomain.projectId,
+                              domainId: displayDomain.id,
+                            })
+                          }
+                        }}
+                        disabled={removeDomain.isPending}
+                        title="Remove domain"
+                      >
+                        <Trash className="size-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="flex items-center gap-2 w-full text-left hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        setIsPublishOpen(false)
+                        setIsDeploymentStatusOpen(true)
+                      }}
+                    >
+                      <Globe
+                        className="size-3.5 text-muted-foreground/70 shrink-0"
+                        weight="duotone"
+                      />
+                      <span className="text-xs text-muted-foreground">Add custom domain</span>
+                    </button>
+                  )}
+                </div>
+              }
 
               {/* Visibility */}
               <div className="border-t px-3 py-2.5">

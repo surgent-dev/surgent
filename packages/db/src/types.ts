@@ -44,6 +44,8 @@ export interface Database {
   pay_dispute: PayDisputeTable
   pay_transaction: PayTransactionTable
   pay_customer: PayCustomerTable
+  domain: DomainTable
+  domain_webhook_event: DomainWebhookEventTable
   trustmrr_startup: TrustMrrStartupTable
 }
 
@@ -670,6 +672,47 @@ export interface PayCustomerTable {
   env: string
   createdAt?: Date
   updatedAt?: Date
+}
+
+export type DomainStatus = 'pending' | 'purchasing' | 'dns_configuring' | 'active' | 'error'
+
+export interface DomainLogEntry {
+  timestamp: string
+  event: string
+  detail?: string
+  success?: boolean
+}
+
+export interface DomainTable {
+  id: Generated<string>
+  projectId: string | null
+  userId: string
+  organizationId: string | null
+  domainName: string
+  status: DomainStatus
+  registrar: string | null
+  entriFlowId: string | null
+  cfCustomDomainId: string | null
+  dnsVerified: Generated<boolean>
+  kvMapped: Generated<boolean>
+  lastError: string | null
+  logs: Generated<DomainLogEntry[]>
+  purchasedAt: Date | null
+  expiresAt: Date | null
+  createdAt: Generated<Date>
+  updatedAt: Generated<Date>
+}
+
+export interface DomainWebhookEventTable {
+  id: Generated<string>
+  entriEventId: string | null
+  eventType: string
+  domainName: string | null
+  payload: Record<string, unknown>
+  status: 'pending' | 'processing' | 'processed' | 'failed'
+  error: string | null
+  createdAt: Generated<Date>
+  processedAt: Date | null
 }
 
 export interface TrustMrrStartupTable {

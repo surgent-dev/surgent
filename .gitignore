@@ -100,3 +100,5 @@ cdk.context.json
 
 # code references
 references/
+
+pgadmin-servers.json

@@ -8,6 +8,7 @@ export type DispatchNamespace = {
 
 export type Bindings = {
   dispatcher?: DispatchNamespace
+  DOMAIN_MAP?: KVNamespace
 }
 
 export type AppContext = {

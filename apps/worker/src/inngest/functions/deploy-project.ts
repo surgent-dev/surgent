@@ -29,9 +29,14 @@ export const deployProjectFn = inngest.createFunction(
   {
     id: 'deploy-project',
     retries: 1,
+    cancelOn: [{ event: 'project/deploy.cancelled', match: 'data.deploymentId' }],
     onFailure: async ({ event }) => {
       const { projectId, deploymentId } = event.data.event.data as DeployProjectEvent['data']
       const errorMessage = event.data.error?.message || 'Deployment failed after retries'
+
+      // Don't overwrite 'cancelled' status — it was set by the user
+      const current = await ProjectService.getDeployment(deploymentId)
+      if (current?.status === 'cancelled') return
 
       // deployProject already marks deployment as failed internally,
       // but if it crashes completely this is the safety net

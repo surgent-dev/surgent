@@ -1,0 +1,160 @@
+import { http } from '@/lib/http'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'react-hot-toast'
+
+// Types
+
+export interface DomainAvailability {
+  domain: string
+  available: boolean
+  price?: number
+  reason: 'AVAILABLE' | 'UNAVAILABLE' | 'UNSUPPORTED_TLD' | 'ERROR'
+  checkedAt: string
+}
+
+interface EntriPurchaseConfig {
+  token: string
+  applicationId: string
+  dnsRecords: Array<{ type: string; host: string; value: string; ttl: number }>
+  domainId: string
+  prefilledDomain?: string
+  devMode?: boolean
+  contact: { email: string; firstName: string; lastName: string }
+}
+
+export interface EntriConnectConfig {
+  token: string
+  applicationId: string
+  dnsRecords: Array<{ type: string; host: string; value: string; ttl: number }>
+  domainId: string
+  prefilledDomain: string
+  userId: string
+}
+
+export interface DomainLogEntry {
+  timestamp: string
+  event: string
+  detail?: string
+  success?: boolean
+}
+
+export interface Domain {
+  id: string
+  projectId: string | null
+  domainName: string
+  status: 'pending' | 'purchasing' | 'dns_configuring' | 'active' | 'error'
+  registrar: string | null
+  dnsVerified: boolean
+  kvMapped: boolean
+  lastError: string | null
+  logs: DomainLogEntry[]
+  purchasedAt: string | null
+  expiresAt: string | null
+  createdAt: string
+}
+
+// Hooks
+
+export function useProjectDomains(projectId?: string, fastPoll?: boolean) {
+  return useQuery({
+    queryKey: ['domains', projectId],
+    queryFn: () => http.get(`api/domains/${projectId}`).json<{ domains: Domain[] }>(),
+    enabled: Boolean(projectId),
+    refetchInterval: (query) => {
+      // Fast poll after purchase/connect attempt (waiting for webhook to create record)
+      if (fastPoll) return 2000
+      const domains = query.state.data?.domains
+      const hasPending = domains?.some((d) =>
+        ['pending', 'purchasing', 'dns_configuring'].includes(d.status),
+      )
+      return hasPending ? 3000 : 30000
+    },
+  })
+}
+
+export function useCheckDomainAvailability() {
+  return useMutation({
+    mutationFn: (domain: string) =>
+      http
+        .post('api/domains/check-availability', { json: { domain } })
+        .json<DomainAvailability[]>(),
+    onError: () => {
+      toast.error('Failed to check domain availability')
+    },
+  })
+}
+
+export function useInitDomainPurchase() {
+  return useMutation({
+    mutationFn: (params: { projectId: string; suggestedDomain?: string }) =>
+      http.post('api/domains/init-purchase', { json: params }).json<EntriPurchaseConfig>(),
+    onError: () => {
+      toast.error('Failed to initialize domain purchase')
+    },
+  })
+}
+
+export function useInitDomainConnect() {
+  return useMutation({
+    mutationFn: (params: { projectId: string; domain: string }) =>
+      http.post('api/domains/init-connect', { json: params }).json<EntriConnectConfig>(),
+    onError: () => {
+      toast.error('Failed to initialize domain connection')
+    },
+  })
+}
+
+export function useRetryDomainConnect() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: { projectId: string; domainId: string }) =>
+      http.post('api/domains/retry-connect', { json: params }).json<EntriConnectConfig>(),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['domains', vars.projectId] })
+    },
+    onError: () => {
+      toast.error('Failed to retry domain connection')
+    },
+  })
+}
+
+export function useRemoveDomain() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ projectId, domainId }: { projectId: string; domainId: string }) =>
+      http.delete(`api/domains/${projectId}/${domainId}`).json<{ deleted: boolean }>(),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['domains', vars.projectId] })
+      toast.success('Domain removed')
+    },
+    onError: () => {
+      toast.error('Failed to remove domain')
+    },
+  })
+}
+
+export function useMockDomainPurchase() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: { domainId: string; domainName: string }) =>
+      http
+        .post('api/domains/mock-purchase', { json: params })
+        .json<{ ok: boolean; domainName: string; status: string }>(),
+    onSuccess: (data, vars) => {
+      qc.invalidateQueries({ queryKey: ['domains'] })
+      toast.success(`[DEV] Domain ${data.domainName} activated instantly`)
+    },
+    onError: () => {
+      toast.error('Mock purchase failed')
+    },
+  })
+}
+
+export function useOnDomainPurchased() {
+  const qc = useQueryClient()
+  return (projectId: string, domainName: string) => {
+    qc.invalidateQueries({ queryKey: ['domains', projectId] })
+    qc.invalidateQueries({ queryKey: ['project', projectId] })
+    toast.success(`Domain ${domainName} is being configured!`)
+  }
+}

@@ -20,5 +20,9 @@ export type {
   DeploymentTable,
   ListingTable,
   EnvDestination,
+  DomainTable,
+  DomainStatus,
+  DomainLogEntry,
+  DomainWebhookEventTable,
   TrustMrrStartupTable,
 } from './src/types'

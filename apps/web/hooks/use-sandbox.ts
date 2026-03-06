@@ -10,6 +10,8 @@ export type IframeError = {
   source: 'global' | 'promise' | 'react' | 'react-router' | 'preload'
 }
 
+export type DeviceFrame = 'mobile' | 'tablet' | 'desktop'
+
 type SandboxState = {
   sandboxId?: string | null
   setSandboxId: (id: string | null | undefined) => void
@@ -32,6 +34,9 @@ type SandboxState = {
   // Preview refresh signal (incremented when dev-run completes)
   previewRefreshTick: number
   requestPreviewRefresh: () => void
+  // Device frame for preview (mobile/tablet/desktop)
+  deviceFrame: DeviceFrame | null
+  setDeviceFrame: (frame: DeviceFrame | null) => void
 }
 
 export const useSandbox = create<SandboxState>()(
@@ -52,6 +57,8 @@ export const useSandbox = create<SandboxState>()(
       setPendingPrompt: (prompt) => set({ pendingPrompt: prompt }),
       previewRefreshTick: 0,
       requestPreviewRefresh: () => set((s) => ({ previewRefreshTick: s.previewRefreshTick + 1 })),
+      deviceFrame: null,
+      setDeviceFrame: (frame) => set({ deviceFrame: frame }),
     }),
     { name: 'sandbox-store', partialize: (s) => ({ activeSessionId: s.activeSessionId }) },
   ),

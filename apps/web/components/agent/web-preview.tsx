@@ -488,6 +488,11 @@ type PreviewStatus = 'idle' | 'loading' | 'ready' | 'failed'
 const WATCHDOG_MS = 10000
 const ONLOAD_FALLBACK_MS = 3000
 
+const DEVICE_DIMENSIONS: Record<string, { w: number; h: number }> = {
+  mobile: { w: 375, h: 667 },
+  tablet: { w: 768, h: 1024 },
+}
+
 export const WebPreviewBody = ({
   className,
   overlay,
@@ -498,6 +503,7 @@ export const WebPreviewBody = ({
   const { url, iframeRef, reloadTick, refresh } = useWebPreview()
   const setIframeError = useSandbox((s) => s.setIframeError)
   const previewRefreshTick = useSandbox((s) => s.previewRefreshTick)
+  const deviceFrame = useSandbox((s) => s.deviceFrame)
   const [status, setStatus] = useState<PreviewStatus>('idle')
   const [glowing, setGlowing] = useState(false)
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -605,18 +611,40 @@ export const WebPreviewBody = ({
     }
   }
 
+  const dims = deviceFrame ? DEVICE_DIMENSIONS[deviceFrame] : null
+
   return (
     <div className="relative flex-1">
-      <iframe
-        ref={iframeRef}
-        className={cn('size-full', className)}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-presentation allow-pointer-lock allow-storage-access-by-user-activation allow-downloads"
-        allow="autoplay; camera; clipboard-read; clipboard-write; geolocation; display-capture; encrypted-media; fullscreen; gamepad; gyroscope; magnetometer; microphone; midi; payment; usb; bluetooth; hid; serial; xr-spatial-tracking; screen-wake-lock; idle-detection; publickey-credentials-get; local-fonts; window-management"
-        src={currentUrl || undefined}
-        title="Preview"
-        onLoad={handleLoad}
-        {...props}
-      />
+      {dims ? (
+        <div className="size-full flex items-start justify-center overflow-auto bg-muted/30 p-4">
+          <div
+            className="shrink-0 rounded-2xl border-2 border-border/60 bg-background shadow-lg overflow-hidden"
+            style={{ width: dims.w, height: dims.h }}
+          >
+            <iframe
+              ref={iframeRef}
+              className="size-full"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-presentation allow-pointer-lock allow-storage-access-by-user-activation allow-downloads"
+              allow="autoplay; camera; clipboard-read; clipboard-write; geolocation; display-capture; encrypted-media; fullscreen; gamepad; gyroscope; magnetometer; microphone; midi; payment; usb; bluetooth; hid; serial; xr-spatial-tracking; screen-wake-lock; idle-detection; publickey-credentials-get; local-fonts; window-management"
+              src={currentUrl || undefined}
+              title="Preview"
+              onLoad={handleLoad}
+              {...props}
+            />
+          </div>
+        </div>
+      ) : (
+        <iframe
+          ref={iframeRef}
+          className={cn('size-full', className)}
+          sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-presentation allow-pointer-lock allow-storage-access-by-user-activation allow-downloads"
+          allow="autoplay; camera; clipboard-read; clipboard-write; geolocation; display-capture; encrypted-media; fullscreen; gamepad; gyroscope; magnetometer; microphone; midi; payment; usb; bluetooth; hid; serial; xr-spatial-tracking; screen-wake-lock; idle-detection; publickey-credentials-get; local-fonts; window-management"
+          src={currentUrl || undefined}
+          title="Preview"
+          onLoad={handleLoad}
+          {...props}
+        />
+      )}
       {status === 'loading' && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3 text-muted-foreground">

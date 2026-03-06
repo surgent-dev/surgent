@@ -701,6 +701,15 @@ body {
   opacity: 0.5;
 }
 
+/* Entri modal – ensure iframe is clickable above all app layers */
+#entri-modal,
+#entri-lightbox,
+[id^='entri'] iframe,
+iframe[src*='goentri.com'] {
+  z-index: 2147483647 !important;
+  pointer-events: auto !important;
+}
+
 /* Preview refresh glow — Siri-style multicolor edge glow */
 @keyframes preview-glow-border {
   0% { opacity: 0; }
