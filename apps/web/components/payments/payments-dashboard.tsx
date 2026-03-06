@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { ArrowUpFromLine, CircleDollarSign, Loader2, Plus } from 'lucide-react'
+import Image from 'next/image'
 import { toast } from 'react-hot-toast'
 import {
   useProducts,
@@ -96,14 +97,34 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
 
   return (
     <div className="w-full h-full flex items-center justify-center p-8">
-      <div className="flex flex-col items-center w-full max-w-[300px] text-center">
-        <div className="size-11 rounded-xl bg-[var(--brand)]/10 flex items-center justify-center mb-5">
-          <CircleDollarSign className="size-5 text-[var(--brand)]" strokeWidth={1.5} />
+      <div className="flex flex-col items-center w-full max-w-[340px] text-center">
+        {/* Integration logos */}
+        <div className="flex items-center mb-7">
+          <div className="size-14 rounded-2xl border bg-card shadow-sm grid place-items-center">
+            <Image
+              src="/surgent-coin.svg"
+              alt="Surgent"
+              width={28}
+              height={28}
+              className="size-7 object-contain"
+            />
+          </div>
+          <div className="w-8 border-t border-dashed border-border" />
+          <div className="size-14 rounded-2xl border bg-card shadow-sm grid place-items-center">
+            <Image
+              src="/whop_logo_brandmark_orange.svg"
+              alt="Whop"
+              width={28}
+              height={28}
+              className="size-7"
+            />
+          </div>
         </div>
 
-        <p className="text-[15px] font-semibold mb-1">Payments</p>
-        <p className="text-[13px] text-muted-foreground leading-relaxed mb-6">
-          Accept payments and manage revenue from your AI agents.
+        <h3 className="text-lg font-semibold mb-2">Start accepting payments</h3>
+        <p className="text-[13px] text-muted-foreground leading-relaxed mb-8">
+          Surgent partners with <span className="text-foreground font-medium">Whop</span> to let you
+          sell access to your AI agents, manage subscriptions, and get paid.
         </p>
 
         {disconnectedAccount ? (
@@ -111,9 +132,9 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
             type="button"
             onClick={handleReconnect}
             disabled={whopConnect.isPending}
-            className="flex items-center gap-3 w-full p-3 rounded-lg border hover:bg-muted/50 transition-colors disabled:opacity-50"
+            className="flex items-center gap-3 w-full p-3.5 rounded-xl border hover:bg-muted/50 transition-colors disabled:opacity-50"
           >
-            <div className="size-8 rounded-md border bg-muted/40 grid place-items-center shrink-0">
+            <div className="size-9 rounded-lg border bg-muted/40 grid place-items-center shrink-0">
               <CircleDollarSign className="size-5 text-muted-foreground" strokeWidth={1.5} />
             </div>
             <div className="text-left min-w-0 flex-1">
@@ -126,7 +147,7 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
             </div>
             <span
               className={cn(
-                'shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium',
+                'shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium',
                 isLive ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600',
               )}
             >
@@ -134,12 +155,11 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
             </span>
           </button>
         ) : (
-          <div className="w-full space-y-2.5">
+          <div className="w-full space-y-3 mt-4">
             <Input
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Company name"
-              className="h-9"
+              placeholder="Your company name"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && companyName.trim()) handleCreate()
               }}
@@ -148,9 +168,9 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
               type="button"
               onClick={handleCreate}
               disabled={!companyName.trim() || whopConnect.isPending}
-              className="w-full h-9 text-[13px] font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary-hover transition-all duration-100 disabled:opacity-40 flex items-center justify-center"
+              className="w-full h-10 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary-hover transition-all duration-100 disabled:opacity-40 flex items-center justify-center"
             >
-              {whopConnect.isPending ? 'Creating...' : 'Create Account'}
+              {whopConnect.isPending ? 'Creating...' : 'Get started'}
             </button>
           </div>
         )}
