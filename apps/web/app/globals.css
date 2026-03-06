@@ -125,42 +125,42 @@
 }
 
 .dark {
-  /* Warm neutral dark theme — inspired by reference UI */
-  --background: hsl(0 0% 11%);       /* #1c1c1c */
-  --foreground: hsl(45 40% 98%);     /* #fdf8f0 warm white */
-  --card: hsl(0 0% 8%);              /* #141414 */
-  --card-foreground: hsl(45 40% 98%);
-  --popover: hsl(0 0% 11%);
-  --popover-foreground: hsl(45 40% 98%);
-  --primary: hsl(45 40% 98%);
-  --primary-hover: hsl(40 20% 90%);
-  --primary-foreground: hsl(0 0% 11%);
+  /* Pure neutral dark theme */
+  --background: #191919;             /* p3 0.098 */
+  --foreground: #f5f5f5;
+  --card: #111111;                   /* p3 0.067 */
+  --card-foreground: #f5f5f5;
+  --popover: #191919;
+  --popover-foreground: #f5f5f5;
+  --primary: #f5f5f5;
+  --primary-hover: #e5e5e5;
+  --primary-foreground: #111111;
   --brand: #7c3aed;
   --brand-foreground: #ffffff;
-  --secondary: hsl(60 3% 15%);       /* #272724 */
-  --secondary-foreground: hsl(45 40% 98%);
-  --muted: hsl(60 3% 15%);
-  --muted-foreground: hsl(40 9% 63%); /* warm gray */
-  --accent: hsl(60 3% 15%);
-  --accent-foreground: hsl(45 40% 98%);
-  --destructive: hsl(0 72% 51%);          /* Red 500 — vivid for buttons */
+  --secondary: #222222;              /* p3 0.135 */
+  --secondary-foreground: #f5f5f5;
+  --muted: #222222;
+  --muted-foreground: #999999;
+  --accent: #222222;
+  --accent-foreground: #f5f5f5;
+  --destructive: hsl(0 72% 51%);
   --destructive-foreground: #fff;
-  --border: hsl(60 3% 18%);          /* #2e2e2b subtle warm border */
-  --input: hsl(60 1% 25%);
-  --ring: hsl(47 10% 83%);
+  --border: #2e2e2e;                 /* between p3 0.163–0.228 */
+  --input: #292929;                  /* p3 0.163 */
+  --ring: #999999;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: hsl(0 0% 11%);
-  --sidebar-foreground: hsl(42 38% 95%);
+  --sidebar: #191919;
+  --sidebar-foreground: #f5f5f5;
   --sidebar-primary: hsl(217 77% 55%);
-  --sidebar-primary-foreground: hsl(45 40% 98%);
-  --sidebar-accent: hsl(60 3% 15%);
-  --sidebar-accent-foreground: hsl(42 38% 95%);
-  --sidebar-border: hsl(60 3% 15%);
-  --sidebar-ring: hsl(47 10% 83%);
+  --sidebar-primary-foreground: #f5f5f5;
+  --sidebar-accent: #222222;
+  --sidebar-accent-foreground: #f5f5f5;
+  --sidebar-border: #222222;
+  --sidebar-ring: #999999;
 
   /* Surface shadow system — reference UI inspired */
   --shadow-surface-xs: 0 0 0 0.5px #000000e0, 0 1px 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 0 rgba(255,255,255,0.05), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.04);
@@ -204,14 +204,14 @@ body {
 
 /* Surface elevation utilities */
 .surface-card {
-  background: hsl(0 0% 8%);
+  background: #111111;
   box-shadow: var(--shadow-surface-sm);
 }
 .surface-card:hover {
   box-shadow: var(--shadow-surface-md);
 }
 .surface-raised {
-  background: hsl(0 0% 8%);
+  background: #111111;
   box-shadow: var(--shadow-surface-md);
 }
 .surface-inset {
