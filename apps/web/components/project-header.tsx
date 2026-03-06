@@ -49,7 +49,6 @@ import { http } from '@/lib/http'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
 import { useGitHubStatus } from '@/queries/github'
-import WarningBanner from '@/components/project-header/warning-banner'
 import UserMenu from '@/components/project-header/user-menu'
 import PayDialogs from '@/components/project-header/pay-dialogs'
 import SellDialog from '@/components/project-header/sell-dialog'
@@ -268,8 +267,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
   return (
     <>
-      <WarningBanner onDownload={handleDownload} downloading={downloading} />
-
       <header className="h-11 flex items-center bg-background shrink-0 pl-3 pr-4">
         {/* Back */}
         <Button
