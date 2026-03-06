@@ -10,6 +10,7 @@
   --font-mono: var(--font-jetbrains-mono);
   --font-display: var(--font-display);
   --font-satoshi: 'Satoshi', var(--font-inter), sans-serif;
+  --font-geist: var(--font-geist), system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -124,59 +125,65 @@
 }
 
 .dark {
-  /* Slate-like dark theme tokens */
-  --background: #020617; /* Slate 950 */
-  --foreground: #f8fafc; /* Slate 50 */
-  --card: #0f172a; /* Slate 900 */
-  --card-foreground: #f8fafc;
-  --popover: #0f172a;
-  --popover-foreground: #f8fafc;
-  --primary: #f8fafc;
-  --primary-hover: #e2e8f0;
-  --primary-foreground: #0f172a;
+  /* Warm neutral dark theme — inspired by reference UI */
+  --background: hsl(0 0% 11%);       /* #1c1c1c */
+  --foreground: hsl(45 40% 98%);     /* #fdf8f0 warm white */
+  --card: hsl(0 0% 8%);              /* #141414 */
+  --card-foreground: hsl(45 40% 98%);
+  --popover: hsl(0 0% 11%);
+  --popover-foreground: hsl(45 40% 98%);
+  --primary: hsl(45 40% 98%);
+  --primary-hover: hsl(40 20% 90%);
+  --primary-foreground: hsl(0 0% 11%);
   --brand: #7c3aed;
   --brand-foreground: #ffffff;
-  --secondary: #1e293b; /* Slate 800 */
-  --secondary-foreground: #f8fafc;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8; /* Slate 400 */
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
-  --destructive: #7f1d1d; /* Red 900 */
-  --destructive-foreground: #f8fafc;
-  --border: #1e293b;
-  --input: #1e293b;
-  --ring: #7c3aed;
+  --secondary: hsl(60 3% 15%);       /* #272724 */
+  --secondary-foreground: hsl(45 40% 98%);
+  --muted: hsl(60 3% 15%);
+  --muted-foreground: hsl(40 9% 63%); /* warm gray */
+  --accent: hsl(60 3% 15%);
+  --accent-foreground: hsl(45 40% 98%);
+  --destructive: hsl(0 72% 51%);          /* Red 500 — vivid for buttons */
+  --destructive-foreground: #fff;
+  --border: hsl(60 3% 18%);          /* #2e2e2b subtle warm border */
+  --input: hsl(60 1% 25%);
+  --ring: hsl(47 10% 83%);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: #020617;
-  --sidebar-foreground: #f8fafc;
-  --sidebar-primary: #334155; /* Slate 700 */
-  --sidebar-primary-foreground: #f8fafc;
-  --sidebar-accent: #1e293b;
-  --sidebar-accent-foreground: #f8fafc;
-  --sidebar-border: #1e293b;
-  --sidebar-ring: #7c3aed;
+  --sidebar: hsl(0 0% 11%);
+  --sidebar-foreground: hsl(42 38% 95%);
+  --sidebar-primary: hsl(217 77% 55%);
+  --sidebar-primary-foreground: hsl(45 40% 98%);
+  --sidebar-accent: hsl(60 3% 15%);
+  --sidebar-accent-foreground: hsl(42 38% 95%);
+  --sidebar-border: hsl(60 3% 15%);
+  --sidebar-ring: hsl(47 10% 83%);
+
+  /* Surface shadow system — reference UI inspired */
+  --shadow-surface-xs: 0 0 0 0.5px #000000e0, 0 1px 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 0 rgba(255,255,255,0.05), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-surface-sm: 0 0 0 0.5px #000000e0, 0 2px 4px -1px rgba(0,0,0,0.25), 0 4px 6px -2px rgba(0,0,0,0.2), inset 0 1px 0 0 rgba(255,255,255,0.05), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-surface-md: 0 0 0 0.5px #000000e0, 0 4px 6px -4px rgba(0,0,0,0.3), 0 10px 15px -3px rgba(0,0,0,0.2), inset 0 1px 0 0 rgba(255,255,255,0.06), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-surface-lg: 0 0 0 0.5px #000000e0, 0 4px 6px -4px rgba(0,0,0,0.3), 0 10px 15px -3px rgba(0,0,0,0.2), 0 20px 25px -5px rgba(0,0,0,0.25), inset 0 1px 0 0 rgba(255,255,255,0.06), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.04);
 
   /* Status + misc semantic colors */
-  --success: #22c55e; /* Green 500 */
-  --warning: #fbbf24; /* Amber 400 */
-  --danger: #f87171; /* Red 400 */
-  --info: #60a5fa; /* Blue 400 */
+  --success: hsl(142 69% 58%);
+  --warning: hsl(37 100% 55%);
+  --danger: hsl(0 91% 71%);
+  --info: hsl(217 100% 72%);
   --backdrop: #000000;
 
   /* Provider badge/dot colors */
-  --provider-anthropic: #fb923c; /* Orange 400 */
-  --provider-openai: #34d399; /* Emerald 400 */
-  --provider-google: #60a5fa; /* Blue 400 */
-  --provider-github-copilot: #a1a1aa; /* Zinc 400 */
+  --provider-anthropic: #fb923c;
+  --provider-openai: #34d399;
+  --provider-google: #60a5fa;
+  --provider-github-copilot: #a1a1aa;
 
   /* Diff colors */
   --diff-add: #22c55e;
-  --diff-del: #fb7185; /* Rose 400 */
+  --diff-del: #fb7185;
 }
 
 * {
@@ -193,6 +200,22 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Surface elevation utilities */
+.surface-card {
+  background: hsl(0 0% 8%);
+  box-shadow: var(--shadow-surface-sm);
+}
+.surface-card:hover {
+  box-shadow: var(--shadow-surface-md);
+}
+.surface-raised {
+  background: hsl(0 0% 8%);
+  box-shadow: var(--shadow-surface-md);
+}
+.surface-inset {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 2px rgba(0,0,0,0.2);
 }
 
 /*

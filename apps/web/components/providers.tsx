@@ -25,7 +25,7 @@ export default function Providers({ children }: ProvidersProps) {
 
   return (
     <QueryClientProvider client={client}>
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" enableSystem={false}>
         <AutumnProvider betterAuthUrl={process.env.NEXT_PUBLIC_BACKEND_URL!}>
           {children}
         </AutumnProvider>
