@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -310,6 +310,14 @@ interface User {
 }
 
 export default function InspirationsPage() {
+  return (
+    <Suspense>
+      <InspirationsContent />
+    </Suspense>
+  )
+}
+
+function InspirationsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
