@@ -33,3 +33,12 @@ export const payHttp = ky.create({
   timeout: 30000,
   hooks: { beforeRequest: [injectPayEnv], beforeError: [extractErrorMessage] },
 })
+
+export const payHttpLive = ky.create({
+  prefixUrl: process.env.NEXT_PUBLIC_PAY_URL,
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json', 'x-pay-env': 'live' },
+  retry: { limit: 3, methods: ['get'], statusCodes: [502, 503, 504] },
+  timeout: 30000,
+  hooks: { beforeError: [extractErrorMessage] },
+})

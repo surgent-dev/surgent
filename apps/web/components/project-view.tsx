@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { FileDiff } from '@opencode-ai/sdk'
 import Conversation from './conversation'
-import PreviewPanel, { type PreviewTab } from './preview-panel'
+import ProjectTools, { type ProjectTab } from './project/project-tools'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useActivateProject } from '@/queries/projects'
@@ -14,13 +14,13 @@ import ProjectHeader from './project-header'
 import { ProjectInitOverlay } from './project-init-overlay'
 import { ProjectEventProvider } from '@/context/project-events'
 
-interface SplitViewProps {
+interface ProjectViewProps {
   projectId?: string
   onPreviewUrl?: (url: string | null) => void
   initialPrompt?: string
 }
 
-export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: SplitViewProps) {
+export default function ProjectView({ projectId, onPreviewUrl, initialPrompt }: ProjectViewProps) {
   const { mutate: activateProject } = useActivateProject()
   const { isReady, stage, project } = useSandboxReady(projectId)
 
@@ -36,7 +36,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
   const hasConvexProd = Boolean(convexDeployments?.production?.name)
   const convexTabsAdded = useRef(false)
 
-  const [tabs, setTabs] = useState<PreviewTab[]>([
+  const [tabs, setTabs] = useState<ProjectTab[]>([
     { id: 'preview', type: 'preview', title: 'Preview' },
     { id: 'payments', type: 'payments', title: 'Payments' },
     { id: 'settings', type: 'settings', title: 'Settings' },
@@ -78,7 +78,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
     setActiveTabId((prev) => (prev === tabId ? 'preview' : prev))
   }, [])
 
-  const handleAddTab = useCallback((type: PreviewTab['type']) => {
+  const handleAddTab = useCallback((type: ProjectTab['type']) => {
     setTabs((prev) => {
       if (type !== 'logs' && type !== 'payments') return prev
       if (prev.some((tab) => tab.type === type)) return prev
@@ -172,7 +172,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
                   <TabsContent value="preview" className="flex-1 min-h-0 flex flex-col">
                     <div className="flex-1 min-h-0 px-1 pb-1">
                       <div className="h-full min-h-0 overflow-hidden rounded-xl border bg-background">
-                        <PreviewPanel
+                        <ProjectTools
                           projectId={projectId}
                           project={project}
                           onPreviewUrl={onPreviewUrl}
@@ -201,7 +201,7 @@ export default function SplitView({ projectId, onPreviewUrl, initialPrompt }: Sp
                     className="!overflow-visible rounded-tl-xl"
                   >
                     <div className="h-full bg-background border-l border-t rounded-tl-xl overflow-hidden">
-                      <PreviewPanel
+                      <ProjectTools
                         projectId={projectId}
                         project={project}
                         onPreviewUrl={onPreviewUrl}

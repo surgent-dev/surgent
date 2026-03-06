@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowUpFromLine, Loader2, Plus } from 'lucide-react'
+import { ArrowUpFromLine, CircleDollarSign, Loader2, Plus, ArrowRight } from 'lucide-react'
+import { CircleNotch } from '@phosphor-icons/react'
+import Image from 'next/image'
 import { toast } from 'react-hot-toast'
 import {
   useProducts,
@@ -13,11 +15,18 @@ import {
 import { useTransactions } from '@/queries/transactions'
 import { useCustomers } from '@/queries/customers'
 import { useSubscriptions } from '@/queries/subscriptions'
+import {
+  useSurpayAccounts,
+  useSurpayDisconnect,
+  useWhopConnect,
+  type SurpayAccount,
+} from '@/queries/surpay'
+import { usePayEnv } from '@/stores/pay-env'
+import { parseConnectError } from '@/components/payments/utils'
 import { CreateProductSheet } from './create-product-sheet'
 import { CreatePriceDialog } from './create-price-dialog'
 import { EditProductDialog } from './edit-product-dialog'
 import { Sidebar, type ViewType, type AccountData } from './sidebar'
-import { usePayEnv } from '@/stores/pay-env'
 import { DashboardView } from './dashboard-view'
 import { ProductsView } from './products-view'
 import { TransactionsView } from './transactions-view'
@@ -26,10 +35,181 @@ import { SubscriptionsView } from './subscriptions-view'
 import { SettingsView } from './settings-view'
 import { payHttp } from '@/lib/http'
 import { cn } from '@/lib/utils'
+import { authClient } from '@/lib/auth-client'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { FunLoadingState } from '@/components/ui/fun-loading'
 
-export function ProductsSection({
+function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: SurpayAccount }) {
+  const [companyName, setCompanyName] = useState('')
+  const whopConnect = useWhopConnect()
+  const env = usePayEnv((s) => s.env)
+  const isLive = env === 'live'
+
+  const handleReconnect = async () => {
+    if (!disconnectedAccount) return
+    try {
+      await whopConnect.mutateAsync({
+        accountId: disconnectedAccount.id,
+        data: {
+          email: disconnectedAccount.data.email || '',
+          title: disconnectedAccount.data.title || '',
+          country: disconnectedAccount.data.country || 'us',
+        },
+      })
+      toast.success('Payment account reconnected')
+    } catch (err: any) {
+      toast.error(parseConnectError(err, 'Failed to reconnect account'))
+    }
+  }
+
+  const handleCreate = async () => {
+    if (!companyName.trim()) return
+    let session
+    try {
+      session = await authClient.getSession()
+    } catch {
+      toast.error('Failed to get session')
+      return
+    }
+    const email = session.data?.user?.email
+    if (!email) {
+      toast.error('Unable to get user email')
+      return
+    }
+    try {
+      await whopConnect.mutateAsync({
+        data: { email, title: companyName.trim(), country: 'us' },
+      })
+      toast.success('Payment account created')
+      setCompanyName('')
+    } catch (err: any) {
+      toast.error(parseConnectError(err, 'Failed to create account'))
+    }
+  }
+
+  return (
+    <div className="w-full h-full flex items-center justify-center p-8">
+      <div className="flex flex-col items-center w-full max-w-[360px]">
+        {/* Integration logos */}
+        <div className="flex items-center mb-8">
+          <div className="size-[60px] rounded-[18px] border bg-card shadow-sm grid place-items-center">
+            <Image
+              src="/surgent-coin.svg"
+              alt="Surgent"
+              width={32}
+              height={32}
+              className="size-8 object-contain"
+            />
+          </div>
+          <div className="flex items-center w-10">
+            <div className="w-full border-t border-dashed border-border" />
+          </div>
+          <div className="size-[60px] rounded-[18px] border bg-card shadow-sm grid place-items-center">
+            <Image
+              src="/whop_logo_brandmark_orange.svg"
+              alt="Whop"
+              width={30}
+              height={30}
+              className="size-[30px]"
+            />
+          </div>
+        </div>
+
+        <div className="text-center mb-8">
+          <h3 className="text-[20px] font-bold tracking-tight mb-2">Start accepting payments</h3>
+          <p className="text-[14px] text-muted-foreground leading-relaxed">
+            Surgent partners with <span className="text-foreground font-medium">Whop</span> to let
+            you sell access, manage subscriptions, and get paid.
+          </p>
+        </div>
+
+        {disconnectedAccount ? (
+          <button
+            type="button"
+            onClick={handleReconnect}
+            disabled={whopConnect.isPending}
+            className={cn(
+              'flex items-center gap-4 w-full p-4 rounded-[16px] text-left transition-all',
+              'bg-black/5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(255,255,255,0.05)]',
+              'hover:bg-black/10 disabled:opacity-50',
+            )}
+          >
+            <div className="size-10 rounded-xl bg-[#FF6243]/10 grid place-items-center shrink-0">
+              <Image
+                src="/whop_logo_brandmark_orange.svg"
+                alt="Whop"
+                width={20}
+                height={20}
+                className="size-5"
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[14px] font-semibold truncate">
+                {disconnectedAccount.data.title || 'Untitled'}
+              </div>
+              <div className="text-[13px] text-muted-foreground mt-0.5">
+                {whopConnect.isPending ? 'Reconnecting...' : 'Tap to reconnect'}
+              </div>
+            </div>
+            <span
+              className={cn(
+                'shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                isLive ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600',
+              )}
+            >
+              {isLive ? 'Live' : 'Sandbox'}
+            </span>
+          </button>
+        ) : (
+          <div className="w-full space-y-3">
+            <input
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder="Your company name"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && companyName.trim()) handleCreate()
+              }}
+              className={cn(
+                'flex h-12 w-full rounded-[16px] bg-black/5 px-4 py-2 text-[14px]',
+                'text-foreground placeholder:text-muted-foreground/40',
+                'border border-transparent transition-all duration-200 outline-none',
+                'shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(255,255,255,0.05)]',
+                'hover:shadow-[inset_0_2px_4px_rgba(0,0,0,0.15),inset_0_0_0_1px_rgba(255,255,255,0.08)] hover:bg-black/10',
+                'focus:bg-black/20 focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.15),inset_0_0_0_1px_rgba(255,255,255,0.12),0_0_0_3px_rgba(255,255,255,0.05)]',
+              )}
+            />
+            <Button
+              onClick={handleCreate}
+              disabled={!companyName.trim() || whopConnect.isPending}
+              className="w-full h-12 rounded-2xl font-bold text-[14px]"
+            >
+              {whopConnect.isPending ? (
+                <CircleNotch className="size-4 animate-spin" />
+              ) : (
+                <>
+                  Connect Whop
+                  <ArrowRight className="size-4 ml-1.5" />
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ConnectedDashboard({
   projectId,
-  isConnected = false,
   processor,
   accountData,
   accountId,
@@ -37,7 +217,6 @@ export function ProductsSection({
   isDisconnecting,
 }: {
   projectId: string
-  isConnected?: boolean
   processor?: string
   accountData?: AccountData
   accountId?: string
@@ -132,7 +311,7 @@ export function ProductsSection({
         subscriptionCount={subscriptions.length}
         customerCount={customers.length}
         transactionCount={transactions.length}
-        isConnected={isConnected}
+        isConnected
         processor={processor}
         accountData={accountData}
         onOpenPayoutsPortal={openPayoutPortal}
@@ -239,7 +418,7 @@ export function ProductsSection({
           )}
           {view === 'settings' && (
             <SettingsView
-              isConnected={isConnected}
+              isConnected
               processor={processor}
               onDisconnect={onDisconnect}
               isDisconnecting={isDisconnecting}
@@ -272,5 +451,61 @@ export function ProductsSection({
         />
       )}
     </div>
+  )
+}
+
+export function PaymentsDashboard({ projectId }: { projectId?: string }) {
+  const { data: accounts, isLoading } = useSurpayAccounts()
+  const disconnect = useSurpayDisconnect()
+  const [disconnectOpen, setDisconnectOpen] = useState(false)
+
+  if (isLoading) {
+    return <FunLoadingState />
+  }
+
+  const account = accounts?.find((a) => a.status === 'connected')
+  const disconnected = accounts?.find((a) => a.status === 'disconnected')
+
+  if (!account) {
+    return <ConnectPaymentsView disconnectedAccount={disconnected} />
+  }
+
+  return (
+    <>
+      <ConnectedDashboard
+        projectId={projectId!}
+        processor={account.processor}
+        accountData={account.data}
+        accountId={account.id}
+        onDisconnect={() => setDisconnectOpen(true)}
+        isDisconnecting={disconnect.isPending}
+      />
+
+      <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Disconnect Payment Account</DialogTitle>
+            <DialogDescription>This will disable payment processing.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisconnectOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={disconnect.isPending}
+              onClick={() => {
+                disconnect.mutate(
+                  { accountId: account.id },
+                  { onSuccess: () => setDisconnectOpen(false) },
+                )
+              }}
+            >
+              {disconnect.isPending ? 'Disconnecting...' : 'Disconnect'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

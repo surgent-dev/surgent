@@ -67,7 +67,7 @@ function FooterLink({ href, label }: { href: string; label: string }) {
 export function LandingFooter() {
   return (
     <footer className="relative z-10 border-t border-border bg-muted/50">
-      <div className="mx-auto max-w-6xl px-6 sm:px-8">
+      <div className="mx-auto max-w-6xl px-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-12 py-16 sm:py-20">
           <div className="col-span-2">
             <div

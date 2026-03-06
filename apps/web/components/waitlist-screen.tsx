@@ -58,7 +58,7 @@ export function WaitlistScreen() {
           <header className="mb-16 md:mb-24">
             <Link href="/" className="inline-block">
               <Image
-                src="/surgent-logo.png"
+                src="/surgent-logo-dark.svg"
                 alt="Surgent"
                 width={100}
                 height={27}

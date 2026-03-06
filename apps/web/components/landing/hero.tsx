@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
-  ArrowUp,
+  ArrowRight,
   LayoutDashboard,
   ShoppingCart,
   Calendar,
@@ -40,10 +40,10 @@ function useTypingPlaceholder(items: string[], speed = 45, pause = 2200) {
 }
 
 const placeholders = [
-  'A brutalist portfolio with bold type and raw edges...',
-  'A SaaS dashboard with live charts and dark UI...',
-  'A storefront with floating cart and smooth hover cards...',
-  'A booking app with calendar slots and instant confirm...',
+  'A SaaS dashboard with live charts and subscription billing...',
+  'An online store with product pages, cart, and Stripe checkout...',
+  'A booking app with calendar, payments, and email confirmations...',
+  'A membership site with gated content and monthly plans...',
 ]
 
 const suggestions = [
@@ -99,6 +99,7 @@ function LandingPrompt({
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
   const [focused, setFocused] = useState(false)
+  const hasValue = value.trim().length > 0
 
   useEffect(() => {
     if (!ref.current) return
@@ -119,37 +120,51 @@ function LandingPrompt({
   return (
     <div
       onClick={() => ref.current?.focus()}
-      className={`cursor-text relative isolate rounded-2xl border bg-white transition-all duration-200 ${focused ? 'border-brand/25 shadow-[0_0_0_3px_rgba(124,58,237,0.08)]' : 'border-[#e5e5e5] shadow-sm'}`}
+      className="cursor-text flex flex-col gap-2 p-3.5 transition-all duration-150"
+      style={{
+        borderRadius: '1.75rem',
+        background: 'hsl(60 3% 15%)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        boxShadow: focused
+          ? '0 0 0 0.5px #000000e0, 0 20px 25px -5px rgba(0,0,0,0.25), 0 8px 10px -6px rgba(0,0,0,0.2), inset 0 1px 0 0 rgba(255,255,255,0.08), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.04)'
+          : '0 0 0 0.5px #000000e0, 0 20px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.12), inset 0 1px 0 0 rgba(255,255,255,0.06), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.03)',
+      }}
     >
-      <div className="px-4 pt-4 pb-3 sm:px-5">
-        <textarea
-          ref={ref}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          onKeyDown={handleKey}
-          placeholder={placeholder}
-          rows={2}
-          style={{ fontWeight: 450 }}
-          className="w-full resize-none bg-transparent text-[#1a1a1a] text-sm leading-relaxed placeholder:text-[#b0b0b0] focus:outline-none"
-        />
-      </div>
-      <div className="flex items-center justify-between px-4 pb-3 sm:px-5">
-        <div className="flex items-center gap-1.5 text-[11px] text-[#b0b0b0]">
-          <kbd className="px-1.5 py-0.5 rounded bg-[#f5f5f5] text-[10px] font-medium text-[#999]">
+      <textarea
+        ref={ref}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onKeyDown={handleKey}
+        placeholder={placeholder}
+        rows={2}
+        className="font-(--font-geist) w-full resize-none bg-transparent text-[#fdf8f0] text-[15px] leading-[1.6] placeholder:text-[#666] focus:outline-none px-1 pt-0.5"
+        style={{ fontWeight: 400, letterSpacing: '-0.01em' }}
+      />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-[11px] text-[#555]">
+          <kbd
+            className="inline-flex items-center justify-center h-[20px] px-1.5 rounded-md text-[10px] text-[#777]"
+            style={{
+              fontWeight: 500,
+              background: 'rgba(255,255,255,0.06)',
+              boxShadow:
+                '0 0 0 0.5px rgba(255,255,255,0.06), 0 1px 1px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)',
+            }}
+          >
             ↵
           </kbd>
-          to send
+          <span className="hidden sm:inline text-[#555]">to build</span>
         </div>
         <button
           onClick={(e) => {
             e.stopPropagation()
             onSend()
           }}
-          className="flex items-center justify-center h-8 w-8 rounded-full transition-all duration-100 bg-brand text-white cursor-pointer hover:bg-brand/90 active:scale-95"
+          className="inline-flex items-center justify-center rounded-full size-8 text-white bg-brand hover:bg-brand/90 btn-elevated-brand cursor-pointer transition-all duration-100 active:scale-[0.97]"
         >
-          <ArrowUp className="h-4 w-4" />
+          <ArrowRight className="h-4 w-4" />
         </button>
       </div>
     </div>
@@ -159,13 +174,13 @@ function LandingPrompt({
 /* ─── Suggestion buttons ─── */
 function SuggestionButtons({ onSelect }: { onSelect: (prompt: string) => void }) {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 landing-stagger-4">
+    <div className="flex flex-wrap items-center justify-center gap-1.5 landing-stagger-4">
       {suggestions.map((s) => (
         <button
           key={s.label}
           onClick={() => onSelect(s.prompt)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] sm:text-[13px] text-[#616161] bg-[#f6f6f6] hover:bg-[#eeeeee] hover:text-[#303030] transition-all duration-150 cursor-pointer active:scale-[0.97]"
-          style={{ fontWeight: 500 }}
+          className="font-(--font-geist) inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-[#666] hover:text-[#bbb] hover:bg-[rgba(255,255,255,0.04)] transition-all duration-100 cursor-pointer active:scale-[0.97]"
+          style={{ fontWeight: 450, letterSpacing: '-0.01em' }}
         >
           <s.icon className="h-3.5 w-3.5 shrink-0" />
           {s.label}
@@ -189,7 +204,7 @@ export function LandingHero({
 
   return (
     <section className="relative flex-1 flex flex-col items-center justify-center pt-24 pb-12 sm:pt-32 sm:pb-16 overflow-hidden">
-      <div className="relative z-10 w-full max-w-[720px] mx-auto px-5 sm:px-6">
+      <div className="relative z-10 w-full max-w-[640px] mx-auto px-5 sm:px-6">
         {/* Headline */}
         <div className="text-center mb-8 sm:mb-10 landing-stagger-2">
           <div className="flex flex-col items-center gap-2 mb-6">
@@ -208,11 +223,11 @@ export function LandingHero({
                     alt={a.alt}
                     width={32}
                     height={32}
-                    className="w-8 h-8 rounded-full border-2 border-white object-cover shadow-sm"
+                    className="w-8 h-8 rounded-full border-2 border-background object-cover shadow-sm"
                   />
                 ))}
               </div>
-              <div className="h-5 w-px bg-[#e0e0e0]" />
+              <div className="h-5 w-px bg-[#333]" />
               <div className="flex items-center gap-1">
                 <div className="flex items-center gap-0.5">
                   {[...Array(5)].map((_, i) => (
@@ -226,34 +241,36 @@ export function LandingHero({
                     </svg>
                   ))}
                 </div>
-                <span className="text-[13px] text-[#505050] font-semibold">4.8</span>
+                <span className="text-[13px] text-[#999] font-semibold">4.8</span>
               </div>
             </div>
-            <p className="text-[12.5px] text-[#9a9a9a]" style={{ fontWeight: 500 }}>
-              Loved by <span className="text-[#606060]">1,500+</span> builders &middot;{' '}
-              <span className="text-[#606060]">2k+</span> projects created
+            <p
+              className="font-(--font-geist) text-[12.5px] text-[#666]"
+              style={{ fontWeight: 500 }}
+            >
+              Loved by <span className="text-[#999]">1,500+</span> builders &middot;{' '}
+              <span className="text-[#999]">2k+</span> projects created
             </p>
           </div>
           <h1
-            className="font-(--font-satoshi) text-[2.25rem] sm:text-[2.75rem] lg:text-5xl leading-[1.2] tracking-[-0.035em] text-[#1a1a1a] mb-4"
-            style={{ fontWeight: 700, textShadow: '0 1px 2px rgba(0,0,0,0.06)' }}
+            className="font-(--font-geist) text-[2.25rem] sm:text-[2.75rem] lg:text-[3.25rem] leading-[1.1] tracking-[-0.04em] text-[#fdf8f0] mb-5"
+            style={{ fontWeight: 800 }}
           >
-            Build apps that{' '}
-            <span className="text-brand underline decoration-brand decoration-2 underline-offset-4">
-              make money
-            </span>
+            Build your app,
+            <br />
+            <span className="text-[#fdf8f0]/30">start earning today</span>
           </h1>
           <p
-            className="text-[#717171] text-[13.5px] sm:text-[15px] max-w-136 mx-auto leading-[1.65]"
-            style={{ fontWeight: 450 }}
+            className="font-(--font-geist) text-[#777] text-[14px] sm:text-[15.5px] max-w-[480px] mx-auto leading-[1.6]"
+            style={{ fontWeight: 400, letterSpacing: '-0.01em' }}
           >
-            Describe your idea, get a full app with payments built in — no company or bank account
-            needed. Start earning from day one.
+            Describe your idea in plain text — Surgent builds it, adds payments, and deploys it
+            live. No setup, no code, no waiting.
           </p>
         </div>
 
         {/* Prompt */}
-        <div className="landing-stagger-3 mb-5">
+        <div className="landing-stagger-3 mb-6">
           <LandingPrompt
             value={promptValue}
             onChange={onPromptChange}

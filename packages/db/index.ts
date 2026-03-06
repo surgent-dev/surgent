@@ -24,4 +24,5 @@ export type {
   DomainStatus,
   DomainLogEntry,
   DomainWebhookEventTable,
+  TrustMrrStartupTable,
 } from './src/types'

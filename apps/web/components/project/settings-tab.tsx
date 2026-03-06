@@ -342,7 +342,7 @@ function AddEnvVarForm({
   )
 }
 
-export function EnvVarsContent({ projectId }: { projectId?: string }) {
+export function SettingsTab({ projectId }: { projectId?: string }) {
   const [environment, setEnvironment] = useState<Environment>('development')
   const [adding, setAdding] = useState(false)
   const [revealed, setRevealed] = useState(false)

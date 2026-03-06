@@ -14,6 +14,7 @@ import admin from './routes/admin'
 import providers from './routes/providers'
 import pay from './routes/pay'
 import domains, { domainWebhooks } from './routes/domains'
+import startups from './routes/startups'
 import { serve as serveInngest } from 'inngest/hono'
 import { inngest, functions as inngestFunctions } from './inngest'
 import { auth } from './lib/auth'
@@ -215,6 +216,7 @@ app.route('/api/providers', providers)
 app.route('/api/pay', pay)
 app.route('/api/domains', domainWebhooks) // Webhook (before auth middleware applies)
 app.route('/api/domains', domains)
+app.route('/api/startups', startups)
 app.route('/mcp', mcp)
 app.route('/preview', preview)
 

@@ -46,6 +46,7 @@ export interface Database {
   pay_customer: PayCustomerTable
   domain: DomainTable
   domain_webhook_event: DomainWebhookEventTable
+  trustmrr_startup: TrustMrrStartupTable
 }
 
 export interface UserTable {
@@ -712,4 +713,32 @@ export interface DomainWebhookEventTable {
   error: string | null
   createdAt: Generated<Date>
   processedAt: Date | null
+}
+
+export interface TrustMrrStartupTable {
+  slug: string
+  name: string
+  icon: string | null
+  description: string | null
+  website: string | null
+  country: string | null
+  foundedDate: Date | null
+  category: string | null
+  paymentProvider: string | null
+  targetAudience: string | null
+  revenueLast30Days: number
+  revenueMrr: number
+  revenueTotal: number
+  customers: number
+  activeSubscriptions: number
+  askingPrice: number | null
+  profitMarginLast30Days: number | null
+  growth30d: number | null
+  multiple: number | null
+  onSale: boolean
+  firstListedForSaleAt: Date | null
+  xHandle: string | null
+  syncedAt: Date
+  createdAt?: Date
+  updatedAt?: Date
 }

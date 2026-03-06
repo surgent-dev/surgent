@@ -57,7 +57,7 @@ function getProjectColor(id: string): string {
     hash = id.charCodeAt(i) + ((hash << 5) - hash)
   }
   const hue = Math.abs(hash) % 360
-  return `hsl(${hue}, 35%, 95%)`
+  return `hsla(${hue}, 40%, 60%, 0.1)`
 }
 
 function getProjectAccent(id: string): string {
@@ -66,7 +66,7 @@ function getProjectAccent(id: string): string {
     hash = id.charCodeAt(i) + ((hash << 5) - hash)
   }
   const hue = Math.abs(hash) % 360
-  return `hsl(${hue}, 30%, 50%)`
+  return `hsl(${hue}, 45%, 65%)`
 }
 
 // Format relative time
@@ -136,19 +136,19 @@ function ProjectCard({
 
         {/* Status badge — only one at a time */}
         {isProvisioning ? (
-          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm">
-            <Loader2 className="w-3 h-3 text-neutral-600 animate-spin" />
-            <span className="text-xs font-medium text-neutral-700">Setting up</span>
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-card/90 backdrop-blur-sm">
+            <Loader2 className="w-3 h-3 text-muted-foreground animate-spin" />
+            <span className="text-xs font-medium text-muted-foreground">Setting up</span>
           </div>
         ) : isFailed ? (
-          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm">
-            <AlertCircle className="w-3 h-3 text-red-500" />
-            <span className="text-xs font-medium text-red-600">Failed</span>
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-card/90 backdrop-blur-sm">
+            <AlertCircle className="w-3 h-3 text-destructive" />
+            <span className="text-xs font-medium text-destructive">Failed</span>
           </div>
         ) : isLive ? (
-          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-xs font-medium text-neutral-700">Live</span>
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-card/90 backdrop-blur-sm">
+            <span className="w-2 h-2 rounded-full bg-success" />
+            <span className="text-xs font-medium text-foreground">Live</span>
           </div>
         ) : null}
       </div>
@@ -281,13 +281,13 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="w-full px-6 py-6">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <header className="w-full px-6 h-14 flex items-center border-b border-border/50">
+          <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
             <Skeleton className="h-8 w-28" />
             <Skeleton className="h-10 w-10 rounded-full" />
           </div>
         </header>
-        <main className="max-w-7xl mx-auto py-8">
+        <main className="max-w-6xl mx-auto px-6 py-8">
           <Skeleton className="h-9 w-40 mb-10" />
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -307,16 +307,16 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header - matching main page style */}
-      <header className="w-full px-6 py-6">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+      {/* Header */}
+      <header className="w-full px-6 h-14 flex items-center border-b border-border/50">
+        <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <Image
-              src="/surgent-logo.png"
+              src="/surgent-logo-dark.svg"
               alt="Surgent"
               width={119}
               height={32}
-              className="h-8 w-auto"
+              className="h-7 w-auto"
               priority
             />
           </Link>
@@ -393,7 +393,7 @@ export default function DashboardPage() {
       </header>
 
       {/* Main */}
-      <main className="max-w-7xl mx-auto py-8">
+      <main className="max-w-6xl mx-auto px-6 py-8">
         {/* Title row */}
         <div className="flex items-center justify-between mb-10">
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Your Projects</h1>
@@ -472,21 +472,29 @@ export default function DashboardPage() {
 
       {/* Delete Dialog */}
       <Dialog open={!!projectToDelete} onOpenChange={(open) => !open && setProjectToDelete(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-sm">
           <DialogHeader>
+            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-destructive/10 mb-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+            </div>
             <DialogTitle>Delete project</DialogTitle>
           </DialogHeader>
-          <p className="text-muted-foreground">
-            Are you sure you want to delete{' '}
-            <span className="font-medium text-foreground">{projectToDelete?.name}</span>? This
-            action cannot be undone.
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            This will permanently delete{' '}
+            <span className="font-medium text-foreground">{projectToDelete?.name}</span> and all its
+            data. This cannot be undone.
           </p>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="ghost" onClick={() => setProjectToDelete(null)}>
+          <DialogFooter className="gap-2 sm:gap-2 mt-2">
+            <Button variant="outline" onClick={() => setProjectToDelete(null)} className="flex-1">
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleteProject.isPending}>
-              {deleteProject.isPending ? 'Deleting...' : 'Delete'}
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteProject.isPending}
+              className="flex-1"
+            >
+              {deleteProject.isPending ? 'Deleting...' : 'Delete project'}
             </Button>
           </DialogFooter>
         </DialogContent>

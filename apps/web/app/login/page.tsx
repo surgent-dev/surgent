@@ -4,7 +4,6 @@ import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
-import { ThemeToggle } from '@/components/theme-toggle'
 import { isWaitlistMode } from '@/lib/waitlist'
 
 function LoginContent() {
@@ -34,9 +33,6 @@ function LoginContent() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background relative">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
       <div className="mx-auto flex w-full flex-col md:max-w-sm">
         <div className="flex flex-col items-center gap-6">
           {/* Logo/Brand */}

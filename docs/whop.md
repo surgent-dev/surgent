@@ -3487,7 +3487,6 @@ Many components support responsive values using an object syntax:
 
 ```tsx theme={null}
 import { Text, Box } from '@whop/react'
-
 ;<Text size={{ initial: '2', md: '4', lg: '6' }}>Responsive text size</Text>
 ```
 
@@ -3620,7 +3619,6 @@ import { TextInput, TextArea } from "@whop/react";
 
 ```tsx theme={null}
 import { Card } from '@whop/react'
-
 ;<Card size="2" variant="surface">
   <Heading size="4">Card Title</Heading>
   <Text>Card content goes here</Text>
@@ -3641,7 +3639,6 @@ import { Badge } from "@whop/react";
 
 ```tsx theme={null}
 import { Dialog, Button } from '@whop/react'
-
 ;<Dialog.Root>
   <Dialog.Trigger>
     <Button>Open Dialog</Button>
@@ -3660,7 +3657,6 @@ import { Dialog, Button } from '@whop/react'
 
 ```tsx theme={null}
 import { Select } from '@whop/react'
-
 ;<Select.Root defaultValue="1">
   <Select.Trigger />
   <Select.Content>
@@ -3714,7 +3710,6 @@ Create sections with different themes:
 
 ```tsx theme={null}
 import { Theme } from '@whop/react'
-
 ;<div>
   <Theme accentColor="blue">
     <Button>Blue button</Button>
@@ -8214,6 +8209,7 @@ fetch(`/api/token?companyId=${companyId}`)
 }
 companyId={companyId}
 redirectUrl="https://yourapp.com/verification-complete" >
+
 <section
 style={{ display: "flex", flexDirection: "column", gap: "8px" }} >
 <div
