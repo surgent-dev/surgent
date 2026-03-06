@@ -73,11 +73,19 @@ function StatCard({
   )
 }
 
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+function DetailRow({
+  label,
+  children,
+  last,
+}: {
+  label: string
+  children: React.ReactNode
+  last?: boolean
+}) {
   return (
     <div
       className="flex items-center justify-between py-3.5"
-      style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+      style={!last ? { borderBottom: '1px solid rgba(255,255,255,0.04)' } : undefined}
     >
       <p className="text-[13px] text-muted-foreground font-medium">{label}</p>
       <div className="text-[13px] text-foreground flex items-center gap-1.5 font-medium">
@@ -303,7 +311,10 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
             <DetailRow label="Audience">
               <span className="capitalize">{startup.targetAudience || '—'}</span>
             </DetailRow>
-            <DetailRow label="Growth (30d)">
+            <DetailRow
+              label="Growth (30d)"
+              last={startup.profitMarginLast30Days == null && startup.multiple == null}
+            >
               <span
                 className={hasGrowth ? 'text-emerald-500' : hasNegGrowth ? 'text-rose-500' : ''}
               >
@@ -315,10 +326,14 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
               </span>
             </DetailRow>
             {startup.profitMarginLast30Days != null && (
-              <DetailRow label="Profit margin">{startup.profitMarginLast30Days}%</DetailRow>
+              <DetailRow label="Profit margin" last={startup.multiple == null}>
+                {startup.profitMarginLast30Days}%
+              </DetailRow>
             )}
             {startup.multiple != null && (
-              <DetailRow label="Multiple">{startup.multiple.toFixed(1)}x</DetailRow>
+              <DetailRow label="Multiple" last>
+                {startup.multiple.toFixed(1)}x
+              </DetailRow>
             )}
           </div>
         </div>
