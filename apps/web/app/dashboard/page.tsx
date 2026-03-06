@@ -287,7 +287,7 @@ export default function DashboardPage() {
             <Skeleton className="h-10 w-10 rounded-full" />
           </div>
         </header>
-        <main className="max-w-6xl mx-auto py-8">
+        <main className="max-w-6xl mx-auto px-6 py-8">
           <Skeleton className="h-9 w-40 mb-10" />
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -393,7 +393,7 @@ export default function DashboardPage() {
       </header>
 
       {/* Main */}
-      <main className="max-w-6xl mx-auto py-8">
+      <main className="max-w-6xl mx-auto px-6 py-8">
         {/* Title row */}
         <div className="flex items-center justify-between mb-10">
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Your Projects</h1>
