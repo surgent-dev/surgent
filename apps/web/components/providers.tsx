@@ -18,14 +18,17 @@ export default function Providers({ children }: ProvidersProps) {
   useEffect(() => {
     authClient.getSession().then(({ data }) => {
       if (data?.user) {
-        posthog.identify(data.user.id, { email: data.user.email })
+        posthog.identify(data.user.id, {
+          email: data.user.email,
+          name: data.user.name,
+        })
       }
     })
   }, [])
 
   return (
     <QueryClientProvider client={client}>
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" enableSystem={false}>
         <AutumnProvider betterAuthUrl={process.env.NEXT_PUBLIC_BACKEND_URL!}>
           {children}
         </AutumnProvider>

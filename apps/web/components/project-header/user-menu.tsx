@@ -13,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import posthog from 'posthog-js'
 import { authClient } from '@/lib/auth-client'
 
 interface User {
@@ -37,6 +38,7 @@ export default function UserMenu({ onUpgrade }: UserMenuProps) {
   }, [])
 
   const handleSignOut = async () => {
+    posthog.reset()
     await authClient.signOut()
     router.push('/login')
   }

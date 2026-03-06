@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { motion } from 'motion/react'
 import { Button } from '@/components/ui/button'
+import posthog from 'posthog-js'
 import { authClient } from '@/lib/auth-client'
 import { isWaitlistMode } from '@/lib/waitlist'
 
@@ -43,6 +44,7 @@ export function WaitlistScreen() {
 
   const signOut = () => {
     setLoading(true)
+    posthog.reset()
     authClient.signOut().finally(() => {
       setUser(null)
       setLoading(false)
@@ -58,7 +60,7 @@ export function WaitlistScreen() {
           <header className="mb-16 md:mb-24">
             <Link href="/" className="inline-block">
               <Image
-                src="/surgent-logo.png"
+                src="/surgent-logo-dark.svg"
                 alt="Surgent"
                 width={100}
                 height={27}
