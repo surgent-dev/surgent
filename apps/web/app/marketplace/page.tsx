@@ -53,12 +53,12 @@ export default function MarketplacePage() {
     return (
       <div className="min-h-screen bg-background">
         <header className="w-full px-6 h-14 flex items-center border-b">
-          <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
+          <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
             <Skeleton className="h-7 w-32" />
             <Skeleton className="h-8 w-8 rounded-full" />
           </div>
         </header>
-        <main className="max-w-7xl mx-auto px-6 py-10">
+        <main className="max-w-6xl mx-auto px-6 py-10">
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="space-y-3">
@@ -78,11 +78,11 @@ export default function MarketplacePage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="w-full px-6 h-14 flex items-center border-b">
-        <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-4">
+        <div className="max-w-6xl mx-auto w-full flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
               <Image
-                src="/surgent-logo.png"
+                src="/surgent-logo-dark.svg"
                 alt="Surgent"
                 width={119}
                 height={32}
@@ -113,7 +113,7 @@ export default function MarketplacePage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10">
+      <main className="max-w-6xl mx-auto px-6 py-10">
         <div className="mb-8">
           <h1 className="text-lg font-semibold tracking-tight">Marketplace</h1>
           <p className="text-sm text-muted-foreground mt-1">

@@ -120,7 +120,7 @@ export default function ListingPage() {
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/" className="flex items-center gap-2 shrink-0">
               <Image
-                src="/surgent-logo.png"
+                src="/surgent-logo-dark.svg"
                 alt="Surgent"
                 width={119}
                 height={32}
