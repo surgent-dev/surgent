@@ -324,10 +324,18 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     await ProjectService.updateDeployment(deploymentId, { status, ...extra })
   }
 
+  const checkCancelled = async () => {
+    const current = await ProjectService.getDeployment(deploymentId)
+    if (current?.status === 'cancelled') {
+      throw new Error('Deployment cancelled by user')
+    }
+  }
+
   let stage: 'starting' | 'deploying_convex' | 'building' | 'uploading' = 'starting'
   await updateStatus(stage)
 
   try {
+    await checkCancelled()
     await ensureConvexProdDeployment(projectId)
 
     // Set production SITE_URL to the actual worker hostname (not the dev sandbox URL)
@@ -344,12 +352,14 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     // Deploy Convex functions to production (if project uses Convex)
     const convexCreds = await getConvexCredentials(projectId, 'production')
     if (convexCreds) {
+      await checkCancelled()
       stage = 'deploying_convex'
       await updateStatus(stage)
       await deployConvexFunctions(sandbox, workingDir, envVars)
       log.info({ projectId }, 'convex functions deployed to production')
     }
 
+    await checkCancelled()
     stage = 'building'
     await updateStatus(stage)
     const build = await sandbox.exec('bun run build', {
@@ -370,6 +380,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
 
     const localEnv = await readEnvFile(sandbox, `${workingDir}/.env`)
 
+    await checkCancelled()
     stage = 'uploading'
     await updateStatus(stage)
 
@@ -451,6 +462,13 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
 
     log.info({ projectId, scriptName, cfDeploymentId: cfDeployment?.id }, 'deploy success')
   } catch (err: any) {
+    // Don't overwrite 'cancelled' status — it was set by the user
+    const current = await ProjectService.getDeployment(deploymentId).catch(() => null)
+    if (current?.status === 'cancelled') {
+      log.info({ projectId, deploymentId }, 'deploy aborted (cancelled)')
+      return
+    }
+
     log.error({ projectId, err }, 'deploy failed')
     const failStatus = stage === 'building' ? 'build_failed' : 'deploy_failed'
     await ProjectService.updateDeployment(deploymentId, {

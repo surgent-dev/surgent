@@ -34,9 +34,10 @@ const STATUS: Record<string, string> = {
   queued: 'Queued',
   deploy_failed: 'Failed',
   build_failed: 'Build failed',
+  cancelled: 'Cancelled',
 }
 
-const TERMINAL = ['deployed', 'deploy_failed', 'build_failed']
+const TERMINAL = ['deployed', 'deploy_failed', 'build_failed', 'cancelled']
 
 function timeAgo(d: string) {
   const now = Date.now()
@@ -82,7 +83,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
     if (prev && !TERMINAL.includes(prev) && TERMINAL.includes(curr)) {
       if (curr === 'deployed') {
         toast.success(`Deployed to ${latest.scriptName}.surgent.site`, { position: 'bottom-left' })
-      } else {
+      } else if (curr !== 'cancelled') {
         toast.error(`Deployment failed: ${latest.error || curr}`, { position: 'bottom-left' })
       }
     }

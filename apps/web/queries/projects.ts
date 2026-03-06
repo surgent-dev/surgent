@@ -132,6 +132,23 @@ export function useDeployProject() {
   })
 }
 
+// Cancel deployment
+async function cancelDeploymentReq({ id, deploymentId }: { id: string; deploymentId: string }) {
+  const data = await http.post(`api/projects/${id}/deployments/${deploymentId}/cancel`).json()
+  return data as { cancelled: boolean }
+}
+
+export function useCancelDeployment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: cancelDeploymentReq,
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['latest-deployment', vars.id] })
+      queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
+    },
+  })
+}
+
 async function undeployProjectReq({ id }: { id: string }) {
   const data = await http.post(`api/projects/${id}/undeploy`).json()
   return ScheduledSchema.parse(data)
@@ -485,7 +502,7 @@ const DeploymentStatusSchema = z.object({
 
 export type DeploymentStatus = z.infer<typeof DeploymentStatusSchema>
 
-const TERMINAL_STATUSES = ['deployed', 'deploy_failed', 'build_failed']
+const TERMINAL_STATUSES = ['deployed', 'deploy_failed', 'build_failed', 'cancelled']
 
 // Fetch latest deployment for a project
 async function fetchLatestDeployment(projectId: string): Promise<DeploymentStatus | null> {

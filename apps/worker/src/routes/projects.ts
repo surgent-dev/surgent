@@ -1084,6 +1084,49 @@ projects.get('/:id/deployments', zValidator('param', idParam), async (c) => {
   return c.json(response)
 })
 
+// POST /projects/:id/deployments/:deploymentId/cancel - Cancel an in-progress deployment
+projects.post(
+  '/:id/deployments/:deploymentId/cancel',
+  zValidator('param', z.object({ id: z.string().uuid(), deploymentId: z.string().uuid() })),
+  async (c) => {
+    const { id, deploymentId } = c.req.valid('param')
+    await getProjectWithAuth(id, c.get('user')!)
+
+    const deployment = await db
+      .selectFrom('deployment')
+      .select(['id', 'status', 'projectId'])
+      .where('id', '=', deploymentId)
+      .where('projectId', '=', id)
+      .executeTakeFirst()
+
+    if (!deployment) {
+      return c.json({ error: 'Deployment not found' }, 404)
+    }
+
+    const terminalStatuses = ['deployed', 'deploy_failed', 'build_failed', 'cancelled']
+    if (terminalStatuses.includes(deployment.status)) {
+      return c.json({ error: 'Deployment is not in progress' }, 409)
+    }
+
+    await updateDeployment(deploymentId, {
+      status: 'cancelled',
+      error: 'Cancelled by user',
+      finishedAt: new Date(),
+    })
+
+    // Send cancellation event to Inngest to stop the function
+    await inngest
+      .send({
+        name: 'project/deploy.cancelled',
+        data: { projectId: id, deploymentId },
+      })
+      .catch(() => {})
+
+    log.info({ projectId: id, deploymentId }, 'deployment cancelled')
+    return c.json({ cancelled: true })
+  },
+)
+
 // POST /projects/:id/undeploy - Undeploy project from Cloudflare
 projects.post('/:id/undeploy', zValidator('param', idParam), async (c) => {
   try {
