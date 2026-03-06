@@ -1,22 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import {
-  Copy,
-  PencilSimple,
-  ArrowSquareOut,
-  X,
-  RocketLaunch,
-  Eye,
-  EyeSlash,
-} from '@phosphor-icons/react'
+import { X, Eye, EyeSlash } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'react-hot-toast'
-import { useDeploymentHistoryQuery, useRedeployVersion, useDeployProject } from '@/queries/projects'
-import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
+import { useDeploymentHistoryQuery, useRedeployVersion } from '@/queries/projects'
 
 interface Props {
   open: boolean
@@ -59,47 +50,14 @@ function duration(start?: string, end?: string) {
 
 export default function DeploymentStatusDialog({ open, onOpenChange, projectId, worker }: Props) {
   const [rollId, setRollId] = useState<string | null>(null)
-  const [editing, setEditing] = useState(false)
-  const [input, setInput] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const prevStatusRef = useRef<string | null>(null)
 
   const { data: history, isLoading } = useDeploymentHistoryQuery(projectId, open)
   const redeploy = useRedeployVersion()
-  const deploy = useDeployProject()
 
-  const name = worker?.name
   const isLive = worker?.status === 'active'
   const latest = history?.[0]
   const busy = latest && !TERMINAL.includes(latest.status)
-
-  // Toast when deployment completes
-  useEffect(() => {
-    if (!latest) return
-    const prev = prevStatusRef.current
-    const curr = latest.status
-
-    if (prev && !TERMINAL.includes(prev) && TERMINAL.includes(curr)) {
-      if (curr === 'deployed') {
-        toast.success(`Deployed to ${latest.scriptName}.surgent.site`, { position: 'bottom-left' })
-      } else {
-        toast.error(`Deployment failed: ${latest.error || curr}`, { position: 'bottom-left' })
-      }
-    }
-    prevStatusRef.current = curr
-  }, [latest])
-
-  const handleDeploy = (n: string) => {
-    if (!projectId || !n) return
-    deploy.mutate(
-      { id: projectId, deployName: n },
-      {
-        onSuccess: () => setEditing(false),
-        onError: (err) =>
-          toast.error(err instanceof Error ? err.message : 'Failed to start deployment'),
-      },
-    )
-  }
 
   const handleRollback = (v: string) => {
     if (!projectId) return
@@ -124,7 +82,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
               className={`size-2 rounded-full ${isLive ? 'bg-emerald-500' : busy ? 'bg-amber-500 animate-pulse' : 'bg-muted-foreground/30'}`}
             />
             <span className="text-sm font-semibold">
-              {isLive ? 'Live' : busy ? 'Deploying' : 'Offline'}
+              {isLive ? 'Deployment History' : busy ? 'Deploying' : 'Deployment History'}
             </span>
           </div>
           <button
@@ -159,89 +117,6 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
             {latest.error && (
               <span className="text-xs text-destructive/70 truncate flex-1">{latest.error}</span>
             )}
-          </div>
-        )}
-
-        {/* URL + Actions */}
-        <div className="px-5 py-4 border-b space-y-3">
-          {name && (
-            <div className="flex items-center h-10 px-3 rounded-lg border bg-muted/20 font-mono text-sm">
-              {editing ? (
-                <>
-                  <input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleDeploy(input.trim())
-                      if (e.key === 'Escape') setEditing(false)
-                    }}
-                    className="flex-1 bg-transparent outline-none min-w-0"
-                    autoFocus
-                  />
-                  <span className="text-muted-foreground/60 shrink-0">.surgent.site</span>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(false)}
-                    className="ml-2 p-0.5 hover:bg-muted rounded"
-                  >
-                    <X className="size-3.5 text-muted-foreground" />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className="flex-1 truncate text-muted-foreground">{name}.surgent.site</span>
-                  <a
-                    href={`https://${name}.surgent.site`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-1 hover:bg-muted rounded"
-                  >
-                    <ArrowSquareOut className="size-3.5 text-muted-foreground" />
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(`https://${name}.surgent.site`)
-                      toast.success('Copied')
-                    }}
-                    className="p-1 hover:bg-muted rounded"
-                  >
-                    <Copy className="size-3.5 text-muted-foreground" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInput(name)
-                      setEditing(true)
-                    }}
-                    className="p-1 hover:bg-muted rounded"
-                  >
-                    <PencilSimple className="size-3.5 text-muted-foreground" />
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          <Button
-            variant="brand"
-            size="lg"
-            className="w-full"
-            onClick={() => handleDeploy(editing ? input.trim() : name || '')}
-            disabled={deploy.isPending || Boolean(busy) || (!name && !editing)}
-          >
-            {deploy.isPending ? (
-              <Loader2 className="size-4 animate-spin mr-2" />
-            ) : (
-              <RocketLaunch className="size-4 mr-2" weight="fill" />
-            )}
-            {editing && input.trim() !== name ? 'Save & Publish' : 'Republish'}
-          </Button>
-        </div>
-
-        {/* Custom Domain */}
-        {projectId && (
-          <div className="border-b">
-            <DomainSearchPanel projectId={projectId} />
           </div>
         )}
 
