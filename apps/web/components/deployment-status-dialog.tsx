@@ -239,12 +239,13 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
           </Button>
         </div>
 
-        {/* Custom Domain */}
+        {/* Custom Domain — temporarily hidden
         {projectId && (
           <div className="border-b">
             <DomainSearchPanel projectId={projectId} />
           </div>
         )}
+        */}
 
         {/* History header */}
         <div className="h-10 px-5 flex items-center justify-between text-xs text-muted-foreground border-b bg-muted/20">
