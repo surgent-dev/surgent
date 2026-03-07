@@ -649,98 +649,69 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               </div>
 
               {/* Custom Domain */}
-              {
-                <div className="border-t px-3 py-2.5">
-                  {activeDomain ? (
-                    <div className="flex items-center gap-2">
-                      <Globe
-                        className="size-3.5 text-muted-foreground/70 shrink-0"
-                        weight="duotone"
-                      />
-                      <span className="size-1.5 rounded-full shrink-0 bg-emerald-500" />
-                      <span className="font-mono text-xs truncate flex-1">
-                        {activeDomain.domainName}
-                      </span>
-                      <span className="text-[10px] text-emerald-600">Live</span>
-                      <a
-                        href={`https://${activeDomain.domainName}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={iconBtn}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <ArrowSquareOut className="size-3.5 text-muted-foreground" />
-                      </a>
-                    </div>
-                  ) : displayDomain ? (
-                    <div className="flex items-center gap-2">
-                      <Globe
-                        className="size-3.5 text-muted-foreground/70 shrink-0"
-                        weight="duotone"
-                      />
-                      {displayDomain.status === 'error' ? (
-                        <>
-                          <span className="size-1.5 rounded-full shrink-0 bg-red-500" />
-                          <span className="font-mono text-xs truncate flex-1">
-                            {displayDomain.domainName}
-                          </span>
-                          <span className="text-[10px] text-red-500">Failed</span>
-                        </>
-                      ) : displayDomain.status === 'dns_configuring' ? (
-                        <>
-                          <span className="size-1.5 rounded-full shrink-0 bg-amber-500 animate-pulse" />
-                          <span className="font-mono text-xs truncate flex-1">
-                            {displayDomain.domainName}
-                          </span>
-                          <span className="text-[10px] text-amber-600">Configuring</span>
-                        </>
-                      ) : (
-                        <>
-                          <CircleNotch className="size-3 animate-spin text-muted-foreground shrink-0" />
-                          <span className="font-mono text-xs truncate flex-1">
-                            {displayDomain.domainName === 'pending'
-                              ? 'Processing...'
-                              : displayDomain.domainName}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {displayDomain.status === 'purchasing' ? 'Purchasing' : 'Pending'}
-                          </span>
-                        </>
-                      )}
-                      <button
-                        className={`${iconBtn} hover:!text-destructive`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (displayDomain.projectId) {
-                            removeDomain.mutate({
-                              projectId: displayDomain.projectId,
-                              domainId: displayDomain.id,
-                            })
-                          }
-                        }}
-                        disabled={removeDomain.isPending}
-                        title="Remove domain"
-                      >
-                        <Trash className="size-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      className="flex items-center gap-2 w-full text-left hover:opacity-80 transition-opacity"
-                      onClick={() => {
-                        setIsPublishOpen(false)
-                        setIsDeploymentStatusOpen(true)
-                      }}
+              <div className="border-t px-3 py-2.5">
+                {activeDomain ? (
+                  <div className="flex items-center gap-2 h-8 px-2.5 rounded-lg bg-emerald-500/6 border border-emerald-500/20">
+                    <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    <span className="font-mono text-xs truncate flex-1">
+                      {activeDomain.domainName}
+                    </span>
+                    <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                      Live
+                    </span>
+                    <a
+                      href={`https://${activeDomain.domainName}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-0.5 hover:bg-emerald-500/10 rounded transition-colors"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <Globe
-                        className="size-3.5 text-muted-foreground/70 shrink-0"
-                        weight="duotone"
-                      />
-                      <span className="text-xs text-muted-foreground">Add custom domain</span>
-                    </button>
-                  )}
-                </div>
-              }
+                      <ArrowSquareOut className="size-3.5 text-emerald-600" />
+                    </a>
+                  </div>
+                ) : displayDomain ? (
+                  <button
+                    className="flex items-center gap-2 w-full h-8 px-2.5 rounded-lg border border-border hover:bg-muted/30 transition-colors text-left"
+                    onClick={() => {
+                      setIsPublishOpen(false)
+                      setIsDeploymentStatusOpen(true)
+                    }}
+                  >
+                    {displayDomain.status === 'error' ? (
+                      <span className="size-1.5 rounded-full bg-red-500 shrink-0" />
+                    ) : (
+                      <CircleNotch className="size-3 animate-spin text-amber-500 shrink-0" />
+                    )}
+                    <span className="font-mono text-xs truncate flex-1">
+                      {displayDomain.domainName === 'pending'
+                        ? 'Processing...'
+                        : displayDomain.domainName}
+                    </span>
+                    <span
+                      className={`text-[10px] font-medium ${displayDomain.status === 'error' ? 'text-red-500' : 'text-amber-500'}`}
+                    >
+                      {displayDomain.status === 'error'
+                        ? 'Failed'
+                        : displayDomain.status === 'dns_configuring'
+                          ? 'DNS'
+                          : 'Pending'}
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    className="flex items-center gap-2 w-full h-8 px-2.5 rounded-lg border border-border hover:bg-muted/30 transition-colors"
+                    onClick={() => {
+                      setIsPublishOpen(false)
+                      setIsDeploymentStatusOpen(true)
+                    }}
+                  >
+                    <Globe className="size-3.5 text-brand shrink-0" weight="duotone" />
+                    <span className="text-xs font-medium text-foreground/80">
+                      Add custom domain
+                    </span>
+                  </button>
+                )}
+              </div>
 
               {/* Visibility */}
               <div className="border-t px-3 py-2.5">
