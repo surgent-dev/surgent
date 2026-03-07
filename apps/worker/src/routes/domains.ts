@@ -668,102 +668,97 @@ export default domains
 
 export const domainWebhooks = new Hono<AppContext>()
 
+const SIGNATURE_MAX_AGE_S = 300 // 5 minutes
+const ENTRI_PRODUCTION_IP = '3.14.77.245'
+
+/** SHA-256 hex digest of a string. */
+function sha256(input: string): string {
+  return new Bun.CryptoHasher('sha256').update(input).digest('hex')
+}
+
+/** Constant-time string comparison to prevent timing attacks. */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  const bufA = Buffer.from(a)
+  const bufB = Buffer.from(b)
+  return crypto.timingSafeEqual(bufA, bufB)
+}
+
+/**
+ * Verify Entri webhook signature.
+ * V2 (recommended): SHA256(id + timestamp + secret), header Entri-Signature-V2
+ * V1 (legacy):      SHA256(id + secret),             header Entri-Signature
+ * @see https://developers.entri.com/docs/webhooks
+ */
+function verifyEntriSignature(
+  webhookId: string,
+  secret: string,
+  headers: { signatureV2: string; signatureV1: string; timestamp: string },
+): { valid: boolean; version: 'v2' | 'v1' | null; error?: string } {
+  if (headers.signatureV2 && headers.timestamp) {
+    const ts = parseInt(headers.timestamp, 10)
+    if (Number.isNaN(ts) || Math.abs(Date.now() / 1000 - ts) > SIGNATURE_MAX_AGE_S) {
+      return { valid: false, version: 'v2', error: 'timestamp expired' }
+    }
+    const expected = sha256(`${webhookId}${headers.timestamp}${secret}`)
+    return { valid: timingSafeEqual(headers.signatureV2, expected), version: 'v2' }
+  }
+
+  if (headers.signatureV1) {
+    const expected = sha256(`${webhookId}${secret}`)
+    return { valid: timingSafeEqual(headers.signatureV1, expected), version: 'v1' }
+  }
+
+  return { valid: false, version: null, error: 'no signature header' }
+}
+
 /**
  * POST /api/domains/webhooks/entri
  * Receives domain purchase/DNS events from Entri
  */
 domainWebhooks.post('/webhooks/:provider', async (c) => {
   const body = await c.req.text()
-  const webhookSecret = config.entri.webhookSecret
   const isProduction = process.env.NODE_ENV === 'production'
 
-  // Entri signature verification
-  // V2 (recommended): SHA256(webhookId + timestamp + secret) in Entri-Signature-V2 header
-  // V1 (legacy): SHA256(webhookId + secret) in Entri-Signature header
-  const signatureV2 = c.req.header('Entri-Signature-V2') || ''
-  const signatureV1 = c.req.header('Entri-Signature') || ''
-  const timestamp = c.req.header('Entri-Timestamp') || ''
-
-  if (webhookSecret && (signatureV2 || signatureV1)) {
-    let parsedBody: { id?: string } = {}
-    try {
-      parsedBody = JSON.parse(body)
-    } catch {
-      return c.json({ error: 'Invalid payload' }, 400)
-    }
-    const webhookId = parsedBody.id || ''
-
-    let expectedHash: string
-    if (signatureV2 && timestamp) {
-      // V2: SHA256(id + timestamp + secret), with 5-minute freshness check
-      const ts = parseInt(timestamp, 10)
-      if (isProduction && Math.abs(Date.now() / 1000 - ts) > 300) {
-        log.warn({ timestamp }, '[ENTRI-WEBHOOK] timestamp too old, rejecting')
-        return c.json({ error: 'Webhook timestamp expired' }, 401)
-      }
-      const canonical = `${webhookId}${timestamp}${webhookSecret}`
-      const hash = new Bun.CryptoHasher('sha256').update(canonical).digest('hex')
-      expectedHash = hash
-
-      const sigValid =
-        signatureV2.length === expectedHash.length &&
-        (() => {
-          const a = new TextEncoder().encode(signatureV2)
-          const b = new TextEncoder().encode(expectedHash)
-          let diff = 0
-          for (let i = 0; i < a.length; i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0)
-          return diff === 0
-        })()
-
-      if (!sigValid) {
-        if (isProduction) {
-          log.warn('[ENTRI-WEBHOOK] V2 signature mismatch')
-          return c.json({ error: 'Invalid signature' }, 401)
-        }
-        log.warn('[ENTRI-WEBHOOK] V2 signature mismatch (non-production, continuing)')
-      }
-    } else if (signatureV1) {
-      // V1 (legacy): SHA256(id + secret)
-      const canonical = `${webhookId}${webhookSecret}`
-      expectedHash = new Bun.CryptoHasher('sha256').update(canonical).digest('hex')
-
-      const sigValid =
-        signatureV1.length === expectedHash.length &&
-        (() => {
-          const a = new TextEncoder().encode(signatureV1)
-          const b = new TextEncoder().encode(expectedHash)
-          let diff = 0
-          for (let i = 0; i < a.length; i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0)
-          return diff === 0
-        })()
-
-      if (!sigValid) {
-        if (isProduction) {
-          log.warn('[ENTRI-WEBHOOK] V1 signature mismatch')
-          return c.json({ error: 'Invalid signature' }, 401)
-        }
-        log.warn('[ENTRI-WEBHOOK] V1 signature mismatch (non-production, continuing)')
-      }
-    }
-  } else if (isProduction && !webhookSecret) {
-    log.error('ENTRI_WEBHOOK_SECRET not configured')
-    return c.json({ error: 'Webhook not configured' }, 500)
-  } else if (isProduction && !signatureV2 && !signatureV1) {
-    log.warn('[ENTRI-WEBHOOK] no signature header from provider, processing anyway')
-  } else {
-    log.warn('[ENTRI-WEBHOOK] no secret or signature, skipping verification (non-production)')
+  // Parse payload first — needed for both signature verification and processing
+  let payload: any
+  try {
+    payload = JSON.parse(body)
+  } catch {
+    return c.json({ error: 'Invalid payload' }, 400)
   }
-
-  const payload = (() => {
-    try {
-      return JSON.parse(body)
-    } catch {
-      return null
-    }
-  })()
-
   if (!payload || typeof payload !== 'object') {
     return c.json({ error: 'Invalid payload' }, 400)
+  }
+
+  // Signature verification
+  const webhookSecret = config.entri.webhookSecret
+  if (!webhookSecret) {
+    if (isProduction) {
+      log.error('[ENTRI-WEBHOOK] ENTRI_WEBHOOK_SECRET not configured')
+      return c.json({ error: 'Webhook not configured' }, 500)
+    }
+    log.warn('[ENTRI-WEBHOOK] no secret configured, skipping verification')
+  } else {
+    const result = verifyEntriSignature(payload.id || '', webhookSecret, {
+      signatureV2: c.req.header('Entri-Signature-V2') || '',
+      signatureV1: c.req.header('Entri-Signature') || '',
+      timestamp: c.req.header('Entri-Timestamp') || '',
+    })
+
+    if (!result.valid) {
+      if (isProduction && result.version) {
+        log.warn(
+          { version: result.version, error: result.error },
+          '[ENTRI-WEBHOOK] signature rejected',
+        )
+        return c.json({ error: 'Invalid signature' }, 401)
+      }
+      log.warn(
+        { version: result.version, error: result.error },
+        '[ENTRI-WEBHOOK] signature invalid, continuing',
+      )
+    }
   }
 
   const eventType = payload.type || payload.event || 'unknown'
