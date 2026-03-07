@@ -996,11 +996,16 @@ async function processDomainWebhook(payload: any) {
     let kvMapped = false
     let lastError: string | null = null
 
-    await appendDomainLog(
-      domainRecord!.id,
-      'webhook_received',
-      `Event: ${eventType}, DNS propagation: ${propagationOk ? 'ok' : 'pending'}`,
-    )
+    // Skip redundant logs when nothing changed (Entri retries propagation checks)
+    const statusUnchanged = !propagationOk && domainRecord!.status === 'dns_configuring'
+
+    if (!statusUnchanged) {
+      await appendDomainLog(
+        domainRecord!.id,
+        'webhook_received',
+        `Event: ${eventType}, DNS propagation: ${propagationOk ? 'ok' : 'pending'}`,
+      )
+    }
 
     if (propagationOk && domainRecord!.projectId) {
       const worker = await db
@@ -1047,12 +1052,14 @@ async function processDomainWebhook(payload: any) {
       .where('id', '=', domainRecord!.id)
       .execute()
 
-    await appendDomainLog(
-      domainRecord!.id,
-      'status_change',
-      `Status → ${finalStatus}`,
-      finalStatus === 'active',
-    )
+    if (!statusUnchanged) {
+      await appendDomainLog(
+        domainRecord!.id,
+        'status_change',
+        `Status → ${finalStatus}`,
+        finalStatus === 'active',
+      )
+    }
 
     log.info(
       {
