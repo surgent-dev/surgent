@@ -709,9 +709,11 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
       }
       log.warn('[ENTRI-WEBHOOK] signature mismatch (non-production, continuing)')
     }
-  } else if (isProduction) {
-    log.error('ENTRI_WEBHOOK_SECRET not configured or missing signature')
+  } else if (isProduction && !webhookSecret) {
+    log.error('ENTRI_WEBHOOK_SECRET not configured')
     return c.json({ error: 'Webhook not configured' }, 500)
+  } else if (isProduction && !signature) {
+    log.warn('[ENTRI-WEBHOOK] no signature header from provider, processing anyway')
   } else {
     log.warn('[ENTRI-WEBHOOK] no secret or signature, skipping verification (non-production)')
   }
