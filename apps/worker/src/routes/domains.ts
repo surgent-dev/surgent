@@ -885,9 +885,16 @@ async function processDomainWebhook(payload: any) {
     const resolvedUserId = userIdentifier ? await resolveUserId(userIdentifier) : null
     let domainRecord = await findPendingDomain(domainName, resolvedUserId, extractedProjectId)
 
+    // Cloudflare CNAME flattening means Entri can never verify root (@) CNAME
+    // via external DNS lookup. Treat propagation as OK if at least one record
+    // (typically www) has propagated — the root CNAME is still set in CF.
+    const hasAnyPropagated =
+      Array.isArray(payload.data?.records_propagated) && payload.data.records_propagated.length > 0
+
     const propagationOk =
       payload.propagation_status === 'success' ||
       payload.dns_status === 'configured' ||
+      hasAnyPropagated ||
       eventType === 'domain.purchased' ||
       eventType === 'domainPurchased'
 
