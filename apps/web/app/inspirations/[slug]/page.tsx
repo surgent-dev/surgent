@@ -3,20 +3,18 @@
 import { use } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
 import { Geist, Geist_Mono } from 'next/font/google'
 import {
-  ArrowLeft,
   ArrowUpRight,
   TrendingUp,
   TrendingDown,
-  Users,
   Globe,
   Calendar,
   CreditCard,
   BarChart3,
   Layers,
 } from 'lucide-react'
+import { Lightning } from '@phosphor-icons/react'
 import { useStartupQuery } from '@/queries/startups'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
@@ -97,8 +95,20 @@ function DetailRow({
 
 export default function StartupDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
-  const router = useRouter()
   const { data: startup, isLoading, error } = useStartupQuery(slug)
+
+  function buildPrompt() {
+    if (!startup) return ''
+    const lines = [
+      `Build an MVP clone of ${startup.name}${startup.website ? ` (${startup.website})` : ''}.`,
+      '',
+      startup.description ? `What it does: ${startup.description}` : '',
+      startup.category ? `Category: ${startup.category}` : '',
+      '',
+      'Research the product, understand its core value proposition, and build a functional MVP with the key features that make it work. Focus on the core user flow — skip nice-to-haves like auth, billing, and admin panels. The UI must feel modern and premium — clean layout, refined typography, smooth interactions, and polished aesthetics.',
+    ]
+    return lines.filter(Boolean).join('\n')
+  }
 
   const pageClass = `min-h-screen bg-background ${geist.variable} ${geistMono.variable}`
   const pageStyle = { fontFamily: 'var(--font-geist), system-ui, sans-serif' }
@@ -186,14 +196,17 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
               {startup.name}
             </span>
           </div>
-          <button
-            onClick={() => router.back()}
-            className="text-[12px] text-[#555] hover:text-[#bbb] transition-colors flex items-center gap-1 shrink-0 ml-4"
-            style={{ fontWeight: 480 }}
+          <Link
+            href={`/?initial=${encodeURIComponent(buildPrompt())}`}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-semibold text-white shrink-0 ml-4 transition-all hover:brightness-110 active:scale-[0.97]"
+            style={{
+              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+              boxShadow: '0 0 16px rgba(124,58,237,0.25), 0 2px 4px rgba(0,0,0,0.3)',
+            }}
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back
-          </button>
+            <Lightning className="h-3.5 w-3.5" weight="fill" />
+            Build This App
+          </Link>
         </div>
       </header>
 
@@ -384,27 +397,43 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
         )}
 
         {/* CTAs */}
-        <div className="flex gap-3">
-          {startup.website && (
+        <div className="flex flex-col gap-3">
+          <Link
+            href={`/?initial=${encodeURIComponent(buildPrompt())}`}
+            className="flex items-center justify-center gap-2.5 w-full py-4 rounded-2xl text-[15px] font-semibold transition-all hover:brightness-110"
+            style={{
+              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+              color: '#fff',
+              boxShadow:
+                '0 0 32px rgba(124,58,237,0.3), 0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
+            }}
+          >
+            <Lightning className="h-[18px] w-[18px]" weight="fill" />
+            Build This App
+          </Link>
+          <div className="flex gap-3">
+            {startup.website && (
+              <a
+                href={startup.website}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center gap-2 flex-1 py-2.5 rounded-xl text-[13px] text-muted-foreground font-medium hover:text-foreground hover:bg-white/[0.04] transition-all"
+              >
+                <Globe className="h-3.5 w-3.5" />
+                Visit Website
+                <ArrowUpRight className="h-3 w-3 opacity-40" />
+              </a>
+            )}
             <a
-              href={startup.website}
+              href={`https://trustmrr.com/${startup.slug}`}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center justify-center gap-2 flex-1 py-3.5 rounded-xl text-[14px] text-foreground font-semibold bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] transition-all"
+              className="flex items-center justify-center gap-2 flex-1 py-2.5 rounded-xl text-[13px] text-muted-foreground font-medium hover:text-foreground hover:bg-white/[0.04] transition-all"
             >
-              <Globe className="h-4 w-4" />
-              Visit Website
+              View on TrustMRR
+              <ArrowUpRight className="h-3 w-3 opacity-40" />
             </a>
-          )}
-          <a
-            href={`https://trustmrr.com/${startup.slug}`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-center gap-2 flex-1 py-3.5 rounded-xl text-[14px] text-muted-foreground font-medium hover:text-foreground hover:bg-white/[0.02] transition-all"
-          >
-            View on TrustMRR
-            <ArrowUpRight className="h-4 w-4 opacity-50" />
-          </a>
+          </div>
         </div>
       </main>
     </div>
