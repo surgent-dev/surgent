@@ -184,7 +184,7 @@ export function EditProductDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <Label htmlFor="name" className="text-sm font-medium">
               Product Name
             </Label>
@@ -198,7 +198,7 @@ export function EditProductDialog({
             {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <Label htmlFor="description" className="text-sm font-medium">
               Description <span className="text-muted-foreground font-normal">(optional)</span>
             </Label>
@@ -212,7 +212,7 @@ export function EditProductDialog({
           </div>
 
           {/* Slug (read-only) */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <Label className="text-sm font-medium text-muted-foreground">URL Slug</Label>
             <div className="h-10 px-3 flex items-center rounded-md border bg-muted/30 text-sm text-muted-foreground font-mono">
               {product.slug}

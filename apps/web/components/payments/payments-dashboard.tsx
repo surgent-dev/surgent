@@ -125,8 +125,8 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
         </div>
 
         <div className="text-center mb-8">
-          <h3 className="text-[20px] font-bold tracking-tight mb-2">Start accepting payments</h3>
-          <p className="text-[14px] text-muted-foreground leading-relaxed">
+          <h3 className="text-xl font-bold tracking-tight mb-2">Start accepting payments</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">
             Surgent partners with <span className="text-foreground font-medium">Whop</span> to let
             you sell access, manage subscriptions, and get paid.
           </p>
@@ -153,10 +153,10 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
               />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[14px] font-semibold truncate">
+              <div className="text-sm font-semibold truncate">
                 {disconnectedAccount.data.title || 'Untitled'}
               </div>
-              <div className="text-[13px] text-muted-foreground mt-0.5">
+              <div className="text-sm text-muted-foreground mt-1">
                 {whopConnect.isPending ? 'Reconnecting...' : 'Tap to reconnect'}
               </div>
             </div>
@@ -179,7 +179,7 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
                 if (e.key === 'Enter' && companyName.trim()) handleCreate()
               }}
               className={cn(
-                'flex h-12 w-full rounded-[16px] bg-black/5 px-4 py-2 text-[14px]',
+                'flex h-12 w-full rounded-[16px] bg-black/5 px-4 py-2 text-sm',
                 'text-foreground placeholder:text-muted-foreground/40',
                 'border border-transparent transition-all duration-200 outline-none',
                 'shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(255,255,255,0.05)]',
@@ -190,7 +190,7 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
             <Button
               onClick={handleCreate}
               disabled={!companyName.trim() || whopConnect.isPending}
-              className="w-full h-12 rounded-2xl font-bold text-[14px]"
+              className="w-full h-12 rounded-2xl font-bold text-sm"
             >
               {whopConnect.isPending ? (
                 <CircleNotch className="size-4 animate-spin" />
@@ -321,18 +321,18 @@ function ConnectedDashboard({
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-12 border-b shrink-0 flex items-center justify-between px-5">
           <div className="flex items-center gap-2">
-            <h1 className="text-[14px] font-semibold">{viewTitles[view]}</h1>
+            <h1 className="text-sm font-semibold">{viewTitles[view]}</h1>
             <span
               className={cn(
-                'inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[10px] font-medium leading-relaxed',
+                'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide border',
                 payEnv === 'test'
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+                  ? 'bg-amber-500/5 text-amber-600 border-amber-500/20 dark:text-amber-400 dark:border-amber-400/20'
+                  : 'bg-emerald-500/5 text-emerald-600 border-emerald-500/20 dark:text-emerald-400 dark:border-emerald-400/20',
               )}
             >
               <span
                 className={cn(
-                  'size-1.5 rounded-full',
+                  'size-1.5 rounded-full animate-pulse',
                   payEnv === 'test' ? 'bg-amber-500' : 'bg-emerald-500',
                 )}
               />
@@ -344,7 +344,7 @@ function ConnectedDashboard({
               <button
                 onClick={handleSyncToLive}
                 disabled={syncProducts.isPending}
-                className="flex items-center gap-1.5 h-7 px-2.5 text-[12px] font-medium rounded-md border bg-background btn-elevated hover:bg-muted/30 transition-all duration-100 disabled:opacity-50"
+                className="flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium rounded-md border bg-background btn-elevated hover:bg-muted/30 transition-all duration-100 disabled:opacity-50"
               >
                 {syncProducts.isPending ? (
                   <Loader2 className="size-3 animate-spin" />
@@ -358,7 +358,7 @@ function ConnectedDashboard({
               <button
                 onClick={handleSyncToLive}
                 disabled={syncProducts.isPending}
-                className="flex items-center gap-1.5 h-7 px-2.5 text-[12px] font-medium rounded-md border bg-background btn-elevated hover:bg-muted/30 transition-all duration-100 disabled:opacity-50"
+                className="flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium rounded-md border bg-background btn-elevated hover:bg-muted/30 transition-all duration-100 disabled:opacity-50"
               >
                 {syncProducts.isPending ? (
                   <Loader2 className="size-3 animate-spin" />
@@ -371,7 +371,7 @@ function ConnectedDashboard({
             {view === 'products' && (
               <button
                 onClick={handleCreateProduct}
-                className="flex items-center gap-1.5 h-7 px-2.5 text-[12px] font-medium rounded-md bg-primary text-primary-foreground btn-elevated-primary hover:bg-primary-hover transition-all duration-100"
+                className="flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium rounded-md bg-primary text-primary-foreground btn-elevated-primary hover:bg-primary-hover transition-all duration-100"
               >
                 <Plus className="size-3" />
                 New Product

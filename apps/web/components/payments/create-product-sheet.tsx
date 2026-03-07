@@ -179,8 +179,8 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
             <div className="rounded-full bg-success/10 p-3.5 mb-3">
               <Check className="size-7 text-success" strokeWidth={2.5} />
             </div>
-            <h3 className="font-semibold text-[15px] mb-1">Product Created!</h3>
-            <p className="text-[13px] text-muted-foreground">Your product is ready to sell</p>
+            <h3 className="font-semibold text-base mb-1">Product Created!</h3>
+            <p className="text-sm text-muted-foreground">Your product is ready to sell</p>
           </div>
         ) : (
           <>
@@ -193,10 +193,12 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
               <form
                 id="create-product-form"
                 onSubmit={handleSubmit(onSubmit)}
-                className="p-6 space-y-4"
+                className="p-5 space-y-5"
               >
-                <div className="space-y-1.5">
-                  <Label htmlFor="name">Product Name</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-sm">
+                    Product Name
+                  </Label>
                   <Input
                     id="name"
                     placeholder="e.g. Pro Plan, Premium Access"
@@ -204,11 +206,15 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                     className={cn(errors.name && 'border-destructive')}
                     {...register('name')}
                   />
-                  {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+                  {errors.name && (
+                    <p className="text-xs text-destructive mt-2">{errors.name.message}</p>
+                  )}
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="slug">URL Slug</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="slug" className="text-sm">
+                    URL Slug
+                  </Label>
                   <Input
                     id="slug"
                     placeholder="pro-plan"
@@ -221,17 +227,17 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                     })}
                   />
                   {errors.slug ? (
-                    <p className="text-xs text-destructive">{errors.slug.message}</p>
+                    <p className="text-xs text-destructive mt-2">{errors.slug.message}</p>
                   ) : slug ? (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground mt-2">
                       checkout/product/
                       <span className="font-medium text-foreground">{slug}</span>
                     </p>
                   ) : null}
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="description">
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-sm">
                     Description{' '}
                     <span className="text-muted-foreground font-normal">(optional)</span>
                   </Label>
@@ -244,19 +250,19 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                   />
                 </div>
 
-                <div className="h-px bg-border" />
+                <div className="h-px bg-border -mx-5" />
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label>Pricing</Label>
-                    <div className="inline-flex items-center rounded-lg bg-muted dark:bg-background p-1 border border-border/50 shadow-inner">
+                    <Label className="text-sm">Pricing</Label>
+                    <div className="inline-flex items-center rounded-[14px] bg-black/10 p-1 border border-transparent shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_0_0_1px_rgba(255,255,255,0.06)]">
                       <button
                         type="button"
                         onClick={() => setIsRecurring(false)}
                         className={cn(
-                          'px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
+                          'px-3 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                           !isRecurring
-                            ? 'bg-background dark:bg-muted text-foreground shadow-sm'
+                            ? 'bg-foreground/10 text-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground',
                         )}
                       >
@@ -266,9 +272,9 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                         type="button"
                         onClick={() => setIsRecurring(true)}
                         className={cn(
-                          'px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
+                          'px-3 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                           isRecurring
-                            ? 'bg-background dark:bg-muted text-foreground shadow-sm'
+                            ? 'bg-foreground/10 text-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground',
                         )}
                       >
@@ -277,11 +283,11 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <Label>Price</Label>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Price</Label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
                           {currencySymbol}
                         </span>
                         <Input
@@ -300,16 +306,16 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                         name="priceCurrency"
                         control={control}
                         render={({ field }) => (
-                          <div className="inline-flex items-center rounded-lg bg-muted dark:bg-background p-1 border border-border/50 shadow-inner">
+                          <div className="inline-flex items-center rounded-[14px] bg-black/10 p-1 border border-transparent shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_0_0_1px_rgba(255,255,255,0.06)]">
                             {currencies.map((currency) => (
                               <button
                                 key={currency.value}
                                 type="button"
                                 onClick={() => field.onChange(currency.value)}
                                 className={cn(
-                                  'px-2.5 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
+                                  'px-2.5 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                                   field.value === currency.value
-                                    ? 'bg-background dark:bg-muted text-foreground shadow-sm'
+                                    ? 'bg-foreground/10 text-foreground shadow-sm'
                                     : 'text-muted-foreground hover:text-foreground',
                                 )}
                               >
@@ -321,27 +327,27 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                       />
                     </div>
                     {errors.price && (
-                      <p className="text-xs text-destructive">{errors.price.message}</p>
+                      <p className="text-xs text-destructive mt-2">{errors.price.message}</p>
                     )}
                   </div>
 
                   {isRecurring && (
-                    <div className="space-y-1.5">
-                      <Label>Billing Cycle</Label>
+                    <div className="space-y-2">
+                      <Label className="text-sm">Billing Cycle</Label>
                       <Controller
                         name="recurringInterval"
                         control={control}
                         render={({ field }) => (
-                          <div className="inline-flex items-center rounded-lg bg-muted dark:bg-background p-1 border border-border/50 shadow-inner">
+                          <div className="inline-flex items-center rounded-[14px] bg-black/10 p-1 border border-transparent shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_0_0_1px_rgba(255,255,255,0.06)]">
                             {intervals.map((interval) => (
                               <button
                                 key={interval.value}
                                 type="button"
                                 onClick={() => field.onChange(interval.value)}
                                 className={cn(
-                                  'px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
+                                  'px-3 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                                   field.value === interval.value
-                                    ? 'bg-background dark:bg-muted text-foreground shadow-sm'
+                                    ? 'bg-foreground/10 text-foreground shadow-sm'
                                     : 'text-muted-foreground hover:text-foreground',
                                 )}
                               >

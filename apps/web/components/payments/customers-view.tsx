@@ -15,14 +15,12 @@ function CustomerRow({ customer, onClick }: { customer: Customer; onClick: () =>
       className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
     >
       <div className="size-8 rounded-full bg-muted/60 flex items-center justify-center">
-        <span className="text-[12px] font-medium text-muted-foreground">{initial}</span>
+        <span className="text-xs font-medium text-muted-foreground">{initial}</span>
       </div>
       <div className="flex-1 min-w-0 flex items-center justify-between">
         <div className="min-w-0">
-          <p className="text-[13px] font-medium truncate">{customer.name || 'No name'}</p>
-          <p className="text-[11px] text-muted-foreground truncate">
-            {customer.email || 'No email'}
-          </p>
+          <p className="text-sm font-medium truncate">{customer.name || 'No name'}</p>
+          <p className="text-xs text-muted-foreground truncate">{customer.email || 'No email'}</p>
         </div>
         <div className="flex items-center gap-2">
           {customer.externalId && (
@@ -84,7 +82,7 @@ export function CustomersView({ customers, isLoading, projectId }: CustomersView
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-8 pl-8 pr-3 text-[13px] bg-transparent border rounded-lg focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full h-8 pl-8 pr-3 text-sm bg-transparent border rounded-lg focus:outline-none focus:ring-1 focus:ring-ring"
             />
             {searchQuery && (
               <button
@@ -104,10 +102,10 @@ export function CustomersView({ customers, isLoading, projectId }: CustomersView
             <div className="size-12 rounded-xl bg-muted/50 border grid place-items-center mx-auto mb-4">
               <Users className="size-5 text-muted-foreground" strokeWidth={1.5} />
             </div>
-            <h3 className="text-[15px] font-semibold mb-1">
+            <h3 className="text-base font-semibold mb-1">
               {customers.length === 0 ? 'No customers yet' : 'No results'}
             </h3>
-            <p className="text-[13px] text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {customers.length === 0
                 ? 'Customers appear when they make a purchase'
                 : 'Try adjusting your search'}
