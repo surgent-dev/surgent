@@ -674,45 +674,81 @@ export const domainWebhooks = new Hono<AppContext>()
  */
 domainWebhooks.post('/webhooks/:provider', async (c) => {
   const body = await c.req.text()
-  const signature = c.req.header('x-entri-signature') || ''
   const webhookSecret = config.entri.webhookSecret
-
-  // Verify HMAC-SHA256 signature
-  // In production, reject invalid signatures. In non-production, log and continue.
   const isProduction = process.env.NODE_ENV === 'production'
 
-  if (webhookSecret && signature) {
-    const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(webhookSecret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign'],
-    )
-    const expected = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body))
-    const expectedHex = Buffer.from(expected).toString('hex')
+  // Entri signature verification
+  // V2 (recommended): SHA256(webhookId + timestamp + secret) in Entri-Signature-V2 header
+  // V1 (legacy): SHA256(webhookId + secret) in Entri-Signature header
+  const signatureV2 = c.req.header('Entri-Signature-V2') || ''
+  const signatureV1 = c.req.header('Entri-Signature') || ''
+  const timestamp = c.req.header('Entri-Timestamp') || ''
 
-    const sigValid =
-      signature.length === expectedHex.length &&
-      (() => {
-        const a = new TextEncoder().encode(signature)
-        const b = new TextEncoder().encode(expectedHex)
-        let diff = 0
-        for (let i = 0; i < a.length; i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0)
-        return diff === 0
-      })()
+  if (webhookSecret && (signatureV2 || signatureV1)) {
+    let parsedBody: { id?: string } = {}
+    try {
+      parsedBody = JSON.parse(body)
+    } catch {
+      return c.json({ error: 'Invalid payload' }, 400)
+    }
+    const webhookId = parsedBody.id || ''
 
-    if (!sigValid) {
-      if (isProduction) {
-        log.warn('webhook signature mismatch')
-        return c.json({ error: 'Invalid signature' }, 401)
+    let expectedHash: string
+    if (signatureV2 && timestamp) {
+      // V2: SHA256(id + timestamp + secret), with 5-minute freshness check
+      const ts = parseInt(timestamp, 10)
+      if (isProduction && Math.abs(Date.now() / 1000 - ts) > 300) {
+        log.warn({ timestamp }, '[ENTRI-WEBHOOK] timestamp too old, rejecting')
+        return c.json({ error: 'Webhook timestamp expired' }, 401)
       }
-      log.warn('[ENTRI-WEBHOOK] signature mismatch (non-production, continuing)')
+      const canonical = `${webhookId}${timestamp}${webhookSecret}`
+      const hash = new Bun.CryptoHasher('sha256').update(canonical).digest('hex')
+      expectedHash = hash
+
+      const sigValid =
+        signatureV2.length === expectedHash.length &&
+        (() => {
+          const a = new TextEncoder().encode(signatureV2)
+          const b = new TextEncoder().encode(expectedHash)
+          let diff = 0
+          for (let i = 0; i < a.length; i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0)
+          return diff === 0
+        })()
+
+      if (!sigValid) {
+        if (isProduction) {
+          log.warn('[ENTRI-WEBHOOK] V2 signature mismatch')
+          return c.json({ error: 'Invalid signature' }, 401)
+        }
+        log.warn('[ENTRI-WEBHOOK] V2 signature mismatch (non-production, continuing)')
+      }
+    } else if (signatureV1) {
+      // V1 (legacy): SHA256(id + secret)
+      const canonical = `${webhookId}${webhookSecret}`
+      expectedHash = new Bun.CryptoHasher('sha256').update(canonical).digest('hex')
+
+      const sigValid =
+        signatureV1.length === expectedHash.length &&
+        (() => {
+          const a = new TextEncoder().encode(signatureV1)
+          const b = new TextEncoder().encode(expectedHash)
+          let diff = 0
+          for (let i = 0; i < a.length; i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0)
+          return diff === 0
+        })()
+
+      if (!sigValid) {
+        if (isProduction) {
+          log.warn('[ENTRI-WEBHOOK] V1 signature mismatch')
+          return c.json({ error: 'Invalid signature' }, 401)
+        }
+        log.warn('[ENTRI-WEBHOOK] V1 signature mismatch (non-production, continuing)')
+      }
     }
   } else if (isProduction && !webhookSecret) {
     log.error('ENTRI_WEBHOOK_SECRET not configured')
     return c.json({ error: 'Webhook not configured' }, 500)
-  } else if (isProduction && !signature) {
+  } else if (isProduction && !signatureV2 && !signatureV1) {
     log.warn('[ENTRI-WEBHOOK] no signature header from provider, processing anyway')
   } else {
     log.warn('[ENTRI-WEBHOOK] no secret or signature, skipping verification (non-production)')
