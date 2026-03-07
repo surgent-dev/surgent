@@ -116,7 +116,6 @@ function ProjectCard({
         isFailed && 'border-destructive/30',
       )}
     >
-      {/* Preview area */}
       <div
         className={cn(
           'relative h-36 sm:h-40 flex items-center justify-center',
