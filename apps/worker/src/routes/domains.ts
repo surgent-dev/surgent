@@ -762,7 +762,17 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
   }
 
   const eventType = payload.type || payload.event || 'unknown'
-  log.info({ eventType, domain: payload.domain }, '[ENTRI-WEBHOOK] received')
+  log.info(
+    {
+      eventType,
+      domain: payload.domain,
+      propagation_status: payload.propagation_status,
+      setup_type: payload.setup_type,
+      provider: payload.provider,
+      data: payload.data,
+    },
+    '[ENTRI-WEBHOOK] received',
+  )
 
   // Store webhook event
   await db
