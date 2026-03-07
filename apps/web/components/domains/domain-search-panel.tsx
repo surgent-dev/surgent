@@ -141,7 +141,7 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
         applicationId: config.applicationId,
         token: config.token,
         dnsRecords: config.dnsRecords,
-        userId: config.contact.email,
+        userId: JSON.stringify({ projectId, email: config.contact.email }),
         whiteLabel: {
           sell: { contact: config.contact },
         },

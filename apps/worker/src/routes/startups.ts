@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { sql } from 'kysely'
 import type { AppContext } from '@/types/application'
 import { db } from '@/lib/db'
+import { requireAdmin } from '@/middleware/admin'
 
 const startups = new Hono<AppContext>()
 
@@ -106,13 +107,15 @@ startups.get('/categories', async (c) => {
   return c.json(rows)
 })
 
-startups.post('/sync', async (c) => {
+startups.post('/sync', requireAdmin, async (c) => {
   const apiKey = process.env.TRUSTMRR_API_KEY
   if (!apiKey) return c.json({ error: 'TRUSTMRR_API_KEY not configured' }, 500)
 
   const allStartups: any[] = []
   let page = 1
   let hasMore = true
+  let rateLimitRetries = 0
+  const MAX_RATE_LIMIT_RETRIES = 10
 
   while (hasMore) {
     const res = await fetch(`https://trustmrr.com/api/v1/startups?page=${page}&limit=50`, {
@@ -120,8 +123,16 @@ startups.post('/sync', async (c) => {
     })
 
     if (res.status === 429) {
+      rateLimitRetries++
+      if (rateLimitRetries > MAX_RATE_LIMIT_RETRIES) {
+        return c.json(
+          { error: 'Rate limit exceeded after max retries', fetched: allStartups.length },
+          429,
+        )
+      }
       const resetAt = res.headers.get('X-RateLimit-Reset')
-      const waitMs = resetAt ? Math.max(Number(resetAt) * 1000 - Date.now(), 3000) : 60_000
+      const parsed = Number(resetAt)
+      const waitMs = !Number.isNaN(parsed) ? Math.max(parsed * 1000 - Date.now(), 3000) : 60_000
       await new Promise((r) => setTimeout(r, waitMs))
       continue
     }

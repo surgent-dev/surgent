@@ -753,57 +753,94 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
   return c.json({ received: true }, 202)
 })
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Parse userId which may be a JSON string with { projectId, email } from the frontend */
+function parseWebhookUserId(rawUserId: string | undefined) {
+  if (!rawUserId) return { userIdentifier: null, projectId: null }
+
+  try {
+    const parsed = JSON.parse(rawUserId)
+    if (parsed && typeof parsed === 'object' && parsed.email) {
+      return {
+        userIdentifier: parsed.email as string,
+        projectId: (parsed.projectId as string) ?? null,
+      }
+    }
+  } catch {
+    // Not JSON — treat as plain UUID or email
+  }
+
+  return { userIdentifier: rawUserId, projectId: null }
+}
+
+/** Resolve a user identifier (UUID or email) to an internal user ID */
+async function resolveUserId(userIdentifier: string): Promise<string | null> {
+  if (UUID_RE.test(userIdentifier)) {
+    const user = await db
+      .selectFrom('user')
+      .select('id')
+      .where('id', '=', userIdentifier)
+      .executeTakeFirst()
+    return user?.id ?? null
+  }
+  const user = await db
+    .selectFrom('user')
+    .select('id')
+    .where('email', '=', userIdentifier)
+    .executeTakeFirst()
+  return user?.id ?? null
+}
+
+/** Find a pending domain by name, or by userId+projectId */
+async function findPendingDomain(
+  domainName: string | null,
+  resolvedUserId: string | null,
+  projectId: string | null,
+) {
+  if (domainName) {
+    const record = await db
+      .selectFrom('domain')
+      .selectAll()
+      .where('domainName', '=', domainName)
+      .where('status', 'in', ['pending', 'purchasing', 'dns_configuring'])
+      .orderBy('createdAt', 'desc')
+      .executeTakeFirst()
+    if (record) return record
+  }
+
+  if (!resolvedUserId) return null
+
+  let q = db
+    .selectFrom('domain')
+    .selectAll()
+    .where('userId', '=', resolvedUserId)
+    .where('status', 'in', ['pending', 'purchasing', 'dns_configuring'])
+
+  if (projectId) {
+    q = q.where('projectId', '=', projectId)
+  }
+
+  return q.orderBy('createdAt', 'desc').executeTakeFirst()
+}
+
 async function processDomainWebhook(payload: any) {
   const eventType = payload.type || payload.event
   const domainName = payload.purchased_domains?.[0] || payload.domain
-  const userId = payload.user_id
+  const { userIdentifier, projectId: extractedProjectId } = parseWebhookUserId(payload.user_id)
 
   if (
     eventType === 'domain.added' ||
     eventType === 'domain.purchased' ||
     eventType === 'domainPurchased'
   ) {
-    if (!userId && !domainName) {
+    if (!userIdentifier && !domainName) {
       log.warn('[ENTRI-WEBHOOK] no user_id or domain in payload')
       return
     }
 
-    // Find the pending/configuring domain — try by domain name first (Connect flow),
-    // then fall back to finding by userId (Sell flow)
-    let domainRecord = domainName
-      ? await db
-          .selectFrom('domain')
-          .selectAll()
-          .where('domainName', '=', domainName)
-          .where('status', 'in', ['pending', 'purchasing', 'dns_configuring'])
-          .orderBy('createdAt', 'desc')
-          .executeTakeFirst()
-      : null
-
-    if (!domainRecord && userId) {
-      // userId from Entri can be an email — resolve to internal UUID first
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)
-      let resolvedUserId = userId
-
-      if (!isUuid) {
-        const userByEmail = await db
-          .selectFrom('user')
-          .select('id')
-          .where('email', '=', userId)
-          .executeTakeFirst()
-        resolvedUserId = userByEmail?.id ?? null
-      }
-
-      if (resolvedUserId) {
-        domainRecord = await db
-          .selectFrom('domain')
-          .selectAll()
-          .where('status', 'in', ['pending', 'purchasing'])
-          .where('userId', '=', resolvedUserId)
-          .orderBy('createdAt', 'desc')
-          .executeTakeFirst()
-      }
-    }
+    const resolvedUserId = userIdentifier ? await resolveUserId(userIdentifier) : null
+    let domainRecord = await findPendingDomain(domainName, resolvedUserId, extractedProjectId)
 
     const propagationOk =
       payload.propagation_status === 'success' ||
@@ -814,41 +851,37 @@ async function processDomainWebhook(payload: any) {
     const finalDomainName = domainName || domainRecord?.domainName
 
     if (!finalDomainName) {
-      log.warn({ userId }, '[ENTRI-WEBHOOK] no domain name in payload or record')
+      log.warn({ userIdentifier }, '[ENTRI-WEBHOOK] no domain name in payload or record')
       return
     }
 
     // If no existing domain record, create one (Sell flow doesn't pre-create records)
     if (!domainRecord) {
-      if (!userId) {
+      if (!resolvedUserId) {
         log.warn({ domainName }, '[ENTRI-WEBHOOK] no domain record and no userId to find project')
         return
       }
 
-      // userId from Entri can be a UUID or an email — resolve to our internal user
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)
-
-      const resolvedUser = isUuid
-        ? await db.selectFrom('user').select('id').where('id', '=', userId).executeTakeFirst()
-        : await db.selectFrom('user').select('id').where('email', '=', userId).executeTakeFirst()
-
-      if (!resolvedUser) {
-        log.warn({ userId, domainName }, '[ENTRI-WEBHOOK] user not found')
-        return
-      }
-
-      // Find the user's most recent project without a domain
-      const project = await db
-        .selectFrom('project')
-        .select(['id', 'organizationId'])
-        .where('userId', '=', resolvedUser.id)
-        .where('deletedAt', 'is', null)
-        .orderBy('createdAt', 'desc')
-        .executeTakeFirst()
+      // Use projectId from encoded userId, or fall back to user's most recent project
+      const project = extractedProjectId
+        ? await db
+            .selectFrom('project')
+            .select(['id', 'organizationId'])
+            .where('id', '=', extractedProjectId)
+            .where('userId', '=', resolvedUserId)
+            .where('deletedAt', 'is', null)
+            .executeTakeFirst()
+        : await db
+            .selectFrom('project')
+            .select(['id', 'organizationId'])
+            .where('userId', '=', resolvedUserId)
+            .where('deletedAt', 'is', null)
+            .orderBy('createdAt', 'desc')
+            .executeTakeFirst()
 
       if (!project) {
         log.warn(
-          { userId: resolvedUser.id, domainName },
+          { userId: resolvedUserId, domainName },
           '[ENTRI-WEBHOOK] no project found for user',
         )
         return
@@ -859,7 +892,7 @@ async function processDomainWebhook(payload: any) {
         .insertInto('domain')
         .values({
           projectId: project.id,
-          userId: resolvedUser.id,
+          userId: resolvedUserId,
           organizationId: project.organizationId,
           domainName: finalDomainName,
           status: propagationOk ? 'active' : 'dns_configuring',
@@ -1011,35 +1044,20 @@ async function processDomainWebhook(payload: any) {
     const failReason =
       payload.error || payload.reason || 'Domain setup failed (provider reported failure)'
 
-    // Mark domain as error — check by domain name first (Connect), then by userId (Sell)
-    if (domainName) {
-      const failedDomain = await db
-        .selectFrom('domain')
-        .select('id')
-        .where('domainName', '=', domainName)
-        .where('status', 'in', ['pending', 'purchasing', 'dns_configuring'])
-        .executeTakeFirst()
+    // Find the specific domain that failed using shared lookup
+    const resolvedUserId = userIdentifier ? await resolveUserId(userIdentifier) : null
+    const failedDomain = await findPendingDomain(domainName, resolvedUserId, extractedProjectId)
 
-      if (failedDomain) {
-        await appendDomainLog(failedDomain.id, 'domain_failed', failReason, false)
-      }
-
+    if (failedDomain) {
+      await appendDomainLog(failedDomain.id, 'domain_failed', failReason, false)
       await db
         .updateTable('domain')
         .set({ status: 'error', lastError: failReason, updatedAt: new Date() })
-        .where('domainName', '=', domainName)
-        .where('status', 'in', ['pending', 'purchasing', 'dns_configuring'])
-        .execute()
-    } else if (userId) {
-      await db
-        .updateTable('domain')
-        .set({ status: 'error', lastError: failReason, updatedAt: new Date() })
-        .where('userId', '=', userId)
-        .where('status', 'in', ['pending', 'purchasing', 'dns_configuring'])
+        .where('id', '=', failedDomain.id)
         .execute()
     }
 
-    log.warn({ userId, domainName, eventType }, '[ENTRI-WEBHOOK] domain setup failed')
+    log.warn({ userIdentifier, domainName, eventType }, '[ENTRI-WEBHOOK] domain setup failed')
   } else if (eventType === 'dns.propagated' || eventType === 'dnsConfigured') {
     // DNS propagation complete — wire up Cloudflare
     if (domainName) {
