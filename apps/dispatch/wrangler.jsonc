@@ -8,7 +8,9 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
-  "routes": ["*.surgent.site/*", "surgent.site/*"],
+  "routes": [
+    { "pattern": "*/*", "zone_name": "surgent.site" }
+  ],
   "preview_urls": true,
   "workers_dev": true,
   "dispatch_namespaces": [
