@@ -365,13 +365,12 @@ export function PublishModal({
           </div>
         )}
 
-        {/* Custom Domain — temporarily hidden
+        {/* Custom Domain */}
         {projectId && (
           <div className="border-t">
             <DomainSearchPanel projectId={projectId} />
           </div>
         )}
-        */}
 
         {/* Visibility */}
         <div className="border-t px-5 py-3">

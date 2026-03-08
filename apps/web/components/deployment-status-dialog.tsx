@@ -117,7 +117,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl p-0 gap-0 [&>button]:hidden">
+      <DialogContent className="sm:max-w-xl p-0 gap-0 overflow-hidden [&>button]:hidden">
         {/* Header */}
         <div className="h-12 px-5 border-b flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -239,13 +239,12 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
           </Button>
         </div>
 
-        {/* Custom Domain — temporarily hidden
+        {/* Custom Domain */}
         {projectId && (
           <div className="border-b">
             <DomainSearchPanel projectId={projectId} />
           </div>
         )}
-        */}
 
         {/* History header */}
         <div className="h-10 px-5 flex items-center justify-between text-xs text-muted-foreground border-b bg-muted/20">

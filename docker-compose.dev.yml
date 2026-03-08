@@ -31,17 +31,17 @@ services:
       timeout: 5s
       retries: 5
 
-  inngest:
-    image: inngest/inngest:latest
-    container_name: inngest-dev
-    restart: unless-stopped
-    ports:
-      - '8288:8288'
-    environment:
-      INNGEST_EVENT_KEY: local
-      INNGEST_SIGNING_KEY: local
-      INNGEST_LOG_LEVEL: info
-    command: inngest dev -u http://host.docker.internal:4000/api/inngest --no-discovery
+  # inngest:
+  #   image: inngest/inngest:latest
+  #   container_name: inngest-dev
+  #   restart: unless-stopped
+  #   ports:
+  #     - '8288:8288'
+  #   environment:
+  #     INNGEST_EVENT_KEY: local
+  #     INNGEST_SIGNING_KEY: local
+  #     INNGEST_LOG_LEVEL: info
+  #   command: inngest dev -u http://host.docker.internal:4000/api/inngest --no-discovery
 
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -56,7 +56,14 @@ services:
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
     volumes:
       - pgadmin_data:/var/lib/pgadmin
-      - ./pgadmin-servers.json:/pgadmin4/servers.json:ro
+    configs:
+      - source: pgadmin_servers
+        target: /pgadmin4/servers.json
+
+configs:
+  pgadmin_servers:
+    content: |
+      {"Servers":{"1":{"Name":"Local Dev","Group":"Servers","Host":"postgres","Port":5432,"MaintenanceDB":"surgent","Username":"surgent","SSLMode":"prefer"}}}
 
 volumes:
   postgres_data:

@@ -1,17 +1,22 @@
 /**
  * Cloudflare Custom Hostnames (SSL for SaaS) + KV domain mapping.
  *
- * This module handles the two things needed to connect a purchased domain
+ * This module handles the two things needed to connect a custom domain
  * to a deployed user app:
  *
  * 1. **Custom Hostname** — tells Cloudflare to accept traffic for the domain
- *    and provision TLS. The CNAME from the domain (set at Namecheap/Entri)
+ *    and provision TLS. The CNAME from the domain (set via Entri)
  *    points to the fallback origin on `surgent.site`, and Cloudflare routes
  *    the traffic to the dispatch worker.
  *
  * 2. **KV mapping** — the dispatch worker needs to know which user worker
  *    script to forward to. We write `domain → scriptName` into a KV namespace
  *    that the dispatch worker reads at the edge.
+ *
+ * NOTE: Only www subdomains are supported for Custom Hostnames.
+ * Bare/root domains cannot use CF Custom Hostnames when A records point
+ * to Cloudflare IPs — CF blocks TXT/HTTP validation and requires a CNAME
+ * to the SaaS zone, which is impossible for zone apex (RFC 1034).
  */
 
 import Cloudflare from 'cloudflare'
@@ -165,8 +170,13 @@ export interface ConnectDomainResult {
 }
 
 /**
- * Full wiring: register the custom hostname with Cloudflare AND write the
- * KV mapping so the dispatch worker can route traffic.
+ * Full wiring: register a CF custom hostname for the www subdomain
+ * and write a KV mapping so the dispatch worker routes traffic.
+ *
+ * Only the www subdomain is registered as a Custom Hostname because
+ * bare/root domains with A records pointing to Cloudflare IPs cannot
+ * pass CF ownership verification (CF blocks TXT/HTTP validation and
+ * requires a CNAME to the SaaS zone, which is invalid at zone apex).
  */
 export async function connectCustomDomain(
   domain: string,
@@ -176,24 +186,26 @@ export async function connectCustomDomain(
   let kvMapped = false
   let error: string | null = null
 
-  // 1. Create Custom Hostname (if zone is configured)
+  const wwwDomain = domain.startsWith('www.') ? domain : `www.${domain}`
+
+  // 1. Create Custom Hostname for www subdomain only
   if (config.cloudflare.zoneId) {
     try {
-      customHostnameId = await createCustomHostname(domain)
+      customHostnameId = await createCustomHostname(wwwDomain)
     } catch (err: any) {
       const msg = err?.message || 'Unknown CF error'
-      log.error({ err, domain }, 'failed to create custom hostname (continuing with KV only)')
-      error = `Custom hostname: ${msg}`
+      log.error({ err, hostname: wwwDomain }, 'failed to create custom hostname')
+      error = `Custom hostname (${wwwDomain}): ${msg}`
     }
   }
 
-  // 2. Write KV mapping (dispatch worker routing)
+  // 2. Write KV mapping for www
   try {
-    await setDomainMapping(domain, scriptName)
+    await setDomainMapping(wwwDomain, scriptName)
     kvMapped = true
   } catch (err: any) {
     const msg = err?.message || 'Unknown KV error'
-    log.error({ err, domain, scriptName }, 'failed to write KV domain mapping')
+    log.error({ err, domain: wwwDomain, scriptName }, 'failed to write KV domain mapping')
     error = error ? `${error}; KV mapping: ${msg}` : `KV mapping: ${msg}`
   }
 
@@ -201,12 +213,17 @@ export async function connectCustomDomain(
 }
 
 /**
- * Full teardown: remove the custom hostname and KV mapping.
+ * Full teardown: remove custom hostname and KV mapping for www,
+ * plus clean up any legacy bare-domain mappings.
  */
 export async function disconnectCustomDomain(
   domain: string,
   customHostnameId?: string | null,
 ): Promise<void> {
+  const wwwDomain = domain.startsWith('www.') ? domain : `www.${domain}`
+  const bareDomain = domain.startsWith('www.') ? domain.slice(4) : domain
+
+  // Delete the stored custom hostname (www)
   if (customHostnameId) {
     try {
       await deleteCustomHostname(customHostnameId)
@@ -215,9 +232,32 @@ export async function disconnectCustomDomain(
     }
   }
 
-  try {
-    await deleteDomainMapping(domain)
-  } catch (err) {
-    log.error({ err, domain }, 'failed to delete KV domain mapping')
+  // Clean up any other custom hostnames for this domain (legacy bare domain, etc.)
+  if (config.cloudflare.zoneId) {
+    const cf = getClient()
+    for (const hostname of [bareDomain, wwwDomain]) {
+      try {
+        const results = await cf.customHostnames.list({
+          zone_id: config.cloudflare.zoneId,
+          hostname,
+        })
+        for (const ch of results.result || []) {
+          if (ch.id && ch.id !== customHostnameId) {
+            await deleteCustomHostname(ch.id)
+          }
+        }
+      } catch (err) {
+        log.error({ err, hostname }, 'failed to find/delete custom hostname')
+      }
+    }
+  }
+
+  // Delete KV mappings for both (clean up legacy bare mappings too)
+  for (const d of [bareDomain, wwwDomain]) {
+    try {
+      await deleteDomainMapping(d)
+    } catch (err) {
+      log.error({ err, domain: d }, 'failed to delete KV domain mapping')
+    }
   }
 }

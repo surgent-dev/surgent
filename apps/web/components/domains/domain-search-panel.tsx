@@ -120,7 +120,7 @@ function DomainStatusCard({
   return (
     <div className="space-y-2.5">
       <div
-        className={`flex items-center gap-2.5 h-10 px-3 rounded-lg border ${cfg.bg} font-mono text-sm`}
+        className={`flex items-center gap-2.5 h-10 px-3 rounded-lg border ${cfg.bg} font-mono text-sm min-w-0`}
       >
         {showSpinner ? (
           <Loader2 className={`size-3.5 animate-spin ${textColor[cfg.color]} shrink-0`} />
@@ -354,7 +354,7 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
   }
 
   return (
-    <div className="px-5 py-4 space-y-3">
+    <div className="px-5 py-4 space-y-3 overflow-hidden">
       {/* Section header */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider font-medium">
         <Globe className="size-3.5 text-brand" weight="bold" />
@@ -374,7 +374,11 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
           isStale={configuringDomain ? isConfigStale : undefined}
           lastError={currentDomain.lastError}
           logs={currentDomain.logs}
-          onVisit={activeDomain ? `https://${activeDomain.domainName}` : undefined}
+          onVisit={
+            activeDomain
+              ? `https://www.${activeDomain.domainName.replace(/^www\./, '')}`
+              : undefined
+          }
           onRetry={
             configuringDomain
               ? () => handleRetryConnect(configuringDomain.id)
@@ -437,7 +441,7 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
                 onChange={(e) => setConnectInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
                 placeholder="myapp.com"
-                className="flex-1 h-9 px-3 rounded-md border bg-background text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                className="flex-1 min-w-0 h-9 px-3 rounded-md border bg-background text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
               />
               <Button
                 className="h-9"

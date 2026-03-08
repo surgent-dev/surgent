@@ -124,14 +124,11 @@ domains.post(
       .executeTakeFirst()
 
     const deployDomain = config.cloudflare.deployDomain
-    const dnsTarget = worker?.scriptName
-      ? `${worker.scriptName}.${deployDomain}`
-      : `${projectId.slice(0, 8)}.${deployDomain}`
 
-    const dnsRecords = [
-      { type: 'CNAME', host: '@', value: dnsTarget, ttl: 300 },
-      { type: 'CNAME', host: 'www', value: dnsTarget, ttl: 300 },
-    ]
+    // Only www CNAME is supported for CF Custom Hostnames.
+    // Bare/root domains cannot use Custom Hostnames when A records
+    // point to Cloudflare IPs (CF blocks validation, requires CNAME).
+    const dnsRecords = [{ type: 'CNAME', host: 'www', value: deployDomain, ttl: 300 }]
 
     const provider = await getDomainProvider()
 
@@ -338,14 +335,9 @@ domains.post(
       .executeTakeFirst()
 
     const deployDomain = config.cloudflare.deployDomain
-    const dnsTarget = worker?.scriptName
-      ? `${worker.scriptName}.${deployDomain}`
-      : `${projectId.slice(0, 8)}.${deployDomain}`
 
-    const dnsRecords = [
-      { type: 'CNAME', host: '@', value: dnsTarget, ttl: 300 },
-      { type: 'CNAME', host: 'www', value: dnsTarget, ttl: 300 },
-    ]
+    // Only www CNAME — bare domain can't use CF Custom Hostnames
+    const dnsRecords = [{ type: 'CNAME', host: 'www', value: deployDomain, ttl: 300 }]
 
     const token = await generateEntriToken(user.id)
 
@@ -545,14 +537,9 @@ domains.post(
       .executeTakeFirst()
 
     const deployDomain = config.cloudflare.deployDomain
-    const dnsTarget = worker?.scriptName
-      ? `${worker.scriptName}.${deployDomain}`
-      : `${projectId.slice(0, 8)}.${deployDomain}`
 
-    const dnsRecords = [
-      { type: 'CNAME', host: '@', value: dnsTarget, ttl: 300 },
-      { type: 'CNAME', host: 'www', value: dnsTarget, ttl: 300 },
-    ]
+    // Only www CNAME — bare domain can't use CF Custom Hostnames
+    const dnsRecords = [{ type: 'CNAME', host: 'www', value: deployDomain, ttl: 300 }]
 
     const token = await generateEntriToken(user.id)
 
