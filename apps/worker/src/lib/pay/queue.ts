@@ -1,7 +1,6 @@
-import { PgBoss } from 'pg-boss'
 import type { Job } from 'pg-boss'
 import { db } from '@/lib/db'
-import { config } from '@/lib/config'
+import { getBoss } from '@/lib/boss'
 import { processWebhookEvent } from '@/routes/pay/handlers'
 import type { ParsedWhopWebhookEvent, PayEnv } from './types'
 import { createLogger } from '@/lib/logger'
@@ -18,26 +17,38 @@ interface WebhookJobData {
   env: PayEnv
 }
 
-let boss: PgBoss | null = null
+let registered = false
 
-function getBoss(): PgBoss {
-  if (!boss) {
-    if (!config.database.url) throw new Error('DATABASE_URL not set')
-    boss = new PgBoss({
-      connectionString: config.database.url,
-      max: 3,
-    })
-  }
-  return boss
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : 'Webhook handling failed'
 }
 
-export async function startBoss(): Promise<void> {
-  const b = getBoss()
-  await b.start()
+function isPermanentWebhookError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
 
-  b.on('error', (err: unknown) => {
-    log.error({ err }, 'error')
-  })
+  const code = 'code' in err && typeof err.code === 'string' ? err.code : null
+  const status = 'status' in err && typeof err.status === 'number' ? err.status : null
+  const table = 'table' in err && typeof err.table === 'string' ? err.table : null
+  const constraint =
+    'constraint' in err && typeof err.constraint === 'string' ? err.constraint : null
+
+  if (code === '22P02' || code === '42P18') return true
+  if (
+    code === '23503' &&
+    table === 'pay_customer' &&
+    constraint === 'pay_customer_projectId_fkey'
+  ) {
+    return true
+  }
+  if (status && status >= 400 && status < 500 && ![408, 409, 429].includes(status)) return true
+
+  return false
+}
+
+export async function registerPayWorkers(): Promise<void> {
+  if (registered) return
+
+  const b = getBoss()
 
   await b.createQueue(DLQ_NAME, {
     retentionSeconds: 2_592_000, // 30 days
@@ -65,18 +76,26 @@ export async function startBoss(): Promise<void> {
           await processWebhookEvent(eventId, eventType, event, env)
           log.info({ eventId, jobId: job.id }, `${tag} ${eventType} completed`)
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Webhook handling failed'
+          const message = getErrorMessage(err)
+          if (isPermanentWebhookError(err)) {
+            log.error({ eventId, jobId: job.id, err }, `${tag} ${eventType} failed permanently`)
+            await db
+              .updateTable('pay_webhook_event')
+              .set({ status: 'failed', handledAt: new Date(), error: message })
+              .where('id', '=', eventId)
+              .execute()
+            continue
+          }
 
           log.error({ eventId, jobId: job.id, err }, `${tag} ${eventType} failed, will retry`)
 
-          // Record error but keep status retryable — claim gate uses 'pending'|'failed'
           await db
             .updateTable('pay_webhook_event')
             .set({ error: message })
             .where('id', '=', eventId)
             .execute()
 
-          throw err // let pg-boss handle retry
+          throw err
         }
       }
     },
@@ -90,10 +109,19 @@ export async function startBoss(): Promise<void> {
       for (const job of jobs) {
         const { eventId, eventType, env } = job.data
         const tag = `[QUEUE:whop:${env}]`
+        const current = await db
+          .selectFrom('pay_webhook_event')
+          .select(['error'])
+          .where('id', '=', eventId)
+          .executeTakeFirst()
 
         await db
           .updateTable('pay_webhook_event')
-          .set({ status: 'failed', handledAt: new Date(), error: 'Exhausted all retries' })
+          .set({
+            status: 'failed',
+            handledAt: new Date(),
+            error: current?.error || 'Exhausted all retries',
+          })
           .where('id', '=', job.data.eventId)
           .execute()
 
@@ -102,14 +130,8 @@ export async function startBoss(): Promise<void> {
     },
   )
 
-  log.info({ queues: [QUEUE_NAME, DLQ_NAME] }, 'started, listening on queues')
-}
-
-export async function stopBoss(): Promise<void> {
-  if (boss) {
-    await boss.stop({ graceful: true, timeout: 10_000 })
-    log.info('stopped')
-  }
+  registered = true
+  log.info({ queues: [QUEUE_NAME, DLQ_NAME] }, 'pay workers registered')
 }
 
 export async function enqueueWebhookJob(

@@ -40,7 +40,11 @@ import {
 } from '@/services/projects'
 import { getConvexCredentials, syncEnvVarsToConvexForEnv } from '@/lib/convex-env'
 import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
-import { inngest } from '@/inngest'
+import {
+  cancelProjectDeployJob,
+  enqueueProjectCreateJob,
+  enqueueProjectDeployJob,
+} from '@/lib/projects/queue'
 import { createLogger } from '@/lib/logger'
 
 const log = createLogger('projects')
@@ -814,7 +818,7 @@ projects.delete('/:id', zValidator('param', idParam), async (c) => {
   return c.json({ deleted: true })
 })
 
-// POST /projects - Create project + fire async initialization via Inngest
+// POST /projects - Create project + fire async initialization in the background
 projects.post(
   '/',
   zValidator(
@@ -892,17 +896,14 @@ projects.post(
         })
         .execute()
 
-      // Fire Inngest event — sandbox provisioning runs in the background
+      // Queue project initialization in the background
       try {
-        await inngest.send({
-          name: 'project/create.requested',
-          data: {
-            projectId,
-            userId,
-            organizationId,
-            githubUrl,
-            name: projectName,
-          },
+        await enqueueProjectCreateJob({
+          projectId,
+          userId,
+          organizationId,
+          githubUrl,
+          name: projectName,
         })
       } catch (sendErr) {
         await updateProjectStatus(projectId, 'failed', 'Failed to dispatch creation event').catch(
@@ -1012,13 +1013,10 @@ projects.post(
       const deployment = await createDeploymentRecord(id, name)
 
       try {
-        await inngest.send({
-          name: 'project/deploy.requested',
-          data: {
-            projectId: id,
-            deployName: name,
-            deploymentId: deployment.id,
-          },
+        await enqueueProjectDeployJob({
+          projectId: id,
+          deployName: name,
+          deploymentId: deployment.id,
         })
       } catch (sendErr) {
         await updateDeployment(deployment.id, {
@@ -1114,13 +1112,7 @@ projects.post(
       finishedAt: new Date(),
     })
 
-    // Send cancellation event to Inngest to stop the function
-    await inngest
-      .send({
-        name: 'project/deploy.cancelled',
-        data: { projectId: id, deploymentId },
-      })
-      .catch(() => {})
+    await cancelProjectDeployJob(deploymentId).catch(() => {})
 
     log.info({ projectId: id, deploymentId }, 'deployment cancelled')
     return c.json({ cancelled: true })

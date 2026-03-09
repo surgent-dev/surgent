@@ -1,10 +1,19 @@
 import { config } from '@/lib/config'
-import { createLogger } from '@/lib/logger'
-
-const log = createLogger('browser-rendering')
 
 const CF_SCREENSHOT_URL = `https://api.cloudflare.com/client/v4/accounts/${config.cloudflare.accountId}/browser-rendering/screenshot`
 const SCREENSHOT_TIMEOUT_MS = 30_000
+
+export class ScreenshotError extends Error {
+  status: number
+  permanent: boolean
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ScreenshotError'
+    this.status = status
+    this.permanent = status === 401 || status === 403
+  }
+}
 
 interface ScreenshotOptions {
   url: string
@@ -46,8 +55,10 @@ export async function captureScreenshot({
 
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      log.error({ status: res.status, body: body.slice(0, 500) }, 'screenshot failed')
-      throw new Error(`Screenshot failed (${res.status})`)
+      throw new ScreenshotError(
+        `Screenshot failed (${res.status})${body ? `: ${body.slice(0, 200)}` : ''}`,
+        res.status,
+      )
     }
 
     return Buffer.from(await res.arrayBuffer())

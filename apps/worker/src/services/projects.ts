@@ -1,10 +1,18 @@
 import { db } from '@/lib/db'
-import { sql } from 'kysely'
-import type { EnvDestination, ProjectMetadata } from '@repo/db'
+import type {
+  EnvDestination,
+  ProjectMetadata,
+  ProjectProvisioningMetadata,
+  ProjectProvisioningStep,
+} from '@repo/db'
 import { isAdmin } from '@/middleware/admin'
 import { HttpError } from '@/lib/errors'
 
 type User = { id: string; role?: string | null }
+
+function getProjectMetadata(metadata: ProjectMetadata | null | undefined): ProjectMetadata {
+  return metadata || {}
+}
 
 export async function getProjectWithAuth(id: string, user: User) {
   const project = await db
@@ -113,15 +121,29 @@ export async function updateProject(id: string, data: { metadata?: ProjectMetada
     .execute()
 }
 
-export async function updateProvisioningStep(id: string, step: string) {
-  await db
-    .updateTable('project')
-    .set({
-      metadata: sql`COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ provisioningStep: step })}::jsonb`,
-      updatedAt: new Date(),
-    } as any)
-    .where('id', '=', id)
-    .execute()
+export async function mergeProjectMetadata(
+  id: string,
+  data: Partial<ProjectMetadata> & { provisioning?: Partial<ProjectProvisioningMetadata> },
+): Promise<ProjectMetadata> {
+  const project = await getProjectById(id)
+  const current = getProjectMetadata(project?.metadata)
+  const next: ProjectMetadata = {
+    ...current,
+    ...data,
+    provisioning: data.provisioning
+      ? {
+          ...(current.provisioning || {}),
+          ...data.provisioning,
+        }
+      : current.provisioning,
+  }
+
+  await updateProject(id, { metadata: next })
+  return next
+}
+
+export async function updateProvisioningStep(id: string, step: ProjectProvisioningStep | null) {
+  await mergeProjectMetadata(id, { provisioningStep: step })
 }
 
 export async function updateProjectStatus(
@@ -246,43 +268,42 @@ export async function createDeployment(args: {
   return { id: row.id as string }
 }
 
-export async function updateDeployment(
-  id: string,
-  data: {
-    status?: string
-    envSnapshot?: any | null
-    hostname?: string | null
-    error?: string | null
-    startedAt?: Date | null
-    finishedAt?: Date | null
-    cloudflareDeploymentId?: string | null
-    cloudflareVersionId?: string | null
-    rollbackOf?: string | null
-    screenshotUrl?: string | null
-  },
-) {
-  await db
-    .updateTable('deployment')
-    .set({
-      status: data.status,
-      envSnapshot: data.envSnapshot,
-      hostname: data.hostname,
-      error: data.error,
-      startedAt: data.startedAt,
-      finishedAt: data.finishedAt,
-      cloudflareDeploymentId: data.cloudflareDeploymentId,
-      cloudflareVersionId: data.cloudflareVersionId,
-      rollbackOf: data.rollbackOf,
-      screenshotUrl: data.screenshotUrl,
-    })
-    .where('id', '=', id)
-    .execute()
+type DeploymentUpdate = {
+  status?: string
+  envSnapshot?: any | null
+  hostname?: string | null
+  error?: string | null
+  startedAt?: Date | null
+  finishedAt?: Date | null
+  cloudflareDeploymentId?: string | null
+  cloudflareVersionId?: string | null
+  rollbackOf?: string | null
+  screenshotUrl?: string | null
+}
+
+export async function updateDeployment(id: string, data: DeploymentUpdate) {
+  const set: DeploymentUpdate = {}
+  if (data.status !== undefined) set.status = data.status
+  if (data.envSnapshot !== undefined) set.envSnapshot = data.envSnapshot
+  if (data.hostname !== undefined) set.hostname = data.hostname
+  if (data.error !== undefined) set.error = data.error
+  if (data.startedAt !== undefined) set.startedAt = data.startedAt
+  if (data.finishedAt !== undefined) set.finishedAt = data.finishedAt
+  if (data.cloudflareDeploymentId !== undefined) {
+    set.cloudflareDeploymentId = data.cloudflareDeploymentId
+  }
+  if (data.cloudflareVersionId !== undefined) set.cloudflareVersionId = data.cloudflareVersionId
+  if (data.rollbackOf !== undefined) set.rollbackOf = data.rollbackOf
+  if (data.screenshotUrl !== undefined) set.screenshotUrl = data.screenshotUrl
+  if (Object.keys(set).length === 0) return
+
+  await db.updateTable('deployment').set(set).where('id', '=', id).execute()
 }
 
 export async function getDeployment(id: string) {
   return db
     .selectFrom('deployment')
-    .select(['id', 'projectId', 'scriptName', 'status', 'screenshotUrl'])
+    .select(['id', 'projectId', 'scriptName', 'status', 'error', 'screenshotUrl'])
     .where('id', '=', id)
     .executeTakeFirst()
 }

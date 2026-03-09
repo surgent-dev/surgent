@@ -4,13 +4,14 @@ import { motion, AnimatePresence } from 'motion/react'
 import { cn } from '@/lib/utils'
 import { useFunVibe, keyframeStyles } from '@/components/ui/fun-loading'
 import Link from 'next/link'
+import { getProvisioningStepLabel, type ProjectProvisioningStep } from '@/lib/project-provisioning'
 
 import type { SandboxStage } from '@/hooks/use-sandbox-ready'
 
 interface ProjectInitOverlayProps {
   show: boolean
   stage: SandboxStage
-  provisioningStep?: string
+  provisioningStep?: ProjectProvisioningStep | null
 }
 
 const stageLabels: Record<SandboxStage, string> = {
@@ -63,7 +64,9 @@ export function ProjectInitOverlay({ show, stage, provisioningStep }: ProjectIni
                 animate={{ opacity: 0.5 }}
                 className={cn('text-xs text-muted-foreground', isFailed && 'text-destructive')}
               >
-                {stage === 'creating' && provisioningStep ? provisioningStep : stageLabels[stage]}
+                {stage === 'creating'
+                  ? getProvisioningStepLabel(provisioningStep) || stageLabels[stage]
+                  : stageLabels[stage]}
               </motion.span>
               {isFailed && (
                 <Link

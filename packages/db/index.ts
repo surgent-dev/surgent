@@ -1,5 +1,10 @@
 export { createClient, createDb, createDbFromDialect, createDialect } from './src/kysely_db'
 export { migrate, rollback } from './src/migrate'
+export {
+  PROJECT_PROVISIONING_STEPS,
+  PROJECT_PROVISIONING_STEP_LABELS,
+  getProjectProvisioningStepLabel,
+} from './src/types'
 
 export type {
   Database,
@@ -15,6 +20,8 @@ export type {
   ProjectTable,
   ProjectStatus,
   ProjectMetadata,
+  ProjectProvisioningStep,
+  ProjectProvisioningMetadata,
   ChatsTable,
   GitHubInstallationsTable,
   DeploymentTable,

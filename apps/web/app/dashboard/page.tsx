@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { authClient } from '@/lib/auth-client'
+import { getProvisioningStepLabel } from '@/lib/project-provisioning'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -161,7 +162,8 @@ function ProjectCard({
               {isFailed && project.failReason ? (
                 <span className="text-destructive">{project.failReason}</span>
               ) : isProvisioning ? (
-                project.metadata?.provisioningStep || 'Creating project...'
+                getProvisioningStepLabel(project.metadata?.provisioningStep) ||
+                'Creating project...'
               ) : (
                 formatRelativeDate(project.createdAt)
               )}

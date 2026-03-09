@@ -125,7 +125,7 @@ function sanitizeScriptName(input: string): string {
     .slice(0, 63)
 }
 
-async function getProjectEnvVars(
+export async function getProjectEnvVars(
   projectId: string,
   environment: string,
   options?: { includeServer?: boolean },
@@ -195,7 +195,7 @@ async function collectAssets(sandbox: Sandbox, rootDir: string, hashSalt: string
   return { manifest, files }
 }
 
-async function ensureOpencodeConfigRepo(sandbox: Sandbox, repoUrl: string, dir: string) {
+export async function ensureOpencodeConfigRepo(sandbox: Sandbox, repoUrl: string, dir: string) {
   const repoDir = stripTrailingSlash(dir)
   if (!repoUrl) throw new Error('OPENCODE_CONFIG_REPO_URL is not set')
 
@@ -241,7 +241,7 @@ async function execPm2Start(
   )
 }
 
-async function ensurePm2Process(
+export async function ensurePm2Process(
   sandbox: Sandbox,
   cwd: string,
   name: string,
@@ -253,7 +253,11 @@ async function ensurePm2Process(
   await execPm2Start(sandbox, cwd, name, command, env)
 }
 
-async function startOpencodeServer(sandbox: Sandbox, cwd: string, env?: Record<string, string>) {
+export async function startOpencodeServer(
+  sandbox: Sandbox,
+  cwd: string,
+  env?: Record<string, string>,
+) {
   log.info({ sandboxId: sandbox.id, cwd }, 'starting opencode server')
   // Trusted internal command - bypass validation
   await execPm2Start(
@@ -307,7 +311,7 @@ export async function createDeploymentRecord(projectId: string, deployName?: str
 
 export async function deployProject(args: DeployProjectArgs): Promise<void> {
   const { projectId, deployName: rawName, deploymentId } = args
-  log.info({ projectId, deploymentId }, 'deploy start')
+  log.info({ projectId, deploymentId }, 'project deploy started')
 
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new Error(`Project ${projectId} not found`)
@@ -424,7 +428,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
           sources: { local: localKeys.length, project: projectKeys.length },
         },
       },
-      'deploy plan',
+      'project deploy plan',
     )
 
     const fileContents = new Map(files.map((f) => [f.path, Buffer.from(f.base64, 'base64')]))
@@ -460,16 +464,19 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
         .catch(() => {})
     }
 
-    log.info({ projectId, scriptName, cfDeploymentId: cfDeployment?.id }, 'deploy success')
+    log.info(
+      { projectId, scriptName, cfDeploymentId: cfDeployment?.id },
+      'project deploy completed',
+    )
   } catch (err: any) {
     // Don't overwrite 'cancelled' status — it was set by the user
     const current = await ProjectService.getDeployment(deploymentId).catch(() => null)
     if (current?.status === 'cancelled') {
-      log.info({ projectId, deploymentId }, 'deploy aborted (cancelled)')
+      log.info({ projectId, deploymentId }, 'project deploy cancelled')
       return
     }
 
-    log.error({ projectId, err }, 'deploy failed')
+    log.error({ projectId, err }, 'project deploy failed')
     const failStatus = stage === 'building' ? 'build_failed' : 'deploy_failed'
     await ProjectService.updateDeployment(deploymentId, {
       status: failStatus,
@@ -499,7 +506,7 @@ async function fetchLatestCloudflareDeployment(accountId: string, scriptName: st
 
 export async function undeployProject(args: UndeployProjectArgs): Promise<void> {
   const { projectId } = args
-  log.info({ projectId }, 'undeploy start')
+  log.info({ projectId }, 'project undeploy started')
 
   const project = await ProjectService.getProjectById(projectId)
   if (!project) throw new Error(`Project ${projectId} not found`)
@@ -533,9 +540,9 @@ export async function undeployProject(args: UndeployProjectArgs): Promise<void> 
       status: null,
     })
 
-    log.info({ projectId, scriptName }, 'undeploy success')
+    log.info({ projectId, scriptName }, 'project undeploy completed')
   } catch (err: any) {
-    log.error({ projectId, err }, 'undeploy failed')
+    log.error({ projectId, err }, 'project undeploy failed')
     await ProjectService.updateDeployment(deployment.id, {
       status: 'undeploy_failed',
       error: err?.message || 'Undeploy failed',
