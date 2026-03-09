@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, ArrowLeft, Loader2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ChevronDown, Loader2, Moon, RefreshCw, Sun } from 'lucide-react'
 import { AdminRangeSelect } from '@/components/admin/admin-range-select'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -276,6 +276,72 @@ function ActiveDeploys({ items }: { items: AdminOpsDeploymentActiveItem[] }) {
   )
 }
 
+// ── Expandable error row ─────────────────────────────────────────────
+
+function FailureRow({
+  name,
+  status,
+  email,
+  time,
+  error,
+}: {
+  name: string
+  status: string
+  email: string
+  time: string
+  error: string | null
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className={cn('rounded-md', error && 'cursor-pointer hover:bg-muted/40')}>
+      <button
+        type="button"
+        className={cn(
+          'flex w-full items-start justify-between gap-4 px-3 py-2.5 text-left',
+          error && 'cursor-pointer',
+        )}
+        onClick={() => error && setOpen(!open)}
+      >
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="flex items-center gap-2">
+            <Dot color="red" />
+            <span className="text-sm font-medium">{name}</span>
+            <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+              {status}
+            </Badge>
+            <span className="text-xs text-muted-foreground">{time}</span>
+          </div>
+          <div className="flex items-center gap-2 pl-3">
+            <span className="text-xs text-muted-foreground">{email}</span>
+            {error && !open ? (
+              <>
+                <span className="text-muted-foreground/30">·</span>
+                <span className="max-w-[400px] truncate text-xs text-muted-foreground/70">
+                  {error}
+                </span>
+              </>
+            ) : null}
+          </div>
+        </div>
+        {error ? (
+          <ChevronDown
+            className={cn(
+              'mt-1 size-3.5 shrink-0 text-muted-foreground/50 transition-transform',
+              open && 'rotate-180',
+            )}
+          />
+        ) : null}
+      </button>
+      {open && error ? (
+        <pre className="mx-3 mb-2.5 max-h-48 overflow-auto rounded border bg-muted/50 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
+          {error}
+        </pre>
+      ) : null}
+    </div>
+  )
+}
+
 // ── Project failures ──────────────────────────────────────────────────
 
 function ProjectFailures({ items }: { items: AdminOpsProjectItem[] }) {
@@ -286,43 +352,25 @@ function ProjectFailures({ items }: { items: AdminOpsProjectItem[] }) {
       <CardHeader>
         <SectionHeader count={items.length}>Project Failures In Range</SectionHeader>
       </CardHeader>
-      <CardContent className="space-y-1 pt-0">
+      <CardContent className="space-y-0.5 pt-0">
         {items.map((p) => (
-          <div
+          <FailureRow
             key={p.id}
-            className="flex items-start justify-between gap-4 rounded-md px-3 py-2.5 hover:bg-muted/40"
-          >
-            <div className="min-w-0 flex-1 space-y-0.5">
-              <div className="flex items-center gap-2">
-                <Dot color="red" />
-                <span className="text-sm font-medium">{p.name}</span>
-                <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-                  failed
-                </Badge>
-                <span className="text-xs text-muted-foreground">{timeAgo(p.updatedAt)}</span>
-              </div>
-              <div className="flex items-center gap-2 pl-3">
-                <span className="text-xs text-muted-foreground">{p.userEmail}</span>
-                {p.error ? (
-                  <>
-                    <span className="text-muted-foreground/30">·</span>
-                    <span className="max-w-[240px] truncate text-xs text-muted-foreground/70">
-                      {p.error}
-                    </span>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </div>
+            name={p.name}
+            status="failed"
+            email={p.userEmail}
+            time={timeAgo(p.updatedAt)}
+            error={p.error}
+          />
         ))}
       </CardContent>
     </Card>
   )
 }
 
-// ── Recent failures ───────────────────────────────────────────────────
+// ── Deploy failures ──────────────────────────────────────────────────
 
-function RecentFailures({ items }: { items: AdminOpsDeploymentFailureItem[] }) {
+function DeployFailures({ items }: { items: AdminOpsDeploymentFailureItem[] }) {
   if (!items.length) return null
 
   return (
@@ -330,34 +378,16 @@ function RecentFailures({ items }: { items: AdminOpsDeploymentFailureItem[] }) {
       <CardHeader>
         <SectionHeader count={items.length}>Deploy Failures In Range</SectionHeader>
       </CardHeader>
-      <CardContent className="space-y-1 pt-0">
+      <CardContent className="space-y-0.5 pt-0">
         {items.map((d) => (
-          <div
+          <FailureRow
             key={d.id}
-            className="flex items-start justify-between gap-4 rounded-md px-3 py-2.5 hover:bg-muted/40"
-          >
-            <div className="min-w-0 flex-1 space-y-0.5">
-              <div className="flex items-center gap-2">
-                <Dot color="red" />
-                <span className="text-sm font-medium">{d.projectName}</span>
-                <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-                  {d.status.replace(/_/g, ' ')}
-                </Badge>
-                <span className="text-xs text-muted-foreground">{timeAgo(d.finishedAt)}</span>
-              </div>
-              <div className="flex items-center gap-2 pl-3">
-                <span className="text-xs text-muted-foreground">{d.userEmail}</span>
-                {d.error ? (
-                  <>
-                    <span className="text-muted-foreground/30">·</span>
-                    <span className="max-w-[320px] truncate text-xs text-muted-foreground/70">
-                      {d.error}
-                    </span>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </div>
+            name={d.projectName}
+            status={d.status.replace(/_/g, ' ')}
+            email={d.userEmail}
+            time={timeAgo(d.finishedAt)}
+            error={d.error}
+          />
         ))}
       </CardContent>
     </Card>
@@ -457,6 +487,7 @@ function QueueHealth({ items }: { items: AdminOpsQueueItem[] }) {
 export function OpsDashboard({ data }: { data: AdminOpsData }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [light, setLight] = useState(false)
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -496,7 +527,7 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
   const queueInventoryDot: 'green' | 'amber' | 'red' = otherQueueCount > 0 ? 'amber' : 'green'
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={cn('min-h-screen bg-background', light ? 'light' : 'dark')}>
       <div className="mx-auto max-w-6xl space-y-5 px-4 py-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -518,6 +549,9 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
           <div className="flex items-center gap-3">
             <AdminRangeSelect basePath="/admin/ops" />
             <span className="text-xs text-muted-foreground">{timeAgo(data.generatedAt)}</span>
+            <Button variant="ghost" size="icon" className="size-8" onClick={() => setLight(!light)}>
+              {light ? <Moon className="size-3.5" /> : <Sun className="size-3.5" />}
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -609,10 +643,8 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
           <ActiveDeploys items={deployments.active} />
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-2">
-          <ProjectFailures items={projects.recentFailures} />
-          <RecentFailures items={deployments.recentFailures} />
-        </div>
+        <ProjectFailures items={projects.recentFailures} />
+        <DeployFailures items={deployments.recentFailures} />
 
         <QueueHealth items={queues.items} />
       </div>
