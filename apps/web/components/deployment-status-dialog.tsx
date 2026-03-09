@@ -13,7 +13,6 @@ import {
 } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'react-hot-toast'
 import { useDeploymentHistoryQuery, useRedeployVersion, useDeployProject } from '@/queries/projects'
 import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
@@ -117,143 +116,147 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl p-0 gap-0 overflow-hidden [&>button]:hidden">
-        {/* Header */}
-        <div className="h-12 px-5 border-b flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span
-              className={`size-2 rounded-full ${isLive ? 'bg-emerald-500' : busy ? 'bg-amber-500 animate-pulse' : 'bg-muted-foreground/30'}`}
-            />
-            <span className="text-sm font-semibold">
-              {isLive ? 'Live' : busy ? 'Deploying' : 'Offline'}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="size-7 flex items-center justify-center hover:bg-muted rounded-md transition-colors"
-          >
-            <X className="size-4 text-muted-foreground" />
-          </button>
-        </div>
-
-        {/* Progress banner */}
-        {latest && !['deployed'].includes(latest.status) && (
-          <div
-            className={`h-10 px-5 border-b flex items-center gap-2.5 text-sm ${TERMINAL.includes(latest.status) ? 'bg-destructive/5' : 'bg-brand/5'}`}
-          >
-            {TERMINAL.includes(latest.status) ? (
-              <span className="size-1.5 rounded-full bg-destructive" />
-            ) : (
-              <Loader2 className="size-3.5 animate-spin text-brand" />
-            )}
-            <span
-              className={
-                TERMINAL.includes(latest.status) ? 'text-destructive' : 'text-muted-foreground'
-              }
+      <DialogContent className="block sm:max-w-xl p-0 gap-0 [&>button]:hidden overflow-hidden">
+        <div className="max-h-[85dvh] overflow-y-auto overflow-x-hidden min-w-0">
+          {/* Header */}
+          <div className="h-12 px-4 sm:px-5 border-b flex items-center justify-between sticky top-0 z-10 bg-background">
+            <div className="flex items-center gap-2.5">
+              <span
+                className={`size-2 rounded-full shrink-0 ${isLive ? 'bg-emerald-500' : busy ? 'bg-amber-500 animate-pulse' : 'bg-muted-foreground/30'}`}
+              />
+              <span className="text-sm font-semibold">
+                {isLive ? 'Live' : busy ? 'Deploying' : 'Offline'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="size-7 flex items-center justify-center hover:bg-muted rounded-md transition-colors"
             >
-              {STATUS[latest.status] || latest.status}
-            </span>
-            <span className="text-xs text-muted-foreground/60 font-mono">
-              {latest.id.slice(0, 8)}
-            </span>
-            {latest.error && (
-              <span className="text-xs text-destructive/70 truncate flex-1">{latest.error}</span>
-            )}
+              <X className="size-4 text-muted-foreground" />
+            </button>
           </div>
-        )}
 
-        {/* URL + Actions */}
-        <div className="px-5 py-4 border-b space-y-3">
-          {name && (
-            <div className="flex items-center h-10 px-3 rounded-lg border bg-muted/20 font-mono text-sm">
-              {editing ? (
-                <>
-                  <input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleDeploy(input.trim())
-                      if (e.key === 'Escape') setEditing(false)
-                    }}
-                    className="flex-1 bg-transparent outline-none min-w-0"
-                    autoFocus
-                  />
-                  <span className="text-muted-foreground/60 shrink-0">.surgent.site</span>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(false)}
-                    className="ml-2 p-0.5 hover:bg-muted rounded"
-                  >
-                    <X className="size-3.5 text-muted-foreground" />
-                  </button>
-                </>
+          {/* Progress banner */}
+          {latest && !['deployed'].includes(latest.status) && (
+            <div
+              className={`h-10 px-4 sm:px-5 border-b flex items-center gap-2 text-sm min-w-0 ${TERMINAL.includes(latest.status) ? 'bg-destructive/5' : 'bg-brand/5'}`}
+            >
+              {TERMINAL.includes(latest.status) ? (
+                <span className="size-1.5 rounded-full bg-destructive shrink-0" />
               ) : (
-                <>
-                  <span className="flex-1 truncate text-muted-foreground">{name}.surgent.site</span>
-                  <a
-                    href={`https://${name}.surgent.site`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-1 hover:bg-muted rounded"
-                  >
-                    <ArrowSquareOut className="size-3.5 text-muted-foreground" />
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(`https://${name}.surgent.site`)
-                      toast.success('Copied')
-                    }}
-                    className="p-1 hover:bg-muted rounded"
-                  >
-                    <Copy className="size-3.5 text-muted-foreground" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInput(name)
-                      setEditing(true)
-                    }}
-                    className="p-1 hover:bg-muted rounded"
-                  >
-                    <PencilSimple className="size-3.5 text-muted-foreground" />
-                  </button>
-                </>
+                <Loader2 className="size-3.5 animate-spin text-brand shrink-0" />
+              )}
+              <span
+                className={`shrink-0 ${
+                  TERMINAL.includes(latest.status) ? 'text-destructive' : 'text-muted-foreground'
+                }`}
+              >
+                {STATUS[latest.status] || latest.status}
+              </span>
+              <span className="text-xs text-muted-foreground/60 font-mono shrink-0">
+                {latest.id.slice(0, 8)}
+              </span>
+              {latest.error && (
+                <span className="text-xs text-destructive/70 truncate">{latest.error}</span>
               )}
             </div>
           )}
-          <Button
-            variant="brand"
-            size="lg"
-            className="w-full"
-            onClick={() => handleDeploy(editing ? input.trim() : name || '')}
-            disabled={deploy.isPending || Boolean(busy) || (!name && !editing)}
-          >
-            {deploy.isPending ? (
-              <Loader2 className="size-4 animate-spin mr-2" />
-            ) : (
-              <RocketLaunch className="size-4 mr-2" weight="fill" />
+
+          {/* URL + Actions */}
+          <div className="px-4 sm:px-5 py-4 border-b space-y-3">
+            {name && (
+              <div className="flex items-center h-10 px-3 rounded-lg border bg-muted/20 font-mono text-sm min-w-0 overflow-hidden">
+                {editing ? (
+                  <>
+                    <input
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleDeploy(input.trim())
+                        if (e.key === 'Escape') setEditing(false)
+                      }}
+                      className="flex-1 bg-transparent outline-none min-w-0"
+                      autoFocus
+                    />
+                    <span className="text-muted-foreground/60 shrink-0">.surgent.site</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(false)}
+                      className="ml-2 p-0.5 hover:bg-muted rounded shrink-0"
+                    >
+                      <X className="size-3.5 text-muted-foreground" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 truncate text-muted-foreground">
+                      {name}.surgent.site
+                    </span>
+                    <div className="flex items-center shrink-0">
+                      <a
+                        href={`https://${name}.surgent.site`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 hover:bg-muted rounded"
+                      >
+                        <ArrowSquareOut className="size-3.5 text-muted-foreground" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`https://${name}.surgent.site`)
+                          toast.success('Copied')
+                        }}
+                        className="p-1 hover:bg-muted rounded"
+                      >
+                        <Copy className="size-3.5 text-muted-foreground" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInput(name)
+                          setEditing(true)
+                        }}
+                        className="p-1 hover:bg-muted rounded"
+                      >
+                        <PencilSimple className="size-3.5 text-muted-foreground" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
-            {editing && input.trim() !== name ? 'Save & Publish' : 'Republish'}
-          </Button>
-        </div>
-
-        {/* Custom Domain */}
-        {projectId && (
-          <div className="border-b">
-            <DomainSearchPanel projectId={projectId} />
+            <Button
+              variant="brand"
+              size="lg"
+              className="w-full"
+              onClick={() => handleDeploy(editing ? input.trim() : name || '')}
+              disabled={deploy.isPending || Boolean(busy) || (!name && !editing)}
+            >
+              {deploy.isPending ? (
+                <Loader2 className="size-4 animate-spin mr-2" />
+              ) : (
+                <RocketLaunch className="size-4 mr-2" weight="fill" />
+              )}
+              {editing && input.trim() !== name ? 'Save & Publish' : 'Republish'}
+            </Button>
           </div>
-        )}
 
-        {/* History header */}
-        <div className="h-10 px-5 flex items-center justify-between text-xs text-muted-foreground border-b bg-muted/20">
-          <span className="font-medium uppercase tracking-wider">Deployments</span>
-          {history?.length ? <span>{history.length} total</span> : null}
-        </div>
+          {/* Custom Domain */}
+          {projectId && (
+            <div className="border-b">
+              <DomainSearchPanel projectId={projectId} />
+            </div>
+          )}
 
-        {/* History list */}
-        <ScrollArea className="max-h-[26rem]">
+          {/* History header */}
+          <div className="h-10 px-4 sm:px-5 flex items-center justify-between text-xs text-muted-foreground border-b bg-muted/20">
+            <span className="font-medium uppercase tracking-wider">Deployments</span>
+            {history?.length ? <span>{history.length} total</span> : null}
+          </div>
+
+          {/* History list */}
           {isLoading ? (
             <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin mr-2" /> Loading
@@ -275,25 +278,31 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                 const isExpanded = expandedId === d.id
                 const hasVals = Boolean(snap?.vars)
                 return (
-                  <div key={d.id} className={`px-5 py-3 text-sm ${i === 0 ? 'bg-muted/20' : ''}`}>
+                  <div
+                    key={d.id}
+                    className={`px-4 sm:px-5 py-3 text-sm min-w-0 ${i === 0 ? 'bg-muted/20' : ''}`}
+                  >
                     {/* Row */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                         <span
                           className={`size-2 rounded-full shrink-0 ${fail ? 'bg-destructive' : pend ? 'bg-amber-500' : ok ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`}
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                             <span
-                              className={`font-medium ${fail ? 'text-destructive' : pend ? 'text-amber-600 dark:text-amber-400' : ok ? 'text-emerald-600 dark:text-emerald-400' : ''}`}
+                              className={`font-medium shrink-0 ${fail ? 'text-destructive' : pend ? 'text-amber-600 dark:text-amber-400' : ok ? 'text-emerald-600 dark:text-emerald-400' : ''}`}
                             >
                               {STATUS[d.status] || d.status}
                             </span>
-                            <span className="text-xs text-muted-foreground/50 font-mono">
+                            <span className="text-xs text-muted-foreground/50 font-mono truncate min-w-0">
                               {d.scriptName || '—'}
                             </span>
-                            <span className="text-[11px] text-muted-foreground/40">
+                            <span className="text-[11px] text-muted-foreground/40 shrink-0 hidden sm:inline">
                               {timeAgo(d.createdAt)} · {duration(d.startedAt, d.deployedAt)}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground/40 shrink-0 sm:hidden">
+                              {timeAgo(d.createdAt)}
                             </span>
                           </div>
                           {d.error && (
@@ -306,14 +315,17 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                           <button
                             type="button"
                             onClick={() => setExpandedId(isExpanded ? null : d.id)}
-                            className={`h-7 px-2 rounded-md text-xs inline-flex items-center gap-1.5 transition-colors ${isExpanded ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}
+                            className={`h-7 px-1.5 sm:px-2 rounded-md text-xs inline-flex items-center gap-1 sm:gap-1.5 transition-colors ${isExpanded ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}
                           >
                             {isExpanded ? (
                               <EyeSlash className="size-3.5" weight="bold" />
                             ) : (
                               <Eye className="size-3.5" />
                             )}
-                            <span className="tabular-nums">{varEntries.length} env</span>
+                            <span className="tabular-nums hidden sm:inline">
+                              {varEntries.length} env
+                            </span>
+                            <span className="tabular-nums sm:hidden">{varEntries.length}</span>
                           </button>
                         )}
                         {ok && d.cloudflareVersionId && i > 0 && (
@@ -321,7 +333,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                             type="button"
                             onClick={() => handleRollback(d.cloudflareVersionId!)}
                             disabled={rollId === d.cloudflareVersionId}
-                            className="h-7 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 disabled:opacity-50 transition-colors"
+                            className="h-7 px-1.5 sm:px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 disabled:opacity-50 transition-colors"
                           >
                             {rollId === d.cloudflareVersionId ? (
                               <Loader2 className="size-3 animate-spin" />
@@ -335,17 +347,17 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
 
                     {/* Env snapshot expanded */}
                     {isExpanded && varEntries.length > 0 && (
-                      <div className="mt-3 ml-5 rounded-lg border bg-muted/10 overflow-hidden">
-                        <div className="grid grid-cols-[minmax(120px,auto)_1fr] text-[11px] font-mono">
+                      <div className="mt-3 sm:ml-5 rounded-lg border bg-muted/10 overflow-hidden">
+                        <div className="grid grid-cols-[minmax(80px,auto)_1fr] sm:grid-cols-[minmax(120px,auto)_1fr] text-[11px] font-mono">
                           {varEntries.map(([k, v], idx) => (
                             <div
                               key={`${d.id}-${k}`}
                               className={`contents ${idx < varEntries.length - 1 ? '[&>*]:border-b' : ''}`}
                             >
-                              <div className="px-3 py-2 text-muted-foreground bg-muted/30 font-medium truncate">
+                              <div className="px-2 sm:px-3 py-2 text-muted-foreground bg-muted/30 font-medium truncate">
                                 {k}
                               </div>
-                              <div className="px-3 py-2 text-foreground/85 break-all">
+                              <div className="px-2 sm:px-3 py-2 text-foreground/85 break-all">
                                 {hasVals ? (
                                   v || (
                                     <span className="text-muted-foreground/40 italic">empty</span>
@@ -364,7 +376,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
               })}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   )

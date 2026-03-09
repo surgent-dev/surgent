@@ -38,6 +38,23 @@ async function appendDomainLog(
     .execute()
 }
 
+/** Quick health check: can we reach the domain over HTTPS? */
+async function checkDomainHealth(domain: string): Promise<boolean> {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 3000)
+    const res = await fetch(`https://${domain}`, {
+      method: 'HEAD',
+      signal: controller.signal,
+      redirect: 'follow',
+    })
+    clearTimeout(timeout)
+    return res.status < 500
+  } catch {
+    return false
+  }
+}
+
 const domains = new Hono<AppContext>()
 
 // ─── Auth-protected routes ───────────────────────────────────
@@ -109,7 +126,7 @@ domains.post(
       .selectFrom('domain')
       .select('id')
       .where('projectId', '=', projectId)
-      .where('status', 'in', ['active', 'purchasing', 'dns_configuring'])
+      .where('status', 'in', ['active', 'ssl_provisioning', 'purchasing', 'dns_configuring'])
       .executeTakeFirst()
 
     if (existingDomain) {
@@ -125,10 +142,15 @@ domains.post(
 
     const deployDomain = config.cloudflare.deployDomain
 
-    // Only www CNAME is supported for CF Custom Hostnames.
-    // Bare/root domains cannot use Custom Hostnames when A records
-    // point to Cloudflare IPs (CF blocks validation, requires CNAME).
-    const dnsRecords = [{ type: 'CNAME', host: 'www', value: deployDomain, ttl: 300 }]
+    // Entri Power: root A record proxied by Entri + www CNAME via Entri's cname_target
+    const applicationUrl = worker?.scriptName
+      ? `https://${worker.scriptName}.${deployDomain}`
+      : `https://${deployDomain}`
+
+    const dnsRecords = [
+      { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
+      { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
+    ]
 
     const provider = await getDomainProvider()
 
@@ -320,7 +342,7 @@ domains.post(
       .selectFrom('domain')
       .select('id')
       .where('projectId', '=', projectId)
-      .where('status', 'in', ['active', 'purchasing', 'dns_configuring'])
+      .where('status', 'in', ['active', 'ssl_provisioning', 'purchasing', 'dns_configuring'])
       .executeTakeFirst()
 
     if (existingDomain) {
@@ -336,8 +358,15 @@ domains.post(
 
     const deployDomain = config.cloudflare.deployDomain
 
-    // Only www CNAME — bare domain can't use CF Custom Hostnames
-    const dnsRecords = [{ type: 'CNAME', host: 'www', value: deployDomain, ttl: 300 }]
+    // Entri Power: root A record proxied by Entri + www CNAME via Entri's cname_target
+    const applicationUrl = worker?.scriptName
+      ? `https://${worker.scriptName}.${deployDomain}`
+      : `https://${deployDomain}`
+
+    const dnsRecords = [
+      { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
+      { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
+    ]
 
     const token = await generateEntriToken(user.id)
 
@@ -437,7 +466,7 @@ domains.get('/:projectId', async (c) => {
             await db
               .updateTable('domain')
               .set({
-                status: 'active',
+                status: 'ssl_provisioning',
                 cfCustomDomainId: result.customHostnameId,
                 kvMapped: true,
                 lastError: null,
@@ -445,8 +474,8 @@ domains.get('/:projectId', async (c) => {
               })
               .where('id', '=', d.id)
               .execute()
-            d.status = 'active'
-            await appendDomainLog(d.id, 'auto_connect_done', 'Domain is now live', true)
+            d.status = 'ssl_provisioning'
+            await appendDomainLog(d.id, 'auto_connect_done', 'Connected, provisioning SSL...', true)
             log.info(
               { domainId: d.id, domainName: d.domainName },
               'auto-connected domain to worker',
@@ -476,6 +505,41 @@ domains.get('/:projectId', async (c) => {
           log.warn({ err, domainId: d.id }, 'auto-connect failed, will retry on next poll')
         }
       }
+    }
+  }
+
+  // SSL health check: verify ssl_provisioning domains are reachable over HTTPS
+  const provisioningDomains = result.filter((d) => d.status === 'ssl_provisioning')
+  for (const d of provisioningDomains) {
+    const ageMs = Date.now() - new Date(d.updatedAt).getTime()
+
+    // Timeout after 5 minutes
+    if (ageMs > 5 * 60 * 1000) {
+      await db
+        .updateTable('domain')
+        .set({ status: 'error', lastError: 'SSL provisioning timed out', updatedAt: new Date() })
+        .where('id', '=', d.id)
+        .execute()
+      d.status = 'error'
+      d.lastError = 'SSL provisioning timed out'
+      await appendDomainLog(
+        d.id,
+        'ssl_timeout',
+        'SSL provisioning timed out after 5 minutes',
+        false,
+      )
+      continue
+    }
+
+    const bareDomain = d.domainName.replace(/^www\./, '')
+    if (await checkDomainHealth(bareDomain)) {
+      await db
+        .updateTable('domain')
+        .set({ status: 'active', updatedAt: new Date() })
+        .where('id', '=', d.id)
+        .execute()
+      d.status = 'active'
+      await appendDomainLog(d.id, 'ssl_provisioned', 'Domain is live with SSL', true)
     }
   }
 
@@ -525,7 +589,7 @@ domains.post(
 
     if (!domainRecord) throw new HttpError(404, 'Domain not found')
 
-    if (!['dns_configuring', 'error'].includes(domainRecord.status)) {
+    if (!['dns_configuring', 'ssl_provisioning', 'error'].includes(domainRecord.status)) {
       throw new HttpError(400, 'Domain is not in a retryable state')
     }
 
@@ -538,8 +602,15 @@ domains.post(
 
     const deployDomain = config.cloudflare.deployDomain
 
-    // Only www CNAME — bare domain can't use CF Custom Hostnames
-    const dnsRecords = [{ type: 'CNAME', host: 'www', value: deployDomain, ttl: 300 }]
+    // Entri Power: root A record proxied by Entri + www CNAME via Entri's cname_target
+    const applicationUrl = worker?.scriptName
+      ? `https://${worker.scriptName}.${deployDomain}`
+      : `https://${deployDomain}`
+
+    const dnsRecords = [
+      { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
+      { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
+    ]
 
     const token = await generateEntriToken(user.id)
 
@@ -925,7 +996,7 @@ async function processDomainWebhook(payload: any) {
           userId: resolvedUserId,
           organizationId: project.organizationId,
           domainName: finalDomainName,
-          status: propagationOk ? 'active' : 'dns_configuring',
+          status: propagationOk ? 'ssl_provisioning' : 'dns_configuring',
           registrar: payload.provider || payload.registrar || 'entri',
           entriFlowId: payload.id || null,
           purchasedAt: now,
@@ -950,7 +1021,7 @@ async function processDomainWebhook(payload: any) {
             `Webhook triggered CF connect: ${finalDomainName} → ${worker.scriptName}`,
           )
           const result = await connectCustomDomain(finalDomainName, worker.scriptName)
-          const status = result.kvMapped ? 'active' : 'error'
+          const status = result.kvMapped ? 'ssl_provisioning' : 'error'
           await db
             .updateTable('domain')
             .set({
@@ -981,7 +1052,7 @@ async function processDomainWebhook(payload: any) {
         {
           domainId: newRecord?.id,
           domainName: finalDomainName,
-          status: propagationOk ? 'active' : 'dns_configuring',
+          status: propagationOk ? 'ssl_provisioning' : 'dns_configuring',
         },
         '[ENTRI-WEBHOOK] domain created from webhook',
       )
@@ -1030,7 +1101,11 @@ async function processDomainWebhook(payload: any) {
       }
     }
 
-    const finalStatus = propagationOk ? (kvMapped ? 'active' : 'error') : 'dns_configuring'
+    const finalStatus = propagationOk
+      ? kvMapped
+        ? 'ssl_provisioning'
+        : 'error'
+      : 'dns_configuring'
 
     await db
       .updateTable('domain')
@@ -1054,7 +1129,7 @@ async function processDomainWebhook(payload: any) {
         domainRecord!.id,
         'status_change',
         `Status → ${finalStatus}`,
-        finalStatus === 'active',
+        finalStatus === 'ssl_provisioning',
       )
     }
 
@@ -1139,7 +1214,7 @@ async function processDomainWebhook(payload: any) {
         }
       }
 
-      const finalStatus = kvMapped ? 'active' : 'error'
+      const finalStatus = kvMapped ? 'ssl_provisioning' : 'error'
 
       await db
         .updateTable('domain')
@@ -1160,7 +1235,7 @@ async function processDomainWebhook(payload: any) {
           domainRecord.id,
           'status_change',
           `Status → ${finalStatus}`,
-          finalStatus === 'active',
+          finalStatus === 'ssl_provisioning',
         )
       }
 

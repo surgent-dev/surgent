@@ -15,7 +15,13 @@ export interface DomainAvailability {
 interface EntriPurchaseConfig {
   token: string
   applicationId: string
-  dnsRecords: Array<{ type: string; host: string; value: string; ttl: number }>
+  dnsRecords: Array<{
+    type: string
+    host: string
+    value: string
+    ttl: number
+    applicationUrl?: string
+  }>
   domainId: string
   prefilledDomain?: string
   devMode?: boolean
@@ -25,7 +31,13 @@ interface EntriPurchaseConfig {
 export interface EntriConnectConfig {
   token: string
   applicationId: string
-  dnsRecords: Array<{ type: string; host: string; value: string; ttl: number }>
+  dnsRecords: Array<{
+    type: string
+    host: string
+    value: string
+    ttl: number
+    applicationUrl?: string
+  }>
   domainId: string
   prefilledDomain: string
   userId: string
@@ -42,7 +54,7 @@ export interface Domain {
   id: string
   projectId: string | null
   domainName: string
-  status: 'pending' | 'purchasing' | 'dns_configuring' | 'active' | 'error'
+  status: 'pending' | 'purchasing' | 'dns_configuring' | 'ssl_provisioning' | 'active' | 'error'
   registrar: string | null
   dnsVerified: boolean
   kvMapped: boolean
@@ -65,7 +77,7 @@ export function useProjectDomains(projectId?: string, fastPoll?: boolean) {
       if (fastPoll) return 2000
       const domains = query.state.data?.domains
       const hasPending = domains?.some((d) =>
-        ['pending', 'purchasing', 'dns_configuring'].includes(d.status),
+        ['pending', 'purchasing', 'dns_configuring', 'ssl_provisioning'].includes(d.status),
       )
       return hasPending ? 3000 : 30000
     },

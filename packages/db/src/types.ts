@@ -674,7 +674,13 @@ export interface PayCustomerTable {
   updatedAt?: Date
 }
 
-export type DomainStatus = 'pending' | 'purchasing' | 'dns_configuring' | 'active' | 'error'
+export type DomainStatus =
+  | 'pending'
+  | 'purchasing'
+  | 'dns_configuring'
+  | 'ssl_provisioning'
+  | 'active'
+  | 'error'
 
 export interface DomainLogEntry {
   timestamp: string
