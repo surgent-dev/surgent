@@ -324,7 +324,7 @@ function DomainStatusCard({
               ) : (
                 <ArrowClockwise className="size-3 mr-1.5" weight="bold" />
               )}
-              {isError ? 'Retry' : 'Retry DNS'}
+              {isError ? (lastError?.includes('SSL') ? 'Retry SSL' : 'Retry') : 'Retry DNS'}
             </Button>
           )}
           {onRemove && (
@@ -472,14 +472,22 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
     async (domainId: string) => {
       setRetrying(true)
       try {
-        const config = await retryConnect.mutateAsync({ projectId, domainId })
+        const result = await retryConnect.mutateAsync({ projectId, domainId })
+
+        // SSL-only retry: backend just reset status, no Entri modal needed
+        if ('sslRetryOnly' in result && result.sslRetryOnly) {
+          toast.success('Retrying SSL provisioning...')
+          return
+        }
+
+        // Full retry: re-open Entri Connect modal for DNS setup
         try {
           await showEntri({
-            applicationId: config.applicationId,
-            token: config.token,
-            prefilledDomain: config.prefilledDomain,
-            dnsRecords: config.dnsRecords,
-            userId: config.userId,
+            applicationId: result.applicationId,
+            token: result.token,
+            prefilledDomain: result.prefilledDomain,
+            dnsRecords: result.dnsRecords,
+            userId: result.userId,
             power: true,
           })
         } catch (entriErr) {

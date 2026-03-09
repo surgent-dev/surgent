@@ -513,8 +513,8 @@ domains.get('/:projectId', async (c) => {
   for (const d of provisioningDomains) {
     const ageMs = Date.now() - new Date(d.updatedAt).getTime()
 
-    // Timeout after 5 minutes
-    if (ageMs > 5 * 60 * 1000) {
+    // Timeout after 15 minutes (purchased domains may need longer for DNS propagation)
+    if (ageMs > 15 * 60 * 1000) {
       await db
         .updateTable('domain')
         .set({ status: 'error', lastError: 'SSL provisioning timed out', updatedAt: new Date() })
@@ -525,7 +525,7 @@ domains.get('/:projectId', async (c) => {
       await appendDomainLog(
         d.id,
         'ssl_timeout',
-        'SSL provisioning timed out after 5 minutes',
+        'SSL provisioning timed out after 15 minutes',
         false,
       )
       continue
@@ -593,7 +593,27 @@ domains.post(
       throw new HttpError(400, 'Domain is not in a retryable state')
     }
 
-    // Get worker script name for DNS target
+    // Smart retry: if DNS is already verified and KV mapped, just retry SSL provisioning
+    // (don't re-open Entri modal — DNS is already configured)
+    const isSslRetry = domainRecord.dnsVerified && domainRecord.kvMapped
+    if (isSslRetry) {
+      await db
+        .updateTable('domain')
+        .set({ status: 'ssl_provisioning', lastError: null, updatedAt: new Date() })
+        .where('id', '=', domainId)
+        .execute()
+
+      await appendDomainLog(
+        domainId,
+        'retry_ssl',
+        `Retrying SSL provisioning (DNS already verified)`,
+      )
+      log.info({ projectId, domainId, domainName: domainRecord.domainName }, 'SSL retry started')
+
+      return c.json({ sslRetryOnly: true, domainId })
+    }
+
+    // Full retry: re-open Entri modal for DNS setup
     const worker = await db
       .selectFrom('worker')
       .select(['scriptName'])

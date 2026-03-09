@@ -116,11 +116,15 @@ export function useInitDomainConnect() {
   })
 }
 
+export type RetryConnectResult =
+  | (EntriConnectConfig & { sslRetryOnly?: never })
+  | { sslRetryOnly: true; domainId: string }
+
 export function useRetryDomainConnect() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (params: { projectId: string; domainId: string }) =>
-      http.post('api/domains/retry-connect', { json: params }).json<EntriConnectConfig>(),
+      http.post('api/domains/retry-connect', { json: params }).json<RetryConnectResult>(),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['domains', vars.projectId] })
     },
