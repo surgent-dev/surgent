@@ -3,7 +3,7 @@ import type { AppContext } from '@/types/application'
 import { db } from '@/lib/db'
 import { sql } from 'kysely'
 import { requireAdmin } from '@/middleware/admin'
-import { getAdminOpsOverview } from '@/services/admin-ops'
+import { getAdminOpsJobs, getAdminOpsOverview, isJobState } from '@/services/admin-ops'
 
 const admin = new Hono<AppContext>()
 
@@ -253,6 +253,31 @@ admin.get('/overview', requireAdmin, async (c) => {
 admin.get('/ops', requireAdmin, async (c) => {
   const { range, start } = getStart(c.req.query('range') || 'today')
   return c.json(await getAdminOpsOverview({ range, start }))
+})
+
+admin.get('/ops/jobs', requireAdmin, async (c) => {
+  const queue = c.req.query('queue')?.trim()
+  const state = c.req.query('state')?.trim() || 'active'
+  const page = Math.max(Number(c.req.query('page')) || 1, 1)
+  const perPage = Math.min(
+    Math.max(Number(c.req.query('perPage') || c.req.query('limit')) || 25, 1),
+    100,
+  )
+
+  if (!queue) {
+    return c.json({ error: 'Queue is required' }, 400)
+  }
+
+  if (!isJobState(state)) {
+    return c.json({ error: 'Invalid job state' }, 400)
+  }
+
+  const jobs = await getAdminOpsJobs({ queue, state, page, perPage })
+  if (!jobs) {
+    return c.json({ error: 'Queue not found' }, 404)
+  }
+
+  return c.json(jobs)
 })
 
 export default admin

@@ -103,6 +103,36 @@ interface QueueHealthSummary {
   activeJobs: number
 }
 
+const JOB_STATES = ['created', 'retry', 'active', 'completed', 'cancelled', 'failed'] as const
+
+export type AdminOpsJobState = (typeof JOB_STATES)[number]
+
+interface AdminOpsJobRow {
+  id: string
+  name: string
+  data: unknown
+  policy: string | null
+  state: AdminOpsJobState
+  priority: number | string | null
+  retryLimit: number | string | null
+  retryCount: number | string | null
+  retryDelay: number | string | null
+  retryBackoff: boolean | null
+  retryDelayMax: number | string | null
+  startAfter: Date | string | null
+  startedOn: Date | string | null
+  singletonKey: string | null
+  deleteAfterSeconds: number | string | null
+  createdOn: Date | string | null
+  completedOn: Date | string | null
+  keepUntil: Date | string | null
+  deadLetter: string | null
+  output: unknown
+  groupId: string | null
+  groupTier: string | null
+  expireInSeconds: number | string | null
+}
+
 interface NamedCountRow {
   name: string
   count: string | number | bigint
@@ -186,6 +216,16 @@ function groupQueueNamesByTable(queues: QueueResult[]): Map<string, string[]> {
 
 function getOpenQueueJobs(counts: QueueStateCounts): number {
   return counts.createdReady + counts.deferred + counts.retry + counts.active + counts.failed
+}
+
+function toIso(value: Date | string | null | undefined): string | null {
+  if (!value) return null
+  if (value instanceof Date) return value.toISOString()
+  return new Date(value).toISOString()
+}
+
+function isJobState(value: string): value is AdminOpsJobState {
+  return (JOB_STATES as readonly string[]).includes(value)
 }
 
 async function getQueueStateCountsForTable(
@@ -651,3 +691,107 @@ export async function getAdminOpsOverview(params: { range: string; start: Date }
     queues,
   }
 }
+
+export async function getAdminOpsJobs(params: {
+  queue: string
+  state: AdminOpsJobState
+  page: number
+  perPage: number
+}) {
+  const boss = getBoss()
+  const queue = await boss.getQueue(params.queue)
+  if (!queue) return null
+
+  const safeTable = sanitizePgBossTable(queue.table)
+  const offset = (params.page - 1) * params.perPage
+  const orderBy =
+    params.state === 'active'
+      ? 'started_on asc nulls last, created_on asc'
+      : params.state === 'created' || params.state === 'retry'
+        ? 'start_after asc, created_on asc'
+        : 'completed_on desc nulls last, created_on desc'
+
+  const text = `
+    select
+      id,
+      name,
+      data,
+      expire_seconds as "expireInSeconds",
+      group_id as "groupId",
+      group_tier as "groupTier",
+      policy,
+      state,
+      priority,
+      retry_limit as "retryLimit",
+      retry_count as "retryCount",
+      retry_delay as "retryDelay",
+      retry_backoff as "retryBackoff",
+      retry_delay_max as "retryDelayMax",
+      start_after as "startAfter",
+      started_on as "startedOn",
+      singleton_key as "singletonKey",
+      deletion_seconds as "deleteAfterSeconds",
+      created_on as "createdOn",
+      completed_on as "completedOn",
+      keep_until as "keepUntil",
+      dead_letter as "deadLetter",
+      output
+    from ${PG_BOSS_SCHEMA}.${safeTable}
+    where name = $1
+      and state = $2
+    order by ${orderBy}
+    limit $3
+    offset $4
+  `
+
+  const countText = `
+    select count(*)::int as "count"
+    from ${PG_BOSS_SCHEMA}.${safeTable}
+    where name = $1
+      and state = $2
+  `
+
+  const [result, countResult] = await Promise.all([
+    boss.getDb().executeSql(text, [params.queue, params.state, params.perPage, offset]),
+    boss.getDb().executeSql(countText, [params.queue, params.state]),
+  ])
+
+  const rows = result.rows as AdminOpsJobRow[]
+  const total = toNumber((countResult.rows[0] as NamedCountRow | undefined)?.count)
+
+  return {
+    queue: params.queue,
+    label: getQueueDef(params.queue).label,
+    state: params.state,
+    page: params.page,
+    perPage: params.perPage,
+    total,
+    jobs: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      state: row.state,
+      data: row.data,
+      output: row.output,
+      priority: toNumber(row.priority),
+      retryLimit: toNumber(row.retryLimit),
+      retryCount: toNumber(row.retryCount),
+      retryDelay: toNumber(row.retryDelay),
+      retryBackoff: Boolean(row.retryBackoff),
+      retryDelayMax: row.retryDelayMax === null ? null : toNumber(row.retryDelayMax),
+      startAfter: toIso(row.startAfter) || new Date().toISOString(),
+      startedOn: toIso(row.startedOn),
+      singletonKey: row.singletonKey,
+      deleteAfterSeconds: toNumber(row.deleteAfterSeconds),
+      createdOn: toIso(row.createdOn) || new Date().toISOString(),
+      completedOn: toIso(row.completedOn),
+      keepUntil: toIso(row.keepUntil) || new Date().toISOString(),
+      deadLetter: row.deadLetter,
+      policy: row.policy,
+      groupId: row.groupId,
+      groupTier: row.groupTier,
+      expireInSeconds: toNumber(row.expireInSeconds),
+    })),
+  }
+}
+
+export { isJobState }

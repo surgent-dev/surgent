@@ -64,6 +64,44 @@ export interface AdminOpsQueueItem {
   error: string | null
 }
 
+export type AdminOpsJobState = 'created' | 'retry' | 'active' | 'completed' | 'cancelled' | 'failed'
+
+export interface AdminOpsJobItem {
+  id: string
+  name: string
+  state: AdminOpsJobState
+  data: unknown
+  output: unknown
+  priority: number
+  retryLimit: number
+  retryCount: number
+  retryDelay: number
+  retryBackoff: boolean
+  retryDelayMax: number | null
+  startAfter: string
+  startedOn: string | null
+  singletonKey: string | null
+  deleteAfterSeconds: number
+  createdOn: string
+  completedOn: string | null
+  keepUntil: string
+  deadLetter: string | null
+  policy: string | null
+  groupId: string | null
+  groupTier: string | null
+  expireInSeconds: number
+}
+
+export interface AdminOpsJobsResponse {
+  queue: string
+  label: string
+  state: AdminOpsJobState
+  page: number
+  perPage: number
+  total: number
+  jobs: AdminOpsJobItem[]
+}
+
 export interface AdminOpsData {
   generatedAt: string
   range: string
@@ -106,6 +144,7 @@ export interface AdminOpsData {
   queues: {
     summary: {
       dlqJobs: number
+      dlqJobsInRange?: number
       retryingJobs: number
       activeJobs: number
     }
