@@ -3,6 +3,7 @@ import type { AppContext } from '@/types/application'
 import { db } from '@/lib/db'
 import { sql } from 'kysely'
 import { requireAdmin } from '@/middleware/admin'
+import { getAdminOpsOverview } from '@/services/admin-ops'
 
 const admin = new Hono<AppContext>()
 
@@ -247,6 +248,11 @@ admin.get('/overview', requireAdmin, async (c) => {
     allProjects: projectsWithWorker,
     charts,
   })
+})
+
+admin.get('/ops', requireAdmin, async (c) => {
+  const { range, start } = getStart(c.req.query('range') || 'today')
+  return c.json(await getAdminOpsOverview({ range, start }))
 })
 
 export default admin

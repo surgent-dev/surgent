@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -543,7 +544,12 @@ export function AdminDashboard({ data }: { data: AdminOverview }) {
       <div className="container mx-auto py-8 px-4 space-y-8">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-          <AdminRangeSelect />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/admin/ops">Ops</Link>
+            </Button>
+            <AdminRangeSelect />
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

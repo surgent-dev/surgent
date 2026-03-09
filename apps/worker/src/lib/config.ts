@@ -4,6 +4,8 @@ const csv = (value: string | undefined): string[] =>
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
+const csvLower = (value: string | undefined): string[] =>
+  csv(value).map((item) => item.toLowerCase())
 
 // Centralized environment variables as a single config object
 export const config = {
@@ -25,6 +27,7 @@ export const config = {
     baseUrl: env.BETTER_AUTH_URL,
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+    adminUserEmails: csvLower(env.BETTER_AUTH_ADMIN_EMAILS || env.ADMIN_EMAILS),
     adminUserIds: csv(env.BETTER_AUTH_ADMIN_USER_IDS || env.ADMIN_USER_IDS),
     adminRoles: csv(env.BETTER_AUTH_ADMIN_ROLES || 'admin'),
   },
