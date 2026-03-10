@@ -51,8 +51,6 @@ const DEFAULT_WRANGLER = {
   assets: { binding: 'ASSETS', not_found_handling: 'single-page-application' as const },
   observability: { enabled: true, head_sampling_rate: 0.1 },
 }
-const OUTPUT_LIMIT = 12_000
-const CLOUDFLARE_PREFLIGHT_URL = `https://api.cloudflare.com/client/v4/accounts/${config.cloudflare.accountId}/workers/dispatch/namespaces/${config.cloudflare.dispatchNamespace}`
 
 // ============================================================================
 // Types
@@ -101,17 +99,6 @@ export interface RedeployVersionArgs {
   versionId: string
 }
 
-export class ProjectDeployError extends Error {
-  constructor(
-    message: string,
-    readonly status: string,
-    readonly permanent = false,
-  ) {
-    super(message)
-    this.name = 'ProjectDeployError'
-  }
-}
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -138,78 +125,7 @@ function sanitizeScriptName(input: string): string {
     .slice(0, 63)
 }
 
-function tailOutput(value?: string): string {
-  const clean = (value || '')
-    .replace(/\u001b\[[0-9;]*[A-Za-z]|\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, '')
-    .trim()
-  if (!clean) return ''
-  if (clean.length <= OUTPUT_LIMIT) return clean
-  return clean.slice(-OUTPUT_LIMIT)
-}
-
-function createDeployError(
-  message: string,
-  status: string,
-  permanent = false,
-  output?: string,
-): ProjectDeployError {
-  const tail = tailOutput(output)
-  return new ProjectDeployError(tail ? `${message}\n\n${tail}` : message, status, permanent)
-}
-
-function isTimeoutError(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err)
-  const text = message.toLowerCase()
-  return (
-    text.includes('deadline_exceeded') || text.includes('timed out') || text.includes('timeoutms')
-  )
-}
-
-function isConvexSchemaError(output?: string): boolean {
-  return (output || '').toLowerCase().includes('schema validation failed')
-}
-
-async function assertCloudflareDeployReady(): Promise<void> {
-  const missing = [
-    !config.cloudflare.accountId ? 'CLOUDFLARE_ACCOUNT_ID' : null,
-    !config.cloudflare.apiToken ? 'CLOUDFLARE_API_TOKEN' : null,
-    !config.cloudflare.dispatchNamespace ? 'DISPATCH_NAMESPACE_NAME' : null,
-  ].filter(Boolean)
-  if (missing.length > 0) {
-    throw createDeployError(
-      `Cloudflare deployment is not configured: missing ${missing.join(', ')}`,
-      'deploy_failed',
-      true,
-    )
-  }
-
-  try {
-    const res = await fetch(CLOUDFLARE_PREFLIGHT_URL, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${config.cloudflare.apiToken}` },
-      signal: AbortSignal.timeout(config.deploy.cloudflarePreflightTimeoutMs),
-    })
-    const text = await res.text()
-    const verified = /\b"success"\s*:\s*true\b/.test(text)
-    if (!res.ok || !verified) {
-      throw createDeployError(
-        'Cloudflare API token cannot access dispatch namespace',
-        'deploy_failed',
-        true,
-        text || `${res.status}`,
-      )
-    }
-  } catch (err) {
-    if (err instanceof ProjectDeployError) throw err
-    throw createDeployError(
-      `Cloudflare deployment preflight failed: ${err instanceof Error ? err.message : String(err)}`,
-      'deploy_failed',
-      false,
-    )
-  }
-}
-
-export async function getProjectEnvVars(
+async function getProjectEnvVars(
   projectId: string,
   environment: string,
   options?: { includeServer?: boolean },
@@ -231,14 +147,7 @@ async function deployConvexFunctions(
     env,
   })
   if (result.code === 0) return
-  throw createDeployError(
-    isConvexSchemaError(String(result.output))
-      ? 'Convex schema validation failed against existing production data'
-      : 'Convex deploy failed',
-    'deploy_failed',
-    true,
-    String(result.output),
-  )
+  throw new Error(`Convex deploy failed: ${String(result.output).slice(0, 500)}`)
 }
 
 async function directoryExists(sandbox: Sandbox, dir: string): Promise<boolean> {
@@ -431,7 +340,6 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
 
   try {
     await checkCancelled()
-    await assertCloudflareDeployReady()
     await ensureConvexProdDeployment(projectId)
 
     // Set production SITE_URL to the actual worker hostname (not the dev sandbox URL)
@@ -464,7 +372,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       env: envVars,
     })
     if (build.code !== 0) {
-      throw createDeployError('Build failed', 'build_failed', true, String(build.output))
+      throw new Error(`Build failed: ${String(build.output).slice(0, 500)}`)
     }
 
     const assetsDir = await findAssetsDir(sandbox, workingDir)
@@ -560,41 +468,23 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       { projectId, scriptName, cfDeploymentId: cfDeployment?.id },
       'project deploy completed',
     )
-  } catch (err: unknown) {
+  } catch (err: any) {
     // Don't overwrite 'cancelled' status — it was set by the user
     const current = await ProjectService.getDeployment(deploymentId).catch(() => null)
     if (current?.status === 'cancelled') {
-      log.info({ projectId, deploymentId }, 'project deploy cancelled')
+      log.info({ projectId, deploymentId }, 'deploy aborted (cancelled)')
       return
     }
 
-    const timeoutSec = Math.floor(
-      (stage === 'deploying_convex'
-        ? config.deploy.convexTimeoutMs
-        : config.deploy.buildTimeoutMs) / 1000,
-    )
-    const failure =
-      err instanceof ProjectDeployError
-        ? err
-        : isTimeoutError(err)
-          ? createDeployError(
-              `Deployment ${stage} timed out after ${timeoutSec}s`,
-              stage === 'building' ? 'build_failed' : 'deploy_failed',
-              true,
-              err instanceof Error ? err.message : String(err),
-            )
-          : createDeployError(
-              err instanceof Error ? err.message : String(err),
-              stage === 'building' ? 'build_failed' : 'deploy_failed',
-            )
-    log.error({ projectId, err, failure }, 'project deploy failed')
+    log.error({ projectId, err }, 'deploy failed')
+    const failStatus = stage === 'building' ? 'build_failed' : 'deploy_failed'
     await ProjectService.updateDeployment(deploymentId, {
-      status: failure.status,
-      error: failure.message || 'Deployment failed',
+      status: failStatus,
+      error: err?.message || 'Deployment failed',
       finishedAt: new Date(),
     }).catch(() => {})
     // Don't update worker status on deploy failure - previous version may still be running
-    throw failure
+    throw err
   }
 }
 

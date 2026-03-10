@@ -81,7 +81,6 @@ export const config = {
   deploy: {
     buildTimeoutMs: int(env.DEPLOY_BUILD_TIMEOUT_MS, 600_000),
     convexTimeoutMs: int(env.DEPLOY_CONVEX_TIMEOUT_MS, 420_000),
-    cloudflarePreflightTimeoutMs: int(env.DEPLOY_CLOUDFLARE_PREFLIGHT_TIMEOUT_MS, 10_000),
   },
   convex: {
     host: env.CONVEX_HOST || 'https://api.convex.dev',
