@@ -91,6 +91,37 @@ function getSslCheckInterval(attempts: number): number {
   return 60_000
 }
 
+// ─── TXT domain verification ─────────────────────────────────
+
+/** Generate a deterministic verification token for a project's domain. */
+function generateVerifyToken(projectId: string): string {
+  const secret = config.entri.secret || 'surgent-verify'
+  return sha256(`${projectId}:${secret}`).slice(0, 32)
+}
+
+/** Build the TXT verification record for inclusion in Entri DNS config. */
+function buildVerifyTxtRecord(projectId: string) {
+  return {
+    type: 'TXT' as const,
+    host: '_surgent-verify',
+    value: `surgent-verify=${generateVerifyToken(projectId)}`,
+    ttl: 300,
+  }
+}
+
+/** Check if the TXT verification record exists for a domain. */
+async function verifyDomainTxt(domain: string, projectId: string): Promise<boolean> {
+  const expected = `surgent-verify=${generateVerifyToken(projectId)}`
+  const host = `_surgent-verify.${domain.replace(/^www\./, '')}`
+  try {
+    const { resolve } = await import('dns/promises')
+    const records = await resolve(host, 'TXT')
+    return records.some((r) => r.join('') === expected)
+  } catch {
+    return false
+  }
+}
+
 const domains = new Hono<AppContext>()
 
 // ─── Auth-protected routes ───────────────────────────────────
@@ -188,6 +219,7 @@ domains.post(
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
       { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
+      buildVerifyTxtRecord(projectId),
     ]
 
     const provider = await getDomainProvider()
@@ -406,6 +438,7 @@ domains.post(
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
       { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
+      buildVerifyTxtRecord(projectId),
     ]
 
     const token = await generateEntriToken(user.id)
@@ -470,34 +503,50 @@ domains.get('/:projectId', async (c) => {
     .orderBy('createdAt', 'desc')
     .execute()
 
-  // Auto-promote: if a domain has DNS verified but is still in dns_configuring,
-  // move it to ssl_provisioning so the health check loop can verify SSL readiness.
-  // Entri Power handles SSL — no CF custom hostname needed.
+  // Auto-promote: move dns_configuring domains forward.
+  // Don't wait for webhook — do a live health check to detect readiness.
   const configuringDomains = result.filter((d) => d.status === 'dns_configuring')
   for (const d of configuringDomains) {
-    if (!d.dnsVerified) continue
     if (d.kvMapped) continue // already promoted
 
-    // Throttle: skip if last update was <60s ago
-    const lastUpdate = new Date(d.updatedAt).getTime()
-    if (Date.now() - lastUpdate < 60_000) continue
+    if (d.dnsVerified) {
+      // Webhook confirmed DNS — go straight to ssl_provisioning
+      await db
+        .updateTable('domain')
+        .set({ status: 'ssl_provisioning', kvMapped: true, lastError: null, updatedAt: new Date() })
+        .where('id', '=', d.id)
+        .execute()
+      d.status = 'ssl_provisioning'
+      await appendDomainLog(d.id, 'auto_promote', 'DNS verified by webhook, checking SSL', true)
+      log.info({ domainId: d.id, domainName: d.domainName }, 'auto-promoted to ssl_provisioning')
+      continue
+    }
 
-    await db
-      .updateTable('domain')
-      .set({
-        status: 'ssl_provisioning',
-        kvMapped: true,
-        lastError: null,
-        updatedAt: new Date(),
-      })
-      .where('id', '=', d.id)
-      .execute()
-    d.status = 'ssl_provisioning'
-    await appendDomainLog(d.id, 'auto_promote', 'DNS verified, waiting for Entri Power SSL', true)
-    log.info({ domainId: d.id, domainName: d.domainName }, 'auto-promoted to ssl_provisioning')
+    // No webhook yet — do a live check to avoid waiting
+    const bareDomain = d.domainName.replace(/^www\./, '')
+    const bareOk = await checkDomainHealth(bareDomain)
+    if (bareOk) {
+      // Domain is resolving — promote past dns_configuring
+      await db
+        .updateTable('domain')
+        .set({
+          status: 'ssl_provisioning',
+          dnsVerified: true,
+          kvMapped: true,
+          lastError: null,
+          updatedAt: new Date(),
+        })
+        .where('id', '=', d.id)
+        .execute()
+      d.status = 'ssl_provisioning'
+      d.dnsVerified = true
+      await appendDomainLog(d.id, 'auto_promote', 'DNS resolving (live check), checking SSL', true)
+      log.info({ domainId: d.id, domainName: d.domainName }, 'auto-promoted via live DNS check')
+    }
   }
 
   // SSL health check with backoff: never hard-fail, keep checking with decreasing frequency
+  // Use current d.status (may have been updated by auto-promote above)
   const provisioningDomains = result.filter((d) => d.status === 'ssl_provisioning')
   for (const d of provisioningDomains) {
     const meta = parseSslMeta(d.lastError) ?? {
@@ -521,6 +570,15 @@ domains.get('/:projectId', async (c) => {
     const wwwOk = bareOk ? await checkDomainHealth(`www.${bareDomain}`) : false
 
     if (bareOk && wwwOk) {
+      // Verify TXT ownership record (non-blocking — log result but don't gate activation)
+      const txtOk = d.projectId ? await verifyDomainTxt(bareDomain, d.projectId) : false
+      if (!txtOk) {
+        log.warn(
+          { domainId: d.id, domainName: bareDomain },
+          'TXT verification missing — activating anyway',
+        )
+      }
+
       await db
         .updateTable('domain')
         .set({ status: 'active', lastError: null, updatedAt: new Date() })
@@ -531,7 +589,7 @@ domains.get('/:projectId', async (c) => {
       await appendDomainLog(
         d.id,
         'ssl_provisioned',
-        `Domain is live with SSL (attempt ${meta.attempts})`,
+        `Domain is live with SSL (attempt ${meta.attempts}${txtOk ? ', TXT verified' : ', TXT not found'})`,
         true,
       )
     } else {
@@ -552,7 +610,7 @@ domains.get('/:projectId', async (c) => {
         await appendDomainLog(
           d.id,
           'ssl_check',
-          `Still provisioning SSL after ${elapsedMin}m (${meta.attempts} checks, bare=${bareOk ? 'ok' : 'no'} www=${wwwOk ? 'ok' : 'no'})`,
+          `Still provisioning after ${elapsedMin}m (${meta.attempts} checks, bare=${bareOk ? 'ok' : 'no'} www=${wwwOk ? 'ok' : 'no'})`,
           false,
         )
       }
@@ -657,6 +715,7 @@ domains.post(
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
       { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
+      buildVerifyTxtRecord(projectId),
     ]
 
     const token = await generateEntriToken(user.id)
