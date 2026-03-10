@@ -176,12 +176,14 @@ domains.post(
       .where('projectId', '=', projectId)
       .executeTakeFirst()
 
+    if (!worker?.scriptName) {
+      throw new HttpError(400, 'Deploy your app before adding a custom domain')
+    }
+
     const deployDomain = config.cloudflare.deployDomain
 
     // Entri Power: root A record proxied by Entri + www CNAME via Entri's cname_target
-    const applicationUrl = worker?.scriptName
-      ? `https://${worker.scriptName}.${deployDomain}`
-      : `https://${deployDomain}`
+    const applicationUrl = `https://${worker.scriptName}.${deployDomain}`
 
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
@@ -392,12 +394,14 @@ domains.post(
       .where('projectId', '=', projectId)
       .executeTakeFirst()
 
+    if (!worker?.scriptName) {
+      throw new HttpError(400, 'Deploy your app before adding a custom domain')
+    }
+
     const deployDomain = config.cloudflare.deployDomain
 
     // Entri Power: root A record proxied by Entri + www CNAME via Entri's cname_target
-    const applicationUrl = worker?.scriptName
-      ? `https://${worker.scriptName}.${deployDomain}`
-      : `https://${deployDomain}`
+    const applicationUrl = `https://${worker.scriptName}.${deployDomain}`
 
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },

@@ -392,6 +392,19 @@ projects.use('*', async (c, next) => {
   return next()
 })
 
+// GET /projects/generate-hostname - Generate a random available hostname
+projects.get('/generate-hostname', async (c) => {
+  for (let i = 0; i < 5; i++) {
+    const name = `app-${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`
+    if (await isHostnameAvailable(name)) {
+      return c.json({ name })
+    }
+  }
+  // Fallback with longer suffix to guarantee uniqueness
+  const name = `app-${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`
+  return c.json({ name })
+})
+
 // GET /projects/check-hostname - Check if a hostname is available
 projects.get(
   '/check-hostname',

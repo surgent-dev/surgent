@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-
+import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import Image from 'next/image'
@@ -47,6 +47,7 @@ import {
   useUpdateProjectVisibility,
   useLatestDeploymentQuery,
   useHostnameAvailability,
+  useGenerateHostname,
 } from '@/queries/projects'
 import { useProjectDomains, useRemoveDomain } from '@/queries/domains'
 import { http } from '@/lib/http'
@@ -101,6 +102,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const { check: checkFeature } = useCustomer()
   const canToggleVisibility = checkFeature({ featureId: 'private_projects' }).data?.allowed ?? false
 
+  const queryClient = useQueryClient()
+
   // Dialog states
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
   const [isDeploymentStatusOpen, setIsDeploymentStatusOpen] = useState(false)
@@ -146,6 +149,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     const curr = latestDeployment.status
 
     if (prev && !TERMINAL_STATUSES.includes(prev) && TERMINAL_STATUSES.includes(curr)) {
+      // Refetch project data so worker info is up-to-date
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       if (curr === 'deployed') {
         toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, {
           position: 'top-right',
@@ -155,7 +160,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       }
     }
     prevStatusRef.current = curr
-  }, [latestDeployment])
+  }, [latestDeployment, queryClient, projectId])
 
   // Derived state
   const worker = project?.worker
@@ -165,6 +170,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const isFailed = workerStatus === 'error'
   const isDeploymentInProgress =
     latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status)
+  const { data: generatedHostname } = useGenerateHostname(isPublishOpen && !workerName)
   // Hostname availability check
   const sanitizedHostname = sanitizeHostname(hostnameInput)
   const isNewHostname = !workerName || sanitizedHostname !== workerName
@@ -209,7 +215,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       if (!projectId || isDeploying) return
       setIsDeploying(true)
       deployProject.mutate(
-        { id: projectId, deployName: name },
+        { id: projectId, deployName: name || undefined },
         {
           onSuccess: () => setIsDeploying(false),
           onError: (err: unknown) => {
@@ -270,20 +276,23 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const handlePublishOpenChange = (open: boolean) => {
     setIsPublishOpen(open)
     if (open) {
-      // Pre-fill with existing worker name, or generate a slug from the project name
-      const defaultHostname = workerName || sanitizeHostname(project?.name || '')
-      setHostnameInput(defaultHostname)
+      setHostnameInput(workerName || generatedHostname?.name || '')
       setIsEditingHostname(false)
     }
   }
 
-  const submitHostname = () => {
-    const name = !workerName || isEditingHostname ? hostnameInput.trim() : workerName
-    if (!name) return
-    if (isDeploymentInProgress) return
+  // Pre-fill with backend-generated hostname when it arrives (first deploy)
+  useEffect(() => {
+    if (!workerName && generatedHostname?.name && !hostnameInput) {
+      setHostnameInput(generatedHostname.name)
+    }
+  }, [generatedHostname, workerName, hostnameInput])
 
-    setPendingHostname(name)
-    handleDeploy(name)
+  const submitHostname = () => {
+    if (isDeploymentInProgress) return
+    const name = !workerName || isEditingHostname ? hostnameInput.trim() : workerName
+    if (name) setPendingHostname(name)
+    handleDeploy(name || '')
   }
 
   const handleCancelDeploy = () => {
@@ -590,9 +599,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     disabled={
                       isDeploying ||
                       Boolean(isDeploymentInProgress) ||
-                      hostnameTaken ||
-                      checkingHostname ||
-                      (!workerName && !hostnameInput.trim())
+                      (isEditingHostname && (hostnameTaken || checkingHostname))
                     }
                   >
                     {isDeploying ? (

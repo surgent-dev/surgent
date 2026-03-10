@@ -33,6 +33,7 @@ import {
   useUpdateProjectVisibility,
   useLatestDeploymentQuery,
   useHostnameAvailability,
+  useGenerateHostname,
 } from '@/queries/projects'
 import { useProjectDomains } from '@/queries/domains'
 import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
@@ -96,6 +97,7 @@ export function PublishModal({
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
   const updateVisibility = useUpdateProjectVisibility()
   const { data: domainsData } = useProjectDomains(projectId)
+  const { data: generatedHostname } = useGenerateHostname(open && !project?.worker?.name)
 
   const worker = project?.worker
   const workerName = worker?.name
@@ -147,18 +149,24 @@ export function PublishModal({
   // Pre-fill hostname when modal opens
   useEffect(() => {
     if (open) {
-      const defaultHostname = workerName || sanitizeHostname(project?.name || '')
-      setHostnameInput(defaultHostname)
+      setHostnameInput(workerName || generatedHostname?.name || '')
       setIsEditingHostname(false)
     }
-  }, [open, workerName, project?.name])
+  }, [open, workerName, generatedHostname])
+
+  // Pre-fill with backend-generated hostname when it arrives (first deploy)
+  useEffect(() => {
+    if (!workerName && generatedHostname?.name && !hostnameInput) {
+      setHostnameInput(generatedHostname.name)
+    }
+  }, [generatedHostname, workerName, hostnameInput])
 
   const handleDeploy = useCallback(
     (name: string) => {
       if (!projectId || isDeploying) return
       setIsDeploying(true)
       deployProject.mutate(
-        { id: projectId, deployName: name },
+        { id: projectId, deployName: name || undefined },
         {
           onSuccess: () => setIsDeploying(false),
           onError: (err: unknown) => {
@@ -179,10 +187,10 @@ export function PublishModal({
   )
 
   const submitHostname = () => {
+    if (isDeploymentInProgress) return
     const name = !workerName || isEditingHostname ? hostnameInput.trim() : workerName
-    if (!name || isDeploymentInProgress) return
-    setPendingHostname(name)
-    handleDeploy(name)
+    if (name) setPendingHostname(name)
+    handleDeploy(name || '')
   }
 
   const copyUrl = () => {
@@ -304,9 +312,7 @@ export function PublishModal({
             disabled={
               isDeploying ||
               Boolean(isDeploymentInProgress) ||
-              hostnameTaken ||
-              checkingHostname ||
-              (!workerName && !hostnameInput.trim())
+              (isEditingHostname && (hostnameTaken || checkingHostname))
             }
           >
             {isDeploying ? (
@@ -368,7 +374,11 @@ export function PublishModal({
         {/* Custom Domain */}
         {projectId && (
           <div className="border-t">
-            <DomainSearchPanel projectId={projectId} />
+            <DomainSearchPanel
+              projectId={projectId}
+              hasDeployment={Boolean(project?.worker?.name)}
+              onDeploy={() => projectId && deployProject.mutate({ id: projectId })}
+            />
           </div>
         )}
 

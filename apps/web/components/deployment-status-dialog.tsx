@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import {
   Copy,
@@ -59,6 +60,7 @@ function duration(start?: string, end?: string) {
 }
 
 export default function DeploymentStatusDialog({ open, onOpenChange, projectId, worker }: Props) {
+  const queryClient = useQueryClient()
   const [rollId, setRollId] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [input, setInput] = useState('')
@@ -84,6 +86,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
     const curr = latest.status
 
     if (prev && !TERMINAL.includes(prev) && TERMINAL.includes(curr)) {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       if (curr === 'deployed') {
         toast.success(`Deployed to ${latest.scriptName}.surgent.site`, { position: 'bottom-left' })
       } else if (curr !== 'cancelled') {
@@ -91,7 +94,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
       }
     }
     prevStatusRef.current = curr
-  }, [latest])
+  }, [latest, queryClient, projectId])
 
   const handleDeploy = (n: string) => {
     if (!projectId || !n) return
@@ -285,7 +288,11 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
           {/* Custom Domain */}
           {projectId && (
             <div className="border-b">
-              <DomainSearchPanel projectId={projectId} />
+              <DomainSearchPanel
+                projectId={projectId}
+                hasDeployment={Boolean(worker?.name)}
+                onDeploy={() => projectId && deploy.mutate({ id: projectId })}
+              />
             </div>
           )}
 

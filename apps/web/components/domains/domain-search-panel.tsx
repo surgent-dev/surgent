@@ -379,15 +379,24 @@ function DomainStatusCard({
 // ─── Main panel ─────────────────────────────────────────────────
 interface DomainSearchPanelProps {
   projectId: string
+  hasDeployment?: boolean
+  onDeploy?: () => void
 }
 
-export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
+export function DomainSearchPanel({
+  projectId,
+  hasDeployment = true,
+  onDeploy,
+}: DomainSearchPanelProps) {
   const [mode, setMode] = useState<'buy' | 'connect'>('connect')
   const [launching, setLaunching] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [connectInput, setConnectInput] = useState('')
   const [retrying, setRetrying] = useState(false)
   const [awaitingWebhook, setAwaitingWebhook] = useState(false)
+  const [pendingAction, setPendingAction] = useState<
+    { type: 'buy'; free?: boolean } | { type: 'connect' } | null
+  >(null)
   const awaitingTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const { data: domainsData, isLoading: domainsLoading } = useProjectDomains(
@@ -433,6 +442,18 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
 
   useEffect(() => () => clearTimeout(awaitingTimerRef.current), [])
 
+  // Auto-proceed with domain action after deploy completes
+  useEffect(() => {
+    if (!hasDeployment || !pendingAction) return
+    const action = pendingAction
+    setPendingAction(null)
+    if (action.type === 'buy') {
+      handleBuyDomain(action.free)
+    } else {
+      handleConnect()
+    }
+  }, [hasDeployment, pendingAction]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
@@ -447,6 +468,11 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
 
   const handleBuyDomain = useCallback(
     async (free?: boolean) => {
+      if (!hasDeployment) {
+        setPendingAction({ type: 'buy', free })
+        onDeploy?.()
+        return
+      }
       setLaunching(true)
       try {
         const config = await initPurchase.mutateAsync({ projectId })
@@ -472,11 +498,16 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
         setLaunching(false)
       }
     },
-    [projectId, initPurchase, startAwaitingWebhook, onPurchased],
+    [projectId, hasDeployment, onDeploy, initPurchase, startAwaitingWebhook, onPurchased],
   )
 
   const handleConnect = useCallback(async () => {
     if (!connectInput.trim()) return
+    if (!hasDeployment) {
+      setPendingAction({ type: 'connect' })
+      onDeploy?.()
+      return
+    }
     setConnecting(true)
     try {
       const config = await initConnect.mutateAsync({ projectId, domain: connectInput.trim() })
@@ -497,7 +528,7 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
     } finally {
       setConnecting(false)
     }
-  }, [projectId, connectInput, initConnect, startAwaitingWebhook])
+  }, [projectId, connectInput, hasDeployment, onDeploy, initConnect, startAwaitingWebhook])
 
   const handleRetryConnect = useCallback(
     async (domainId: string) => {
@@ -581,7 +612,17 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
       )}
 
       {/* No domain — Buy / Connect */}
-      {!currentDomain && !awaitingWebhook && (
+      {/* Deploying before domain action */}
+      {pendingAction && !hasDeployment && (
+        <div className="flex items-center gap-2 rounded-lg border border-brand/20 bg-brand/5 px-3 py-2.5">
+          <Loader2 className="size-3.5 animate-spin text-brand shrink-0" />
+          <p className="text-xs text-muted-foreground">
+            Deploying your app first, then we'll set up your domain...
+          </p>
+        </div>
+      )}
+
+      {!currentDomain && !awaitingWebhook && !pendingAction && (
         <div className="space-y-3">
           {/* Mode tabs */}
           <div className="flex rounded-lg border bg-muted/40 p-0.5">

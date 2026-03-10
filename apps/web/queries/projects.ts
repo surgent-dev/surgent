@@ -196,6 +196,16 @@ export function useHostnameAvailability(name: string, projectId?: string, enable
   })
 }
 
+// Generate random hostname
+export function useGenerateHostname(enabled = false) {
+  return useQuery({
+    queryKey: ['generate-hostname'],
+    queryFn: () => http.get('api/projects/generate-hostname').json<{ name: string }>(),
+    enabled,
+    staleTime: Infinity,
+  })
+}
+
 // Rename project
 async function renameProjectReq({ id, name }: { id: string; name: string }) {
   await http.patch(`api/projects/${id}`, { json: { name } }).json()
