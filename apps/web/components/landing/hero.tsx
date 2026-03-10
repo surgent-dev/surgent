@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
-  ArrowRight,
+  ArrowUp,
   LayoutDashboard,
   ShoppingCart,
   Calendar,
@@ -130,15 +130,6 @@ function LandingPrompt({
           : '0 0 0 0.5px #000000e0, 0 20px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.12), inset 0 1px 0 0 rgba(255,255,255,0.06), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.03)',
       }}
     >
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          onSend()
-        }}
-        className="absolute top-3 right-3 inline-flex items-center justify-center rounded-full size-8 text-white bg-brand hover:bg-brand/90 btn-elevated-brand cursor-pointer transition-all duration-100 active:scale-[0.97]"
-      >
-        <ArrowRight className="h-4 w-4" />
-      </button>
       <textarea
         ref={ref}
         value={value}
@@ -148,10 +139,10 @@ function LandingPrompt({
         onKeyDown={handleKey}
         placeholder={placeholder}
         rows={2}
-        className="font-(--font-geist) w-full resize-none bg-transparent text-[#fdf8f0] text-[15px] leading-[1.6] placeholder:text-[#666] focus:outline-none px-1 pt-0.5 pr-10"
+        className="font-(--font-geist) w-full resize-none bg-transparent text-[#fdf8f0] text-[15px] leading-[1.6] placeholder:text-[#666] focus:outline-none px-1 pt-0.5"
         style={{ fontWeight: 400, letterSpacing: '-0.01em' }}
       />
-      <div className="flex items-center">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[11px] text-[#555]">
           <kbd
             className="inline-flex items-center justify-center h-[20px] px-1.5 rounded-md text-[10px] text-[#777]"
@@ -166,6 +157,15 @@ function LandingPrompt({
           </kbd>
           <span className="hidden sm:inline text-[#555]">to build</span>
         </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onSend()
+          }}
+          className="inline-flex items-center justify-center rounded-full size-8 text-white bg-brand hover:bg-brand/90 btn-elevated-brand cursor-pointer transition-all duration-100 active:scale-[0.97]"
+        >
+          <ArrowUp className="h-4 w-4" />
+        </button>
       </div>
     </div>
   )
