@@ -29,7 +29,7 @@ function PriceRow({ price }: { price: ProductPrice }) {
   const isRecurring = !!price.recurringInterval
 
   return (
-    <div className="flex items-center justify-between py-1.5 px-2 rounded-md">
+    <div className="flex items-center justify-between py-2 px-2 rounded-md">
       <div className="flex items-center gap-2 min-w-0">
         <div
           className={cn(
@@ -37,15 +37,15 @@ function PriceRow({ price }: { price: ProductPrice }) {
             isRecurring ? 'bg-foreground' : 'bg-muted-foreground/50',
           )}
         />
-        <span className="text-[12px] text-muted-foreground truncate">
+        <span className="text-xs text-muted-foreground truncate">
           {price.name || (isRecurring ? 'Recurring' : 'One-time')}
         </span>
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="text-[13px] font-medium tabular-nums">
+        <span className="text-sm font-medium tabular-nums">
           {formatPrice(price.priceAmount, price.priceCurrency)}
         </span>
-        {interval && <span className="text-[11px] text-muted-foreground">{interval}</span>}
+        {interval && <span className="text-xs text-muted-foreground">{interval}</span>}
       </div>
     </div>
   )
@@ -103,9 +103,9 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
       <div className="p-4 pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <h4 className="text-[14px] font-semibold truncate">{product.name}</h4>
+            <h4 className="text-sm font-semibold truncate">{product.name}</h4>
             {product.description && (
-              <p className="text-[12px] text-muted-foreground mt-0.5 line-clamp-1">
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
                 {product.description}
               </p>
             )}
@@ -156,7 +156,7 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
         <div className="px-3 pb-3">
           <button
             onClick={() => onAddPrice(item)}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-md border border-dashed text-[12px] text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-100"
+            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-md border border-dashed text-xs text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-100"
           >
             <Plus className="size-3" />
             Add pricing
@@ -172,7 +172,7 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
           <button
             onClick={() => handleCreateCheckout()}
             disabled={creating}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md bg-primary text-primary-foreground btn-elevated-primary hover:bg-primary-hover transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md bg-primary text-primary-foreground btn-elevated-primary hover:bg-primary-hover transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {creating ? (
               <Loader2 className="size-3 animate-spin" />
@@ -219,18 +219,18 @@ export function ProductsView({
           <div className="size-10 rounded-lg bg-muted/50 border grid place-items-center mx-auto mb-3">
             <Package className="size-4.5 text-muted-foreground" strokeWidth={1.5} />
           </div>
-          <h3 className="text-[14px] font-semibold mb-1">No products yet</h3>
-          <p className="text-[13px] text-muted-foreground mb-4">
+          <h3 className="text-sm font-semibold mb-1">No products yet</h3>
+          <p className="text-sm text-muted-foreground mb-4">
             Create your first product to start accepting payments
           </p>
           <button
             onClick={onCreateProduct}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-primary-foreground font-medium text-[13px] btn-elevated-primary hover:bg-primary-hover transition-all duration-100"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-primary-foreground font-medium text-sm btn-elevated-primary hover:bg-primary-hover transition-all duration-100"
           >
             <Plus className="size-3.5" />
             Create Product
           </button>
-          <p className="text-[11px] text-muted-foreground/60 mt-4">
+          <p className="text-xs text-muted-foreground/60 mt-4">
             <span className="font-medium text-muted-foreground/80">Tip:</span> Ask AI to integrate
             payments into your app
           </p>

@@ -1,3 +1,8 @@
+import type {
+  ProjectProvisioningMetadata,
+  ProjectProvisioningStep,
+} from '@/lib/project-provisioning'
+
 export interface Sandbox {
   id: string
   status: string | null
@@ -16,7 +21,8 @@ export interface ProjectMetadata {
   workingDirectory?: string
   processName?: string
   startCommand?: string
-  provisioningStep?: string
+  provisioningStep?: ProjectProvisioningStep | null
+  provisioning?: ProjectProvisioningMetadata
 }
 
 export interface Project {

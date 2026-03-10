@@ -4,6 +4,12 @@ const csv = (value: string | undefined): string[] =>
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
+const csvLower = (value: string | undefined): string[] =>
+  csv(value).map((item) => item.toLowerCase())
+const int = (value: string | undefined, fallback: number): number => {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback
+}
 
 // Centralized environment variables as a single config object
 export const config = {
@@ -25,6 +31,7 @@ export const config = {
     baseUrl: env.BETTER_AUTH_URL,
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+    adminUserEmails: csvLower(env.BETTER_AUTH_ADMIN_EMAILS || env.ADMIN_EMAILS),
     adminUserIds: csv(env.BETTER_AUTH_ADMIN_USER_IDS || env.ADMIN_USER_IDS),
     adminRoles: csv(env.BETTER_AUTH_ADMIN_ROLES || 'admin'),
   },
@@ -70,6 +77,10 @@ export const config = {
     deployDomain: env.DEPLOY_DOMAIN || 'surgent.site',
     zoneId: env.CLOUDFLARE_ZONE_ID,
     kvNamespaceId: env.CLOUDFLARE_DOMAIN_KV_NAMESPACE_ID,
+  },
+  deploy: {
+    buildTimeoutMs: int(env.DEPLOY_BUILD_TIMEOUT_MS, 600_000),
+    convexTimeoutMs: int(env.DEPLOY_CONVEX_TIMEOUT_MS, 420_000),
   },
   convex: {
     host: env.CONVEX_HOST || 'https://api.convex.dev',

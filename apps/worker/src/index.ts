@@ -15,8 +15,6 @@ import providers from './routes/providers'
 import pay from './routes/pay'
 import domains, { domainWebhooks } from './routes/domains'
 import startups from './routes/startups'
-import { serve as serveInngest } from 'inngest/hono'
-import { inngest, functions as inngestFunctions } from './inngest'
 import { auth } from './lib/auth'
 import { config, validateDomainConfig } from './lib/config'
 import { db } from './lib/db'
@@ -27,7 +25,7 @@ import {
   oauthProviderOpenIdConfigMetadata,
 } from '@better-auth/oauth-provider'
 import type { AppContext } from '@/types/application'
-import { startBoss, stopBoss } from '@/lib/pay/queue'
+import { startBoss, stopBoss } from '@/lib/queues'
 import { logger, createLogger } from '@/lib/logger'
 
 const log = createLogger('server')
@@ -117,7 +115,6 @@ app.use(
         else if (p.startsWith('/api/upload/')) tag = '[UPLOAD] '
         else if (p.startsWith('/api/mcp/') || p.startsWith('/mcp/')) tag = '[MCP] '
         else if (p.startsWith('/api/admin/')) tag = '[ADMIN] '
-        else if (p.startsWith('/api/inngest')) tag = '[INNGEST] '
         else if (p.startsWith('/preview')) tag = '[PREVIEW] '
         return `${tag}${c.req.method} ${p} ${c.res.status}`
       },
@@ -183,13 +180,6 @@ app.use('*', async (c, next) => {
     throw err
   }
 })
-
-// Inngest serve handler
-app.on(
-  ['GET', 'PUT', 'POST'],
-  '/api/inngest',
-  serveInngest({ client: inngest, functions: inngestFunctions }),
-)
 
 app.get('/health', (c) => c.text('ok'))
 

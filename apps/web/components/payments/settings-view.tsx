@@ -30,8 +30,8 @@ export function SettingsView({
                   )}
                 />
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-[14px] font-semibold">Payment Provider</h3>
-                  <p className="text-[13px] text-muted-foreground mt-0.5">
+                  <h3 className="text-sm font-semibold">Payment Provider</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
                     {isConnected
                       ? 'Connected and ready to process payments'
                       : 'Connect a payment provider to start accepting payments'}
@@ -44,7 +44,7 @@ export function SettingsView({
                 <button
                   onClick={onDisconnect}
                   disabled={isDisconnecting}
-                  className="text-[13px] text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-sm text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
                 </button>

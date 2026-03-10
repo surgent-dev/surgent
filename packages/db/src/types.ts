@@ -314,11 +314,46 @@ export interface IpRateLimitTable {
   count: number
 }
 
-export interface ProjectMetadata {
-  workingDirectory: string
+export const PROJECT_PROVISIONING_STEPS = [
+  'provisioning_sandbox',
+  'installing_dependencies',
+  'starting_ai_agent',
+  'finalizing',
+] as const
+
+export type ProjectProvisioningStep = (typeof PROJECT_PROVISIONING_STEPS)[number]
+
+export const PROJECT_PROVISIONING_STEP_LABELS: Record<ProjectProvisioningStep, string> = {
+  provisioning_sandbox: 'Provisioning sandbox',
+  installing_dependencies: 'Installing dependencies',
+  starting_ai_agent: 'Starting AI agent',
+  finalizing: 'Finalizing',
+}
+
+export function getProjectProvisioningStepLabel(
+  step?: ProjectProvisioningStep | string | null,
+): string | null {
+  if (!step) return null
+  return PROJECT_PROVISIONING_STEP_LABELS[step as ProjectProvisioningStep] || step
+}
+
+export interface ProjectProvisioningMetadata {
+  sandboxId?: string
+  previewUrl?: string
   processName?: string
   startCommand?: string
-  provisioningStep?: string
+  initializedAt?: string
+  opencodeReadyAt?: string
+  finalizedAt?: string
+  lastError?: string | null
+}
+
+export interface ProjectMetadata {
+  workingDirectory?: string
+  processName?: string
+  startCommand?: string
+  provisioningStep?: ProjectProvisioningStep | null
+  provisioning?: ProjectProvisioningMetadata
 }
 
 export type ProjectStatus = 'provisioning' | 'ready' | 'failed'

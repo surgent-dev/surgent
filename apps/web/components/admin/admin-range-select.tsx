@@ -13,14 +13,14 @@ import {
 
 const ranges = [
   { value: 'today', label: 'Today' },
-  { value: 'week', label: 'Week' },
+  { value: 'week', label: 'Last 7 days' },
   { value: 'this_month', label: 'This month' },
-  { value: 'month', label: 'Last month' },
+  { value: 'month', label: 'Last 30 days' },
   { value: 'year', label: 'This year' },
   { value: '12mo', label: 'Last 12 months' },
 ]
 
-export function AdminRangeSelect() {
+export function AdminRangeSelect({ basePath = '/admin' }: { basePath?: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const current = searchParams.get('range') || 'today'
@@ -29,9 +29,9 @@ export function AdminRangeSelect() {
   function onChange(value: string) {
     const params = new URLSearchParams(searchParams.toString())
     params.set('range', value)
-    params.set('page', '1')
+    if (params.has('page')) params.set('page', '1')
     startTransition(() => {
-      router.push(`/admin?${params.toString()}`)
+      router.push(`${basePath}?${params.toString()}`)
     })
   }
 

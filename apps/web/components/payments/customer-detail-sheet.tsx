@@ -72,7 +72,7 @@ export function CustomerDetailSheet({
                 {detail?.subscriptions && detail.subscriptions.length > 0 ? (
                   <div className="space-y-2">
                     {detail.subscriptions.map((sub) => (
-                      <div key={sub.id} className="rounded-lg border p-3 space-y-1.5">
+                      <div key={sub.id} className="rounded-lg border p-3 space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Repeat className="size-3.5 text-muted-foreground" />
@@ -101,7 +101,7 @@ export function CustomerDetailSheet({
                 ) : (
                   <div className="rounded-lg border border-dashed p-4 text-center">
                     <Repeat
-                      className="size-5 text-muted-foreground/50 mx-auto mb-1.5"
+                      className="size-5 text-muted-foreground/50 mx-auto mb-2"
                       strokeWidth={1.5}
                     />
                     <p className="text-xs text-muted-foreground">No subscriptions</p>
@@ -141,7 +141,7 @@ export function CustomerDetailSheet({
                 ) : (
                   <div className="rounded-lg border border-dashed p-4 text-center">
                     <Receipt
-                      className="size-5 text-muted-foreground/50 mx-auto mb-1.5"
+                      className="size-5 text-muted-foreground/50 mx-auto mb-2"
                       strokeWidth={1.5}
                     />
                     <p className="text-xs text-muted-foreground">No transactions</p>

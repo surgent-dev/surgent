@@ -727,6 +727,59 @@ describe('processWebhookEvent edge cases', () => {
     expect(row?.status).toBe('processed')
     expect(row?.error).toBeNull() // error cleared on successful retry
   })
+
+  test('stale metadata project_id is ignored for payment.created', async () => {
+    const eventId = `evt_stale_project_${Date.now()}`
+    const paymentId = `pay_stale_project_${Date.now()}`
+    createdEventIds.push(eventId)
+    createdWhopIds.push(paymentId)
+
+    await db
+      .insertInto('pay_webhook_event')
+      .values({
+        id: eventId,
+        eventType: 'payment.created',
+        payload: {},
+        env: 'live',
+        status: 'pending',
+        receivedAt: new Date(),
+        handledAt: null,
+        error: null,
+      })
+      .execute()
+
+    await processWebhookEvent(
+      eventId,
+      'payment.created',
+      {
+        eventType: 'payment.created',
+        paymentId,
+        amount: 1500,
+        currency: 'usd',
+        userId: 'usr_stale_project',
+        userEmail: 'stale@test.local',
+        userName: 'Stale Project',
+        metadata: { project_id: crypto.randomUUID() },
+        data: { id: paymentId, total: 15, currency: 'usd', status: 'created', metadata: {} },
+      },
+      'live',
+    )
+
+    const row = await getEvent(eventId)
+    expect(row?.status).toBe('processed')
+    expect(row?.error).toBeNull()
+
+    const payment = await db
+      .selectFrom('pay_payment')
+      .select(['projectId', 'customerId', 'status'])
+      .where('whopPaymentId', '=', paymentId)
+      .where('env', '=', 'live')
+      .executeTakeFirst()
+
+    expect(payment?.status).toBe('created')
+    expect(payment?.projectId).toBeNull()
+    expect(payment?.customerId).toBeNull()
+  })
 })
 
 // --- HTTP-level event type variations ---

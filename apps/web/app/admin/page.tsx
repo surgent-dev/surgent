@@ -52,6 +52,11 @@ interface AdminOverview {
   }
 }
 
+interface AdminFetchError {
+  error: string
+  email?: string | null
+}
+
 interface SearchParams {
   range?: string
   page?: string
@@ -60,7 +65,9 @@ interface SearchParams {
   deployed?: string
 }
 
-async function fetchAdminData(params: SearchParams): Promise<AdminOverview | null> {
+async function fetchAdminData(
+  params: SearchParams,
+): Promise<{ data: AdminOverview | null; error?: AdminFetchError }> {
   const cookieStore = await cookies()
   const cookieHeader = cookieStore
     .getAll()
@@ -81,20 +88,27 @@ async function fetchAdminData(params: SearchParams): Promise<AdminOverview | nul
   })
 
   if (res.status === 401) redirect('/login')
-  if (res.status === 403) redirect('/')
-  if (!res.ok) return null
+  if (res.status === 403) {
+    return { data: null, error: await res.json() }
+  }
+  if (!res.ok) return { data: null, error: { error: 'Failed to load admin data' } }
 
-  return res.json()
+  return { data: await res.json() }
 }
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams
-  const data = await fetchAdminData(params)
+  const { data, error } = await fetchAdminData(params)
 
   if (!data) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-muted-foreground">Failed to load admin data</p>
+        <div className="space-y-2 text-center">
+          <p className="text-muted-foreground">{error?.error || 'Failed to load admin data'}</p>
+          {error?.email ? (
+            <p className="text-xs text-muted-foreground">Signed in as {error.email}</p>
+          ) : null}
+        </div>
       </div>
     )
   }

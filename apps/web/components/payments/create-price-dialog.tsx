@@ -162,14 +162,14 @@ export function CreatePriceDialog({
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
               {/* Price Type Toggle */}
               {pricingType === 'none' && (
-                <div className="inline-flex items-center rounded-lg bg-muted dark:bg-background p-1 border border-border/50 shadow-inner">
+                <div className="inline-flex items-center rounded-[14px] bg-black/10 p-1 border border-transparent shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_0_0_1px_rgba(255,255,255,0.06)]">
                   <button
                     type="button"
                     onClick={() => setIsRecurring(false)}
                     className={cn(
-                      'px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
+                      'px-4 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                       !isRecurring
-                        ? 'bg-background dark:bg-muted text-foreground shadow-sm'
+                        ? 'bg-foreground/10 text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
@@ -179,9 +179,9 @@ export function CreatePriceDialog({
                     type="button"
                     onClick={() => setIsRecurring(true)}
                     className={cn(
-                      'px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
+                      'px-4 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                       isRecurring
-                        ? 'bg-background dark:bg-muted text-foreground shadow-sm'
+                        ? 'bg-foreground/10 text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
@@ -191,7 +191,7 @@ export function CreatePriceDialog({
               )}
 
               {/* Price Input */}
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-sm font-medium">Price</Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
@@ -214,16 +214,16 @@ export function CreatePriceDialog({
                     name="priceCurrency"
                     control={control}
                     render={({ field }) => (
-                      <div className="inline-flex items-center rounded-lg bg-muted dark:bg-background p-1 border border-border/50 shadow-inner">
+                      <div className="inline-flex items-center rounded-[14px] bg-black/10 p-1 border border-transparent shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_0_0_1px_rgba(255,255,255,0.06)]">
                         {currencies.map((currency) => (
                           <button
                             key={currency.value}
                             type="button"
                             onClick={() => field.onChange(currency.value)}
                             className={cn(
-                              'px-2.5 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
+                              'px-2.5 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                               field.value === currency.value
-                                ? 'bg-background dark:bg-muted text-foreground shadow-sm'
+                                ? 'bg-foreground/10 text-foreground shadow-sm'
                                 : 'text-muted-foreground hover:text-foreground',
                             )}
                           >
@@ -239,22 +239,22 @@ export function CreatePriceDialog({
 
               {/* Billing Interval */}
               {isRecurring && (
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <Label className="text-sm font-medium">Billing Cycle</Label>
                   <Controller
                     name="recurringInterval"
                     control={control}
                     render={({ field }) => (
-                      <div className="inline-flex items-center rounded-lg bg-muted dark:bg-background p-1 border border-border/50 shadow-inner">
+                      <div className="inline-flex items-center rounded-[14px] bg-black/10 p-1 border border-transparent shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_0_0_1px_rgba(255,255,255,0.06)]">
                         {intervals.map((interval) => (
                           <button
                             key={interval.value}
                             type="button"
                             onClick={() => field.onChange(interval.value)}
                             className={cn(
-                              'px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
+                              'px-3 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                               field.value === interval.value
-                                ? 'bg-background dark:bg-muted text-foreground shadow-sm'
+                                ? 'bg-foreground/10 text-foreground shadow-sm'
                                 : 'text-muted-foreground hover:text-foreground',
                             )}
                           >
@@ -268,7 +268,7 @@ export function CreatePriceDialog({
               )}
 
               {/* Price Name */}
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="name" className="text-sm font-medium">
                   Name <span className="text-muted-foreground font-normal">(optional)</span>
                 </Label>

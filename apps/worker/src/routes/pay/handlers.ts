@@ -31,6 +31,23 @@ function defined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v != null)) as Partial<T>
 }
 
+async function resolveProjectId(
+  trx: Trx,
+  projectId: string | null | undefined,
+): Promise<string | null> {
+  if (!projectId) return null
+
+  const project = await trx
+    .selectFrom('project')
+    .select('id')
+    .where('id', '=', projectId)
+    .executeTakeFirst()
+  if (project?.id) return project.id
+
+  log.warn({ projectId }, 'ignoring webhook metadata for missing project')
+  return null
+}
+
 // --- Status lookup tables ---
 
 const paymentStatuses: Record<string, string> = {
@@ -436,6 +453,8 @@ async function upsertPaymentFromWebhook(
 ) {
   if (!ev.paymentId) return
 
+  const metadataProjectId = await resolveProjectId(trx, extractProjectId(ev.metadata))
+
   const checkout = ev.sessionId
     ? await trx
         .selectFrom('pay_checkout_session')
@@ -446,10 +465,8 @@ async function upsertPaymentFromWebhook(
     : null
 
   const account =
-    !checkout?.projectId && !extractProjectId(ev.metadata)
-      ? await lookupAccount(ev.companyId, env, trx)
-      : null
-  const projectId = checkout?.projectId || extractProjectId(ev.metadata) || null
+    !checkout?.projectId && !metadataProjectId ? await lookupAccount(ev.companyId, env, trx) : null
+  const projectId = checkout?.projectId || metadataProjectId || null
   const accountId = checkout?.accountId || account?.id || null
   const checkoutId = checkout?.id || null
   const whopCompanyId = checkout?.whopCompanyId || null
@@ -620,6 +637,8 @@ async function upsertMembershipFromWebhook(
 ) {
   if (!ev.membershipId) return
 
+  const metadataProjectId = await resolveProjectId(trx, extractProjectId(ev.metadata))
+
   const existingSub = await trx
     .selectFrom('pay_subscription')
     .select('status')
@@ -637,10 +656,8 @@ async function upsertMembershipFromWebhook(
     : null
 
   const account =
-    !checkout?.projectId && !extractProjectId(ev.metadata)
-      ? await lookupAccount(ev.companyId, env, trx)
-      : null
-  const projectId = checkout?.projectId || extractProjectId(ev.metadata) || null
+    !checkout?.projectId && !metadataProjectId ? await lookupAccount(ev.companyId, env, trx) : null
+  const projectId = checkout?.projectId || metadataProjectId || null
   const checkoutId = checkout?.id || null
   const now = new Date()
   const rawStatus =
@@ -712,6 +729,8 @@ async function upsertRefundFromWebhook(
 ) {
   if (!ev.refundId) return
 
+  const metadataProjectId = await resolveProjectId(trx, extractProjectId(ev.metadata))
+
   const payment = ev.paymentId
     ? await trx
         .selectFrom('pay_payment')
@@ -721,7 +740,7 @@ async function upsertRefundFromWebhook(
         .executeTakeFirst()
     : null
 
-  const projectId = payment?.projectId || extractProjectId(ev.metadata) || null
+  const projectId = payment?.projectId || metadataProjectId || null
   const paymentId = payment?.id || null
   const paymentTx = await getPaymentTransaction(ev.paymentId, env, trx)
   const checkout = payment?.checkoutId
@@ -804,6 +823,8 @@ async function upsertDisputeFromWebhook(
 ) {
   if (!ev.disputeId) return
 
+  const metadataProjectId = await resolveProjectId(trx, extractProjectId(ev.metadata))
+
   const payment = ev.paymentId
     ? await trx
         .selectFrom('pay_payment')
@@ -813,7 +834,7 @@ async function upsertDisputeFromWebhook(
         .executeTakeFirst()
     : null
 
-  const projectId = payment?.projectId || extractProjectId(ev.metadata) || null
+  const projectId = payment?.projectId || metadataProjectId || null
   const paymentId = payment?.id || null
   const paymentTx = await getPaymentTransaction(ev.paymentId, env, trx)
   const checkout = payment?.checkoutId
@@ -902,6 +923,8 @@ async function upsertInvoiceFromWebhook(
 ) {
   if (!ev.invoiceId) return
 
+  const metadataProjectId = await resolveProjectId(trx, extractProjectId(ev.metadata))
+
   const checkout = ev.sessionId
     ? await trx
         .selectFrom('pay_checkout_session')
@@ -921,11 +944,10 @@ async function upsertInvoiceFromWebhook(
     : null
 
   const account =
-    !checkout?.projectId && !subscription?.projectId && !extractProjectId(ev.metadata)
+    !checkout?.projectId && !subscription?.projectId && !metadataProjectId
       ? await lookupAccount(ev.companyId, env, trx)
       : null
-  const projectId =
-    checkout?.projectId || subscription?.projectId || extractProjectId(ev.metadata) || null
+  const projectId = checkout?.projectId || subscription?.projectId || metadataProjectId || null
   const checkoutId = checkout?.id || subscription?.checkoutId || null
   const subscriptionId = subscription?.id || null
   const accountId =
@@ -1035,7 +1057,7 @@ async function upsertWithdrawalFromWebhook(
         .executeTakeFirst()
     : null
 
-  const projectId = extractProjectId(ev.metadata) || null
+  const projectId = (await resolveProjectId(trx, extractProjectId(ev.metadata))) || null
   const status = statusFromWithdrawal(eventType, ev.status)
   const amount = ev.amount ?? 0
   const now = new Date()

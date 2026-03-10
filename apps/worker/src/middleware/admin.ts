@@ -2,10 +2,18 @@ import { Context, Next } from 'hono'
 import type { AppContext } from '@/types/application'
 import { config } from '@/lib/config'
 
-export function isAdmin(user: { id: string; role?: string | null }): boolean {
-  const isAdminById = config.auth.adminUserIds.includes(user.id)
-  const isAdminByRole = config.auth.adminRoles.includes(user.role ?? '')
-  return isAdminById || isAdminByRole
+function normalizeEmail(email?: string | null): string {
+  return email?.trim().toLowerCase() || ''
+}
+
+export function isAdmin(user: {
+  id?: string
+  email?: string | null
+  role?: string | null
+}): boolean {
+  const email = normalizeEmail(user.email)
+  if (!email) return false
+  return config.auth.adminUserEmails.includes(email)
 }
 
 export async function requireAdmin(c: Context<AppContext>, next: Next) {
@@ -17,7 +25,7 @@ export async function requireAdmin(c: Context<AppContext>, next: Next) {
   }
 
   if (!isAdmin(user)) {
-    return c.json({ error: 'Forbidden' }, 403)
+    return c.json({ error: 'Forbidden', email: normalizeEmail(user.email) || null }, 403)
   }
 
   return next()

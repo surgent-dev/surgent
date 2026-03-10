@@ -60,7 +60,7 @@ function SubscriptionRow({
         <div className="min-w-0">
           <span
             className={cn(
-              'inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-medium capitalize',
+              'inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-medium capitalize',
               getStatusColor(subscription.status),
             )}
           >
@@ -68,22 +68,22 @@ function SubscriptionRow({
           </span>
         </div>
         <div className="min-w-0">
-          <p className="text-[12px] text-muted-foreground truncate font-mono">
+          <p className="text-xs text-muted-foreground truncate font-mono">
             {subscription.customerId ? `${subscription.customerId.slice(0, 8)}...` : 'No customer'}
           </p>
         </div>
         <div className="text-center">
           {subscription.currentPeriodStart && subscription.currentPeriodEnd ? (
-            <p className="text-[12px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {format(new Date(subscription.currentPeriodStart), 'MMM d')} &rarr;{' '}
               {format(new Date(subscription.currentPeriodEnd), 'MMM d')}
             </p>
           ) : (
-            <p className="text-[12px] text-muted-foreground/50">&mdash;</p>
+            <p className="text-xs text-muted-foreground/50">&mdash;</p>
           )}
         </div>
         <div className="flex items-center justify-end gap-2">
-          <p className="text-[12px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {format(new Date(subscription.createdAt), 'MMM d, yyyy')}
           </p>
           {isActive && (
@@ -173,7 +173,7 @@ export function SubscriptionsView({ subscriptions, isLoading, projectId }: Subsc
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-8 pl-8 pr-3 text-[13px] bg-transparent border rounded-lg focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full h-8 pl-8 pr-3 text-sm bg-transparent border rounded-lg focus:outline-none focus:ring-1 focus:ring-ring"
             />
             {searchQuery && (
               <button
@@ -186,7 +186,7 @@ export function SubscriptionsView({ subscriptions, isLoading, projectId }: Subsc
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1.5 h-8 px-2.5 text-[13px] rounded-md bg-background btn-elevated hover:bg-muted/30 transition-all duration-100">
+              <button className="flex items-center gap-1.5 h-8 px-2.5 text-sm rounded-md bg-background btn-elevated hover:bg-muted/30 transition-all duration-100">
                 <Filter className="size-3 text-muted-foreground" />
                 {filter === 'all' ? 'All' : filter === 'active' ? 'Active' : 'Canceled'}
                 <ChevronDown className="size-3 text-muted-foreground" />
@@ -208,10 +208,10 @@ export function SubscriptionsView({ subscriptions, isLoading, projectId }: Subsc
             <div className="size-12 rounded-xl bg-muted/50 border grid place-items-center mx-auto mb-4">
               <Repeat className="size-5 text-muted-foreground" strokeWidth={1.5} />
             </div>
-            <h3 className="text-[15px] font-semibold mb-1">
+            <h3 className="text-base font-semibold mb-1">
               {subscriptions.length === 0 ? 'No subscriptions yet' : 'No results'}
             </h3>
-            <p className="text-[13px] text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {subscriptions.length === 0
                 ? 'Subscriptions appear when customers purchase recurring products'
                 : 'Try adjusting your search or filters'}
