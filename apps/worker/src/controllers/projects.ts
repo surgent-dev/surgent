@@ -294,7 +294,9 @@ async function getOrCreateSandbox(opts: {
 // ============================================================================
 
 export async function createDeploymentRecord(projectId: string, deployName?: string) {
-  const scriptName = deployName ? sanitizeHostname(deployName) : `project-${projectId.slice(0, 8)}`
+  const scriptName = deployName
+    ? sanitizeHostname(deployName)
+    : `app-${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`
   const hostname = `https://${scriptName}.${config.cloudflare.deployDomain}`
   return ProjectService.createDeployment({
     projectId,
@@ -314,7 +316,9 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
   const sandboxRow = await ProjectService.getSandboxByProjectId(projectId)
   if (!sandboxRow?.id) throw new Error('Sandbox not initialized')
 
-  const scriptName = rawName ? sanitizeHostname(rawName) : `project-${projectId.slice(0, 8)}`
+  const scriptName = rawName
+    ? sanitizeHostname(rawName)
+    : `app-${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`
   const workingDir = workspacePath(projectId)
   const accountId = config.cloudflare.accountId!
 

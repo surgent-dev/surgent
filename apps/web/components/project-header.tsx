@@ -505,7 +505,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               {/* Live URL — only when deployed and not editing */}
               {workerName && !isEditingHostname && (
                 <div className="p-3">
-                  <div className="flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/20 px-3 h-8 font-mono text-[13px]">
+                  <div
+                    className={`flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/20 px-3 h-8 font-mono text-[13px] ${activeDomain ? 'opacity-50' : ''}`}
+                  >
                     <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
                     <span className="flex-1 truncate">{workerName}.surgent.site</span>
                     <a
@@ -520,9 +522,11 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     <button onClick={copyUrl} className={iconBtn}>
                       <Copy className="size-3.5 text-muted-foreground" />
                     </button>
-                    <button onClick={startEditHostname} className={iconBtn}>
-                      <PencilSimple className="size-3.5 text-muted-foreground" />
-                    </button>
+                    {!activeDomain && (
+                      <button onClick={startEditHostname} className={iconBtn}>
+                        <PencilSimple className="size-3.5 text-muted-foreground" />
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

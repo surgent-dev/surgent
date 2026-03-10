@@ -63,6 +63,24 @@ export interface Domain {
   purchasedAt: string | null
   expiresAt: string | null
   createdAt: string
+  updatedAt: string
+}
+
+// SSL provisioning metadata (stored as JSON in lastError during provisioning)
+export interface SslProvisioningMeta {
+  _type: 'ssl_provisioning_meta'
+  attempts: number
+  firstAttemptAt: string
+  lastAttemptAt: string
+}
+
+export function parseSslProvisioningMeta(lastError: string | null): SslProvisioningMeta | null {
+  if (!lastError) return null
+  try {
+    const parsed = JSON.parse(lastError)
+    if (parsed?._type === 'ssl_provisioning_meta') return parsed
+  } catch {}
+  return null
 }
 
 // Hooks
@@ -73,13 +91,23 @@ export function useProjectDomains(projectId?: string, fastPoll?: boolean) {
     queryFn: () => http.get(`api/domains/${projectId}`).json<{ domains: Domain[] }>(),
     enabled: Boolean(projectId),
     refetchInterval: (query) => {
-      // Fast poll after purchase/connect attempt (waiting for webhook to create record)
       if (fastPoll) return 2000
       const domains = query.state.data?.domains
       const hasPending = domains?.some((d) =>
-        ['pending', 'purchasing', 'dns_configuring', 'ssl_provisioning'].includes(d.status),
+        ['pending', 'purchasing', 'dns_configuring'].includes(d.status),
       )
-      return hasPending ? 3000 : 30000
+      if (hasPending) return 3000
+
+      // For ssl_provisioning, slow down polling to match backend backoff
+      const provisioning = domains?.find((d) => d.status === 'ssl_provisioning')
+      if (provisioning) {
+        const meta = parseSslProvisioningMeta(provisioning.lastError)
+        if (meta && meta.attempts > 40) return 15000
+        if (meta && meta.attempts > 20) return 8000
+        return 3000
+      }
+
+      return 30000
     },
   })
 }

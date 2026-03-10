@@ -55,6 +55,42 @@ async function checkDomainHealth(domain: string): Promise<boolean> {
   }
 }
 
+// ─── SSL provisioning metadata (stored in lastError as JSON) ────
+
+interface SslProvisioningMeta {
+  _type: 'ssl_provisioning_meta'
+  attempts: number
+  firstAttemptAt: string
+  lastAttemptAt: string
+}
+
+function parseSslMeta(lastError: string | null): SslProvisioningMeta | null {
+  if (!lastError) return null
+  try {
+    const parsed = JSON.parse(lastError)
+    if (parsed?._type === 'ssl_provisioning_meta') return parsed
+  } catch {}
+  return null
+}
+
+function serializeSslMeta(meta: SslProvisioningMeta): string {
+  return JSON.stringify(meta)
+}
+
+/**
+ * Backoff interval between SSL health checks.
+ *   1-20 attempts (~first minute): every poll (3s)
+ *   21-40 (~2 min): every 10s
+ *   41-80 (~7 min): every 30s
+ *   81+: every 60s
+ */
+function getSslCheckInterval(attempts: number): number {
+  if (attempts <= 20) return 0
+  if (attempts <= 40) return 10_000
+  if (attempts <= 80) return 30_000
+  return 60_000
+}
+
 const domains = new Hono<AppContext>()
 
 // ─── Auth-protected routes ───────────────────────────────────
@@ -430,116 +466,92 @@ domains.get('/:projectId', async (c) => {
     .orderBy('createdAt', 'desc')
     .execute()
 
-  // Auto-connect: if a domain has DNS verified (webhook confirmed propagation)
-  // but hasn't been wired to Cloudflare yet, connect it now.
-  // IMPORTANT: Only auto-connect when dnsVerified=true — we must not mark
-  // domains as "active" before DNS actually points to us.
+  // Auto-promote: if a domain has DNS verified but is still in dns_configuring,
+  // move it to ssl_provisioning so the health check loop can verify SSL readiness.
+  // Entri Power handles SSL — no CF custom hostname needed.
   const configuringDomains = result.filter((d) => d.status === 'dns_configuring')
-  if (configuringDomains.length > 0) {
-    const worker = await db
-      .selectFrom('worker')
-      .select(['scriptName', 'status'])
-      .where('projectId', '=', projectId)
-      .executeTakeFirst()
+  for (const d of configuringDomains) {
+    if (!d.dnsVerified) continue
+    if (d.kvMapped) continue // already promoted
 
-    if (worker?.scriptName) {
-      for (const d of configuringDomains) {
-        // Only auto-connect if DNS has been verified by a webhook
-        if (!d.dnsVerified) continue
+    // Throttle: skip if last update was <60s ago
+    const lastUpdate = new Date(d.updatedAt).getTime()
+    if (Date.now() - lastUpdate < 60_000) continue
 
-        // Skip if already fully connected
-        if (d.cfCustomDomainId && d.kvMapped) continue
-
-        // Throttle: skip if last update was <60s ago (prevents rapid re-attempts)
-        const lastUpdate = new Date(d.updatedAt).getTime()
-        if (Date.now() - lastUpdate < 60_000) continue
-
-        try {
-          await appendDomainLog(
-            d.id,
-            'auto_connect_start',
-            `Worker ${worker.scriptName} detected, connecting`,
-          )
-          const result = await connectCustomDomain(d.domainName, worker.scriptName)
-
-          if (result.kvMapped) {
-            await db
-              .updateTable('domain')
-              .set({
-                status: 'ssl_provisioning',
-                cfCustomDomainId: result.customHostnameId,
-                kvMapped: true,
-                lastError: null,
-                updatedAt: new Date(),
-              })
-              .where('id', '=', d.id)
-              .execute()
-            d.status = 'ssl_provisioning'
-            await appendDomainLog(d.id, 'auto_connect_done', 'Connected, provisioning SSL...', true)
-            log.info(
-              { domainId: d.id, domainName: d.domainName },
-              'auto-connected domain to worker',
-            )
-          } else {
-            await db
-              .updateTable('domain')
-              .set({
-                status: 'error',
-                cfCustomDomainId: result.customHostnameId,
-                lastError: result.error,
-                updatedAt: new Date(),
-              })
-              .where('id', '=', d.id)
-              .execute()
-            d.status = 'error'
-            await appendDomainLog(
-              d.id,
-              'auto_connect_failed',
-              result.error || 'KV mapping failed',
-              false,
-            )
-            log.warn({ domainId: d.id, error: result.error }, 'auto-connect partial failure')
-          }
-        } catch (err) {
-          await appendDomainLog(d.id, 'auto_connect_error', String(err))
-          log.warn({ err, domainId: d.id }, 'auto-connect failed, will retry on next poll')
-        }
-      }
-    }
+    await db
+      .updateTable('domain')
+      .set({
+        status: 'ssl_provisioning',
+        kvMapped: true,
+        lastError: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', d.id)
+      .execute()
+    d.status = 'ssl_provisioning'
+    await appendDomainLog(d.id, 'auto_promote', 'DNS verified, waiting for Entri Power SSL', true)
+    log.info({ domainId: d.id, domainName: d.domainName }, 'auto-promoted to ssl_provisioning')
   }
 
-  // SSL health check: verify ssl_provisioning domains are reachable over HTTPS
+  // SSL health check with backoff: never hard-fail, keep checking with decreasing frequency
   const provisioningDomains = result.filter((d) => d.status === 'ssl_provisioning')
   for (const d of provisioningDomains) {
-    const ageMs = Date.now() - new Date(d.updatedAt).getTime()
-
-    // Timeout after 15 minutes (purchased domains may need longer for DNS propagation)
-    if (ageMs > 15 * 60 * 1000) {
-      await db
-        .updateTable('domain')
-        .set({ status: 'error', lastError: 'SSL provisioning timed out', updatedAt: new Date() })
-        .where('id', '=', d.id)
-        .execute()
-      d.status = 'error'
-      d.lastError = 'SSL provisioning timed out'
-      await appendDomainLog(
-        d.id,
-        'ssl_timeout',
-        'SSL provisioning timed out after 15 minutes',
-        false,
-      )
-      continue
+    const meta = parseSslMeta(d.lastError) ?? {
+      _type: 'ssl_provisioning_meta' as const,
+      attempts: 0,
+      firstAttemptAt: new Date().toISOString(),
+      lastAttemptAt: new Date().toISOString(),
     }
 
+    // Throttle: skip if not enough time since last check
+    const timeSinceUpdate = Date.now() - new Date(d.updatedAt).getTime()
+    const interval = getSslCheckInterval(meta.attempts)
+    if (timeSinceUpdate < interval) continue
+
+    meta.attempts += 1
+    meta.lastAttemptAt = new Date().toISOString()
+
+    // Check both bare and www — don't mark active until both have valid SSL
     const bareDomain = d.domainName.replace(/^www\./, '')
-    if (await checkDomainHealth(bareDomain)) {
+    const bareOk = await checkDomainHealth(bareDomain)
+    const wwwOk = bareOk ? await checkDomainHealth(`www.${bareDomain}`) : false
+
+    if (bareOk && wwwOk) {
       await db
         .updateTable('domain')
-        .set({ status: 'active', updatedAt: new Date() })
+        .set({ status: 'active', lastError: null, updatedAt: new Date() })
         .where('id', '=', d.id)
         .execute()
       d.status = 'active'
-      await appendDomainLog(d.id, 'ssl_provisioned', 'Domain is live with SSL', true)
+      d.lastError = null
+      await appendDomainLog(
+        d.id,
+        'ssl_provisioned',
+        `Domain is live with SSL (attempt ${meta.attempts})`,
+        true,
+      )
+    } else {
+      // Not ready yet — update meta and keep trying
+      const serialized = serializeSslMeta(meta)
+      await db
+        .updateTable('domain')
+        .set({ lastError: serialized, updatedAt: new Date() })
+        .where('id', '=', d.id)
+        .execute()
+      d.lastError = serialized
+
+      // Log periodically (every 10th attempt)
+      if (meta.attempts % 10 === 0) {
+        const elapsedMin = Math.round(
+          (Date.now() - new Date(meta.firstAttemptAt).getTime()) / 60_000,
+        )
+        await appendDomainLog(
+          d.id,
+          'ssl_check',
+          `Still provisioning SSL after ${elapsedMin}m (${meta.attempts} checks, bare=${bareOk ? 'ok' : 'no'} www=${wwwOk ? 'ok' : 'no'})`,
+          false,
+        )
+      }
     }
   }
 
@@ -557,6 +569,7 @@ domains.get('/:projectId', async (c) => {
       purchasedAt: d.purchasedAt?.toISOString() ?? null,
       expiresAt: d.expiresAt?.toISOString() ?? null,
       createdAt: d.createdAt.toISOString(),
+      updatedAt: d.updatedAt.toISOString(),
     })),
   })
 })
@@ -593,13 +606,23 @@ domains.post(
       throw new HttpError(400, 'Domain is not in a retryable state')
     }
 
-    // Smart retry: if DNS is already verified and KV mapped, just retry SSL provisioning
+    // Smart retry: if DNS is already verified, just retry SSL provisioning
     // (don't re-open Entri modal — DNS is already configured)
-    const isSslRetry = domainRecord.dnsVerified && domainRecord.kvMapped
+    const isSslRetry = domainRecord.dnsVerified
     if (isSslRetry) {
+      const freshMeta: SslProvisioningMeta = {
+        _type: 'ssl_provisioning_meta',
+        attempts: 0,
+        firstAttemptAt: new Date().toISOString(),
+        lastAttemptAt: new Date().toISOString(),
+      }
       await db
         .updateTable('domain')
-        .set({ status: 'ssl_provisioning', lastError: null, updatedAt: new Date() })
+        .set({
+          status: 'ssl_provisioning',
+          lastError: serializeSslMeta(freshMeta),
+          updatedAt: new Date(),
+        })
         .where('id', '=', domainId)
         .execute()
 
@@ -1026,40 +1049,20 @@ async function processDomainWebhook(payload: any) {
         .returning(['id', 'projectId'])
         .executeTakeFirst()
 
-      // Connect to Cloudflare
-      if (propagationOk && newRecord?.projectId) {
-        const worker = await db
-          .selectFrom('worker')
-          .select('scriptName')
-          .where('projectId', '=', newRecord.projectId)
-          .executeTakeFirst()
-
-        if (worker?.scriptName) {
-          await appendDomainLog(
-            newRecord.id!,
-            'webhook_cloudflare_connect',
-            `Webhook triggered CF connect: ${finalDomainName} → ${worker.scriptName}`,
-          )
-          const result = await connectCustomDomain(finalDomainName, worker.scriptName)
-          const status = result.kvMapped ? 'ssl_provisioning' : 'error'
-          await db
-            .updateTable('domain')
-            .set({
-              cfCustomDomainId: result.customHostnameId,
-              kvMapped: result.kvMapped,
-              dnsVerified: true,
-              lastError: result.error,
-              status,
-            })
-            .where('id', '=', newRecord.id)
-            .execute()
-          await appendDomainLog(
-            newRecord.id!,
-            'webhook_cloudflare_result',
-            result.error || 'Connected',
-            !result.error,
-          )
-        }
+      // Entri Power handles SSL for both bare and www — no CF custom hostname needed.
+      // Just mark DNS as verified and let the health check loop confirm SSL readiness.
+      if (propagationOk && newRecord?.id) {
+        await db
+          .updateTable('domain')
+          .set({ dnsVerified: true, kvMapped: true })
+          .where('id', '=', newRecord.id)
+          .execute()
+        await appendDomainLog(
+          newRecord.id,
+          'webhook_domain_ready',
+          `DNS verified, waiting for Entri Power SSL provisioning`,
+          true,
+        )
       } else if (newRecord?.id) {
         await appendDomainLog(
           newRecord.id,
@@ -1079,11 +1082,6 @@ async function processDomainWebhook(payload: any) {
       return
     }
 
-    // Connect to Cloudflare if the domain is ready
-    let cfCustomDomainId: string | null = null
-    let kvMapped = false
-    let lastError: string | null = null
-
     // Skip redundant logs when nothing changed (Entri retries propagation checks)
     const statusUnchanged = !propagationOk && domainRecord!.status === 'dns_configuring'
 
@@ -1095,37 +1093,9 @@ async function processDomainWebhook(payload: any) {
       )
     }
 
-    if (propagationOk && domainRecord!.projectId) {
-      const worker = await db
-        .selectFrom('worker')
-        .select('scriptName')
-        .where('projectId', '=', domainRecord!.projectId)
-        .executeTakeFirst()
-
-      if (worker?.scriptName) {
-        await appendDomainLog(
-          domainRecord!.id,
-          'webhook_cloudflare_connect',
-          `Connecting ${finalDomainName} → ${worker.scriptName}`,
-        )
-        const result = await connectCustomDomain(finalDomainName, worker.scriptName)
-        cfCustomDomainId = result.customHostnameId
-        kvMapped = result.kvMapped
-        lastError = result.error
-        await appendDomainLog(
-          domainRecord!.id,
-          'webhook_cloudflare_result',
-          result.error || 'Connected',
-          !result.error,
-        )
-      }
-    }
-
-    const finalStatus = propagationOk
-      ? kvMapped
-        ? 'ssl_provisioning'
-        : 'error'
-      : 'dns_configuring'
+    // Entri Power handles SSL — no CF custom hostname needed.
+    // Just update status and let health check loop confirm SSL readiness.
+    const finalStatus = propagationOk ? 'ssl_provisioning' : 'dns_configuring'
 
     await db
       .updateTable('domain')
@@ -1134,10 +1104,9 @@ async function processDomainWebhook(payload: any) {
         status: finalStatus,
         registrar: payload.provider || payload.registrar || null,
         entriFlowId: payload.id || null,
-        cfCustomDomainId,
-        kvMapped,
+        kvMapped: propagationOk,
         dnsVerified: propagationOk,
-        lastError,
+        lastError: null,
         purchasedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -1158,8 +1127,6 @@ async function processDomainWebhook(payload: any) {
         domainId: domainRecord?.id,
         domainName: finalDomainName,
         status: finalStatus,
-        cfCustomDomainId,
-        kvMapped,
       },
       '[ENTRI-WEBHOOK] domain updated',
     )
@@ -1204,46 +1171,14 @@ async function processDomainWebhook(payload: any) {
         await appendDomainLog(domainRecord.id, 'dns_propagated', 'DNS records verified by provider')
       }
 
-      let cfId: string | null = null
-      let kvMapped = false
-      let lastError: string | null = null
-
-      if (domainRecord?.projectId) {
-        const worker = await db
-          .selectFrom('worker')
-          .select('scriptName')
-          .where('projectId', '=', domainRecord.projectId)
-          .executeTakeFirst()
-
-        if (worker?.scriptName) {
-          await appendDomainLog(
-            domainRecord.id,
-            'dns_cloudflare_connect',
-            `Connecting ${domainName} → ${worker.scriptName}`,
-          )
-          const result = await connectCustomDomain(domainName, worker.scriptName)
-          cfId = result.customHostnameId
-          kvMapped = result.kvMapped
-          lastError = result.error
-          await appendDomainLog(
-            domainRecord.id,
-            'dns_cloudflare_result',
-            result.error || 'Connected',
-            !result.error,
-          )
-        }
-      }
-
-      const finalStatus = kvMapped ? 'ssl_provisioning' : 'error'
-
+      // Entri Power handles SSL — just mark DNS verified and move to ssl_provisioning
       await db
         .updateTable('domain')
         .set({
-          status: finalStatus,
-          cfCustomDomainId: cfId,
+          status: 'ssl_provisioning',
           dnsVerified: true,
-          kvMapped,
-          lastError,
+          kvMapped: true,
+          lastError: null,
           updatedAt: new Date(),
         })
         .where('domainName', '=', domainName)
@@ -1254,15 +1189,12 @@ async function processDomainWebhook(payload: any) {
         await appendDomainLog(
           domainRecord.id,
           'status_change',
-          `Status → ${finalStatus}`,
-          finalStatus === 'ssl_provisioning',
+          'DNS verified, waiting for Entri Power SSL',
+          true,
         )
       }
 
-      log.info(
-        { domainName, cfCustomDomainId: cfId, kvMapped, status: finalStatus },
-        '[ENTRI-WEBHOOK] DNS propagated',
-      )
+      log.info({ domainName, status: 'ssl_provisioning' }, '[ENTRI-WEBHOOK] DNS propagated')
     }
   } else {
     log.info({ eventType }, '[ENTRI-WEBHOOK] unhandled event type')

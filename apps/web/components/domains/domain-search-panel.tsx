@@ -27,6 +27,7 @@ import {
   useProjectDomains,
   useOnDomainPurchased,
   useRemoveDomain,
+  parseSslProvisioningMeta,
   type DomainLogEntry,
 } from '@/queries/domains'
 
@@ -42,7 +43,7 @@ const statusConfig = {
     label: 'Provisioning SSL',
     color: 'brand',
     bg: 'bg-brand/5 border-brand/20',
-    description: 'Setting up HTTPS certificate. This usually takes a few seconds.',
+    description: 'Setting up HTTPS certificate. This usually takes a few minutes.',
   },
   dns_configuring: {
     label: 'Configuring DNS',
@@ -286,13 +287,37 @@ function DomainStatusCard({
         )}
       </div>
 
-      {/* Description for non-active states */}
-      {!isActive && !isError && !isStale && (
-        <p className="text-[11px] text-muted-foreground/60 px-0.5">{cfg.description}</p>
-      )}
+      {/* Description — dynamic for ssl_provisioning */}
+      {!isActive &&
+        !isError &&
+        !isStale &&
+        (() => {
+          if (isProvisioning) {
+            const meta = parseSslProvisioningMeta(lastError ?? null)
+            if (!meta || meta.attempts <= 3) {
+              return (
+                <p className="text-[11px] text-muted-foreground/60 px-0.5">
+                  Setting up HTTPS certificate. This usually takes a few minutes.
+                </p>
+              )
+            }
+            const elapsedMin = Math.round(
+              (Date.now() - new Date(meta.firstAttemptAt).getTime()) / 60_000,
+            )
+            return (
+              <p className="text-[11px] text-muted-foreground/60 px-0.5">
+                SSL certificate is being provisioned ({elapsedMin > 0 ? `${elapsedMin}m` : '<1m'},
+                check #{meta.attempts}).
+                {elapsedMin >= 5 && ' This can take longer for newly purchased domains.'} We'll keep
+                checking automatically.
+              </p>
+            )
+          }
+          return <p className="text-[11px] text-muted-foreground/60 px-0.5">{cfg.description}</p>
+        })()}
 
-      {/* Error message */}
-      {lastError && (
+      {/* Error message — hide JSON meta from ssl_provisioning */}
+      {lastError && !parseSslProvisioningMeta(lastError ?? null) && (
         <p className="text-[11px] text-red-500/80 bg-red-500/5 px-2.5 py-1.5 rounded-md">
           {lastError}
         </p>
@@ -324,7 +349,13 @@ function DomainStatusCard({
               ) : (
                 <ArrowClockwise className="size-3 mr-1.5" weight="bold" />
               )}
-              {isError ? (lastError?.includes('SSL') ? 'Retry SSL' : 'Retry') : 'Retry DNS'}
+              {isProvisioning
+                ? 'Retry SSL'
+                : isError
+                  ? parseSslProvisioningMeta(lastError ?? null) || lastError?.includes('SSL')
+                    ? 'Retry SSL'
+                    : 'Retry'
+                  : 'Retry DNS'}
             </Button>
           )}
           {onRemove && (
@@ -538,7 +569,10 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
               ? () => handleRetryConnect(configuringDomain.id)
               : errorDomain
                 ? () => handleRetryConnect(errorDomain.id)
-                : undefined
+                : provisioningDomain &&
+                    (parseSslProvisioningMeta(provisioningDomain.lastError)?.attempts ?? 0) > 60
+                  ? () => handleRetryConnect(provisioningDomain.id)
+                  : undefined
           }
           onRemove={() => removeDomain.mutate({ projectId, domainId: currentDomain.id })}
           retrying={retrying || retryConnect.isPending}

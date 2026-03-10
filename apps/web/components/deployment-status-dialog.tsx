@@ -16,6 +16,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { toast } from 'react-hot-toast'
 import { useDeploymentHistoryQuery, useRedeployVersion, useDeployProject } from '@/queries/projects'
 import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
+import { useProjectDomains } from '@/queries/domains'
 
 interface Props {
   open: boolean
@@ -65,11 +66,14 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
   const prevStatusRef = useRef<string | null>(null)
 
   const { data: history, isLoading } = useDeploymentHistoryQuery(projectId, open)
+  const { data: domainsData } = useProjectDomains(projectId)
   const redeploy = useRedeployVersion()
   const deploy = useDeployProject()
 
   const name = worker?.name
   const isLive = worker?.status === 'active'
+  const activeDomain = domainsData?.domains?.find((d) => d.status === 'active')
+  const hasCustomDomain = Boolean(activeDomain)
   const latest = history?.[0]
   const busy = latest && !TERMINAL.includes(latest.status)
 
@@ -165,9 +169,41 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
 
           {/* URL + Actions */}
           <div className="px-4 sm:px-5 py-4 border-b space-y-3">
+            {/* Custom domain — shown as primary URL when active */}
+            {activeDomain && (
+              <div className="flex items-center h-10 px-3 rounded-lg border bg-emerald-500/5 border-emerald-500/20 font-mono text-sm min-w-0 overflow-hidden">
+                <span className="flex-1 truncate">{activeDomain.domainName}</span>
+                <div className="flex items-center shrink-0">
+                  <a
+                    href={`https://${activeDomain.domainName.replace(/^www\./, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1 hover:bg-muted rounded"
+                  >
+                    <ArrowSquareOut className="size-3.5 text-muted-foreground" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `https://${activeDomain.domainName.replace(/^www\./, '')}`,
+                      )
+                      toast.success('Copied')
+                    }}
+                    className="p-1 hover:bg-muted rounded"
+                  >
+                    <Copy className="size-3.5 text-muted-foreground" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Surgent subdomain — secondary when custom domain exists, editable only without custom domain */}
             {name && (
-              <div className="flex items-center h-10 px-3 rounded-lg border bg-muted/20 font-mono text-sm min-w-0 overflow-hidden">
-                {editing ? (
+              <div
+                className={`flex items-center h-10 px-3 rounded-lg border bg-muted/20 font-mono text-sm min-w-0 overflow-hidden ${hasCustomDomain ? 'opacity-50' : ''}`}
+              >
+                {editing && !hasCustomDomain ? (
                   <>
                     <input
                       value={input}
@@ -212,16 +248,19 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                       >
                         <Copy className="size-3.5 text-muted-foreground" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setInput(name)
-                          setEditing(true)
-                        }}
-                        className="p-1 hover:bg-muted rounded"
-                      >
-                        <PencilSimple className="size-3.5 text-muted-foreground" />
-                      </button>
+                      {/* Hide edit when custom domain is active */}
+                      {!hasCustomDomain && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInput(name)
+                            setEditing(true)
+                          }}
+                          className="p-1 hover:bg-muted rounded"
+                        >
+                          <PencilSimple className="size-3.5 text-muted-foreground" />
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
