@@ -1,7 +1,7 @@
 import type { Job } from 'pg-boss'
 import { captureScreenshot, ScreenshotError } from '@/apis/browser-rendering'
 import { runProjectCreationJob, type CreateProjectJobData } from '@/controllers/project-create'
-import { deployProject } from '@/controllers/projects'
+import { deployProject, ProjectDeployError } from '@/controllers/projects'
 import { getBoss } from '@/lib/boss'
 import { config } from '@/lib/config'
 import { createLogger } from '@/lib/logger'
@@ -126,7 +126,18 @@ export async function registerProjectWorkers(): Promise<void> {
       for (const job of jobs) {
         const { projectId, deployName, deploymentId } = job.data
         log.info({ jobId: job.id, projectId, deploymentId }, 'project deploy claimed')
-        await deployProject({ projectId, deployName, deploymentId })
+        try {
+          await deployProject({ projectId, deployName, deploymentId })
+        } catch (err) {
+          if (err instanceof ProjectDeployError && err.permanent) {
+            log.warn(
+              { jobId: job.id, projectId, deploymentId, status: err.status, error: err.message },
+              'project deploy failed permanently without retry',
+            )
+            continue
+          }
+          throw err
+        }
         await enqueueDeploymentScreenshotJob({ projectId, deploymentId }).catch((err) => {
           log.warn(
             { projectId, deploymentId, err },
