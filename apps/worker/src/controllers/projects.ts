@@ -52,7 +52,7 @@ const DEFAULT_WRANGLER = {
   observability: { enabled: true, head_sampling_rate: 0.1 },
 }
 const OUTPUT_LIMIT = 12_000
-const CLOUDFLARE_TOKEN_VERIFY_URL = 'https://api.cloudflare.com/client/v4/user/tokens/verify'
+const CLOUDFLARE_PREFLIGHT_URL = `https://api.cloudflare.com/client/v4/accounts/${config.cloudflare.accountId}/workers/dispatch/namespaces/${config.cloudflare.dispatchNamespace}`
 
 // ============================================================================
 // Types
@@ -184,7 +184,7 @@ async function assertCloudflareDeployReady(): Promise<void> {
   }
 
   try {
-    const res = await fetch(CLOUDFLARE_TOKEN_VERIFY_URL, {
+    const res = await fetch(CLOUDFLARE_PREFLIGHT_URL, {
       method: 'GET',
       headers: { Authorization: `Bearer ${config.cloudflare.apiToken}` },
       signal: AbortSignal.timeout(config.deploy.cloudflarePreflightTimeoutMs),
@@ -193,7 +193,7 @@ async function assertCloudflareDeployReady(): Promise<void> {
     const verified = /\b"success"\s*:\s*true\b/.test(text)
     if (!res.ok || !verified) {
       throw createDeployError(
-        'Cloudflare API token verification failed',
+        'Cloudflare API token cannot access dispatch namespace',
         'deploy_failed',
         true,
         text || `${res.status}`,
