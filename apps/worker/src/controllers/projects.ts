@@ -125,7 +125,7 @@ function sanitizeScriptName(input: string): string {
     .slice(0, 63)
 }
 
-async function getProjectEnvVars(
+export async function getProjectEnvVars(
   projectId: string,
   environment: string,
   options?: { includeServer?: boolean },
