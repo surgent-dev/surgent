@@ -51,26 +51,49 @@ github.get('/callback', async (c) => {
       ? await githubApp.exchangeUserAccessToken(code, redirectUrl, state ?? undefined)
       : null
 
-    // Save installation (upsert by userId + accountLogin to handle re-installs)
+    // Save installation without depending on a composite unique index.
     if (installationId) {
       const { account } = await githubApp.getInstallation(installationId)
+      const existingByInstallation = await db
+        .selectFrom('github_installations')
+        .select('id')
+        .where('installationId', '=', installationId)
+        .executeTakeFirst()
+      const existingByAccount = existingByInstallation
+        ? null
+        : await db
+            .selectFrom('github_installations')
+            .select('id')
+            .where('userId', '=', userId)
+            .where('accountLogin', '=', account.login)
+            .executeTakeFirst()
+      const existing = existingByInstallation || existingByAccount
 
-      await db
-        .insertInto('github_installations')
-        .values({
-          userId,
-          installationId,
-          accountLogin: account.login,
-          accountType: account.type,
-        })
-        .onConflict((oc) =>
-          oc.columns(['userId', 'accountLogin']).doUpdateSet({
+      if (existing?.id) {
+        await db
+          .updateTable('github_installations')
+          .set({
+            userId,
             installationId,
+            accountLogin: account.login,
             accountType: account.type,
             updatedAt: new Date(),
-          }),
-        )
-        .execute()
+          })
+          .where('id', '=', existing.id)
+          .execute()
+      }
+
+      if (!existing?.id) {
+        await db
+          .insertInto('github_installations')
+          .values({
+            userId,
+            installationId,
+            accountLogin: account.login,
+            accountType: account.type,
+          })
+          .execute()
+      }
 
       c.var.logger.info({ installationId, account: account.login }, 'installation saved')
     }
