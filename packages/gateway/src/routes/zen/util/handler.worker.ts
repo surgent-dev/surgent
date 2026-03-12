@@ -49,6 +49,11 @@ type UsageBillingContext = {
   interval: UsageBillingInterval
 }
 
+type UsageSettlement = {
+  costMicros: number
+  uncoveredMicros: number
+}
+
 type AuthInfo = {
   apiKeyId: string
   projectId: string
@@ -902,6 +907,7 @@ export async function handleZenRequest(
 
     const costMicro = authInfo.provider?.credentials ? 0 : centsToMicroCents(totalCostInCent)
     const costBig = BigInt(costMicro)
+    let uncoveredMicros = 0
 
     await db.transaction().execute(async (tx) => {
       const usageId = crypto.randomUUID()
@@ -927,10 +933,7 @@ export async function handleZenRequest(
         )
         includedDebit = debits.includedDebit
         prepaidDebit = debits.prepaidDebit
-
-        if (debits.uncoveredMicros > 0) {
-          throw new CreditsError('You have run out of usage balance. Upgrade or add more balance.')
-        }
+        uncoveredMicros = debits.uncoveredMicros
       }
 
       await tx
@@ -1038,6 +1041,26 @@ export async function handleZenRequest(
       }
     })
 
-    return costBig
+    if (uncoveredMicros > 0) {
+      logger.log(
+        {
+          organizationId: authInfo.organizationId,
+          projectId: authInfo.projectId,
+          costMicros: costMicro,
+          uncoveredMicros,
+        },
+        'usage settled after response with insufficient balance',
+      )
+      logger.metric({
+        billing_settlement: 'uncovered',
+        billing_cost_micros: costMicro,
+        billing_uncovered_micros: uncoveredMicros,
+      })
+    }
+
+    return {
+      costMicros: Number(costBig),
+      uncoveredMicros,
+    } satisfies UsageSettlement
   }
 }
