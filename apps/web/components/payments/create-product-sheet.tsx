@@ -255,14 +255,14 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Pricing</Label>
-                    <div className="inline-flex items-center rounded-[14px] bg-black/10 p-1 border border-transparent shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+                    <div className="inline-flex items-center rounded-xl bg-black/[0.05] dark:bg-white/[0.06] p-1">
                       <button
                         type="button"
                         onClick={() => setIsRecurring(false)}
                         className={cn(
                           'px-3 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                           !isRecurring
-                            ? 'bg-foreground/10 text-foreground shadow-sm'
+                            ? 'bg-background text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.06)]'
                             : 'text-muted-foreground hover:text-foreground',
                         )}
                       >
@@ -274,7 +274,7 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                         className={cn(
                           'px-3 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                           isRecurring
-                            ? 'bg-foreground/10 text-foreground shadow-sm'
+                            ? 'bg-background text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.06)]'
                             : 'text-muted-foreground hover:text-foreground',
                         )}
                       >
@@ -306,7 +306,7 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                         name="priceCurrency"
                         control={control}
                         render={({ field }) => (
-                          <div className="inline-flex items-center rounded-[14px] bg-black/10 p-1 border border-transparent shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+                          <div className="inline-flex items-center rounded-xl bg-black/[0.05] dark:bg-white/[0.06] p-1">
                             {currencies.map((currency) => (
                               <button
                                 key={currency.value}
@@ -315,7 +315,7 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                                 className={cn(
                                   'px-2.5 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                                   field.value === currency.value
-                                    ? 'bg-foreground/10 text-foreground shadow-sm'
+                                    ? 'bg-background text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.06)]'
                                     : 'text-muted-foreground hover:text-foreground',
                                 )}
                               >
@@ -338,7 +338,7 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                         name="recurringInterval"
                         control={control}
                         render={({ field }) => (
-                          <div className="inline-flex items-center rounded-[14px] bg-black/10 p-1 border border-transparent shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+                          <div className="inline-flex items-center rounded-xl bg-black/[0.05] dark:bg-white/[0.06] p-1">
                             {intervals.map((interval) => (
                               <button
                                 key={interval.value}
@@ -347,7 +347,7 @@ export function CreateProductSheet({ projectId, open, onOpenChange }: CreateProd
                                 className={cn(
                                   'px-3 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                                   field.value === interval.value
-                                    ? 'bg-foreground/10 text-foreground shadow-sm'
+                                    ? 'bg-background text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.06)]'
                                     : 'text-muted-foreground hover:text-foreground',
                                 )}
                               >

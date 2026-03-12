@@ -36,25 +36,26 @@ function nameToSlug(name: string) {
     .slice(0, 63)
 }
 
-const toggleTrack =
-  'inline-flex items-center rounded-2xl bg-black/10 dark:bg-background p-1 border border-border/50 shadow-inner'
+const toggleTrack = 'inline-flex items-center rounded-2xl bg-black/[0.05] dark:bg-white/[0.06] p-1'
 const toggleBtn = (active: boolean) =>
   cn(
     'px-4 py-2 rounded-[12px] text-sm font-semibold transition-all duration-300 ease-out',
     active
-      ? 'bg-background dark:bg-muted text-foreground shadow-[0_2px_8px_-2px_rgba(0,0,0,0.1)]'
-      : 'text-muted-foreground hover:text-foreground hover:bg-white/5',
+      ? 'bg-background text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.06)]'
+      : 'text-muted-foreground hover:text-foreground',
   )
 
 const field = cn(
-  'flex h-12 w-full rounded-[16px] bg-black/5 px-4 py-2 text-[14px]',
+  'flex h-12 w-full rounded-xl px-4 py-2 text-[14px]',
   'text-foreground placeholder:text-muted-foreground/40',
-  'border border-transparent transition-all duration-200 outline-none',
-  'shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(255,255,255,0.05)]',
-  'hover:shadow-[inset_0_2px_4px_rgba(0,0,0,0.15),inset_0_0_0_1px_rgba(255,255,255,0.08)] hover:bg-black/10',
-  'focus:bg-black/20 focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.15),inset_0_0_0_1px_rgba(255,255,255,0.12),0_0_0_3px_rgba(255,255,255,0.05)]',
-  'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(255,255,255,0.05)] disabled:hover:bg-black/5',
-  'aria-invalid:border-destructive/50 aria-invalid:shadow-[inset_0_0_0_1px_rgba(239,68,68,0.3)] aria-invalid:focus:shadow-[0_0_0_3px_rgba(239,68,68,0.15)]',
+  'bg-black/[0.03] border border-black/[0.08] transition-all duration-150 outline-none',
+  'hover:bg-black/[0.05] hover:border-black/[0.12]',
+  'focus:bg-black/[0.05] focus:border-black/[0.16] focus:ring-2 focus:ring-black/[0.04]',
+  'dark:bg-white/[0.04] dark:border-white/[0.08]',
+  'dark:hover:bg-white/[0.06] dark:hover:border-white/[0.14]',
+  'dark:focus:bg-white/[0.07] dark:focus:border-white/[0.18] dark:focus:ring-white/[0.06]',
+  'disabled:cursor-not-allowed disabled:opacity-50',
+  'aria-invalid:border-destructive/50 aria-invalid:focus:ring-destructive/15',
 )
 
 export default function SellDialog({
@@ -298,7 +299,7 @@ export default function SellDialog({
                       'flex flex-col items-center justify-center gap-2 aspect-[16/9] rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-300',
                       dragging
                         ? 'border-brand/50 bg-brand/5'
-                        : 'border-border hover:border-muted-foreground/30 hover:bg-black/5',
+                        : 'border-border hover:border-muted-foreground/30 hover:bg-muted',
                     )}
                   >
                     <UploadSimple className="size-6 text-muted-foreground/30" weight="duotone" />

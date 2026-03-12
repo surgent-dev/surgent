@@ -3,8 +3,7 @@
 import Image from 'next/image'
 import {
   ArrowUpRight,
-  FlaskConical,
-  Globe,
+  FileText,
   LayoutDashboard,
   Package,
   Repeat,
@@ -22,6 +21,7 @@ export type ViewType =
   | 'subscriptions'
   | 'customers'
   | 'transactions'
+  | 'documentation'
   | 'settings'
 
 export interface AccountData {
@@ -108,6 +108,7 @@ export function Sidebar({
   isOpeningPayoutsPortal,
 }: SidebarProps) {
   const showPayouts = isConnected && processor === 'whop' && onOpenPayoutsPortal
+  const showDocumentation = process.env.NODE_ENV !== 'production'
   const env = usePayEnv((s) => s.env)
   const setEnv = usePayEnv((s) => s.setEnv)
   const isLive = env === 'live'
@@ -129,24 +130,28 @@ export function Sidebar({
           </div>
         </div>
 
-        <div className="mt-3 relative rounded-lg border bg-muted/30 p-1 grid grid-cols-2">
+        <div className="mt-3 relative rounded-lg bg-black/[0.05] dark:bg-white/[0.06] p-0.5 grid grid-cols-2">
           <div
             className={cn(
-              'absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-md bg-background shadow-sm border transition-all duration-200 ease-out',
-              isLive ? 'left-[calc(50%+2px)]' : 'left-1',
+              'absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md transition-all duration-200 ease-out',
+              'bg-background shadow-[0_1px_3px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]',
+              'dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.06)]',
+              isLive ? 'left-[calc(50%+1px)]' : 'left-0.5',
             )}
           />
           <button
             type="button"
             onClick={() => setEnv('test')}
             className={cn(
-              'relative z-10 flex items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-semibold transition-colors duration-200',
-              !isLive ? 'text-amber-600' : 'text-muted-foreground hover:text-foreground',
+              'relative z-10 flex items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition-colors duration-200',
+              !isLive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <FlaskConical
-              className={cn('size-3', !isLive ? 'text-amber-500' : 'text-muted-foreground/50')}
-              strokeWidth={2}
+            <span
+              className={cn(
+                'size-1.5 rounded-full transition-colors duration-200',
+                !isLive ? 'bg-amber-500' : 'bg-muted-foreground/30',
+              )}
             />
             Sandbox
           </button>
@@ -154,13 +159,15 @@ export function Sidebar({
             type="button"
             onClick={() => setEnv('live')}
             className={cn(
-              'relative z-10 flex items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-semibold transition-colors duration-200',
-              isLive ? 'text-emerald-600' : 'text-muted-foreground hover:text-foreground',
+              'relative z-10 flex items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition-colors duration-200',
+              isLive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <Globe
-              className={cn('size-3', isLive ? 'text-emerald-500' : 'text-muted-foreground/50')}
-              strokeWidth={2}
+            <span
+              className={cn(
+                'size-1.5 rounded-full transition-colors duration-200',
+                isLive ? 'bg-emerald-500' : 'bg-muted-foreground/30',
+              )}
             />
             Live
           </button>
@@ -204,6 +211,14 @@ export function Sidebar({
           onClick={() => setView('transactions')}
           badge={transactionCount > 0 ? transactionCount : undefined}
         />
+        {showDocumentation && (
+          <NavItem
+            icon={FileText}
+            label="Documentation"
+            active={view === 'documentation'}
+            onClick={() => setView('documentation')}
+          />
+        )}
 
         <div className="h-px bg-border/60 my-2 !mx-0" />
 
