@@ -64,8 +64,8 @@
     "ai": "^5.0.108",
     "ai-elements": "^1.6.3",
     "apify-client": "^2.20.0",
-    "autumn-js": "0.1.75",
     "better-auth": "^1.4.18",
+    "canvas-confetti": "1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "css-mesh": "0.7.1",
@@ -105,6 +105,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "1.9.0",
     "@types/hast": "3.0.4",
     "@types/node": "^22.19.1",
     "@types/react": "19.1.1",

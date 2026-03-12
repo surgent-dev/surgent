@@ -147,7 +147,14 @@ async function deployConvexFunctions(
     env,
   })
   if (result.code === 0) return
-  throw new Error(`Convex deploy failed: ${String(result.output).slice(0, 500)}`)
+  throw new Error(`Convex deploy failed: ${formatExecFailure(result.output)}`)
+}
+
+function formatExecFailure(output: string, limit = 8_000): string {
+  const text = String(output || '').trim()
+  if (!text) return 'command exited without output'
+  if (text.length <= limit) return text
+  return `[truncated to last ${limit} chars]\n${text.slice(-limit)}`
 }
 
 async function directoryExists(sandbox: Sandbox, dir: string): Promise<boolean> {
@@ -372,7 +379,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       env: envVars,
     })
     if (build.code !== 0) {
-      throw new Error(`Build failed: ${String(build.output).slice(0, 500)}`)
+      throw new Error(`Build failed: ${formatExecFailure(build.output)}`)
     }
 
     const assetsDir = await findAssetsDir(sandbox, workingDir)

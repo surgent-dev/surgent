@@ -59,6 +59,12 @@ export default function MarketplacePage() {
           </div>
         </header>
         <main className="max-w-6xl mx-auto px-6 py-10">
+          <div className="mb-8">
+            <h1 className="text-lg font-semibold tracking-tight">Marketplace</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Browse templates and projects from other builders
+            </p>
+          </div>
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="space-y-3">
@@ -86,7 +92,15 @@ export default function MarketplacePage() {
                 alt="Surgent"
                 width={119}
                 height={32}
-                className="h-7 w-auto"
+                className="h-7 w-auto hidden dark:block"
+                priority
+              />
+              <Image
+                src="/surgent-logo.svg"
+                alt="Surgent"
+                width={119}
+                height={32}
+                className="h-7 w-auto block dark:hidden"
                 priority
               />
             </Link>

@@ -17,12 +17,7 @@ export function LandingNav({ isLoggedIn }: { isLoggedIn: boolean }) {
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-50 transition-all duration-200 landing-stagger-1 px-6"
-      style={{
-        background: scrolled ? 'rgba(28,28,28,0.85)' : 'transparent',
-        backdropFilter: scrolled ? 'blur(16px)' : 'none',
-        borderBottom: scrolled ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
-      }}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 landing-stagger-1 px-6 ${scrolled ? 'bg-background/85 backdrop-blur-xl border-b border-border' : 'border-b border-transparent'}`}
     >
       <div className="mx-auto max-w-6xl w-full flex items-center justify-between h-14">
         <Link href="/" className="flex items-center gap-2">
@@ -31,7 +26,15 @@ export function LandingNav({ isLoggedIn }: { isLoggedIn: boolean }) {
             alt="Surgent"
             width={119}
             height={32}
-            className="h-7 w-auto"
+            className="h-7 w-auto hidden dark:block"
+            priority
+          />
+          <Image
+            src="/surgent-logo.svg"
+            alt="Surgent"
+            width={119}
+            height={32}
+            className="h-7 w-auto block dark:hidden"
             priority
           />
         </Link>
@@ -40,29 +43,20 @@ export function LandingNav({ isLoggedIn }: { isLoggedIn: boolean }) {
         <div className="hidden sm:flex items-center gap-2 text-[13px]">
           <Link
             href="/inspirations"
-            className="text-[#888] hover:text-[#ddd] transition-colors px-3 py-1.5"
-            style={{ fontWeight: 450 }}
+            className="text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 font-[450]"
           >
             Inspirations
           </Link>
           <Link
             href="/marketplace"
-            className="text-[#888] hover:text-[#ddd] transition-colors px-3 py-1.5"
-            style={{ fontWeight: 450 }}
+            className="text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 font-[450]"
           >
             Marketplace
           </Link>
           {isLoggedIn ? (
             <Link
               href="/dashboard"
-              className="px-3.5 py-1.5 rounded-lg transition-all duration-100 active:scale-[0.98]"
-              style={{
-                fontWeight: 550,
-                fontSize: '13px',
-                background: 'rgba(255,255,255,0.1)',
-                color: '#eee',
-                border: '1px solid rgba(255,255,255,0.08)',
-              }}
+              className="px-3.5 py-1.5 rounded-lg transition-all duration-100 active:scale-[0.98] font-[550] text-[13px] bg-muted text-foreground border border-border"
             >
               Dashboard
             </Link>
@@ -70,20 +64,13 @@ export function LandingNav({ isLoggedIn }: { isLoggedIn: boolean }) {
             <>
               <Link
                 href="/login"
-                className="text-[#888] hover:text-[#ddd] transition-colors px-3 py-1.5"
-                style={{ fontWeight: 450 }}
+                className="text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 font-[450]"
               >
                 Sign in
               </Link>
               <Link
                 href="/signup"
-                className="px-3.5 py-1.5 rounded-lg transition-all duration-100 active:scale-[0.98]"
-                style={{
-                  fontWeight: 550,
-                  fontSize: '13px',
-                  background: '#fdf8f0',
-                  color: '#1c1c1c',
-                }}
+                className="px-3.5 py-1.5 rounded-lg transition-all duration-100 active:scale-[0.98] font-[550] text-[13px] bg-foreground text-background"
               >
                 Get started
               </Link>
@@ -94,48 +81,32 @@ export function LandingNav({ isLoggedIn }: { isLoggedIn: boolean }) {
         {/* Mobile */}
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="sm:hidden text-[#888] hover:text-[#ddd] transition-colors"
+          className="sm:hidden text-muted-foreground hover:text-foreground transition-colors"
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
       {mobileOpen && (
-        <div
-          className="sm:hidden"
-          style={{
-            background: 'rgba(28,28,28,0.95)',
-            backdropFilter: 'blur(16px)',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-          }}
-        >
-          <nav className="flex flex-col px-6 py-4 gap-3 text-sm" style={{ fontWeight: 450 }}>
+        <div className="sm:hidden bg-background/95 backdrop-blur-xl border-t border-border">
+          <nav className="flex flex-col px-6 py-4 gap-3 text-sm font-[450]">
             <Link
               href="/inspirations"
-              className="text-[#888] hover:text-[#ddd] transition-colors py-2"
+              className="text-muted-foreground hover:text-foreground transition-colors py-2"
             >
               Inspirations
             </Link>
             <Link
               href="/marketplace"
-              className="text-[#888] hover:text-[#ddd] transition-colors py-2"
+              className="text-muted-foreground hover:text-foreground transition-colors py-2"
             >
               Marketplace
             </Link>
-            <div
-              className="pt-3 mt-1 flex flex-col gap-2"
-              style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
-            >
+            <div className="pt-3 mt-1 flex flex-col gap-2 border-t border-border">
               {isLoggedIn ? (
                 <Link
                   href="/dashboard"
-                  className="px-4 py-2 text-sm text-center rounded-lg"
-                  style={{
-                    fontWeight: 550,
-                    background: 'rgba(255,255,255,0.1)',
-                    color: '#eee',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                  }}
+                  className="px-4 py-2 text-sm text-center rounded-lg font-[550] bg-muted text-foreground border border-border"
                 >
                   Dashboard
                 </Link>
@@ -143,14 +114,13 @@ export function LandingNav({ isLoggedIn }: { isLoggedIn: boolean }) {
                 <>
                   <Link
                     href="/login"
-                    className="text-[#888] hover:text-[#ddd] transition-colors py-2"
+                    className="text-muted-foreground hover:text-foreground transition-colors py-2"
                   >
                     Sign in
                   </Link>
                   <Link
                     href="/signup"
-                    className="px-4 py-2 text-sm text-center rounded-lg"
-                    style={{ fontWeight: 550, background: '#fdf8f0', color: '#1c1c1c' }}
+                    className="px-4 py-2 text-sm text-center rounded-lg font-[550] bg-foreground text-background"
                   >
                     Get started
                   </Link>

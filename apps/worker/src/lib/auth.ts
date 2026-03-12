@@ -1,10 +1,10 @@
 import { betterAuth } from 'better-auth'
 import { admin, apiKey, jwt, organization } from 'better-auth/plugins'
 import { oauthProvider } from '@better-auth/oauth-provider'
-import { autumn } from 'autumn-js/better-auth'
 import { createAccessControl } from 'better-auth/plugins/access'
 import { db, dialect } from '@/lib/db'
 import { config } from './config'
+import { ensureBillingState } from './billing'
 
 const ac = createAccessControl({
   organization: ['update', 'delete'],
@@ -21,7 +21,10 @@ async function ensureActiveOrganization(userId: string): Promise<string> {
     .where('organizationId', '=', userId)
     .executeTakeFirst()
 
-  if (personalMembership?.organizationId) return personalMembership.organizationId
+  if (personalMembership?.organizationId) {
+    await ensureBillingState(personalMembership.organizationId)
+    return personalMembership.organizationId
+  }
 
   const membership = await db
     .selectFrom('member')
@@ -29,7 +32,10 @@ async function ensureActiveOrganization(userId: string): Promise<string> {
     .where('userId', '=', userId)
     .executeTakeFirst()
 
-  if (membership?.organizationId) return membership.organizationId
+  if (membership?.organizationId) {
+    await ensureBillingState(membership.organizationId)
+    return membership.organizationId
+  }
 
   const user = await db
     .selectFrom('user')
@@ -48,7 +54,10 @@ async function ensureActiveOrganization(userId: string): Promise<string> {
     .where((eb) => eb.or([eb('id', '=', organizationId), eb('slug', '=', slug)]))
     .executeTakeFirst()
 
-  if (existingOrg) return existingOrg.id
+  if (existingOrg) {
+    await ensureBillingState(existingOrg.id)
+    return existingOrg.id
+  }
 
   await db
     .insertInto('organization')
@@ -74,6 +83,7 @@ async function ensureActiveOrganization(userId: string): Promise<string> {
     .onConflict((oc) => oc.columns(['userId', 'organizationId']).doNothing())
     .execute()
 
+  await ensureBillingState(organizationId)
   return organizationId
 }
 
@@ -87,6 +97,11 @@ export const auth = betterAuth({
       ac,
       teams: { enabled: true },
       dynamicAccessControl: { enabled: true },
+      organizationHooks: {
+        afterCreateOrganization: async ({ organization }) => {
+          await ensureBillingState(organization.id)
+        },
+      },
     }),
     admin({
       adminUserIds: config.auth.adminUserIds,
@@ -112,9 +127,6 @@ export const auth = betterAuth({
         keyPairConfig: { alg: 'RS256', modulusLength: 2048 },
       },
       disableSettingJwtHeader: true,
-    }),
-    autumn({
-      customerScope: 'organization',
     }),
     oauthProvider({
       loginPage: new URL('/login', config.server.clientOrigin).toString(),
