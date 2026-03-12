@@ -38,6 +38,7 @@ function isPermanentBillingError(err: unknown) {
   const message = err instanceof Error ? err.message : ''
 
   if (code === '22P02' || code === '42P18') return true
+  // TODO: Make unknown Stripe prices retryable once legacy price resolution is implemented.
   if (message.startsWith('Unknown Stripe price ID:')) return true
   if (message.startsWith('Unknown billing tier:')) return true
   if (message.startsWith('Unknown top-up')) return true

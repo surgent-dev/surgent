@@ -239,6 +239,7 @@ function getPlanConfig(tier: string, interval: string | null = null): PlanConfig
 
 function getPlanFromPriceId(priceId: string | null | undefined): PlanConfig {
   const match = planCatalog.find((item) => item.priceId && item.priceId === priceId)
+  // TODO: Support legacy Stripe price ids via metadata or a local mapping table.
   if (!match) throw new Error(`Unknown Stripe price ID: ${priceId}`)
   return match
 }

@@ -66,6 +66,7 @@ async function run() {
       continue
     }
 
+    // TODO: Resolve legacy product/interval from the export instead of assuming monthly Pro.
     const amountUsd = roundUsd((balance / included) * config.stripe.pro.month.allowanceUsd)
     if (amountUsd <= 0) {
       console.log(`  SKIP ${cust.email} — rounded grant is $0.00`)
