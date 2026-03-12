@@ -77,6 +77,7 @@ type BillingSnapshot = {
   stripeDiscountId: string | null
   stripePromotionCodeId: string | null
   hasMigrationCredit: boolean
+  founderCouponCode: string | null
   topupMinUsd: number
   features: {
     projectsLimit: number | null
@@ -239,6 +240,108 @@ const freePlan = (() => {
 function requireStripe() {
   if (!stripe) throw new Error('Stripe is not configured')
   return stripe
+}
+
+const FOUNDER_COUPON_ID = 'founder_50_off'
+
+function generateCouponCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = 'SRGNT-'
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)]
+  }
+  return code
+}
+
+/** Read-only: returns founder coupon from DB metadata if already generated */
+async function getFounderCouponData(organizationId: string) {
+  const grant = await db
+    .selectFrom('billing_payment')
+    .select(['id', 'metadata'])
+    .where('organizationId', '=', organizationId)
+    .where('idempotencyKey', 'like', 'old-stripe-grant:%')
+    .limit(1)
+    .executeTakeFirst()
+
+  if (!grant) return { hasMigrationCredit: false, founderCouponCode: null as string | null }
+
+  const metadata = (grant.metadata ?? {}) as Record<string, unknown>
+  return {
+    hasMigrationCredit: true,
+    founderCouponCode: (metadata.founderCouponCode as string) ?? null,
+  }
+}
+
+/** Creates a unique Stripe promotion code for a founding member. Only call on user action. */
+export async function generateFounderCoupon(
+  organizationId: string,
+): Promise<{ code: string; promotionCodeId: string }> {
+  return db.transaction().execute(async (tx) => {
+    // Lock the grant row to prevent concurrent promo code creation
+    const grant = await tx
+      .selectFrom('billing_payment')
+      .select(['id', 'metadata'])
+      .where('organizationId', '=', organizationId)
+      .where('idempotencyKey', 'like', 'old-stripe-grant:%')
+      .forUpdate()
+      .limit(1)
+      .executeTakeFirst()
+
+    if (!grant) throw new Error('No migration credit found')
+
+    const metadata = (grant.metadata ?? {}) as Record<string, unknown>
+    if (metadata.founderCouponCode && metadata.founderPromotionCodeId) {
+      return {
+        code: metadata.founderCouponCode as string,
+        promotionCodeId: metadata.founderPromotionCodeId as string,
+      }
+    }
+
+    const client = requireStripe()
+
+    // Get or create the shared coupon — only catch 404, re-throw everything else
+    let coupon: import('stripe').Stripe.Coupon
+    try {
+      coupon = await client.coupons.retrieve(FOUNDER_COUPON_ID)
+    } catch (err: unknown) {
+      const stripeErr = err as { statusCode?: number }
+      if (stripeErr.statusCode !== 404) throw err
+      coupon = await client.coupons.create({
+        id: FOUNDER_COUPON_ID,
+        percent_off: 50,
+        duration: 'once',
+        name: 'Founding Member - 50% Off',
+      })
+    }
+
+    const account = await tx
+      .selectFrom('billing_account')
+      .select('stripeCustomerId')
+      .where('organizationId', '=', organizationId)
+      .executeTakeFirst()
+
+    const code = generateCouponCode()
+
+    const promoCode = await client.promotionCodes.create({
+      promotion: { type: 'coupon', coupon: coupon.id },
+      code,
+      max_redemptions: 1,
+      ...(account?.stripeCustomerId ? { customer: account.stripeCustomerId } : {}),
+    })
+
+    await tx
+      .updateTable('billing_payment')
+      .set({
+        metadata: sql`coalesce(metadata, '{}'::jsonb) || ${JSON.stringify({
+          founderCouponCode: promoCode.code,
+          founderPromotionCodeId: promoCode.id,
+        })}::jsonb`,
+      })
+      .where('id', '=', grant.id)
+      .execute()
+
+    return { code: promoCode.code, promotionCodeId: promoCode.id }
+  })
 }
 
 function getPlanConfig(tier: string, interval: string | null = null): PlanConfig {
@@ -577,16 +680,13 @@ async function normalizeState(row: BillingStateRow) {
 
 async function getBillingBaseSnapshot(organizationId: string) {
   const base = await normalizeState(await getBillingState(organizationId))
+  const founder = await getFounderCouponData(organizationId)
 
-  const migrationGrant = await db
-    .selectFrom('billing_payment')
-    .select('id')
-    .where('organizationId', '=', organizationId)
-    .where('idempotencyKey', 'like', 'old-stripe-grant:%')
-    .limit(1)
-    .executeTakeFirst()
-
-  return { ...base, hasMigrationCredit: Boolean(migrationGrant) }
+  return {
+    ...base,
+    hasMigrationCredit: founder.hasMigrationCredit,
+    founderCouponCode: founder.founderCouponCode,
+  }
 }
 
 export async function getBillingSnapshot(organizationId: string): Promise<BillingSnapshot> {
@@ -1034,13 +1134,27 @@ export async function createBillingCheckout(args: {
   const successUrl = billingSuccessUrl(args.returnPath)
   const cancelUrl = resolveBillingReturnUrl(args.returnPath)
 
+  // Auto-apply founder coupon if user already generated one
+  const founderGrant = await db
+    .selectFrom('billing_payment')
+    .select('metadata')
+    .where('organizationId', '=', args.organizationId)
+    .where('idempotencyKey', 'like', 'old-stripe-grant:%')
+    .limit(1)
+    .executeTakeFirst()
+  const founderPromoId = (founderGrant?.metadata as Record<string, unknown>)
+    ?.founderPromotionCodeId as string | undefined
+  const discountConfig = founderPromoId
+    ? { discounts: [{ promotion_code: founderPromoId }] }
+    : { allow_promotion_codes: true as const }
+
   const session = await client.checkout.sessions.create(
     {
       customer,
       client_reference_id: args.organizationId,
       mode: 'subscription',
       payment_method_collection: 'always',
-      allow_promotion_codes: true,
+      ...discountConfig,
       line_items: [{ price: plan.priceId, quantity: 1 }],
       subscription_data: {
         metadata: {

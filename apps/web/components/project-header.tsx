@@ -39,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import PlanDialog from '@/components/plan-dialog'
+import MigrationCreditBanner from '@/components/migration-credit-banner'
 import {
   useDeployProject,
   useCancelDeployment,
@@ -764,6 +765,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
         <UserMenu onUpgrade={() => credits.setPlanDialogOpen(true)} />
       </header>
+      <MigrationCreditBanner showDialog onUpgrade={() => credits.setPlanDialogOpen(true)} />
 
       {/* Dialogs */}
       <GitHubDialog

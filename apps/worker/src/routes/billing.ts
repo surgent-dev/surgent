@@ -14,6 +14,7 @@ import {
   createBillingCheckout,
   createBillingPortal,
   createTopupPaymentIntent,
+  generateFounderCoupon,
   getBillingSnapshot,
   syncStripeCustomerToBillingState,
 } from '@/lib/billing'
@@ -209,6 +210,19 @@ billing.post('/portal', zValidator('json', portalSchema), async (c) => {
     return c.json({ url })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Portal unavailable'
+    return c.json({ error: message }, 400)
+  }
+})
+
+billing.post('/founder-coupon', async (c) => {
+  const organizationId = c.get('session')?.activeOrganizationId
+  if (!organizationId) return c.json({ error: 'No active organization' }, 400)
+
+  try {
+    const result = await generateFounderCoupon(organizationId)
+    return c.json({ code: result.code })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to generate coupon'
     return c.json({ error: message }, 400)
   }
 })
