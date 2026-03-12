@@ -204,7 +204,6 @@ export interface BillingAccountTable {
   defaultPaymentMethodId: string | null
   paymentMethodBrand: string | null
   paymentMethodLast4: string | null
-  includedBalanceMicros: string
   prepaidBalanceMicros: string
   autoReloadEnabled: boolean
   autoReloadThresholdMicros: string | null
@@ -230,7 +229,8 @@ export interface BillingSubscriptionTable {
   cancelAtPeriodEnd: boolean
   canceledAt: Date | null
   monthlyAllowanceMicros: string
-  nextAllowanceGrantAt: Date | null
+  includedUsageMicros: string
+  includedUsagePeriodStart: Date | null
   stripeCouponId: string | null
   stripeDiscountId: string | null
   stripePromotionCodeId: string | null

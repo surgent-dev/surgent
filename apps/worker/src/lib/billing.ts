@@ -1,5 +1,6 @@
 import type Stripe from 'stripe'
 import { sql } from 'kysely'
+import { getAllowanceWindow, sameAllowanceWindowStart } from '@repo/db'
 import { db } from './db'
 import { config } from './config'
 import { stripe } from './stripe'
@@ -25,15 +26,8 @@ export type TopupPaymentIntentResult =
       error?: string | null
     }
 
-type BillingBucket = 'included' | 'prepaid'
-type BillingLedgerKind =
-  | 'subscription_allowance'
-  | 'topup_purchase'
-  | 'auto_reload'
-  | 'usage_debit'
-  | 'refund'
-  | 'manual_adjustment'
-  | 'reward'
+type BillingBucket = 'prepaid'
+type BillingLedgerKind = 'topup_purchase' | 'auto_reload' | 'refund' | 'reward'
 
 type PlanConfig = {
   tier: BillingTier
@@ -68,9 +62,9 @@ type BillingSnapshot = {
   status: string
   trialEnd: string | null
   currentPeriodEnd: string | null
-  nextAllowanceGrantAt: string | null
+  nextResetAt: string | null
   cancelAtPeriodEnd: boolean
-  includedBalanceMicros: number
+  includedRemainingMicros: number
   prepaidBalanceMicros: number
   totalBalanceMicros: number
   totalBudgetMicros: number
@@ -83,6 +77,7 @@ type BillingSnapshot = {
   stripeCouponId: string | null
   stripeDiscountId: string | null
   stripePromotionCodeId: string | null
+  hasMigrationCredit: boolean
   topupMinUsd: number
   features: {
     projectsLimit: number | null
@@ -102,7 +97,6 @@ type BillingStateRow = {
     defaultPaymentMethodId: string | null
     paymentMethodBrand: string | null
     paymentMethodLast4: string | null
-    includedBalanceMicros: string | number
     prepaidBalanceMicros: string | number
     autoReloadEnabled: boolean
     autoReloadThresholdMicros: string | number | null
@@ -125,7 +119,8 @@ type BillingStateRow = {
     cancelAtPeriodEnd: boolean
     canceledAt: Date | null
     monthlyAllowanceMicros: string | number
-    nextAllowanceGrantAt: Date | null
+    includedUsageMicros: string | number
+    includedUsagePeriodStart: Date | null
     stripeCouponId: string | null
     stripeDiscountId: string | null
     stripePromotionCodeId: string | null
@@ -297,16 +292,29 @@ function allowanceEligible(row: BillingStateRow['subscription']) {
   return ALLOWANCE_STATUSES.has(row.status)
 }
 
-function nextAllowanceDate(anchor: Date) {
-  return addMonths(anchor, 1)
+function getEffectiveIncludedUsage(row: BillingStateRow['subscription'], now = new Date()) {
+  const window = getAllowanceWindow(
+    {
+      tier: row.tier,
+      interval: row.interval,
+      currentPeriodStart: row.currentPeriodStart,
+      currentPeriodEnd: row.currentPeriodEnd,
+    },
+    now,
+  )
+
+  if (!sameAllowanceWindowStart(row.includedUsagePeriodStart, window.start)) {
+    return 0
+  }
+
+  return asNumber(row.includedUsageMicros)
 }
 
-function getUsagePeriodStart(
-  row: Pick<BillingStateRow['subscription'], 'currentPeriodStart' | 'nextAllowanceGrantAt'>,
-  now = new Date(),
-) {
-  if (row.nextAllowanceGrantAt) return addMonths(row.nextAllowanceGrantAt, -1)
-  return row.currentPeriodStart ?? startOfMonth(now)
+function getIncludedBalance(row: BillingStateRow['subscription'], now = new Date()) {
+  if (!allowanceEligible(row)) return 0
+  const allowanceMicros = asNumber(row.monthlyAllowanceMicros)
+  if (allowanceMicros <= 0) return 0
+  return Math.max(allowanceMicros - getEffectiveIncludedUsage(row, now), 0)
 }
 
 function getCatalogDisplay(): CatalogDisplay {
@@ -323,54 +331,6 @@ function getCatalogDisplay(): CatalogDisplay {
         monthlyAllowanceLabel: formatMoney(microsToDollars(item.monthlyAllowanceMicros)),
       })),
   }
-}
-
-async function resetIncludedBalanceTx(
-  tx: typeof db,
-  args: {
-    organizationId: string
-    currentIncludedBalanceMicros: number
-    idempotencyKey: string
-    reason: string
-    metadata?: Record<string, unknown>
-  },
-) {
-  if (args.currentIncludedBalanceMicros <= 0) return
-
-  const inserted = await tx
-    .insertInto('billing_ledger')
-    .values({
-      id: crypto.randomUUID(),
-      organizationId: args.organizationId,
-      kind: 'manual_adjustment',
-      bucket: 'included',
-      amountMicros: String(-args.currentIncludedBalanceMicros),
-      stripeEventId: null,
-      stripeInvoiceId: null,
-      stripeCheckoutSessionId: null,
-      stripePaymentIntentId: null,
-      usageId: null,
-      idempotencyKey: args.idempotencyKey,
-      metadata: {
-        reason: args.reason,
-        ...(args.metadata ?? {}),
-      },
-      createdAt: new Date(),
-    })
-    .onConflict((oc) => oc.column('idempotencyKey').doNothing())
-    .returning('id')
-    .executeTakeFirst()
-
-  if (!inserted) return
-
-  await tx
-    .updateTable('billing_account')
-    .set({
-      includedBalanceMicros: '0',
-      updatedAt: new Date(),
-    })
-    .where('organizationId', '=', args.organizationId)
-    .execute()
 }
 
 async function insertLedgerEntry(
@@ -412,17 +372,6 @@ async function insertLedgerEntry(
 
   if (!inserted) return false
 
-  if (args.bucket === 'included') {
-    await tx
-      .updateTable('billing_account')
-      .set({
-        includedBalanceMicros: sql`"includedBalanceMicros" + ${String(args.amountMicros)}`,
-        updatedAt: new Date(),
-      })
-      .where('organizationId', '=', args.organizationId)
-      .execute()
-  }
-
   if (args.bucket === 'prepaid') {
     await tx
       .updateTable('billing_account')
@@ -452,7 +401,6 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
       id: crypto.randomUUID(),
       organizationId,
       stripeCustomerId: org.stripeCustomerId ?? null,
-      includedBalanceMicros: '0',
       prepaidBalanceMicros: '0',
       autoReloadEnabled: false,
       monthlySpendLimitMicros: null,
@@ -485,7 +433,8 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
       cancelAtPeriodEnd: false,
       canceledAt: null,
       monthlyAllowanceMicros: String(freePlan.monthlyAllowanceMicros),
-      nextAllowanceGrantAt: null,
+      includedUsageMicros: '0',
+      includedUsagePeriodStart: null,
       stripeCouponId: null,
       stripeDiscountId: null,
       stripePromotionCodeId: null,
@@ -520,123 +469,8 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
   return { account, subscription }
 }
 
-async function applyAllowanceGrantsTx(tx: typeof db, row: BillingStateRow, now = new Date()) {
-  const monthlyAllowanceMicros = asNumber(row.subscription.monthlyAllowanceMicros)
-  if (!monthlyAllowanceMicros || !allowanceEligible(row.subscription)) return
-  const isFreePlan = row.subscription.tier === 'free'
-
-  let anchor = row.subscription.nextAllowanceGrantAt
-  if (!anchor) {
-    anchor = row.subscription.currentPeriodStart ?? startOfMonth(now)
-    await resetIncludedBalanceTx(tx, {
-      organizationId: row.account.organizationId,
-      currentIncludedBalanceMicros: asNumber(row.account.includedBalanceMicros),
-      idempotencyKey: `included-reset:${row.account.organizationId}:${anchor.toISOString()}`,
-      reason: 'allowance_reset',
-      metadata: { tier: row.subscription.tier },
-    })
-    await insertLedgerEntry(tx, {
-      organizationId: row.account.organizationId,
-      kind: 'subscription_allowance',
-      bucket: 'included',
-      amountMicros: monthlyAllowanceMicros,
-      idempotencyKey: `allowance:${row.account.organizationId}:${anchor.toISOString()}`,
-      metadata: { tier: row.subscription.tier, anchor: anchor.toISOString() },
-    })
-    await tx
-      .updateTable('billing_subscription')
-      .set(
-        isFreePlan
-          ? {
-              currentPeriodStart: anchor,
-              currentPeriodEnd: nextAllowanceDate(anchor),
-              nextAllowanceGrantAt: nextAllowanceDate(anchor),
-              updatedAt: now,
-            }
-          : {
-              nextAllowanceGrantAt: nextAllowanceDate(anchor),
-              updatedAt: now,
-            },
-      )
-      .where('organizationId', '=', row.account.organizationId)
-      .execute()
-    if (isFreePlan) {
-      row.subscription.currentPeriodStart = anchor
-      row.subscription.currentPeriodEnd = nextAllowanceDate(anchor)
-    }
-    row.subscription.nextAllowanceGrantAt = nextAllowanceDate(anchor)
-  }
-
-  let nextAt = row.subscription.nextAllowanceGrantAt
-  while (nextAt && nextAt <= now) {
-    const account = await tx
-      .selectFrom('billing_account')
-      .select('includedBalanceMicros')
-      .where('organizationId', '=', row.account.organizationId)
-      .forUpdate()
-      .executeTakeFirstOrThrow()
-
-    await resetIncludedBalanceTx(tx, {
-      organizationId: row.account.organizationId,
-      currentIncludedBalanceMicros: asNumber(account.includedBalanceMicros),
-      idempotencyKey: `included-reset:${row.account.organizationId}:${nextAt.toISOString()}`,
-      reason: 'allowance_reset',
-      metadata: { tier: row.subscription.tier },
-    })
-    await insertLedgerEntry(tx, {
-      organizationId: row.account.organizationId,
-      kind: 'subscription_allowance',
-      bucket: 'included',
-      amountMicros: monthlyAllowanceMicros,
-      idempotencyKey: `allowance:${row.account.organizationId}:${nextAt.toISOString()}`,
-      metadata: { tier: row.subscription.tier, anchor: nextAt.toISOString() },
-    })
-    if (isFreePlan) {
-      row.subscription.currentPeriodStart = nextAt
-      row.subscription.currentPeriodEnd = nextAllowanceDate(nextAt)
-    }
-    nextAt = nextAllowanceDate(nextAt)
-  }
-
-  await tx
-    .updateTable('billing_subscription')
-    .set(
-      isFreePlan
-        ? {
-            currentPeriodStart: row.subscription.currentPeriodStart,
-            currentPeriodEnd: row.subscription.currentPeriodEnd,
-            nextAllowanceGrantAt: nextAt,
-            updatedAt: now,
-          }
-        : {
-            nextAllowanceGrantAt: nextAt,
-            updatedAt: now,
-          },
-    )
-    .where('organizationId', '=', row.account.organizationId)
-    .execute()
-}
-
 async function getBillingState(organizationId: string) {
-  const state = await db.transaction().execute(async (tx) => {
-    const row = await ensureBillingStateTx(tx, organizationId)
-    await applyAllowanceGrantsTx(tx, row)
-
-    const account = await tx
-      .selectFrom('billing_account')
-      .selectAll()
-      .where('organizationId', '=', organizationId)
-      .executeTakeFirstOrThrow()
-    const subscription = await tx
-      .selectFrom('billing_subscription')
-      .selectAll()
-      .where('organizationId', '=', organizationId)
-      .executeTakeFirstOrThrow()
-
-    return { account, subscription }
-  })
-
-  return state
+  return db.transaction().execute(async (tx) => ensureBillingStateTx(tx, organizationId))
 }
 
 export async function ensureBillingState(organizationId: string) {
@@ -660,16 +494,23 @@ async function getUsageSpentMicros(organizationId: string, periodStart: Date | n
 }
 
 async function normalizeState(row: BillingStateRow) {
+  const now = new Date()
   const plan = getPlanConfig(row.subscription.tier, row.subscription.interval)
-  const includedBalanceMicros = asNumber(row.account.includedBalanceMicros)
+  const allowanceWindow = getAllowanceWindow(
+    {
+      tier: row.subscription.tier,
+      interval: row.subscription.interval,
+      currentPeriodStart: row.subscription.currentPeriodStart,
+      currentPeriodEnd: row.subscription.currentPeriodEnd,
+    },
+    now,
+  )
+  const includedRemainingMicros = getIncludedBalance(row.subscription, now)
   const prepaidBalanceMicros = asNumber(row.account.prepaidBalanceMicros)
   const monthlyAllowanceMicros = asNumber(row.subscription.monthlyAllowanceMicros)
   const monthlySpendLimitMicros = asNumber(row.account.monthlySpendLimitMicros)
-  const totalBalanceMicros = includedBalanceMicros + prepaidBalanceMicros
-  const usedMicros = await getUsageSpentMicros(
-    row.account.organizationId,
-    getUsagePeriodStart(row.subscription),
-  )
+  const totalBalanceMicros = includedRemainingMicros + prepaidBalanceMicros
+  const usedMicros = await getUsageSpentMicros(row.account.organizationId, allowanceWindow.start)
   const totalBudgetMicros = totalBalanceMicros + usedMicros
   const balancePercent = totalBudgetMicros
     ? Math.max(0, Math.min((usedMicros / totalBudgetMicros) * 100, 100))
@@ -682,9 +523,9 @@ async function normalizeState(row: BillingStateRow) {
     status: row.subscription.status,
     trialEnd: row.subscription.trialEnd?.toISOString() ?? null,
     currentPeriodEnd: row.subscription.currentPeriodEnd?.toISOString() ?? null,
-    nextAllowanceGrantAt: row.subscription.nextAllowanceGrantAt?.toISOString() ?? null,
+    nextResetAt: allowanceWindow.end.toISOString(),
     cancelAtPeriodEnd: row.subscription.cancelAtPeriodEnd,
-    includedBalanceMicros,
+    includedRemainingMicros,
     prepaidBalanceMicros,
     totalBalanceMicros,
     totalBudgetMicros,
@@ -709,7 +550,17 @@ async function normalizeState(row: BillingStateRow) {
 }
 
 async function getBillingBaseSnapshot(organizationId: string) {
-  return normalizeState(await getBillingState(organizationId))
+  const base = await normalizeState(await getBillingState(organizationId))
+
+  const migrationGrant = await db
+    .selectFrom('billing_ledger')
+    .select('id')
+    .where('organizationId', '=', organizationId)
+    .where('idempotencyKey', 'like', 'old-stripe-grant:%')
+    .limit(1)
+    .executeTakeFirst()
+
+  return { ...base, hasMigrationCredit: Boolean(migrationGrant) }
 }
 
 export async function getBillingSnapshot(organizationId: string): Promise<BillingSnapshot> {
@@ -1041,11 +892,6 @@ export async function syncStripeCustomerToBillingState(args: {
   const nextPeriodStart = activeSubscription?.items.data[0]?.current_period_start
     ? new Date(activeSubscription.items.data[0].current_period_start * 1000)
     : startOfMonth(now)
-  const shouldResetIncluded =
-    state.subscription.tier !== plan.tier ||
-    state.subscription.interval !== plan.interval ||
-    state.subscription.stripeSubscriptionId !== (activeSubscription?.id ?? null) ||
-    (state.subscription.currentPeriodStart?.toISOString() ?? null) !== nextPeriodStart.toISOString()
 
   await db.transaction().execute(async (tx) => {
     await ensureBillingStateTx(tx, args.organizationId)
@@ -1093,7 +939,6 @@ export async function syncStripeCustomerToBillingState(args: {
           ? new Date(activeSubscription.canceled_at * 1000)
           : null,
         monthlyAllowanceMicros: String(plan.monthlyAllowanceMicros),
-        nextAllowanceGrantAt: shouldResetIncluded ? null : state.subscription.nextAllowanceGrantAt,
         stripeCouponId: discount.stripeCouponId,
         stripeDiscountId: discount.stripeDiscountId,
         stripePromotionCodeId: discount.stripePromotionCodeId,
@@ -1101,20 +946,6 @@ export async function syncStripeCustomerToBillingState(args: {
       })
       .where('organizationId', '=', args.organizationId)
       .execute()
-
-    const row = await ensureBillingStateTx(tx, args.organizationId)
-    if (shouldResetIncluded) {
-      await resetIncludedBalanceTx(tx, {
-        organizationId: args.organizationId,
-        currentIncludedBalanceMicros: asNumber(row.account.includedBalanceMicros),
-        idempotencyKey: `included-reset:${args.organizationId}:${nextPeriodStart.toISOString()}`,
-        reason: 'subscription_sync_reset',
-        metadata: { tier: plan.tier, interval: plan.interval },
-      })
-      row.account.includedBalanceMicros = '0'
-      row.subscription.nextAllowanceGrantAt = null
-    }
-    await applyAllowanceGrantsTx(tx, row, now)
   })
 
   return kind
@@ -1585,20 +1416,30 @@ export async function checkBillingFeature(args: {
     allowed: snapshot.features.canUseAi,
     balance: snapshot.totalBalanceMicros,
     total: snapshot.totalBudgetMicros,
-    nextResetAt: snapshot.nextAllowanceGrantAt,
+    nextResetAt: snapshot.nextResetAt,
   }
 }
 
 export async function listBillingStateForUsage(organizationId: string) {
   const row = await getBillingState(organizationId)
+  const now = new Date()
+  const allowanceWindow = getAllowanceWindow(
+    {
+      tier: row.subscription.tier,
+      interval: row.subscription.interval,
+      currentPeriodStart: row.subscription.currentPeriodStart,
+      currentPeriodEnd: row.subscription.currentPeriodEnd,
+    },
+    now,
+  )
   return {
     organizationId,
-    includedBalanceMicros: asNumber(row.account.includedBalanceMicros),
+    includedRemainingMicros: getIncludedBalance(row.subscription, now),
     prepaidBalanceMicros: asNumber(row.account.prepaidBalanceMicros),
     monthlySpendLimitMicros: asNumber(row.account.monthlySpendLimitMicros),
     monthlyAllowanceMicros: asNumber(row.subscription.monthlyAllowanceMicros),
-    currentPeriodStart: row.subscription.currentPeriodStart,
-    nextAllowanceGrantAt: row.subscription.nextAllowanceGrantAt,
+    currentPeriodStart: allowanceWindow.start,
+    nextResetAt: allowanceWindow.end,
     tier: row.subscription.tier,
     status: row.subscription.status,
     autoReloadEnabled: row.account.autoReloadEnabled,
