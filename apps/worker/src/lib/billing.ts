@@ -180,6 +180,21 @@ function resolveBillingReturnUrl(returnPath?: string | null) {
   }
 }
 
+/** Stripe needs literal `{CHECKOUT_SESSION_ID}` — URL.searchParams would encode the braces. */
+function billingReturnUrl(returnPath?: string | null, billing?: 'success' | 'return') {
+  const url = new URL(resolveBillingReturnUrl(returnPath))
+  if (billing) url.searchParams.set('billing', billing)
+  return url.toString()
+}
+
+function billingSuccessUrl(returnPath?: string | null) {
+  const url = new URL(billingReturnUrl(returnPath, 'success'))
+  const hash = url.hash
+  url.hash = ''
+  const base = url.toString()
+  return `${base}${base.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}${hash}`
+}
+
 export const planCatalog: PlanConfig[] = [
   {
     tier: 'free',
@@ -885,10 +900,8 @@ async function createCheckoutTopupSession(args: {
 }) {
   const client = requireStripe()
   const amountCents = Math.round(args.amountUsd * 100)
-  const returnBase = resolveBillingReturnUrl(args.returnPath)
-  const sep = returnBase.includes('?') ? '&' : '?'
-  const successUrl = `${returnBase}${sep}billing=success&session_id={CHECKOUT_SESSION_ID}`
-  const cancelUrl = `${returnBase}${sep}billing=cancelled`
+  const successUrl = billingSuccessUrl(args.returnPath)
+  const cancelUrl = resolveBillingReturnUrl(args.returnPath)
   const idempotencyKey = args.requestId ? `billing-topup-checkout:${args.requestId}` : undefined
   const session = await client.checkout.sessions.create(
     {
@@ -1142,10 +1155,8 @@ export async function createBillingCheckout(args: {
   })
 
   const client = requireStripe()
-  const returnBase = resolveBillingReturnUrl(args.returnPath)
-  const sep = returnBase.includes('?') ? '&' : '?'
-  const successUrl = `${returnBase}${sep}billing=success&session_id={CHECKOUT_SESSION_ID}`
-  const cancelUrl = `${returnBase}${sep}billing=cancelled`
+  const successUrl = billingSuccessUrl(args.returnPath)
+  const cancelUrl = resolveBillingReturnUrl(args.returnPath)
 
   const session = await client.checkout.sessions.create(
     {
@@ -1349,11 +1360,9 @@ export async function createBillingPortal(args: {
   if (!snapshot.stripeCustomerId) throw new Error('No Stripe customer found for this organization')
 
   const client = requireStripe()
-  const returnUrl = new URL(resolveBillingReturnUrl(args.returnPath))
-  returnUrl.searchParams.set('billing', 'return')
   const session = await client.billingPortal.sessions.create({
     customer: snapshot.stripeCustomerId,
-    return_url: returnUrl.toString(),
+    return_url: billingReturnUrl(args.returnPath, 'return'),
   })
 
   return session.url

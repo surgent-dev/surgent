@@ -28,6 +28,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { useCredits } from '@/hooks/use-credits'
+import BillingSyncBridge from '@/components/billing-sync-bridge'
 import PlanDialog from '@/components/plan-dialog'
 import UserMenu from '@/components/project-header/user-menu'
 import {
@@ -40,13 +41,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { useProjectsQuery, useRenameProject, useDeleteProject } from '@/queries/projects'
 import type { Project } from '@/types/project'
-
-interface User {
-  id: string
-  email: string
-  name?: string
-  image?: string
-}
 
 // Deterministic soft color from project ID
 function getProjectColor(id: string): string {
@@ -222,7 +216,6 @@ function ProjectCard({
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
   const { data: projects = [], isLoading } = useProjectsQuery()
   const credits = useCredits()
   const rename = useRenameProject()
@@ -238,14 +231,8 @@ export default function DashboardPage() {
         router.push('/login')
         return
       }
-      setUser(data.user as User)
     })
   }, [router])
-
-  const handleSignOut = async () => {
-    await authClient.signOut()
-    router.push('/login')
-  }
 
   const handleRename = useCallback(() => {
     if (!projectToRename || !newName.trim()) return
@@ -278,158 +265,164 @@ export default function DashboardPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <header className="w-full px-6 h-14 flex items-center border-b border-border/50">
-          <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
-            <Skeleton className="h-8 w-28" />
-            <Skeleton className="h-10 w-10 rounded-full" />
-          </div>
-        </header>
-        <main className="max-w-6xl mx-auto px-6 py-8">
-          <Skeleton className="h-9 w-40 mb-10" />
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="rounded-xl border border-border/50 overflow-hidden">
-                <Skeleton className="h-40 rounded-none" />
-                <div className="p-4 space-y-2">
-                  <Skeleton className="h-5 w-32" />
-                  <Skeleton className="h-4 w-20" />
+      <>
+        <BillingSyncBridge />
+        <div className="min-h-screen bg-background">
+          <header className="w-full px-6 h-14 flex items-center border-b border-border/50">
+            <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
+              <Skeleton className="h-8 w-28" />
+              <Skeleton className="h-10 w-10 rounded-full" />
+            </div>
+          </header>
+          <main className="max-w-6xl mx-auto px-6 py-8">
+            <Skeleton className="h-9 w-40 mb-10" />
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="rounded-xl border border-border/50 overflow-hidden">
+                  <Skeleton className="h-40 rounded-none" />
+                  <div className="p-4 space-y-2">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </main>
-      </div>
+              ))}
+            </div>
+          </main>
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="w-full px-6 h-14 flex items-center border-b border-border/50">
-        <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/surgent-logo-dark.svg"
-              alt="Surgent"
-              width={119}
-              height={32}
-              className="h-7 w-auto hidden dark:block"
-              priority
-            />
-            <Image
-              src="/surgent-logo.svg"
-              alt="Surgent"
-              width={119}
-              height={32}
-              className="h-7 w-auto block dark:hidden"
-              priority
-            />
-          </Link>
+    <>
+      <BillingSyncBridge />
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <header className="w-full px-6 h-14 flex items-center border-b border-border/50">
+          <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
+            <Link href="/" className="flex items-center gap-2">
+              <Image
+                src="/surgent-logo-dark.svg"
+                alt="Surgent"
+                width={119}
+                height={32}
+                className="h-7 w-auto hidden dark:block"
+                priority
+              />
+              <Image
+                src="/surgent-logo.svg"
+                alt="Surgent"
+                width={119}
+                height={32}
+                className="h-7 w-auto block dark:hidden"
+                priority
+              />
+            </Link>
 
-          <UserMenu onUpgrade={() => credits.setPlanDialogOpen(true)} />
-        </div>
-      </header>
+            <UserMenu onUpgrade={() => credits.setPlanDialogOpen(true)} />
+          </div>
+        </header>
 
-      {/* Main */}
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        {/* Title row */}
-        <div className="flex items-center justify-between mb-10">
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Your Projects</h1>
-          <Button onClick={() => router.push('/')} className="gap-2 rounded-full">
-            <Plus className="h-4 w-4" />
-            New project
-          </Button>
-        </div>
-
-        {/* Projects grid */}
-        {projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-6">
-              <FolderOpen className="h-7 w-7 text-muted-foreground" />
-            </div>
-            <h2 className="text-xl font-medium mb-2">No projects yet</h2>
-            <p className="text-muted-foreground mb-8 max-w-sm">
-              Create your first project to start building with AI
-            </p>
+        {/* Main */}
+        <main className="max-w-6xl mx-auto px-6 py-8">
+          {/* Title row */}
+          <div className="flex items-center justify-between mb-10">
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Your Projects</h1>
             <Button onClick={() => router.push('/')} className="gap-2 rounded-full">
               <Plus className="h-4 w-4" />
-              Create your first project
+              New project
             </Button>
           </div>
-        ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {projects.map((project: Project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onClick={() => router.push(`/project/${project.id}`)}
-                onRename={() => {
-                  setNewName(project.name)
-                  setProjectToRename(project)
-                }}
-                onDelete={() => setProjectToDelete(project)}
-              />
-            ))}
-          </div>
-        )}
-      </main>
 
-      {/* Rename Dialog */}
-      <Dialog open={!!projectToRename} onOpenChange={(open) => !open && setProjectToRename(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Rename project</DialogTitle>
-          </DialogHeader>
-          <Input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Project name"
-            onKeyDown={(e) => e.key === 'Enter' && handleRename()}
-            autoFocus
-          />
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="ghost" onClick={() => setProjectToRename(null)}>
-              Cancel
-            </Button>
-            <Button onClick={handleRename} disabled={rename.isPending || !newName.trim()}>
-              {rename.isPending ? 'Saving...' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Dialog */}
-      <Dialog open={!!projectToDelete} onOpenChange={(open) => !open && setProjectToDelete(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-destructive/10 mb-2">
-              <Trash2 className="h-5 w-5 text-destructive" />
+          {/* Projects grid */}
+          {projects.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-6">
+                <FolderOpen className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <h2 className="text-xl font-medium mb-2">No projects yet</h2>
+              <p className="text-muted-foreground mb-8 max-w-sm">
+                Create your first project to start building with AI
+              </p>
+              <Button onClick={() => router.push('/')} className="gap-2 rounded-full">
+                <Plus className="h-4 w-4" />
+                Create your first project
+              </Button>
             </div>
-            <DialogTitle>Delete project</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            This will permanently delete{' '}
-            <span className="font-medium text-foreground">{projectToDelete?.name}</span> and all its
-            data. This cannot be undone.
-          </p>
-          <DialogFooter className="gap-2 sm:gap-2 mt-2">
-            <Button variant="outline" onClick={() => setProjectToDelete(null)} className="flex-1">
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleteProject.isPending}
-              className="flex-1"
-            >
-              {deleteProject.isPending ? 'Deleting...' : 'Delete project'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          ) : (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {projects.map((project: Project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onClick={() => router.push(`/project/${project.id}`)}
+                  onRename={() => {
+                    setNewName(project.name)
+                    setProjectToRename(project)
+                  }}
+                  onDelete={() => setProjectToDelete(project)}
+                />
+              ))}
+            </div>
+          )}
+        </main>
 
-      <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
-    </div>
+        {/* Rename Dialog */}
+        <Dialog open={!!projectToRename} onOpenChange={(open) => !open && setProjectToRename(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Rename project</DialogTitle>
+            </DialogHeader>
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Project name"
+              onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+              autoFocus
+            />
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="ghost" onClick={() => setProjectToRename(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRename} disabled={rename.isPending || !newName.trim()}>
+                {rename.isPending ? 'Saving...' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Dialog */}
+        <Dialog open={!!projectToDelete} onOpenChange={(open) => !open && setProjectToDelete(null)}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-destructive/10 mb-2">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              <DialogTitle>Delete project</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              This will permanently delete{' '}
+              <span className="font-medium text-foreground">{projectToDelete?.name}</span> and all
+              its data. This cannot be undone.
+            </p>
+            <DialogFooter className="gap-2 sm:gap-2 mt-2">
+              <Button variant="outline" onClick={() => setProjectToDelete(null)} className="flex-1">
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={deleteProject.isPending}
+                className="flex-1"
+              >
+                {deleteProject.isPending ? 'Deleting...' : 'Delete project'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
+      </div>
+    </>
   )
 }

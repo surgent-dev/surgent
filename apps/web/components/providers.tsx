@@ -6,7 +6,6 @@ import { useState, useEffect } from 'react'
 import { ThemeProvider } from 'next-themes'
 import posthog from 'posthog-js'
 import { authClient } from '@/lib/auth-client'
-import BillingSyncBridge from '@/components/billing-sync-bridge'
 
 type ProvidersProps = {
   children: ReactNode
@@ -26,7 +25,6 @@ export default function Providers({ children }: ProvidersProps) {
   return (
     <QueryClientProvider client={client}>
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-        <BillingSyncBridge />
         {children}
       </ThemeProvider>
     </QueryClientProvider>

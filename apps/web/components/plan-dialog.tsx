@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -83,8 +84,13 @@ export default function PlanDialog({ open, onOpenChange }: PlanDialogProps) {
   const isActive = currentTier === 'pro' && currentInterval === interval
 
   const startCheckout = async () => {
-    const url = await checkout.mutateAsync({ interval })
-    window.location.href = url
+    try {
+      const url = await checkout.mutateAsync({ interval })
+      window.location.href = url
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to start checkout'
+      toast.error(message, { position: 'top-right' })
+    }
   }
 
   const monthlyOption = billingOptions.find((o) => o.interval === 'month')
