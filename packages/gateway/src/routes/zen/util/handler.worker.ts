@@ -28,7 +28,6 @@ import { createRateLimiter } from './rateLimiter'
 import { createDataDumper } from './dataDumper'
 import { createTrialLimiter } from './trialLimiter'
 import { createStickyTracker } from './stickyProviderTracker'
-import { Autumn } from 'autumn-js'
 
 type ZenConfig = ReturnType<typeof loadZenData>
 
@@ -41,6 +40,15 @@ type ProviderInfo = {
   credentials?: string | null
 }
 
+type UsageBillingMode = 'surgent' | 'byok' | 'anonymous'
+type UsageBillingTier = 'free' | 'pro' | null
+type UsageBillingInterval = 'month' | 'year' | null
+type UsageBillingContext = {
+  mode: UsageBillingMode
+  tier: UsageBillingTier
+  interval: UsageBillingInterval
+}
+
 type AuthInfo = {
   apiKeyId: string
   projectId: string
@@ -48,10 +56,121 @@ type AuthInfo = {
   userId: string
   provider: ProviderInfo | null
   isDisabled: boolean
+  billingTier: string | null
+  billingInterval: string | null
 }
 
 function centsToMicroCents(amount: number) {
   return Math.round(amount * 1_000_000)
+}
+
+function addMonths(date: Date, months: number) {
+  const next = new Date(date)
+  next.setUTCMonth(next.getUTCMonth() + months)
+  return next
+}
+
+function startOfMonth(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1))
+}
+
+function getUsagePeriodStart(
+  row: {
+    currentPeriodStart: Date | null
+    nextAllowanceGrantAt: Date | null
+  },
+  now = new Date(),
+) {
+  if (row.nextAllowanceGrantAt) return addMonths(row.nextAllowanceGrantAt, -1)
+  return row.currentPeriodStart ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+}
+
+function isAllowanceEligible(tier: string, status: string) {
+  if (tier === 'free') return true
+  return status === 'active' || status === 'trialing'
+}
+
+function getUsageDebits(costMicro: number, included: number, prepaid: number) {
+  const includedDebit = Math.min(included, costMicro)
+  const prepaidDebit = Math.min(prepaid, Math.max(costMicro - includedDebit, 0))
+  return {
+    includedDebit,
+    prepaidDebit,
+    uncoveredMicros: Math.max(costMicro - includedDebit - prepaidDebit, 0),
+  }
+}
+
+function resolveBillingContext(authInfo: AuthInfo | undefined): UsageBillingContext {
+  if (!authInfo) {
+    return {
+      mode: 'anonymous',
+      tier: null,
+      interval: null,
+    }
+  }
+
+  const billing = {
+    tier:
+      authInfo.billingTier === 'free' || authInfo.billingTier === 'pro'
+        ? authInfo.billingTier
+        : null,
+    interval:
+      authInfo.billingInterval === 'month' || authInfo.billingInterval === 'year'
+        ? authInfo.billingInterval
+        : null,
+  } satisfies Pick<UsageBillingContext, 'tier' | 'interval'>
+  if (authInfo.provider?.credentials) {
+    return {
+      mode: 'byok',
+      ...billing,
+    }
+  }
+
+  return {
+    mode: 'surgent',
+    ...billing,
+  }
+}
+
+async function resetIncludedBalance(
+  tx: ReturnType<typeof getDb>,
+  organizationId: string,
+  includedBalanceMicros: number,
+  idempotencyKey: string,
+) {
+  if (includedBalanceMicros <= 0) return
+
+  const inserted = await tx
+    .insertInto('billing_ledger')
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      kind: 'manual_adjustment',
+      bucket: 'included',
+      amountMicros: String(-includedBalanceMicros),
+      stripeEventId: null,
+      stripeInvoiceId: null,
+      stripeCheckoutSessionId: null,
+      stripePaymentIntentId: null,
+      usageId: null,
+      idempotencyKey,
+      metadata: { source: 'gateway', reason: 'allowance_reset' },
+      createdAt: new Date(),
+    })
+    .onConflict((oc) => oc.column('idempotencyKey').doNothing())
+    .returning('id')
+    .executeTakeFirst()
+
+  if (!inserted) return
+
+  await tx
+    .updateTable('billing_account')
+    .set({
+      includedBalanceMicros: '0',
+      updatedAt: new Date(),
+    })
+    .where('organizationId', '=', organizationId)
+    .execute()
 }
 
 export async function handleZenRequest(
@@ -69,7 +188,6 @@ export async function handleZenRequest(
   const MAX_RETRIES = 3
   const logger = createLogger(c.env.STAGE)
   const db = getDb(c.env)
-  const autumn = c.env.AUTUMN_SECRET_KEY ? new Autumn({ secretKey: c.env.AUTUMN_SECRET_KEY }) : null
 
   try {
     const url = c.req.url
@@ -98,6 +216,13 @@ export async function handleZenRequest(
     const stickyTracker = createStickyTracker(modelInfo.stickyProvider, sessionId, c.env.GATEWAY_KV)
     const stickyProvider = (await stickyTracker?.get()) ?? undefined
     const authInfo = await authenticate(modelInfo)
+    const billing = resolveBillingContext(authInfo)
+    logger.metric({
+      billing_mode: billing.mode,
+      billing_tier: billing.tier ?? undefined,
+      billing_interval: billing.interval ?? undefined,
+    })
+    await ensureBillingAccess(authInfo)
 
     const retriableRequest = async (
       retry: RetryOptions = { excludeProviders: [], retryCount: 0 },
@@ -457,6 +582,7 @@ export async function handleZenRequest(
           .on('m.model', '=', modelInfo.id)
           .on('m.deletedAt', 'is', null),
       )
+      .leftJoin('billing_subscription as bs', 'bs.organizationId', 'pr.organizationId')
       .select(({ ref }) => [
         ref('k.id').as('apiKeyId'),
         ref('k.projectId').as('projectId'),
@@ -466,6 +592,8 @@ export async function handleZenRequest(
         ref('k.expiresAt').as('expiresAt'),
         ref('p.credentials').as('providerCredentials'),
         ref('m.id').as('disabledModelId'),
+        ref('bs.tier').as('billingTier'),
+        ref('bs.interval').as('billingInterval'),
       ])
       .where('k.id', '=', verify.key.id)
       .executeTakeFirst()
@@ -493,6 +621,8 @@ export async function handleZenRequest(
       userId: row.userId,
       provider,
       isDisabled: !!row.disabledModelId,
+      billingTier: row.billingTier ?? 'free',
+      billingInterval: row.billingInterval,
     }
   }
 
@@ -506,12 +636,218 @@ export async function handleZenRequest(
     providerInfo.apiKey = authInfo.provider.credentials
   }
 
+  async function ensureBillingAccess(authInfo: AuthInfo | undefined) {
+    if (!authInfo || authInfo.provider?.credentials) return
+
+    const state = await db
+      .selectFrom('billing_account as account')
+      .innerJoin(
+        'billing_subscription as subscription',
+        'subscription.organizationId',
+        'account.organizationId',
+      )
+      .select([
+        'account.organizationId',
+        'account.includedBalanceMicros',
+        'account.prepaidBalanceMicros',
+        'account.monthlySpendLimitMicros',
+        'subscription.tier',
+        'subscription.status',
+        'subscription.monthlyAllowanceMicros',
+        'subscription.currentPeriodStart',
+        'subscription.nextAllowanceGrantAt',
+      ])
+      .where('account.organizationId', '=', authInfo.organizationId)
+      .executeTakeFirst()
+
+    if (!state) throw new CreditsError('Billing state is not ready yet. Please try again.')
+
+    await db.transaction().execute(async (tx) => {
+      const now = new Date()
+      let nextAllowanceGrantAt = state.nextAllowanceGrantAt
+      if (!isAllowanceEligible(state.tier, state.status)) return
+
+      if (!nextAllowanceGrantAt) {
+        const allowanceMicros = Number(state.monthlyAllowanceMicros ?? 0)
+        const anchor = state.currentPeriodStart ?? startOfMonth(now)
+        if (allowanceMicros > 0) {
+          const account = await tx
+            .selectFrom('billing_account')
+            .select('includedBalanceMicros')
+            .where('organizationId', '=', authInfo.organizationId)
+            .forUpdate()
+            .executeTakeFirst()
+
+          await resetIncludedBalance(
+            tx,
+            authInfo.organizationId,
+            Number(account?.includedBalanceMicros ?? 0),
+            `included-reset:${authInfo.organizationId}:${anchor.toISOString()}`,
+          )
+
+          const inserted = await tx
+            .insertInto('billing_ledger')
+            .values({
+              id: crypto.randomUUID(),
+              organizationId: authInfo.organizationId,
+              kind: 'subscription_allowance',
+              bucket: 'included',
+              amountMicros: String(allowanceMicros),
+              stripeEventId: null,
+              stripeInvoiceId: null,
+              stripeCheckoutSessionId: null,
+              stripePaymentIntentId: null,
+              usageId: null,
+              idempotencyKey: `allowance:${authInfo.organizationId}:${anchor.toISOString()}`,
+              metadata: {
+                source: 'gateway',
+                anchor: anchor.toISOString(),
+              },
+              createdAt: now,
+            })
+            .onConflict((oc) => oc.column('idempotencyKey').doNothing())
+            .returning('id')
+            .executeTakeFirst()
+
+          if (inserted) {
+            await tx
+              .updateTable('billing_account')
+              .set({
+                includedBalanceMicros: sql`"includedBalanceMicros" + ${String(allowanceMicros)}`,
+                updatedAt: now,
+              })
+              .where('organizationId', '=', authInfo.organizationId)
+              .execute()
+          }
+        }
+
+        nextAllowanceGrantAt = addMonths(anchor, 1)
+      }
+
+      while (nextAllowanceGrantAt && nextAllowanceGrantAt <= now) {
+        const allowanceMicros = Number(state.monthlyAllowanceMicros ?? 0)
+        if (allowanceMicros <= 0) break
+        const idempotencyKey = `allowance:${authInfo.organizationId}:${nextAllowanceGrantAt.toISOString()}`
+        const account = await tx
+          .selectFrom('billing_account')
+          .select('includedBalanceMicros')
+          .where('organizationId', '=', authInfo.organizationId)
+          .forUpdate()
+          .executeTakeFirst()
+
+        await resetIncludedBalance(
+          tx,
+          authInfo.organizationId,
+          Number(account?.includedBalanceMicros ?? 0),
+          `included-reset:${authInfo.organizationId}:${nextAllowanceGrantAt.toISOString()}`,
+        )
+
+        const inserted = await tx
+          .insertInto('billing_ledger')
+          .values({
+            id: crypto.randomUUID(),
+            organizationId: authInfo.organizationId,
+            kind: 'subscription_allowance',
+            bucket: 'included',
+            amountMicros: String(allowanceMicros),
+            stripeEventId: null,
+            stripeInvoiceId: null,
+            stripeCheckoutSessionId: null,
+            stripePaymentIntentId: null,
+            usageId: null,
+            idempotencyKey,
+            metadata: {
+              source: 'gateway',
+              anchor: nextAllowanceGrantAt.toISOString(),
+            },
+            createdAt: new Date(),
+          })
+          .onConflict((oc) => oc.column('idempotencyKey').doNothing())
+          .returning('id')
+          .executeTakeFirst()
+
+        if (inserted) {
+          await tx
+            .updateTable('billing_account')
+            .set({
+              includedBalanceMicros: sql`"includedBalanceMicros" + ${String(allowanceMicros)}`,
+              updatedAt: now,
+            })
+            .where('organizationId', '=', authInfo.organizationId)
+            .execute()
+        }
+
+        nextAllowanceGrantAt = addMonths(nextAllowanceGrantAt, 1)
+      }
+
+      if (nextAllowanceGrantAt !== state.nextAllowanceGrantAt) {
+        await tx
+          .updateTable('billing_subscription')
+          .set({
+            nextAllowanceGrantAt,
+            updatedAt: now,
+          })
+          .where('organizationId', '=', authInfo.organizationId)
+          .execute()
+      }
+    })
+
+    const fresh = await db
+      .selectFrom('billing_account as account')
+      .innerJoin(
+        'billing_subscription as subscription',
+        'subscription.organizationId',
+        'account.organizationId',
+      )
+      .select([
+        'account.includedBalanceMicros',
+        'account.prepaidBalanceMicros',
+        'account.monthlySpendLimitMicros',
+        'subscription.currentPeriodStart',
+        'subscription.nextAllowanceGrantAt',
+      ])
+      .where('account.organizationId', '=', authInfo.organizationId)
+      .executeTakeFirst()
+
+    const included = Number(fresh?.includedBalanceMicros ?? 0)
+    const prepaid = Number(fresh?.prepaidBalanceMicros ?? 0)
+    const monthlySpendLimitMicros = Number(fresh?.monthlySpendLimitMicros ?? 0)
+    if (monthlySpendLimitMicros > 0) {
+      const spent = await db
+        .selectFrom('billing_ledger')
+        .select(
+          sql<string>`COALESCE(SUM(CASE WHEN "kind" = 'usage_debit' THEN ABS("amountMicros") ELSE 0 END), 0)`.as(
+            'spentMicros',
+          ),
+        )
+        .where('organizationId', '=', authInfo.organizationId)
+        .where(
+          'createdAt',
+          '>=',
+          getUsagePeriodStart({
+            currentPeriodStart: fresh?.currentPeriodStart ?? null,
+            nextAllowanceGrantAt: fresh?.nextAllowanceGrantAt ?? null,
+          }),
+        )
+        .executeTakeFirst()
+
+      if (Number(spent?.spentMicros ?? 0) >= monthlySpendLimitMicros) {
+        throw new MonthlyLimitError('You have reached your monthly spending limit.')
+      }
+    }
+
+    if (included + prepaid > 0) return
+
+    throw new CreditsError('You have run out of usage balance. Upgrade or add more balance.')
+  }
+
   async function trackUsage(
     authInfo: AuthInfo | undefined,
     modelInfo: ModelInfo,
     providerInfo: ProviderSelection,
     usageInfo: UsageInfo,
   ) {
+    const billing = resolveBillingContext(authInfo)
     const {
       inputTokens,
       outputTokens,
@@ -568,10 +904,39 @@ export async function handleZenRequest(
     const costBig = BigInt(costMicro)
 
     await db.transaction().execute(async (tx) => {
+      const usageId = crypto.randomUUID()
+      let includedDebit = 0
+      let prepaidDebit = 0
+
+      if (costMicro > 0) {
+        const account = await tx
+          .selectFrom('billing_account')
+          .select(['includedBalanceMicros', 'prepaidBalanceMicros'])
+          .where('organizationId', '=', authInfo.organizationId)
+          .forUpdate()
+          .executeTakeFirst()
+
+        if (!account) {
+          throw new CreditsError('Billing state is not ready yet. Please try again.')
+        }
+
+        const debits = getUsageDebits(
+          costMicro,
+          Math.max(Number(account.includedBalanceMicros ?? 0), 0),
+          Math.max(Number(account.prepaidBalanceMicros ?? 0), 0),
+        )
+        includedDebit = debits.includedDebit
+        prepaidDebit = debits.prepaidDebit
+
+        if (debits.uncoveredMicros > 0) {
+          throw new CreditsError('You have run out of usage balance. Upgrade or add more balance.')
+        }
+      }
+
       await tx
         .insertInto('usage')
         .values({
-          id: crypto.randomUUID(),
+          id: usageId,
           projectId: authInfo.projectId,
           model: modelInfo.id,
           provider: providerInfo.id,
@@ -583,6 +948,9 @@ export async function handleZenRequest(
           cacheWrite1hTokens,
           cost: String(costBig),
           keyId: authInfo.apiKeyId,
+          enrichment: {
+            billing,
+          },
           createdAt: new Date(),
           updatedAt: new Date(),
           deletedAt: null,
@@ -594,16 +962,81 @@ export async function handleZenRequest(
         .set({ lastRequest: sql`now()` })
         .where('id', '=', authInfo.apiKeyId)
         .execute()
-    })
 
-    if (costMicro > 0 && autumn) {
-      const credits = Math.max(1, Math.round(costMicro / 1_000_000))
-      c.executionCtx.waitUntil(
-        autumn
-          .track({ customer_id: authInfo.organizationId, feature_id: 'ai_credits', value: credits })
-          .catch(() => {}),
-      )
-    }
+      if (includedDebit > 0) {
+        const inserted = await tx
+          .insertInto('billing_ledger')
+          .values({
+            id: crypto.randomUUID(),
+            organizationId: authInfo.organizationId,
+            kind: 'usage_debit',
+            bucket: 'included',
+            amountMicros: String(-includedDebit),
+            stripeEventId: null,
+            stripeInvoiceId: null,
+            stripeCheckoutSessionId: null,
+            stripePaymentIntentId: null,
+            usageId,
+            idempotencyKey: `usage:${usageId}:included`,
+            metadata: {
+              projectId: authInfo.projectId,
+              billing,
+            },
+            createdAt: new Date(),
+          })
+          .onConflict((oc) => oc.column('idempotencyKey').doNothing())
+          .returning('id')
+          .executeTakeFirst()
+
+        if (inserted) {
+          await tx
+            .updateTable('billing_account')
+            .set({
+              includedBalanceMicros: sql`GREATEST(0, "includedBalanceMicros" - ${String(includedDebit)})`,
+              updatedAt: new Date(),
+            })
+            .where('organizationId', '=', authInfo.organizationId)
+            .execute()
+        }
+      }
+
+      if (prepaidDebit > 0) {
+        const inserted = await tx
+          .insertInto('billing_ledger')
+          .values({
+            id: crypto.randomUUID(),
+            organizationId: authInfo.organizationId,
+            kind: 'usage_debit',
+            bucket: 'prepaid',
+            amountMicros: String(-prepaidDebit),
+            stripeEventId: null,
+            stripeInvoiceId: null,
+            stripeCheckoutSessionId: null,
+            stripePaymentIntentId: null,
+            usageId,
+            idempotencyKey: `usage:${usageId}:prepaid`,
+            metadata: {
+              projectId: authInfo.projectId,
+              billing,
+            },
+            createdAt: new Date(),
+          })
+          .onConflict((oc) => oc.column('idempotencyKey').doNothing())
+          .returning('id')
+          .executeTakeFirst()
+
+        if (inserted) {
+          await tx
+            .updateTable('billing_account')
+            .set({
+              prepaidBalanceMicros: sql`GREATEST(0, "prepaidBalanceMicros" - ${String(prepaidDebit)})`,
+              updatedAt: new Date(),
+            })
+            .where('organizationId', '=', authInfo.organizationId)
+            .execute()
+        }
+      }
+    })
 
     return costBig
   }

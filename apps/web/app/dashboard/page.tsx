@@ -7,7 +7,6 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { authClient } from '@/lib/auth-client'
 import { getProvisioningStepLabel } from '@/lib/project-provisioning'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -25,14 +24,12 @@ import {
   Trash2,
   ExternalLink,
   FolderOpen,
-  Store,
   Loader2,
   AlertCircle,
-  CreditCard,
 } from 'lucide-react'
-import { Lightning } from '@phosphor-icons/react'
 import { useCredits } from '@/hooks/use-credits'
 import PlanDialog from '@/components/plan-dialog'
+import UserMenu from '@/components/project-header/user-menu'
 import {
   Dialog,
   DialogContent,
@@ -288,7 +285,7 @@ export default function DashboardPage() {
             <Skeleton className="h-10 w-10 rounded-full" />
           </div>
         </header>
-        <main className="max-w-6xl mx-auto py-8">
+        <main className="max-w-6xl mx-auto px-6 py-8">
           <Skeleton className="h-9 w-40 mb-10" />
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -317,101 +314,32 @@ export default function DashboardPage() {
               alt="Surgent"
               width={119}
               height={32}
-              className="h-7 w-auto"
+              className="h-7 w-auto hidden dark:block"
+              priority
+            />
+            <Image
+              src="/surgent-logo.svg"
+              alt="Surgent"
+              width={119}
+              height={32}
+              className="h-7 w-auto block dark:hidden"
               priority
             />
           </Link>
 
-          <div className="flex items-center gap-3">
-            {credits.hasCustomer && !credits.unlimited && (
-              <button
-                onClick={() => credits.setPlanDialogOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-brand/20 bg-brand/8 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/12 active:translate-y-px transition-all duration-100"
-              >
-                <Lightning className="size-3.5" weight="fill" />
-                Upgrade
-              </button>
-            )}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="h-10 w-10 rounded-full ring-1 ring-border/60 hover:ring-border transition-all">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={user?.image} />
-                    <AvatarFallback className="text-sm bg-muted">
-                      {user?.name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <div className="px-3 py-2">
-                  <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-                </div>
-                <DropdownMenuSeparator />
-                {credits.hasCustomer && !credits.unlimited && (
-                  <>
-                    <div className="px-3 py-2.5 space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <span className="text-xs text-muted-foreground">Credits</span>
-                        <span className="text-xs tabular-nums font-medium">
-                          {credits.used.toLocaleString()} / {credits.total.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="h-1 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            credits.usedPercent >= 90
-                              ? 'bg-rose-500'
-                              : credits.usedPercent >= 70
-                                ? 'bg-amber-500'
-                                : 'bg-emerald-500'
-                          }`}
-                          style={{ width: `${credits.usedPercent}%` }}
-                        />
-                      </div>
-                      <button
-                        onClick={() => credits.setPlanDialogOpen(true)}
-                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-brand/20 bg-brand/8 px-2.5 py-1.5 text-[11px] font-medium text-brand hover:bg-brand/12 active:translate-y-px transition-all duration-100"
-                      >
-                        <Lightning className="size-3" weight="fill" />
-                        Upgrade
-                      </button>
-                    </div>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                <DropdownMenuItem onClick={() => credits.openBillingPortal()}>
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Billing
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <UserMenu onUpgrade={() => credits.setPlanDialogOpen(true)} />
         </div>
       </header>
 
       {/* Main */}
-      <main className="max-w-6xl mx-auto py-8">
+      <main className="max-w-6xl mx-auto px-6 py-8">
         {/* Title row */}
         <div className="flex items-center justify-between mb-10">
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Your Projects</h1>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => router.push('/marketplace')}
-              className="gap-2 rounded-full"
-            >
-              <Store className="h-4 w-4" />
-              Marketplace
-            </Button>
-            <Button onClick={() => router.push('/')} className="gap-2 rounded-full">
-              <Plus className="h-4 w-4" />
-              New project
-            </Button>
-          </div>
+          <Button onClick={() => router.push('/')} className="gap-2 rounded-full">
+            <Plus className="h-4 w-4" />
+            New project
+          </Button>
         </div>
 
         {/* Projects grid */}
