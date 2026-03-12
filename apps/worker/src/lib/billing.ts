@@ -26,8 +26,7 @@ export type TopupPaymentIntentResult =
       error?: string | null
     }
 
-type BillingBucket = 'prepaid'
-type BillingLedgerKind = 'topup_purchase' | 'auto_reload' | 'refund' | 'reward'
+type BillingPaymentKind = 'topup' | 'subscription' | 'reward' | 'auto_reload'
 
 type PlanConfig = {
   tier: BillingTier
@@ -102,6 +101,8 @@ type BillingStateRow = {
     autoReloadThresholdMicros: string | number | null
     autoReloadAmountMicros: string | number | null
     monthlySpendLimitMicros: string | number | null
+    monthlySpendUsageMicros: string | number
+    monthlySpendUsagePeriodStart: Date | null
     currency: string
   }
   subscription: {
@@ -333,57 +334,72 @@ function getCatalogDisplay(): CatalogDisplay {
   }
 }
 
-async function insertLedgerEntry(
+async function insertBillingPaymentEntry(
   tx: typeof db,
   args: {
     organizationId: string
-    kind: BillingLedgerKind
-    bucket: BillingBucket
+    kind: BillingPaymentKind
     amountMicros: number
-    idempotencyKey: string
-    stripeEventId?: string | null
+    status: string
+    conflictColumn: 'idempotencyKey' | 'stripePaymentIntentId' | 'stripeCheckoutSessionId'
+    idempotencyKey?: string | null
     stripeInvoiceId?: string | null
     stripeCheckoutSessionId?: string | null
     stripePaymentIntentId?: string | null
-    usageId?: string | null
+    stripeCouponId?: string | null
+    stripeDiscountId?: string | null
+    stripePromotionCodeId?: string | null
+    currency?: string | null
     metadata?: Record<string, unknown>
+    createdAt?: Date
+    updatedAt?: Date
   },
 ) {
   const inserted = await tx
-    .insertInto('billing_ledger')
+    .insertInto('billing_payment')
     .values({
       id: crypto.randomUUID(),
       organizationId: args.organizationId,
       kind: args.kind,
-      bucket: args.bucket,
       amountMicros: String(args.amountMicros),
-      stripeEventId: args.stripeEventId ?? null,
       stripeInvoiceId: args.stripeInvoiceId ?? null,
       stripeCheckoutSessionId: args.stripeCheckoutSessionId ?? null,
       stripePaymentIntentId: args.stripePaymentIntentId ?? null,
-      usageId: args.usageId ?? null,
-      idempotencyKey: args.idempotencyKey,
+      stripeCouponId: args.stripeCouponId ?? null,
+      stripeDiscountId: args.stripeDiscountId ?? null,
+      stripePromotionCodeId: args.stripePromotionCodeId ?? null,
+      refundedAmountMicros: '0',
+      refundedAt: null,
+      currency: args.currency ?? 'usd',
+      status: args.status,
+      idempotencyKey: args.idempotencyKey ?? null,
       metadata: args.metadata ?? {},
-      createdAt: new Date(),
+      createdAt: args.createdAt ?? new Date(),
+      updatedAt: args.updatedAt ?? new Date(),
     })
-    .onConflict((oc) => oc.column('idempotencyKey').doNothing())
+    .onConflict((oc) => oc.column(args.conflictColumn).doNothing())
     .returning('id')
     .executeTakeFirst()
 
-  if (!inserted) return false
+  return Boolean(inserted)
+}
 
-  if (args.bucket === 'prepaid') {
-    await tx
-      .updateTable('billing_account')
-      .set({
-        prepaidBalanceMicros: sql`"prepaidBalanceMicros" + ${String(args.amountMicros)}`,
-        updatedAt: new Date(),
-      })
-      .where('organizationId', '=', args.organizationId)
-      .execute()
-  }
+async function applyPrepaidBalanceDeltaTx(
+  tx: typeof db,
+  organizationId: string,
+  amountMicros: number,
+  updatedAt = new Date(),
+) {
+  if (!amountMicros) return
 
-  return true
+  await tx
+    .updateTable('billing_account')
+    .set({
+      prepaidBalanceMicros: sql`"prepaidBalanceMicros" + ${String(amountMicros)}`,
+      updatedAt,
+    })
+    .where('organizationId', '=', organizationId)
+    .execute()
 }
 
 async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
@@ -404,6 +420,8 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
       prepaidBalanceMicros: '0',
       autoReloadEnabled: false,
       monthlySpendLimitMicros: null,
+      monthlySpendUsageMicros: '0',
+      monthlySpendUsagePeriodStart: null,
       currency: 'usd',
       createdAt: now,
       updatedAt: now,
@@ -477,17 +495,25 @@ export async function ensureBillingState(organizationId: string) {
   return getBillingState(organizationId)
 }
 
-async function getUsageSpentMicros(organizationId: string, periodStart: Date | null) {
-  const start = periodStart ?? startOfMonth(new Date())
-  const row = await db
-    .selectFrom('billing_ledger')
-    .select(
-      sql<string>`COALESCE(SUM(CASE WHEN "kind" = 'usage_debit' THEN ABS("amountMicros") ELSE 0 END), 0)`.as(
-        'spentMicros',
-      ),
-    )
-    .where('organizationId', '=', organizationId)
-    .where('createdAt', '>=', start)
+function getMonthlySpendUsage(
+  row: {
+    monthlySpendUsageMicros: string | number | null
+    monthlySpendUsagePeriodStart: Date | null
+  },
+  periodStart: Date,
+) {
+  if (!sameAllowanceWindowStart(row.monthlySpendUsagePeriodStart, periodStart)) return 0
+  return asNumber(row.monthlySpendUsageMicros)
+}
+
+async function getUsageSpentMicrosTx(tx: typeof db, organizationId: string, periodStart: Date) {
+  const row = await tx
+    .selectFrom('usage')
+    .innerJoin('project', 'project.id', 'usage.projectId')
+    .select(sql<string>`COALESCE(SUM("usage"."cost"), 0)`.as('spentMicros'))
+    .where('project.organizationId', '=', organizationId)
+    .where('usage.deletedAt', 'is', null)
+    .where('usage.createdAt', '>=', periodStart)
     .executeTakeFirst()
 
   return asNumber(row?.spentMicros)
@@ -510,7 +536,7 @@ async function normalizeState(row: BillingStateRow) {
   const monthlyAllowanceMicros = asNumber(row.subscription.monthlyAllowanceMicros)
   const monthlySpendLimitMicros = asNumber(row.account.monthlySpendLimitMicros)
   const totalBalanceMicros = includedRemainingMicros + prepaidBalanceMicros
-  const usedMicros = await getUsageSpentMicros(row.account.organizationId, allowanceWindow.start)
+  const usedMicros = getMonthlySpendUsage(row.account, allowanceWindow.start)
   const totalBudgetMicros = totalBalanceMicros + usedMicros
   const balancePercent = totalBudgetMicros
     ? Math.max(0, Math.min((usedMicros / totalBudgetMicros) * 100, 100))
@@ -553,7 +579,7 @@ async function getBillingBaseSnapshot(organizationId: string) {
   const base = await normalizeState(await getBillingState(organizationId))
 
   const migrationGrant = await db
-    .selectFrom('billing_ledger')
+    .selectFrom('billing_payment')
     .select('id')
     .where('organizationId', '=', organizationId)
     .where('idempotencyKey', 'like', 'old-stripe-grant:%')
@@ -892,9 +918,28 @@ export async function syncStripeCustomerToBillingState(args: {
   const nextPeriodStart = activeSubscription?.items.data[0]?.current_period_start
     ? new Date(activeSubscription.items.data[0].current_period_start * 1000)
     : startOfMonth(now)
+  const currentPeriodEnd = activeSubscription?.items.data[0]?.current_period_end
+    ? new Date(activeSubscription.items.data[0].current_period_end * 1000)
+    : addMonths(startOfMonth(now), 1)
 
   await db.transaction().execute(async (tx) => {
-    await ensureBillingStateTx(tx, args.organizationId)
+    const state = await ensureBillingStateTx(tx, args.organizationId)
+    const allowanceWindow = getAllowanceWindow(
+      {
+        tier: plan.tier,
+        interval: plan.interval,
+        currentPeriodStart: nextPeriodStart,
+        currentPeriodEnd,
+      },
+      now,
+    )
+    const monthlySpendUsageMicros = sameAllowanceWindowStart(
+      state.account.monthlySpendUsagePeriodStart,
+      allowanceWindow.start,
+    )
+      ? asNumber(state.account.monthlySpendUsageMicros)
+      : await getUsageSpentMicrosTx(tx, args.organizationId, allowanceWindow.start)
+    const monthlySpendUsagePeriodStart = monthlySpendUsageMicros > 0 ? allowanceWindow.start : null
 
     await tx
       .updateTable('organization')
@@ -911,6 +956,8 @@ export async function syncStripeCustomerToBillingState(args: {
           paymentMethod?.type === 'card' ? (paymentMethod.card?.brand ?? null) : null,
         paymentMethodLast4:
           paymentMethod?.type === 'card' ? (paymentMethod.card?.last4 ?? null) : null,
+        monthlySpendUsageMicros: String(monthlySpendUsageMicros),
+        monthlySpendUsagePeriodStart,
         updatedAt: now,
       })
       .where('organizationId', '=', args.organizationId)
@@ -931,9 +978,7 @@ export async function syncStripeCustomerToBillingState(args: {
           ? new Date(activeSubscription.trial_end * 1000)
           : null,
         currentPeriodStart: nextPeriodStart,
-        currentPeriodEnd: activeSubscription?.items.data[0]?.current_period_end
-          ? new Date(activeSubscription.items.data[0].current_period_end * 1000)
-          : addMonths(startOfMonth(now), 1),
+        currentPeriodEnd,
         cancelAtPeriodEnd: activeSubscription?.cancel_at_period_end ?? false,
         canceledAt: activeSubscription?.canceled_at
           ? new Date(activeSubscription.canceled_at * 1000)
@@ -1136,39 +1181,22 @@ export async function applyTopupPaymentIntent(args: {
 
   await db.transaction().execute(async (tx) => {
     await ensureBillingStateTx(tx, args.organizationId)
-    await insertLedgerEntry(tx, {
+    const inserted = await insertBillingPaymentEntry(tx, {
       organizationId: args.organizationId,
-      kind: 'topup_purchase',
-      bucket: 'prepaid',
+      kind: 'topup',
       amountMicros,
-      stripeEventId: args.stripeEventId ?? null,
+      status: 'paid',
+      conflictColumn: 'stripePaymentIntentId',
+      stripeInvoiceId: null,
       stripePaymentIntentId: paymentIntent.id,
-      idempotencyKey: `topup:${paymentIntent.id}`,
+      currency: paymentIntent.currency ?? 'usd',
       metadata: { amountUsd: paymentIntent.metadata?.amountUsd ?? null },
+      createdAt: now,
+      updatedAt: now,
     })
 
-    await tx
-      .insertInto('billing_payment')
-      .values({
-        id: crypto.randomUUID(),
-        organizationId: args.organizationId,
-        kind: 'topup',
-        stripeInvoiceId: null,
-        stripePaymentIntentId: paymentIntent.id,
-        stripeCheckoutSessionId: null,
-        stripeCouponId: null,
-        stripeDiscountId: null,
-        stripePromotionCodeId: null,
-        amountMicros: String(amountMicros),
-        refundedAmountMicros: '0',
-        refundedAt: null,
-        currency: paymentIntent.currency ?? 'usd',
-        status: 'paid',
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflict((oc) => oc.column('stripePaymentIntentId').doNothing())
-      .execute()
+    if (!inserted) return
+    await applyPrepaidBalanceDeltaTx(tx, args.organizationId, amountMicros, now)
   })
 
   const paymentMethod = paymentIntent.payment_method
@@ -1211,48 +1239,29 @@ export async function applyTopupCheckout(args: {
   const amountMicros = args.session.amount_total
     ? centsToMicros(args.session.amount_total)
     : dollarsToMicros(Number(args.session.metadata?.amountUsd ?? 0))
+  const createdAt =
+    typeof args.session.created === 'number' ? new Date(args.session.created * 1000) : new Date()
+  const updatedAt = new Date()
 
   await db.transaction().execute(async (tx) => {
     await ensureBillingStateTx(tx, args.organizationId)
-    await insertLedgerEntry(tx, {
+    const inserted = await insertBillingPaymentEntry(tx, {
       organizationId: args.organizationId,
-      kind: 'topup_purchase',
-      bucket: 'prepaid',
+      kind: 'topup',
       amountMicros,
-      stripeEventId: args.stripeEventId ?? null,
+      status: args.session.payment_status,
+      conflictColumn: 'stripeCheckoutSessionId',
       stripeInvoiceId:
         typeof args.session.invoice === 'string' ? args.session.invoice : args.session.invoice?.id,
       stripeCheckoutSessionId: args.session.id,
       stripePaymentIntentId: paymentIntentId ?? null,
-      idempotencyKey: `topup:${args.session.id}`,
       metadata: { amountUsd: args.session.metadata?.amountUsd ?? null },
+      createdAt,
+      updatedAt,
     })
 
-    await tx
-      .insertInto('billing_payment')
-      .values({
-        id: crypto.randomUUID(),
-        organizationId: args.organizationId,
-        kind: 'topup',
-        stripeInvoiceId:
-          typeof args.session.invoice === 'string'
-            ? args.session.invoice
-            : args.session.invoice?.id,
-        stripePaymentIntentId: paymentIntentId ?? null,
-        stripeCheckoutSessionId: args.session.id,
-        stripeCouponId: null,
-        stripeDiscountId: null,
-        stripePromotionCodeId: null,
-        amountMicros: String(amountMicros),
-        refundedAmountMicros: '0',
-        refundedAt: null,
-        currency: 'usd',
-        status: args.session.payment_status,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .onConflict((oc) => oc.column('stripeCheckoutSessionId').doNothing())
-      .execute()
+    if (!inserted) return
+    await applyPrepaidBalanceDeltaTx(tx, args.organizationId, amountMicros, updatedAt)
   })
 
   const customerId =
@@ -1305,6 +1314,7 @@ export async function syncBillingPaymentFromInvoice(args: {
       refundedAt: null,
       currency: invoice.currency ?? 'usd',
       status: args.status,
+      metadata: {},
       createdAt: new Date(invoice.created * 1000),
       updatedAt: new Date(),
     })
@@ -1317,6 +1327,7 @@ export async function syncBillingPaymentFromInvoice(args: {
         amountMicros: String(amountMicros),
         currency: invoice.currency ?? 'usd',
         status: args.status,
+        metadata: {},
         updatedAt: new Date(),
       }),
     )
@@ -1338,21 +1349,22 @@ export async function refundBillingPayment(args: {
   refundedAt: Date
   stripeEventId?: string | null
 }) {
-  const payment = await db
-    .selectFrom('billing_payment')
-    .selectAll()
-    .where('organizationId', '=', args.organizationId)
-    .where('stripePaymentIntentId', '=', args.stripePaymentIntentId)
-    .orderBy('createdAt', 'desc')
-    .executeTakeFirst()
-
-  if (!payment) return
-
-  const previousRefundedMicros = asNumber(payment.refundedAmountMicros)
-  const deltaMicros = Math.max(args.refundedAmountMicros - previousRefundedMicros, 0)
-  if (!deltaMicros) return
-
   await db.transaction().execute(async (tx) => {
+    const payment = await tx
+      .selectFrom('billing_payment')
+      .selectAll()
+      .where('organizationId', '=', args.organizationId)
+      .where('stripePaymentIntentId', '=', args.stripePaymentIntentId)
+      .orderBy('createdAt', 'desc')
+      .forUpdate()
+      .executeTakeFirst()
+
+    if (!payment) return
+
+    const previousRefundedMicros = asNumber(payment.refundedAmountMicros)
+    const deltaMicros = Math.max(args.refundedAmountMicros - previousRefundedMicros, 0)
+    if (!deltaMicros) return
+
     await tx
       .updateTable('billing_payment')
       .set({
@@ -1369,18 +1381,7 @@ export async function refundBillingPayment(args: {
 
     if (payment.kind !== 'topup' && payment.kind !== 'auto_reload') return
 
-    await insertLedgerEntry(tx, {
-      organizationId: args.organizationId,
-      kind: 'refund',
-      bucket: 'prepaid',
-      amountMicros: -deltaMicros,
-      stripeEventId: args.stripeEventId ?? null,
-      stripeInvoiceId: payment.stripeInvoiceId,
-      stripeCheckoutSessionId: payment.stripeCheckoutSessionId,
-      stripePaymentIntentId: args.stripePaymentIntentId,
-      idempotencyKey: `refund:${payment.id}:${args.refundedAmountMicros}`,
-      metadata: { paymentId: payment.id, kind: payment.kind },
-    })
+    await applyPrepaidBalanceDeltaTx(tx, args.organizationId, -deltaMicros)
   })
 }
 
@@ -1458,16 +1459,19 @@ export async function grantCredits(args: {
 
   await db.transaction().execute(async (tx) => {
     await ensureBillingStateTx(tx, args.organizationId)
-    await insertLedgerEntry(tx, {
+    const inserted = await insertBillingPaymentEntry(tx, {
       organizationId: args.organizationId,
       kind: 'reward',
-      bucket: 'prepaid',
       amountMicros,
+      status: 'paid',
+      conflictColumn: 'idempotencyKey',
       idempotencyKey: args.idempotencyKey,
       metadata: {
         reason: args.reason,
         ...(args.metadata ?? {}),
       },
     })
+    if (!inserted) return
+    await applyPrepaidBalanceDeltaTx(tx, args.organizationId, amountMicros)
   })
 }

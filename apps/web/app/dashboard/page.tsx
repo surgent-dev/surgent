@@ -26,6 +26,8 @@ import {
   FolderOpen,
   Loader2,
   AlertCircle,
+  Gift,
+  X,
 } from 'lucide-react'
 import { useCredits } from '@/hooks/use-credits'
 import BillingSyncBridge from '@/components/billing-sync-bridge'
@@ -224,6 +226,7 @@ export default function DashboardPage() {
   const [projectToRename, setProjectToRename] = useState<Project | null>(null)
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
   const [newName, setNewName] = useState('')
+  const [creditBannerDismissed, setCreditBannerDismissed] = useState(false)
 
   useEffect(() => {
     authClient.getSession().then(({ data, error }) => {
@@ -322,6 +325,42 @@ export default function DashboardPage() {
             <UserMenu onUpgrade={() => credits.setPlanDialogOpen(true)} />
           </div>
         </header>
+
+        {/* Migration credit banner */}
+        {credits.snapshot?.hasMigrationCredit &&
+          credits.snapshot.prepaidBalanceMicros > 0 &&
+          !creditBannerDismissed && (
+            <div className="bg-emerald-500/10 border-b border-emerald-500/20">
+              <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Gift className="h-5 w-5 text-emerald-500 shrink-0" />
+                  <p className="text-sm text-foreground">
+                    <span className="font-medium">
+                      We&apos;ve added $
+                      {(credits.snapshot.prepaidBalanceMicros / 100_000_000).toFixed(0)} in credits
+                      to your account!
+                    </span>{' '}
+                    Thank you for being an early supporter. Upgrade to Pro to unlock all features.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => credits.setPlanDialogOpen(true)}
+                  >
+                    View plans
+                  </Button>
+                  <button
+                    onClick={() => setCreditBannerDismissed(true)}
+                    className="p-1 rounded-md hover:bg-muted/80 transition-colors"
+                  >
+                    <X className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         {/* Main */}
         <main className="max-w-6xl mx-auto px-6 py-8">

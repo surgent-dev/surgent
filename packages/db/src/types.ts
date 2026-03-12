@@ -13,7 +13,6 @@ export interface Database {
   organization: OrganizationTable
   billing_account: BillingAccountTable
   billing_subscription: BillingSubscriptionTable
-  billing_ledger: BillingLedgerTable
   billing_event: BillingEventTable
   billing_payment: BillingPaymentTable
   member: MemberTable
@@ -209,6 +208,8 @@ export interface BillingAccountTable {
   autoReloadThresholdMicros: string | null
   autoReloadAmountMicros: string | null
   monthlySpendLimitMicros: string | null
+  monthlySpendUsageMicros: string
+  monthlySpendUsagePeriodStart: Date | null
   currency: string
   createdAt?: Date
   updatedAt?: Date
@@ -238,22 +239,6 @@ export interface BillingSubscriptionTable {
   updatedAt?: Date
 }
 
-export interface BillingLedgerTable {
-  id: string
-  organizationId: string
-  kind: string
-  bucket: string
-  amountMicros: string
-  stripeEventId: string | null
-  stripeInvoiceId: string | null
-  stripeCheckoutSessionId: string | null
-  stripePaymentIntentId: string | null
-  usageId: string | null
-  idempotencyKey: string | null
-  metadata: any | null
-  createdAt?: Date
-}
-
 export interface BillingEventTable {
   stripeEventId: string
   type: string
@@ -279,6 +264,8 @@ export interface BillingPaymentTable {
   refundedAt: Date | null
   currency: string
   status: string
+  idempotencyKey: string | null
+  metadata: Record<string, unknown>
   createdAt?: Date
   updatedAt?: Date
 }
