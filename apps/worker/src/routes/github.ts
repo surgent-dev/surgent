@@ -54,7 +54,6 @@ github.get('/callback', async (c) => {
     // Save installation (upsert by userId + accountLogin to handle re-installs)
     if (installationId) {
       const { account } = await githubApp.getInstallation(installationId)
-
       await db
         .insertInto('github_installations')
         .values({

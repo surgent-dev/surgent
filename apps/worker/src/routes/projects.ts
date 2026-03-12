@@ -8,6 +8,7 @@ import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../middleware/auth'
 import { auth } from '@/lib/auth'
 import { config } from '@/lib/config'
+import { checkBillingFeature } from '@/lib/billing'
 import { getAccountForUser, getClient } from '@/lib/pay/utils'
 import type { PayEnv } from '@/lib/pay/types'
 import { sanitizeHostname, getSandboxPreviewUrl } from '@/lib/utils'
@@ -32,6 +33,7 @@ import {
   isHostnameAvailable,
   getProjectWithAuth,
   createProject,
+  countProjectsByOrganizationId,
   updateProjectStatus,
   updateDeployment,
   upsertEnvVar,
@@ -861,13 +863,13 @@ projects.post(
         return c.json({ error: 'Forbidden' }, 403)
       }
 
-      const access = await auth.api
-        .check({
-          body: { featureId: 'projects' },
-          headers: c.req.raw.headers,
-        })
-        .catch(() => null)
-      if (access && !access.allowed) {
+      const projectCount = await countProjectsByOrganizationId(organizationId)
+      const access = await checkBillingFeature({
+        organizationId,
+        featureId: 'projects',
+        currentProjects: projectCount,
+      })
+      if (!access.allowed) {
         return c.json(
           { error: 'Project limit reached. Please upgrade your plan to create more projects.' },
           402,
@@ -961,9 +963,9 @@ projects.post(
       })
 
       const project = await getProjectWithAuth(id, c.get('user')!)
-      const publishAccess = await auth.api.check({
-        body: { featureId: 'publish_your_app' },
-        headers: c.req.raw.headers,
+      const publishAccess = await checkBillingFeature({
+        organizationId: project.organizationId,
+        featureId: 'publish_your_app',
       })
       if (!publishAccess?.allowed) {
         return c.json({ error: 'Please upgrade your plan to publish.' }, 402)
@@ -1316,10 +1318,10 @@ projects.get('/:id/health', zValidator('param', idParam), async (c) => {
 projects.get('/:id/download', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
 
-  await getProjectWithAuth(id, c.get('user')!)
-  const access = await auth.api.check({
-    body: { featureId: 'download_code' },
-    headers: c.req.raw.headers,
+  const project = await getProjectWithAuth(id, c.get('user')!)
+  const access = await checkBillingFeature({
+    organizationId: project.organizationId,
+    featureId: 'download_code',
   })
   if (!access?.allowed) {
     return c.json({ error: 'Please upgrade your plan to download projects.' }, 402)

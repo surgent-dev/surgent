@@ -32,6 +32,7 @@ import { ProductsView } from './products-view'
 import { TransactionsView } from './transactions-view'
 import { CustomersView } from './customers-view'
 import { SubscriptionsView } from './subscriptions-view'
+import { DocumentationView } from './documentation-view'
 import { SettingsView } from './settings-view'
 import { payHttp } from '@/lib/http'
 import { cn } from '@/lib/utils'
@@ -139,8 +140,8 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
             disabled={whopConnect.isPending}
             className={cn(
               'flex items-center gap-4 w-full p-4 rounded-[16px] text-left transition-all',
-              'bg-black/5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(255,255,255,0.05)]',
-              'hover:bg-black/10 disabled:opacity-50',
+              'bg-muted border border-border/50',
+              'hover:bg-accent disabled:opacity-50',
             )}
           >
             <div className="size-10 rounded-xl bg-[#FF6243]/10 grid place-items-center shrink-0">
@@ -179,12 +180,14 @@ function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: Su
                 if (e.key === 'Enter' && companyName.trim()) handleCreate()
               }}
               className={cn(
-                'flex h-12 w-full rounded-[16px] bg-black/5 px-4 py-2 text-sm',
+                'flex h-12 w-full rounded-xl px-4 py-2 text-sm',
                 'text-foreground placeholder:text-muted-foreground/40',
-                'border border-transparent transition-all duration-200 outline-none',
-                'shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(255,255,255,0.05)]',
-                'hover:shadow-[inset_0_2px_4px_rgba(0,0,0,0.15),inset_0_0_0_1px_rgba(255,255,255,0.08)] hover:bg-black/10',
-                'focus:bg-black/20 focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.15),inset_0_0_0_1px_rgba(255,255,255,0.12),0_0_0_3px_rgba(255,255,255,0.05)]',
+                'bg-black/[0.03] border border-black/[0.08] transition-all duration-150 outline-none',
+                'hover:bg-black/[0.05] hover:border-black/[0.12]',
+                'focus:bg-black/[0.05] focus:border-black/[0.16] focus:ring-2 focus:ring-black/[0.04]',
+                'dark:bg-white/[0.04] dark:border-white/[0.08]',
+                'dark:hover:bg-white/[0.06] dark:hover:border-white/[0.14]',
+                'dark:focus:bg-white/[0.07] dark:focus:border-white/[0.18] dark:focus:ring-white/[0.06]',
               )}
             />
             <Button
@@ -223,6 +226,7 @@ function ConnectedDashboard({
   onDisconnect?: () => void
   isDisconnecting?: boolean
 }) {
+  const showDocumentation = process.env.NODE_ENV !== 'production'
   const { data: products, isLoading: productsLoading } = useProducts(projectId)
   const { data: transactionsData, isLoading: transactionsLoading } = useTransactions(projectId)
   const { data: customersData, isLoading: customersLoading } = useCustomers(projectId)
@@ -299,6 +303,7 @@ function ConnectedDashboard({
     subscriptions: 'Subscriptions',
     customers: 'Customers',
     transactions: 'Transactions',
+    documentation: showDocumentation ? 'Documentation' : 'Dashboard',
     settings: 'Settings',
   }
 
@@ -415,6 +420,15 @@ function ConnectedDashboard({
           )}
           {view === 'transactions' && (
             <TransactionsView transactions={transactions} isLoading={transactionsLoading} />
+          )}
+          {view === 'documentation' && showDocumentation && <DocumentationView />}
+          {view === 'documentation' && !showDocumentation && (
+            <DashboardView
+              products={allProducts}
+              transactions={transactions}
+              subscriptions={subscriptions}
+              onCreateProduct={handleCreateProduct}
+            />
           )}
           {view === 'settings' && (
             <SettingsView

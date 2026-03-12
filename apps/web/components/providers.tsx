@@ -4,7 +4,6 @@ import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { ThemeProvider } from 'next-themes'
-import { AutumnProvider } from 'autumn-js/react'
 import posthog from 'posthog-js'
 import { authClient } from '@/lib/auth-client'
 
@@ -25,10 +24,8 @@ export default function Providers({ children }: ProvidersProps) {
 
   return (
     <QueryClientProvider client={client}>
-      <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" enableSystem={false}>
-        <AutumnProvider betterAuthUrl={process.env.NEXT_PUBLIC_BACKEND_URL!}>
-          {children}
-        </AutumnProvider>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+        {children}
       </ThemeProvider>
     </QueryClientProvider>
   )

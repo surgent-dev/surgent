@@ -21,7 +21,10 @@ class E2BSandboxImpl implements Sandbox {
           return { exitCode: e.exitCode, stdout: e.stdout ?? '', stderr: e.stderr ?? '' }
         throw e
       })
-    return { code: res.exitCode ?? 0, output: res.stdout || res.stderr || '' }
+    return {
+      code: res.exitCode ?? 0,
+      output: [res.stdout, res.stderr].filter(Boolean).join('\n'),
+    }
   }
 
   async read(path: string) {

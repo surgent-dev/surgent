@@ -1,5 +1,6 @@
 import type { Context } from 'hono'
 import { sql } from 'kysely'
+import { getAllowanceWindow, sameAllowanceWindowStart } from '@repo/db'
 import type { AppContext } from '../../../types'
 import { getDb } from '../../../db'
 import { loadZenData, ZenData } from './zenData'
@@ -28,7 +29,6 @@ import { createRateLimiter } from './rateLimiter'
 import { createDataDumper } from './dataDumper'
 import { createTrialLimiter } from './trialLimiter'
 import { createStickyTracker } from './stickyProviderTracker'
-import { Autumn } from 'autumn-js'
 
 type ZenConfig = ReturnType<typeof loadZenData>
 
@@ -41,6 +41,20 @@ type ProviderInfo = {
   credentials?: string | null
 }
 
+type UsageBillingMode = 'surgent' | 'byok' | 'anonymous'
+type UsageBillingTier = 'free' | 'pro' | null
+type UsageBillingInterval = 'month' | 'year' | null
+type UsageBillingContext = {
+  mode: UsageBillingMode
+  tier: UsageBillingTier
+  interval: UsageBillingInterval
+}
+
+type UsageSettlement = {
+  costMicros: number
+  uncoveredMicros: number
+}
+
 type AuthInfo = {
   apiKeyId: string
   projectId: string
@@ -48,10 +62,120 @@ type AuthInfo = {
   userId: string
   provider: ProviderInfo | null
   isDisabled: boolean
+  billingTier: string | null
+  billingInterval: string | null
 }
 
 function centsToMicroCents(amount: number) {
   return Math.round(amount * 1_000_000)
+}
+
+function isAllowanceEligible(tier: string, status: string) {
+  if (tier === 'free') return true
+  return status === 'active' || status === 'trialing'
+}
+
+function getEffectiveIncludedUsage(
+  row: {
+    tier: string
+    interval: string | null
+    currentPeriodStart: Date | null
+    currentPeriodEnd: Date | null
+    includedUsageMicros: string | number | null
+    includedUsagePeriodStart: Date | null
+  },
+  now = new Date(),
+) {
+  const window = getAllowanceWindow(
+    {
+      tier: row.tier,
+      interval: row.interval,
+      currentPeriodStart: row.currentPeriodStart,
+      currentPeriodEnd: row.currentPeriodEnd,
+    },
+    now,
+  )
+
+  if (!sameAllowanceWindowStart(row.includedUsagePeriodStart, window.start)) {
+    return 0
+  }
+
+  return Number(row.includedUsageMicros ?? 0)
+}
+
+function getMonthlySpendUsage(
+  row: {
+    monthlySpendUsageMicros: string | number | null
+    monthlySpendUsagePeriodStart: Date | null
+  },
+  periodStart: Date,
+) {
+  if (!sameAllowanceWindowStart(row.monthlySpendUsagePeriodStart, periodStart)) {
+    return 0
+  }
+
+  return Number(row.monthlySpendUsageMicros ?? 0)
+}
+
+function getIncludedBalance(
+  row: {
+    tier: string
+    interval: string | null
+    status: string
+    monthlyAllowanceMicros: string | number | null
+    currentPeriodStart: Date | null
+    currentPeriodEnd: Date | null
+    includedUsageMicros: string | number | null
+    includedUsagePeriodStart: Date | null
+  },
+  now = new Date(),
+) {
+  if (!isAllowanceEligible(row.tier, row.status)) return 0
+  const allowance = Number(row.monthlyAllowanceMicros ?? 0)
+  if (allowance <= 0) return 0
+  return Math.max(allowance - getEffectiveIncludedUsage(row, now), 0)
+}
+
+function getUsageDebits(costMicro: number, included: number, prepaid: number) {
+  const includedDebit = Math.min(included, costMicro)
+  const prepaidDebit = Math.min(prepaid, Math.max(costMicro - includedDebit, 0))
+  return {
+    includedDebit,
+    prepaidDebit,
+    uncoveredMicros: Math.max(costMicro - includedDebit - prepaidDebit, 0),
+  }
+}
+
+function resolveBillingContext(authInfo: AuthInfo | undefined): UsageBillingContext {
+  if (!authInfo) {
+    return {
+      mode: 'anonymous',
+      tier: null,
+      interval: null,
+    }
+  }
+
+  const billing = {
+    tier:
+      authInfo.billingTier === 'free' || authInfo.billingTier === 'pro'
+        ? authInfo.billingTier
+        : null,
+    interval:
+      authInfo.billingInterval === 'month' || authInfo.billingInterval === 'year'
+        ? authInfo.billingInterval
+        : null,
+  } satisfies Pick<UsageBillingContext, 'tier' | 'interval'>
+  if (authInfo.provider?.credentials) {
+    return {
+      mode: 'byok',
+      ...billing,
+    }
+  }
+
+  return {
+    mode: 'surgent',
+    ...billing,
+  }
 }
 
 export async function handleZenRequest(
@@ -69,7 +193,6 @@ export async function handleZenRequest(
   const MAX_RETRIES = 3
   const logger = createLogger(c.env.STAGE)
   const db = getDb(c.env)
-  const autumn = c.env.AUTUMN_SECRET_KEY ? new Autumn({ secretKey: c.env.AUTUMN_SECRET_KEY }) : null
 
   try {
     const url = c.req.url
@@ -98,6 +221,13 @@ export async function handleZenRequest(
     const stickyTracker = createStickyTracker(modelInfo.stickyProvider, sessionId, c.env.GATEWAY_KV)
     const stickyProvider = (await stickyTracker?.get()) ?? undefined
     const authInfo = await authenticate(modelInfo)
+    const billing = resolveBillingContext(authInfo)
+    logger.metric({
+      billing_mode: billing.mode,
+      billing_tier: billing.tier ?? undefined,
+      billing_interval: billing.interval ?? undefined,
+    })
+    await ensureBillingAccess(authInfo)
 
     const retriableRequest = async (
       retry: RetryOptions = { excludeProviders: [], retryCount: 0 },
@@ -457,6 +587,7 @@ export async function handleZenRequest(
           .on('m.model', '=', modelInfo.id)
           .on('m.deletedAt', 'is', null),
       )
+      .leftJoin('billing_subscription as bs', 'bs.organizationId', 'pr.organizationId')
       .select(({ ref }) => [
         ref('k.id').as('apiKeyId'),
         ref('k.projectId').as('projectId'),
@@ -466,6 +597,8 @@ export async function handleZenRequest(
         ref('k.expiresAt').as('expiresAt'),
         ref('p.credentials').as('providerCredentials'),
         ref('m.id').as('disabledModelId'),
+        ref('bs.tier').as('billingTier'),
+        ref('bs.interval').as('billingInterval'),
       ])
       .where('k.id', '=', verify.key.id)
       .executeTakeFirst()
@@ -493,6 +626,8 @@ export async function handleZenRequest(
       userId: row.userId,
       provider,
       isDisabled: !!row.disabledModelId,
+      billingTier: row.billingTier ?? 'free',
+      billingInterval: row.billingInterval,
     }
   }
 
@@ -506,12 +641,67 @@ export async function handleZenRequest(
     providerInfo.apiKey = authInfo.provider.credentials
   }
 
+  async function ensureBillingAccess(authInfo: AuthInfo | undefined) {
+    if (!authInfo || authInfo.provider?.credentials) return
+
+    const now = new Date()
+    const state = await db
+      .selectFrom('billing_account as account')
+      .innerJoin(
+        'billing_subscription as subscription',
+        'subscription.organizationId',
+        'account.organizationId',
+      )
+      .select([
+        'account.organizationId',
+        'account.prepaidBalanceMicros',
+        'account.monthlySpendLimitMicros',
+        'account.monthlySpendUsageMicros',
+        'account.monthlySpendUsagePeriodStart',
+        'subscription.tier',
+        'subscription.interval',
+        'subscription.status',
+        'subscription.monthlyAllowanceMicros',
+        'subscription.currentPeriodStart',
+        'subscription.currentPeriodEnd',
+        'subscription.includedUsageMicros',
+        'subscription.includedUsagePeriodStart',
+      ])
+      .where('account.organizationId', '=', authInfo.organizationId)
+      .executeTakeFirst()
+
+    if (!state) throw new CreditsError('Billing state is not ready yet. Please try again.')
+    const allowanceWindow = getAllowanceWindow(
+      {
+        tier: state.tier,
+        interval: state.interval,
+        currentPeriodStart: state.currentPeriodStart,
+        currentPeriodEnd: state.currentPeriodEnd,
+      },
+      now,
+    )
+    const included = getIncludedBalance(state, now)
+    const prepaid = Number(state.prepaidBalanceMicros ?? 0)
+    const monthlySpendLimitMicros = Number(state.monthlySpendLimitMicros ?? 0)
+    if (monthlySpendLimitMicros > 0) {
+      const spent = getMonthlySpendUsage(state, allowanceWindow.start)
+      if (spent >= monthlySpendLimitMicros) {
+        throw new MonthlyLimitError('You have reached your monthly spending limit.')
+      }
+    }
+
+    if (included + prepaid > 0) return
+
+    throw new CreditsError('You have run out of usage balance. Upgrade or add more balance.')
+  }
+
   async function trackUsage(
     authInfo: AuthInfo | undefined,
     modelInfo: ModelInfo,
     providerInfo: ProviderSelection,
     usageInfo: UsageInfo,
   ) {
+    const billing = resolveBillingContext(authInfo)
     const {
       inputTokens,
       outputTokens,
@@ -566,12 +756,106 @@ export async function handleZenRequest(
 
     const costMicro = authInfo.provider?.credentials ? 0 : centsToMicroCents(totalCostInCent)
     const costBig = BigInt(costMicro)
+    let uncoveredMicros = 0
 
     await db.transaction().execute(async (tx) => {
+      const usageId = crypto.randomUUID()
+      const now = new Date()
+      let includedDebit = 0
+      let prepaidDebit = 0
+
+      if (costMicro > 0) {
+        const state = await tx
+          .selectFrom('billing_account as account')
+          .innerJoin(
+            'billing_subscription as subscription',
+            'subscription.organizationId',
+            'account.organizationId',
+          )
+          .select([
+            'account.prepaidBalanceMicros',
+            'account.monthlySpendUsageMicros',
+            'account.monthlySpendUsagePeriodStart',
+            'subscription.tier',
+            'subscription.interval',
+            'subscription.status',
+            'subscription.monthlyAllowanceMicros',
+            'subscription.currentPeriodStart',
+            'subscription.currentPeriodEnd',
+            'subscription.includedUsageMicros',
+            'subscription.includedUsagePeriodStart',
+          ])
+          .where('account.organizationId', '=', authInfo.organizationId)
+          .forUpdate()
+          .executeTakeFirst()
+
+        if (!state) {
+          throw new CreditsError('Billing state is not ready yet. Please try again.')
+        }
+
+        const included = getIncludedBalance(state, now)
+        const allowanceWindow = getAllowanceWindow(
+          {
+            tier: state.tier,
+            interval: state.interval,
+            currentPeriodStart: state.currentPeriodStart,
+            currentPeriodEnd: state.currentPeriodEnd,
+          },
+          now,
+        )
+        const debits = getUsageDebits(
+          costMicro,
+          included,
+          Math.max(Number(state.prepaidBalanceMicros ?? 0), 0),
+        )
+        includedDebit = debits.includedDebit
+        prepaidDebit = debits.prepaidDebit
+        uncoveredMicros = debits.uncoveredMicros
+
+        if (includedDebit > 0) {
+          const includedUsageMicros = sameAllowanceWindowStart(
+            state.includedUsagePeriodStart,
+            allowanceWindow.start,
+          )
+            ? Number(state.includedUsageMicros ?? 0) + includedDebit
+            : includedDebit
+
+          await tx
+            .updateTable('billing_subscription')
+            .set({
+              includedUsageMicros: String(includedUsageMicros),
+              includedUsagePeriodStart: allowanceWindow.start,
+              updatedAt: now,
+            })
+            .where('organizationId', '=', authInfo.organizationId)
+            .execute()
+        }
+
+        const coveredMicros = includedDebit + prepaidDebit
+        if (coveredMicros > 0) {
+          const monthlySpendUsageMicros = sameAllowanceWindowStart(
+            state.monthlySpendUsagePeriodStart,
+            allowanceWindow.start,
+          )
+            ? Number(state.monthlySpendUsageMicros ?? 0) + coveredMicros
+            : coveredMicros
+
+          await tx
+            .updateTable('billing_account')
+            .set({
+              monthlySpendUsageMicros: String(monthlySpendUsageMicros),
+              monthlySpendUsagePeriodStart: allowanceWindow.start,
+              updatedAt: now,
+            })
+            .where('organizationId', '=', authInfo.organizationId)
+            .execute()
+        }
+      }
+
       await tx
         .insertInto('usage')
         .values({
-          id: crypto.randomUUID(),
+          id: usageId,
           projectId: authInfo.projectId,
           model: modelInfo.id,
           provider: providerInfo.id,
@@ -583,6 +867,9 @@ export async function handleZenRequest(
           cacheWrite1hTokens,
           cost: String(costBig),
           keyId: authInfo.apiKeyId,
+          enrichment: {
+            billing,
+          },
           createdAt: new Date(),
           updatedAt: new Date(),
           deletedAt: null,
@@ -594,17 +881,46 @@ export async function handleZenRequest(
         .set({ lastRequest: sql`now()` })
         .where('id', '=', authInfo.apiKeyId)
         .execute()
+
+      if (includedDebit > 0) {
+        logger.metric({
+          billing_settlement_bucket: 'included',
+          billing_settlement_included_micros: includedDebit,
+        })
+      }
+
+      if (prepaidDebit > 0) {
+        await tx
+          .updateTable('billing_account')
+          .set({
+            prepaidBalanceMicros: sql`GREATEST(0, "prepaidBalanceMicros" - ${String(prepaidDebit)})`,
+            updatedAt: now,
+          })
+          .where('organizationId', '=', authInfo.organizationId)
+          .execute()
+      }
     })
 
-    if (costMicro > 0 && autumn) {
-      const credits = Math.max(1, Math.round(costMicro / 1_000_000))
-      c.executionCtx.waitUntil(
-        autumn
-          .track({ customer_id: authInfo.organizationId, feature_id: 'ai_credits', value: credits })
-          .catch(() => {}),
+    if (uncoveredMicros > 0) {
+      logger.log(
+        {
+          organizationId: authInfo.organizationId,
+          projectId: authInfo.projectId,
+          costMicros: costMicro,
+          uncoveredMicros,
+        },
+        'usage settled after response with insufficient balance',
       )
+      logger.metric({
+        billing_settlement: 'uncovered',
+        billing_cost_micros: costMicro,
+        billing_uncovered_micros: uncoveredMicros,
+      })
     }
 
-    return costBig
+    return {
+      costMicros: Number(costBig),
+      uncoveredMicros,
+    } satisfies UsageSettlement
   }
 }

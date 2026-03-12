@@ -10,6 +10,10 @@ const int = (value: string | undefined, fallback: number): number => {
   const n = Number(value)
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback
 }
+const float = (value: string | undefined, fallback: number): number => {
+  const n = Number(value)
+  return Number.isFinite(n) && n >= 0 ? n : fallback
+}
 
 // Centralized environment variables as a single config object
 export const config = {
@@ -113,8 +117,27 @@ export const config = {
     },
     redirectBaseUrl: env.WHOP_REDIRECT_BASE_URL,
   },
-  autumn: {
-    secretKey: env.AUTUMN_SECRET_KEY,
+  stripe: {
+    secretKey: env.STRIPE_SECRET_KEY,
+    webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+    free: {
+      allowanceUsd: float(env.STRIPE_FREE_ALLOWANCE_USD, 3),
+    },
+    pro: {
+      month: {
+        priceId: env.STRIPE_PRO_MONTHLY_PRICE_ID,
+        priceUsd: float(env.STRIPE_PRO_MONTHLY_PRICE_USD, 20),
+        allowanceUsd: float(env.STRIPE_PRO_MONTHLY_ALLOWANCE_USD, 20),
+      },
+      year: {
+        priceId: env.STRIPE_PRO_YEARLY_PRICE_ID,
+        priceUsd: float(env.STRIPE_PRO_YEARLY_PRICE_USD, 180),
+        allowanceUsd: float(env.STRIPE_PRO_YEARLY_ALLOWANCE_USD, 25),
+      },
+    },
+    topup: {
+      minUsd: float(env.STRIPE_TOPUP_MIN_USD, 10),
+    },
   },
   domainProvider: (env.DOMAIN_PROVIDER || 'entri') as 'entri' | 'namecheap',
   namecheap: {

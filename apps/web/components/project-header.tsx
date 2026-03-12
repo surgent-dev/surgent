@@ -28,7 +28,6 @@ import {
   Trash,
   Stop,
 } from '@phosphor-icons/react'
-import { useCustomer } from 'autumn-js/react'
 import { useCredits } from '@/hooks/use-credits'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -40,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import PlanDialog from '@/components/plan-dialog'
+import MigrationCreditBanner from '@/components/migration-credit-banner'
 import {
   useDeployProject,
   useCancelDeployment,
@@ -99,8 +99,7 @@ function sanitizeHostname(value: string) {
 export default function ProjectHeader({ projectId, project }: ProjectHeaderProps) {
   const router = useRouter()
   const credits = useCredits()
-  const { check: checkFeature } = useCustomer()
-  const canToggleVisibility = checkFeature({ featureId: 'private_projects' }).data?.allowed ?? false
+  const canToggleVisibility = credits.snapshot?.features.privateProjects ?? false
 
   const queryClient = useQueryClient()
 
@@ -777,6 +776,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
         <UserMenu onUpgrade={() => credits.setPlanDialogOpen(true)} />
       </header>
+      <MigrationCreditBanner showDialog onUpgrade={() => credits.setPlanDialogOpen(true)} />
 
       {/* Dialogs */}
       <GitHubDialog

@@ -7,7 +7,6 @@ export interface Bindings {
   POSTGRES_TYPE?: string
   GATEWAY_DATA?: R2Bucket
   HYPERDRIVE?: { connectionString: string }
-  AUTUMN_SECRET_KEY?: string
 }
 
 export type AppContext = {

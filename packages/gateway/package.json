@@ -15,7 +15,6 @@
     "@smithy/eventstream-codec": "4.2.8",
     "@smithy/util-utf8": "4.2.0",
     "@types/node": "25.0.10",
-    "autumn-js": "0.1.75",
     "hono": "4.10.7",
     "kysely": "^0.28.8",
     "zod": "4.1.8"

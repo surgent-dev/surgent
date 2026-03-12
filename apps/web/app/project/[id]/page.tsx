@@ -1,20 +1,18 @@
-'use client'
-
+import BillingSyncBridge from '@/components/billing-sync-bridge'
 import ProjectView from '@/components/project-view'
-import { Suspense, use } from 'react'
-import { useSearchParams } from 'next/navigation'
 
-function ProjectContent({ id }: { id: string }) {
-  const searchParams = useSearchParams()
-  const initial = searchParams.get('initial') || undefined
-  return <ProjectView projectId={id} initialPrompt={initial} />
-}
-
-export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default async function ProjectPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ initial?: string }>
+}) {
+  const [{ id }, query] = await Promise.all([params, searchParams])
   return (
-    <Suspense>
-      <ProjectContent id={id} />
-    </Suspense>
+    <>
+      <BillingSyncBridge />
+      <ProjectView projectId={id} initialPrompt={query.initial} />
+    </>
   )
 }

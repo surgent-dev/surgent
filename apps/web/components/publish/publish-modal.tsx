@@ -16,7 +16,6 @@ import {
   CaretDown,
   CaretUp,
 } from '@phosphor-icons/react'
-import { useCustomer } from 'autumn-js/react'
 import { useCredits } from '@/hooks/use-credits'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -84,8 +83,7 @@ export function PublishModal({
   onOpenHistory,
 }: PublishModalProps) {
   const credits = useCredits()
-  const { check: checkFeature } = useCustomer()
-  const canToggleVisibility = checkFeature({ featureId: 'private_projects' }).data?.allowed ?? false
+  const canToggleVisibility = credits.snapshot?.features.privateProjects ?? false
 
   const [isEditingHostname, setIsEditingHostname] = useState(false)
   const [hostnameInput, setHostnameInput] = useState('')

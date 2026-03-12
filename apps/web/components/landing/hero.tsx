@@ -99,8 +99,6 @@ function LandingPrompt({
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
   const [focused, setFocused] = useState(false)
-  const hasValue = value.trim().length > 0
-
   useEffect(() => {
     if (!ref.current) return
     ref.current.style.height = 'auto'
@@ -120,15 +118,7 @@ function LandingPrompt({
   return (
     <div
       onClick={() => ref.current?.focus()}
-      className="cursor-text relative flex flex-col gap-2 p-3.5 transition-all duration-150"
-      style={{
-        borderRadius: '1.75rem',
-        background: 'hsl(60 3% 15%)',
-        border: '1px solid rgba(255,255,255,0.06)',
-        boxShadow: focused
-          ? '0 0 0 0.5px #000000e0, 0 20px 25px -5px rgba(0,0,0,0.25), 0 8px 10px -6px rgba(0,0,0,0.2), inset 0 1px 0 0 rgba(255,255,255,0.08), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.04)'
-          : '0 0 0 0.5px #000000e0, 0 20px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.12), inset 0 1px 0 0 rgba(255,255,255,0.06), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.03)',
-      }}
+      className={`cursor-text relative flex flex-col gap-2 p-3.5 rounded-[1.75rem] transition-all duration-150 border bg-black/[0.02] dark:bg-white/[0.03] ${focused ? 'border-black/[0.12] dark:border-white/[0.12] ring-2 ring-black/[0.04] dark:ring-white/[0.06] bg-black/[0.03] dark:bg-white/[0.05]' : 'border-black/[0.08] dark:border-white/[0.08]'}`}
     >
       <textarea
         ref={ref}
@@ -139,23 +129,15 @@ function LandingPrompt({
         onKeyDown={handleKey}
         placeholder={placeholder}
         rows={2}
-        className="font-(--font-geist) w-full resize-none bg-transparent text-[#fdf8f0] text-[15px] leading-[1.6] placeholder:text-[#666] focus:outline-none px-1 pt-0.5"
+        className="font-(--font-geist) w-full resize-none bg-transparent text-foreground text-[15px] leading-[1.6] placeholder:text-muted-foreground focus:outline-none px-1 pt-0.5"
         style={{ fontWeight: 400, letterSpacing: '-0.01em' }}
       />
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-[11px] text-[#555]">
-          <kbd
-            className="inline-flex items-center justify-center h-[20px] px-1.5 rounded-md text-[10px] text-[#777]"
-            style={{
-              fontWeight: 500,
-              background: 'rgba(255,255,255,0.06)',
-              boxShadow:
-                '0 0 0 0.5px rgba(255,255,255,0.06), 0 1px 1px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)',
-            }}
-          >
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60">
+          <kbd className="inline-flex items-center justify-center h-[20px] px-1.5 rounded-md text-[10px] font-medium text-muted-foreground bg-muted border border-border/50 shadow-sm">
             ↵
           </kbd>
-          <span className="hidden sm:inline text-[#555]">to build</span>
+          <span className="hidden sm:inline">to build</span>
         </div>
         <button
           onClick={(e) => {
@@ -179,7 +161,7 @@ function SuggestionButtons({ onSelect }: { onSelect: (prompt: string) => void })
         <button
           key={s.label}
           onClick={() => onSelect(s.prompt)}
-          className="font-(--font-geist) inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-[#666] hover:text-[#bbb] hover:bg-[rgba(255,255,255,0.04)] transition-all duration-100 cursor-pointer active:scale-[0.97]"
+          className="font-(--font-geist) inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-muted-foreground/70 hover:text-foreground hover:bg-muted transition-all duration-100 cursor-pointer active:scale-[0.97]"
           style={{ fontWeight: 450, letterSpacing: '-0.01em' }}
         >
           <s.icon className="h-3.5 w-3.5 shrink-0" />
@@ -227,7 +209,7 @@ export function LandingHero({
                   />
                 ))}
               </div>
-              <div className="h-5 w-px bg-[#333]" />
+              <div className="h-5 w-px bg-border" />
               <div className="flex items-center gap-1">
                 <div className="flex items-center gap-0.5">
                   {[...Array(5)].map((_, i) => (
@@ -241,27 +223,27 @@ export function LandingHero({
                     </svg>
                   ))}
                 </div>
-                <span className="text-[13px] text-[#999] font-semibold">4.8</span>
+                <span className="text-[13px] text-muted-foreground font-semibold">4.8</span>
               </div>
             </div>
             <p
-              className="font-(--font-geist) text-[12.5px] text-[#666]"
+              className="font-(--font-geist) text-[12.5px] text-muted-foreground/70"
               style={{ fontWeight: 500 }}
             >
-              Loved by <span className="text-[#999]">1,500+</span> builders &middot;{' '}
-              <span className="text-[#999]">2k+</span> projects created
+              Loved by <span className="text-muted-foreground">1,500+</span> builders &middot;{' '}
+              <span className="text-muted-foreground">2k+</span> projects created
             </p>
           </div>
           <h1
-            className="font-(--font-geist) text-[2.25rem] sm:text-[2.75rem] lg:text-[3.25rem] leading-[1.1] tracking-[-0.04em] text-[#fdf8f0] mb-5"
+            className="font-(--font-geist) text-[2.25rem] sm:text-[2.75rem] lg:text-[3.25rem] leading-[1.1] tracking-[-0.04em] text-foreground mb-5"
             style={{ fontWeight: 800 }}
           >
             Build your app,
             <br />
-            <span className="text-[#fdf8f0]/30">start earning today</span>
+            <span className="text-foreground/30">start earning today</span>
           </h1>
           <p
-            className="font-(--font-geist) text-[#777] text-[14px] sm:text-[15.5px] max-w-[480px] mx-auto leading-[1.6]"
+            className="font-(--font-geist) text-muted-foreground text-[14px] sm:text-[15.5px] max-w-[480px] mx-auto leading-[1.6]"
             style={{ fontWeight: 400, letterSpacing: '-0.01em' }}
           >
             Describe your idea in plain text — Surgent builds it, adds payments, and deploys it
