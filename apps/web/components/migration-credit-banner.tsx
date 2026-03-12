@@ -27,12 +27,7 @@ export default function MigrationCreditBanner({
   const dialogTriggered = useRef(false)
   const { data: snapshot } = useSubscription()
 
-  // TODO: restore condition after testing
-  const visible = !dismissed
-  // const visible =
-  //   !dismissed &&
-  //   snapshot?.hasMigrationCredit &&
-  //   snapshot.prepaidBalanceMicros > 0
+  const visible = !dismissed && snapshot?.hasMigrationCredit && snapshot.prepaidBalanceMicros > 0
 
   // Auto-open dialog once per user (first visit only)
   useEffect(() => {
