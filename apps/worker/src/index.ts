@@ -13,6 +13,7 @@ import mcp from './routes/mcp'
 import admin from './routes/admin'
 import providers from './routes/providers'
 import pay from './routes/pay'
+import billing from './routes/billing'
 import domains, { domainWebhooks } from './routes/domains'
 import startups from './routes/startups'
 import { auth } from './lib/auth'
@@ -110,6 +111,7 @@ app.use(
         else if (p.startsWith('/api/domains/webhooks/')) tag = '[DOMAIN-WEBHOOK] '
         else if (p.startsWith('/api/domains/')) tag = '[DOMAIN] '
         else if (p.startsWith('/api/pay/')) tag = '[PAY] '
+        else if (p.startsWith('/api/billing/')) tag = '[BILLING] '
         else if (p.startsWith('/api/github/')) tag = '[GITHUB] '
         else if (p.startsWith('/api/auth/')) tag = '[AUTH] '
         else if (p.startsWith('/api/upload/')) tag = '[UPLOAD] '
@@ -204,6 +206,7 @@ app.route('/api/mcp', mcp)
 app.route('/api/admin', admin)
 app.route('/api/providers', providers)
 app.route('/api/pay', pay)
+app.route('/api/billing', billing)
 app.route('/api/domains', domainWebhooks) // Webhook (before auth middleware applies)
 app.route('/api/domains', domains)
 app.route('/api/startups', startups)

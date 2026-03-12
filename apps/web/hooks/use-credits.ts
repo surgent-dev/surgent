@@ -1,30 +1,33 @@
 import { useState } from 'react'
-import { useCustomer } from 'autumn-js/react'
 import { toast } from 'react-hot-toast'
+import { useBillingPortal, useSubscription } from './use-subscription'
 
 const INTERVAL_LABELS: Record<string, string> = {
-  day: 'daily',
-  week: 'weekly',
   month: 'monthly',
   year: 'yearly',
 }
 
+const MONEY_SCALE = 100_000_000
+
+function microsToUsd(value: number) {
+  return value / MONEY_SCALE
+}
+
 export function useCredits() {
   const [planDialogOpen, setPlanDialogOpen] = useState(false)
-  const ctx = useCustomer({ swrConfig: { refreshInterval: 30_000 } })
-  const feature = ctx.customer?.features?.['ai_credits']
+  const subscription = useSubscription()
+  const portal = useBillingPortal()
+  const snapshot = subscription.data
 
-  const balance = feature?.balance ?? 0
-  const total = feature?.included_usage ?? 0
+  const balance = microsToUsd(snapshot?.totalBalanceMicros ?? 0)
+  const total = microsToUsd(snapshot?.totalBudgetMicros ?? 0)
   const used = Math.max(total - balance, 0)
   const usedPercent = total > 0 ? Math.min((used / total) * 100, 100) : 0
-  const unlimited = feature?.unlimited ?? false
+  const unlimited = false
   const remaining = total > 0 ? Math.max((balance / total) * 100, 0) : 0
 
-  const nextResetAt = feature?.next_reset_at
-    ? feature.next_reset_at < 10_000_000_000
-      ? feature.next_reset_at * 1000
-      : feature.next_reset_at
+  const nextResetAt = snapshot?.nextAllowanceGrantAt
+    ? Date.parse(snapshot.nextAllowanceGrantAt)
     : null
   const resetAtLabel = nextResetAt
     ? new Intl.DateTimeFormat('en-US', {
@@ -35,16 +38,15 @@ export function useCredits() {
         hour12: false,
       }).format(nextResetAt)
     : null
-  const renewLabel = feature?.interval ? (INTERVAL_LABELS[feature.interval] ?? null) : null
+  const renewLabel = snapshot?.interval ? (INTERVAL_LABELS[snapshot.interval] ?? null) : null
   const hoursUntilRenew = nextResetAt
     ? Math.max(0, Math.round((nextResetAt - Date.now()) / 3_600_000))
     : null
 
   const gate = () => {
-    if (ctx.isLoading || !ctx.customer) return true
-    const { data } = ctx.check({ featureId: 'ai_credits' })
-    if (data.allowed) return true
-    toast.error('You have run out of AI credits. Please upgrade your plan.', {
+    if (subscription.isLoading || !snapshot) return true
+    if (snapshot.features.canUseAi) return true
+    toast.error('You have run out of usage balance. Please upgrade or add more balance.', {
       position: 'top-right',
     })
     setPlanDialogOpen(true)
@@ -61,10 +63,24 @@ export function useCredits() {
     resetAtLabel,
     renewLabel,
     hoursUntilRenew,
-    hasCustomer: !!ctx.customer,
+    hasCustomer: Boolean(snapshot),
+    snapshot,
     gate,
     planDialogOpen,
     setPlanDialogOpen,
-    openBillingPortal: () => void ctx.openBillingPortal(),
+    openBillingPortal: async () => {
+      if (!snapshot?.stripeCustomerId && snapshot?.tier === 'free') {
+        setPlanDialogOpen(true)
+        return
+      }
+
+      try {
+        const url = await portal.mutateAsync(undefined)
+        window.location.href = url
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to open billing portal'
+        toast.error(message, { position: 'top-right' })
+      }
+    },
   }
 }

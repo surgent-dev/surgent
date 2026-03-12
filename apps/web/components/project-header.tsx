@@ -28,7 +28,6 @@ import {
   Trash,
   Stop,
 } from '@phosphor-icons/react'
-import { useCustomer } from 'autumn-js/react'
 import { useCredits } from '@/hooks/use-credits'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -98,8 +97,7 @@ function sanitizeHostname(value: string) {
 export default function ProjectHeader({ projectId, project }: ProjectHeaderProps) {
   const router = useRouter()
   const credits = useCredits()
-  const { check: checkFeature } = useCustomer()
-  const canToggleVisibility = checkFeature({ featureId: 'private_projects' }).data?.allowed ?? false
+  const canToggleVisibility = credits.snapshot?.features.privateProjects ?? false
 
   // Dialog states
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)

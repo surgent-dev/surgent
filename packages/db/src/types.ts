@@ -11,6 +11,11 @@ export interface Database {
   oauthConsent: OAuthConsentTable
   jwks: JwksTable
   organization: OrganizationTable
+  billing_account: BillingAccountTable
+  billing_subscription: BillingSubscriptionTable
+  billing_ledger: BillingLedgerTable
+  billing_event: BillingEventTable
+  billing_payment: BillingPaymentTable
   member: MemberTable
   organizationRole: OrganizationRoleTable
   team: TeamTable
@@ -187,6 +192,93 @@ export interface OrganizationTable {
   createdBy: string | null
   platformFeePercent: number | null
   platformFeeFixed: number | null
+  stripeCustomerId: string | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface BillingAccountTable {
+  id: string
+  organizationId: string
+  stripeCustomerId: string | null
+  defaultPaymentMethodId: string | null
+  paymentMethodBrand: string | null
+  paymentMethodLast4: string | null
+  includedBalanceMicros: string
+  prepaidBalanceMicros: string
+  autoReloadEnabled: boolean
+  autoReloadThresholdMicros: string | null
+  autoReloadAmountMicros: string | null
+  monthlySpendLimitMicros: string | null
+  currency: string
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface BillingSubscriptionTable {
+  id: string
+  organizationId: string
+  stripeSubscriptionId: string | null
+  stripePriceId: string | null
+  tier: string
+  interval: string | null
+  status: string
+  trialStart: Date | null
+  trialEnd: Date | null
+  currentPeriodStart: Date | null
+  currentPeriodEnd: Date | null
+  cancelAtPeriodEnd: boolean
+  canceledAt: Date | null
+  monthlyAllowanceMicros: string
+  nextAllowanceGrantAt: Date | null
+  stripeCouponId: string | null
+  stripeDiscountId: string | null
+  stripePromotionCodeId: string | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface BillingLedgerTable {
+  id: string
+  organizationId: string
+  kind: string
+  bucket: string
+  amountMicros: string
+  stripeEventId: string | null
+  stripeInvoiceId: string | null
+  stripeCheckoutSessionId: string | null
+  stripePaymentIntentId: string | null
+  usageId: string | null
+  idempotencyKey: string | null
+  metadata: any | null
+  createdAt?: Date
+}
+
+export interface BillingEventTable {
+  stripeEventId: string
+  type: string
+  payload: any
+  status: string
+  error: string | null
+  receivedAt?: Date
+  handledAt: Date | null
+}
+
+export interface BillingPaymentTable {
+  id: string
+  organizationId: string
+  kind: string
+  stripeInvoiceId: string | null
+  stripePaymentIntentId: string | null
+  stripeCheckoutSessionId: string | null
+  stripeCouponId: string | null
+  stripeDiscountId: string | null
+  stripePromotionCodeId: string | null
+  amountMicros: string
+  refundedAmountMicros: string
+  refundedAt: Date | null
+  currency: string
+  status: string
   createdAt?: Date
   updatedAt?: Date
 }
