@@ -26,9 +26,7 @@ export function useCredits() {
   const unlimited = false
   const remaining = total > 0 ? Math.max((balance / total) * 100, 0) : 0
 
-  const nextResetAt = snapshot?.nextAllowanceGrantAt
-    ? Date.parse(snapshot.nextAllowanceGrantAt)
-    : null
+  const nextResetAt = snapshot?.nextResetAt ? Date.parse(snapshot.nextResetAt) : null
   const resetAtLabel = nextResetAt
     ? new Intl.DateTimeFormat('en-US', {
         month: 'short',

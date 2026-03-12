@@ -15,9 +15,9 @@ export type BillingSnapshot = {
   status: string
   trialEnd: string | null
   currentPeriodEnd: string | null
-  nextAllowanceGrantAt: string | null
+  nextResetAt: string | null
   cancelAtPeriodEnd: boolean
-  includedBalanceMicros: number
+  includedRemainingMicros: number
   prepaidBalanceMicros: number
   totalBalanceMicros: number
   totalBudgetMicros: number
@@ -28,6 +28,7 @@ export type BillingSnapshot = {
   paymentMethodLast4: string | null
   stripeCouponId: string | null
   stripePromotionCodeId: string | null
+  hasMigrationCredit: boolean
   topupMinUsd: number
   features: {
     projectsLimit: number | null
