@@ -74,8 +74,8 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
 
   const name = worker?.name
   const isLive = worker?.status === 'active'
-  const activeDomain = domainsData?.domains?.find((d) => d.status === 'active')
-  const hasCustomDomain = Boolean(activeDomain)
+  const activeDomains = domainsData?.domains?.filter((d) => d.status === 'active') ?? []
+  const hasCustomDomain = activeDomains.length > 0
   const latest = history?.[0]
   const busy = latest && !TERMINAL.includes(latest.status)
 
@@ -172,13 +172,27 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
 
           {/* URL + Actions */}
           <div className="px-4 sm:px-5 py-4 border-b space-y-3">
-            {/* Custom domain — shown as primary URL when active */}
-            {activeDomain && (
-              <div className="flex items-center h-10 px-3 rounded-lg border bg-emerald-500/5 border-emerald-500/20 font-mono text-sm min-w-0 overflow-hidden">
-                <span className="flex-1 truncate">{activeDomain.domainName}</span>
-                <div className="flex items-center shrink-0">
+            {/* Custom domains — shown as primary URLs when active */}
+            {activeDomains.map((d) => (
+              <div
+                key={d.id}
+                className="flex items-center h-10 px-3 rounded-lg border bg-emerald-500/5 border-emerald-500/20 font-mono text-sm min-w-0 overflow-hidden"
+              >
+                <span className="flex-1 truncate">{d.domainName}</span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  {activeDomains.length > 1 && (
+                    <span
+                      className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full mr-1 ${
+                        d.isPrimary
+                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                          : 'bg-muted text-muted-foreground border border-border'
+                      }`}
+                    >
+                      {d.isPrimary ? 'PRIMARY' : 'ALIAS'}
+                    </span>
+                  )}
                   <a
-                    href={`https://${activeDomain.domainName.replace(/^www\./, '')}`}
+                    href={`https://${d.domainName.replace(/^www\./, '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-1 hover:bg-muted rounded"
@@ -188,9 +202,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(
-                        `https://${activeDomain.domainName.replace(/^www\./, '')}`,
-                      )
+                      navigator.clipboard.writeText(`https://${d.domainName.replace(/^www\./, '')}`)
                       toast.success('Copied')
                     }}
                     className="p-1 hover:bg-muted rounded"
@@ -199,7 +211,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                   </button>
                 </div>
               </div>
-            )}
+            ))}
 
             {/* Surgent subdomain — secondary when custom domain exists, editable only without custom domain */}
             {name && (

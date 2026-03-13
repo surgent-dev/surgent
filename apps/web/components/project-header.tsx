@@ -131,7 +131,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const removeDomain = useRemoveDomain()
 
   // Domain states
-  const activeDomain = domainsData?.domains?.find((d) => d.status === 'active')
+  const activeDomains = domainsData?.domains?.filter((d) => d.status === 'active') ?? []
+  const activeDomain = activeDomains[0]
   const configuringDomain = domainsData?.domains?.find((d) => d.status === 'dns_configuring')
   const pendingDomain = domainsData?.domains?.find(
     (d) => d.status === 'pending' || d.status === 'purchasing',
@@ -660,24 +661,40 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
               {/* Custom Domain */}
               <div className="border-t px-3 py-2.5">
-                {activeDomain ? (
-                  <div className="flex items-center gap-2 h-8 px-2.5 rounded-lg bg-emerald-500/6 border border-emerald-500/20">
-                    <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                    <span className="font-mono text-xs truncate flex-1">
-                      {activeDomain.domainName}
-                    </span>
-                    <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                      Live
-                    </span>
-                    <a
-                      href={`https://${activeDomain.domainName}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-0.5 hover:bg-emerald-500/10 rounded transition-colors"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <ArrowSquareOut className="size-3.5 text-emerald-600" />
-                    </a>
+                {activeDomains.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {activeDomains.map((d) => (
+                      <div
+                        key={d.id}
+                        className="flex items-center gap-2 h-8 px-2.5 rounded-lg bg-emerald-500/6 border border-emerald-500/20"
+                      >
+                        <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="font-mono text-xs truncate flex-1">{d.domainName}</span>
+                        <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                          Live
+                        </span>
+                        {activeDomains.length > 1 && (
+                          <span
+                            className={`text-[8px] font-semibold px-1 py-0.5 rounded-full ${
+                              d.isPrimary
+                                ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                : 'bg-muted text-muted-foreground border border-border'
+                            }`}
+                          >
+                            {d.isPrimary ? 'PRIMARY' : 'ALIAS'}
+                          </span>
+                        )}
+                        <a
+                          href={`https://${d.domainName}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-0.5 hover:bg-emerald-500/10 rounded transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ArrowSquareOut className="size-3.5 text-emerald-600" />
+                        </a>
+                      </div>
+                    ))}
                   </div>
                 ) : displayDomain ? (
                   <button

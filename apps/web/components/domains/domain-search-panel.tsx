@@ -280,6 +280,7 @@ function DomainStatusCard({
   isStale,
   lastError,
   sslMeta,
+  badge,
   logs,
   onVisit,
   onRetry,
@@ -297,6 +298,7 @@ function DomainStatusCard({
     firstAttemptAt: string
     lastAttemptAt: string
   } | null
+  badge?: 'primary' | 'alias'
   logs?: DomainLogEntry[]
   onVisit?: string
   onRetry?: () => void
@@ -304,6 +306,7 @@ function DomainStatusCard({
   retrying?: boolean
   removing?: boolean
 }) {
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
   const cfg = statusConfig[status]
   const isPending = status === 'pending' || status === 'purchasing'
   const isActive = status === 'active'
@@ -337,6 +340,17 @@ function DomainStatusCard({
             <span className={`text-[11px] font-medium ${textColor[cfg.color]}`}>
               {isStale ? 'Stuck' : cfg.label}
             </span>
+            {badge && (
+              <span
+                className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                  badge === 'primary'
+                    ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                    : 'bg-muted text-muted-foreground border border-border'
+                }`}
+              >
+                {badge === 'primary' ? 'PRIMARY' : 'ALIAS'}
+              </span>
+            )}
             {isActive && onVisit && (
               <>
                 <a
@@ -364,7 +378,7 @@ function DomainStatusCard({
             {onRemove && !isInProgress && (
               <button
                 type="button"
-                onClick={onRemove}
+                onClick={() => setConfirmingRemove(true)}
                 disabled={removing}
                 className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
                 title="Remove domain"
@@ -382,6 +396,33 @@ function DomainStatusCard({
           </div>
         )}
       </div>
+
+      {/* Delete confirmation */}
+      {confirmingRemove && (
+        <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2">
+          <p className="flex-1 text-xs text-destructive">
+            Remove <span className="font-mono font-medium">{domainName}</span>?
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              onRemove?.()
+              setConfirmingRemove(false)
+            }}
+            disabled={removing}
+            className="text-[11px] font-medium text-destructive hover:text-destructive/80 disabled:opacity-50"
+          >
+            {removing ? 'Removing...' : 'Confirm'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmingRemove(false)}
+            className="text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* Description — shown for non-SSL in-progress states */}
       {!isActive && !isError && !isStale && !isProvisioning && (
@@ -687,21 +728,7 @@ export function DomainSearchPanel({
 
       {/* All domain status cards */}
       {allDomains.map((domain) => (
-        <div key={domain.id} className="relative">
-          {domain.status === 'active' &&
-            allDomains.filter((d) => d.status === 'active').length > 1 && (
-              <div className="absolute -top-1.5 right-2 z-10">
-                <span
-                  className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
-                    domain.isPrimary
-                      ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                      : 'bg-muted text-muted-foreground border border-border'
-                  }`}
-                >
-                  {domain.isPrimary ? 'PRIMARY' : 'ALIAS'}
-                </span>
-              </div>
-            )}
+        <div key={domain.id}>
           <DomainStatusCard
             domainName={domain.domainName}
             status={domain.status as keyof typeof statusConfig}
@@ -712,6 +739,13 @@ export function DomainSearchPanel({
             }
             lastError={domain.lastError}
             sslMeta={domain.sslMeta}
+            badge={
+              domain.status === 'active' && activeDomains.length > 1
+                ? domain.isPrimary
+                  ? 'primary'
+                  : 'alias'
+                : undefined
+            }
             logs={domain.logs}
             onVisit={
               domain.status === 'active'
