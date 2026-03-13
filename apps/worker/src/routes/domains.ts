@@ -6,9 +6,10 @@ import { requireAuth } from '@/middleware/auth'
 import { db } from '@/lib/db'
 import { generateEntriToken } from '@/lib/entri/jwt'
 import { getDomainProvider, expandDomainQuery } from '@/lib/domains'
-import { connectCustomDomain, disconnectCustomDomain } from '@/lib/cloudflare/custom-hostnames'
+import { disconnectCustomDomain } from '@/lib/cloudflare/custom-hostnames'
 import { config } from '@/lib/config'
 import { HttpError } from '@/lib/errors'
+import { rateLimit } from '@/middleware/rate-limit'
 import { createLogger } from '@/lib/logger'
 import type { AppContext } from '@/types/application'
 import type { DomainLogEntry } from '@repo/db'
@@ -38,57 +39,13 @@ async function appendDomainLog(
     .execute()
 }
 
-/** Quick health check: can we reach the domain over HTTPS? */
-async function checkDomainHealth(domain: string): Promise<boolean> {
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 3000)
-    const res = await fetch(`https://${domain}`, {
-      method: 'HEAD',
-      signal: controller.signal,
-      redirect: 'follow',
-    })
-    clearTimeout(timeout)
-    return res.status < 500
-  } catch {
-    return false
-  }
-}
-
-// ─── SSL provisioning metadata (stored in lastError as JSON) ────
+// ─── SSL provisioning metadata (dedicated sslMeta JSONB column) ────
 
 interface SslProvisioningMeta {
   _type: 'ssl_provisioning_meta'
   attempts: number
   firstAttemptAt: string
   lastAttemptAt: string
-}
-
-function parseSslMeta(lastError: string | null): SslProvisioningMeta | null {
-  if (!lastError) return null
-  try {
-    const parsed = JSON.parse(lastError)
-    if (parsed?._type === 'ssl_provisioning_meta') return parsed
-  } catch {}
-  return null
-}
-
-function serializeSslMeta(meta: SslProvisioningMeta): string {
-  return JSON.stringify(meta)
-}
-
-/**
- * Backoff interval between SSL health checks.
- *   1-20 attempts (~first minute): every poll (3s)
- *   21-40 (~2 min): every 10s
- *   41-80 (~7 min): every 30s
- *   81+: every 60s
- */
-function getSslCheckInterval(attempts: number): number {
-  if (attempts <= 20) return 0
-  if (attempts <= 40) return 10_000
-  if (attempts <= 80) return 30_000
-  return 60_000
 }
 
 // ─── TXT domain verification ─────────────────────────────────
@@ -109,19 +66,6 @@ function buildVerifyTxtRecord(projectId: string) {
   }
 }
 
-/** Check if the TXT verification record exists for a domain. */
-async function verifyDomainTxt(domain: string, projectId: string): Promise<boolean> {
-  const expected = `surgent-verify=${generateVerifyToken(projectId)}`
-  const host = `_surgent-verify.${domain.replace(/^www\./, '')}`
-  try {
-    const { resolve } = await import('dns/promises')
-    const records = await resolve(host, 'TXT')
-    return records.some((r) => r.join('') === expected)
-  } catch {
-    return false
-  }
-}
-
 const domains = new Hono<AppContext>()
 
 // ─── Auth-protected routes ───────────────────────────────────
@@ -129,12 +73,23 @@ const domains = new Hono<AppContext>()
 domains.use('/*', requireAuth)
 
 /**
+ * GET /api/domains/config
+ * Returns domain feature flags for the frontend.
+ */
+domains.get('/config', async (c) => {
+  return c.json({
+    freeDomainEnabled: config.freeDomain.enabled,
+  })
+})
+
+/**
  * POST /api/domains/check-availability
  * Check if a domain is available for purchase.
- * Uses the configured domain provider (entri or namecheap).
+ * Uses Entri to check domain availability.
  */
 domains.post(
   '/check-availability',
+  rateLimit(20, 60_000),
   zValidator(
     'json',
     z.object({
@@ -157,22 +112,23 @@ domains.post(
 /**
  * POST /api/domains/init-purchase
  * Initialize domain purchase flow.
- * - Entri: returns JWT + config to launch the Entri modal on the frontend
- * - Namecheap: registers the domain server-side and sets DNS records
+ * Returns JWT + config to launch the Entri modal on the frontend.
  */
 domains.post(
   '/init-purchase',
+  rateLimit(5, 3_600_000),
   zValidator(
     'json',
     z.object({
       projectId: z.string().uuid(),
       suggestedDomain: z.string().max(255).optional(),
+      freeDomain: z.boolean().optional(),
     }),
   ),
   async (c) => {
     const user = c.get('user')!
     const session = c.get('session')!
-    const { projectId, suggestedDomain } = c.req.valid('json')
+    const { projectId, suggestedDomain, freeDomain } = c.req.valid('json')
 
     // Verify project belongs to user's org
     const project = await db
@@ -188,16 +144,34 @@ domains.post(
       throw new HttpError(403, 'Forbidden')
     }
 
-    // Check if project already has an active/pending domain
-    const existingDomain = await db
+    // Check domain limits
+    const domainCount = await db
       .selectFrom('domain')
-      .select('id')
+      .select(db.fn.count('id').as('count'))
       .where('projectId', '=', projectId)
-      .where('status', 'in', ['active', 'ssl_provisioning', 'purchasing', 'dns_configuring'])
+      .where('status', '!=', 'error')
       .executeTakeFirst()
 
-    if (existingDomain) {
-      throw new HttpError(409, 'Project already has a domain')
+    if (Number(domainCount?.count ?? 0) >= 5) {
+      throw new HttpError(409, 'Maximum 5 domains per project')
+    }
+
+    // Free domain eligibility check
+    if (freeDomain) {
+      if (!config.freeDomain.enabled) {
+        throw new HttpError(403, 'Free domains are not currently available')
+      }
+
+      const freeCount = await db
+        .selectFrom('domain')
+        .select(db.fn.count('id').as('count'))
+        .where('userId', '=', user.id)
+        .where('registrar', 'like', '%free%')
+        .executeTakeFirst()
+
+      if (Number(freeCount?.count ?? 0) >= config.freeDomain.maxPerUser) {
+        throw new HttpError(409, `You've already claimed your free domain`)
+      }
     }
 
     // Get worker script name for DNS target
@@ -221,132 +195,6 @@ domains.post(
       { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
       buildVerifyTxtRecord(projectId),
     ]
-
-    const provider = await getDomainProvider()
-
-    // ── Namecheap: register server-side ──────────────────────
-    if (provider.name === 'namecheap') {
-      if (!suggestedDomain) throw new HttpError(400, 'Domain name is required')
-
-      // Create pending domain record
-      const now = new Date()
-      const domain = await db
-        .insertInto('domain')
-        .values({
-          projectId,
-          userId: user.id,
-          organizationId: session.activeOrganizationId,
-          domainName: suggestedDomain,
-          status: 'purchasing',
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning(['id'])
-        .executeTakeFirst()
-
-      await appendDomainLog(
-        domain!.id,
-        'purchase_started',
-        `Purchasing ${suggestedDomain} via Namecheap`,
-      )
-      log.info(
-        { projectId, domainId: domain?.id, suggestedDomain, provider: 'namecheap' },
-        'domain purchase started',
-      )
-
-      try {
-        const result = await provider.registerDomain(suggestedDomain, 1, {
-          firstName: user.name?.split(' ')[0] || 'Domain',
-          lastName: user.name?.split(' ').slice(1).join(' ') || 'Owner',
-          address1: '123 Main St',
-          city: 'San Francisco',
-          stateProvince: 'CA',
-          postalCode: '94105',
-          country: 'US',
-          phone: '+1.5555555555',
-          email: user.email,
-        })
-
-        if (!result.registered) {
-          await db
-            .updateTable('domain')
-            .set({ status: 'error', updatedAt: new Date() })
-            .where('id', '=', domain!.id)
-            .execute()
-          throw new HttpError(500, 'Domain registration failed')
-        }
-
-        // Set DNS records at the registrar
-        try {
-          await provider.setDnsRecords(suggestedDomain, dnsRecords)
-        } catch (dnsErr) {
-          log.warn({ err: dnsErr, suggestedDomain }, 'DNS setup failed, domain still purchased')
-        }
-
-        // Connect to Cloudflare: custom hostname + KV dispatch mapping
-        let cfCustomDomainId: string | null = null
-        let kvMapped = false
-        let lastError: string | null = null
-
-        if (worker?.scriptName) {
-          await appendDomainLog(
-            domain!.id,
-            'cloudflare_connect_start',
-            `Connecting ${suggestedDomain} → ${worker.scriptName}`,
-          )
-          const result = await connectCustomDomain(suggestedDomain, worker.scriptName)
-          cfCustomDomainId = result.customHostnameId
-          kvMapped = result.kvMapped
-          lastError = result.error
-          await appendDomainLog(
-            domain!.id,
-            'cloudflare_connect_done',
-            result.error || 'Connected successfully',
-            !result.error,
-          )
-        }
-
-        const finalStatus = kvMapped ? 'active' : worker?.scriptName ? 'error' : 'dns_configuring'
-
-        await db
-          .updateTable('domain')
-          .set({
-            status: finalStatus,
-            registrar: 'namecheap',
-            cfCustomDomainId,
-            kvMapped,
-            lastError,
-            purchasedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where('id', '=', domain!.id)
-          .execute()
-
-        await appendDomainLog(
-          domain!.id,
-          'status_change',
-          `Status set to ${finalStatus}`,
-          finalStatus === 'active',
-        )
-
-        return c.json({
-          domainId: domain!.id,
-          domainName: suggestedDomain,
-          provider: 'namecheap',
-          registered: true,
-          dnsRecords,
-        })
-      } catch (err) {
-        if (err instanceof HttpError) throw err
-        log.error({ err, suggestedDomain }, 'namecheap registration error')
-        await db
-          .updateTable('domain')
-          .set({ status: 'error', updatedAt: new Date() })
-          .where('id', '=', domain!.id)
-          .execute()
-        throw new HttpError(500, 'Domain registration failed')
-      }
-    }
 
     // ── Entri: return config for frontend modal ──────────────
     // Don't create a DB record yet — the webhook will create/update it
@@ -378,6 +226,7 @@ domains.post(
  */
 domains.post(
   '/init-connect',
+  rateLimit(10, 3_600_000),
   zValidator(
     'json',
     z.object({
@@ -407,17 +256,29 @@ domains.post(
       throw new HttpError(403, 'Forbidden')
     }
 
-    // Check if project already has an active/pending domain
-    const existingDomain = await db
+    // Check domain limits
+    const domainCount = await db
       .selectFrom('domain')
-      .select('id')
+      .select(db.fn.count('id').as('count'))
       .where('projectId', '=', projectId)
+      .where('status', '!=', 'error')
+      .executeTakeFirst()
+
+    if (Number(domainCount?.count ?? 0) >= 5) {
+      throw new HttpError(409, 'Maximum 5 domains per project')
+    }
+
+    // Check if project already has a primary domain
+    const existingPrimary = await db
+      .selectFrom('domain')
+      .select(['id', 'domainName'])
+      .where('projectId', '=', projectId)
+      .where('isPrimary', '=', true)
       .where('status', 'in', ['active', 'ssl_provisioning', 'purchasing', 'dns_configuring'])
       .executeTakeFirst()
 
-    if (existingDomain) {
-      throw new HttpError(409, 'Project already has a domain')
-    }
+    const isPrimary = !existingPrimary
+    const redirectTarget = existingPrimary ? existingPrimary.domainName : null
 
     // Get worker script name for DNS target
     const worker = await db
@@ -443,22 +304,54 @@ domains.post(
 
     const token = await generateEntriToken(user.id)
 
-    // Create domain record in dns_configuring state (no purchase needed)
+    // Check if this domain name already exists (e.g., from a previous failed attempt)
     const now = new Date()
-    const domainRecord = await db
-      .insertInto('domain')
-      .values({
-        projectId,
-        userId: user.id,
-        organizationId: session.activeOrganizationId,
-        domainName: domain,
-        status: 'dns_configuring',
-        registrar: 'entri-connect',
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning(['id'])
+    let domainRecord = await db
+      .selectFrom('domain')
+      .select(['id'])
+      .where('domainName', '=', domain)
       .executeTakeFirst()
+
+    if (domainRecord) {
+      // Reuse the existing record — reset it to dns_configuring with clean logs
+      await db
+        .updateTable('domain')
+        .set({
+          projectId,
+          userId: user.id,
+          organizationId: session.activeOrganizationId,
+          status: 'dns_configuring',
+          registrar: 'entri-connect',
+          isPrimary,
+          redirectTarget,
+          lastError: null,
+          sslMeta: null,
+          dnsVerified: false,
+          routingConfigured: false,
+          logs: sql`'[]'::jsonb`,
+          updatedAt: now,
+        })
+        .where('id', '=', domainRecord.id)
+        .execute()
+    } else {
+      // Create new domain record
+      domainRecord = await db
+        .insertInto('domain')
+        .values({
+          projectId,
+          userId: user.id,
+          organizationId: session.activeOrganizationId,
+          domainName: domain,
+          status: 'dns_configuring',
+          registrar: 'entri-connect',
+          isPrimary,
+          redirectTarget,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning(['id'])
+        .executeTakeFirst()
+    }
 
     await appendDomainLog(domainRecord!.id, 'connect_initiated', `DNS setup started for ${domain}`)
     log.info({ projectId, domainId: domainRecord?.id, domain }, 'domain connect initialized')
@@ -503,119 +396,8 @@ domains.get('/:projectId', async (c) => {
     .orderBy('createdAt', 'desc')
     .execute()
 
-  // Auto-promote: move dns_configuring domains forward.
-  // Don't wait for webhook — do a live health check to detect readiness.
-  const configuringDomains = result.filter((d) => d.status === 'dns_configuring')
-  for (const d of configuringDomains) {
-    if (d.kvMapped) continue // already promoted
-
-    if (d.dnsVerified) {
-      // Webhook confirmed DNS — go straight to ssl_provisioning
-      await db
-        .updateTable('domain')
-        .set({ status: 'ssl_provisioning', kvMapped: true, lastError: null, updatedAt: new Date() })
-        .where('id', '=', d.id)
-        .execute()
-      d.status = 'ssl_provisioning'
-      await appendDomainLog(d.id, 'auto_promote', 'DNS verified by webhook, checking SSL', true)
-      log.info({ domainId: d.id, domainName: d.domainName }, 'auto-promoted to ssl_provisioning')
-      continue
-    }
-
-    // No webhook yet — do a live check to avoid waiting
-    const bareDomain = d.domainName.replace(/^www\./, '')
-    const bareOk = await checkDomainHealth(bareDomain)
-    if (bareOk) {
-      // Domain is resolving — promote past dns_configuring
-      await db
-        .updateTable('domain')
-        .set({
-          status: 'ssl_provisioning',
-          dnsVerified: true,
-          kvMapped: true,
-          lastError: null,
-          updatedAt: new Date(),
-        })
-        .where('id', '=', d.id)
-        .execute()
-      d.status = 'ssl_provisioning'
-      d.dnsVerified = true
-      await appendDomainLog(d.id, 'auto_promote', 'DNS resolving (live check), checking SSL', true)
-      log.info({ domainId: d.id, domainName: d.domainName }, 'auto-promoted via live DNS check')
-    }
-  }
-
-  // SSL health check with backoff: never hard-fail, keep checking with decreasing frequency
-  // Use current d.status (may have been updated by auto-promote above)
-  const provisioningDomains = result.filter((d) => d.status === 'ssl_provisioning')
-  for (const d of provisioningDomains) {
-    const meta = parseSslMeta(d.lastError) ?? {
-      _type: 'ssl_provisioning_meta' as const,
-      attempts: 0,
-      firstAttemptAt: new Date().toISOString(),
-      lastAttemptAt: new Date().toISOString(),
-    }
-
-    // Throttle: skip if not enough time since last check
-    const timeSinceUpdate = Date.now() - new Date(d.updatedAt).getTime()
-    const interval = getSslCheckInterval(meta.attempts)
-    if (timeSinceUpdate < interval) continue
-
-    meta.attempts += 1
-    meta.lastAttemptAt = new Date().toISOString()
-
-    // Check both bare and www — don't mark active until both have valid SSL
-    const bareDomain = d.domainName.replace(/^www\./, '')
-    const bareOk = await checkDomainHealth(bareDomain)
-    const wwwOk = bareOk ? await checkDomainHealth(`www.${bareDomain}`) : false
-
-    if (bareOk && wwwOk) {
-      // Verify TXT ownership record (non-blocking — log result but don't gate activation)
-      const txtOk = d.projectId ? await verifyDomainTxt(bareDomain, d.projectId) : false
-      if (!txtOk) {
-        log.warn(
-          { domainId: d.id, domainName: bareDomain },
-          'TXT verification missing — activating anyway',
-        )
-      }
-
-      await db
-        .updateTable('domain')
-        .set({ status: 'active', lastError: null, updatedAt: new Date() })
-        .where('id', '=', d.id)
-        .execute()
-      d.status = 'active'
-      d.lastError = null
-      await appendDomainLog(
-        d.id,
-        'ssl_provisioned',
-        `Domain is live with SSL (attempt ${meta.attempts}${txtOk ? ', TXT verified' : ', TXT not found'})`,
-        true,
-      )
-    } else {
-      // Not ready yet — update meta and keep trying
-      const serialized = serializeSslMeta(meta)
-      await db
-        .updateTable('domain')
-        .set({ lastError: serialized, updatedAt: new Date() })
-        .where('id', '=', d.id)
-        .execute()
-      d.lastError = serialized
-
-      // Log periodically (every 10th attempt)
-      if (meta.attempts % 10 === 0) {
-        const elapsedMin = Math.round(
-          (Date.now() - new Date(meta.firstAttemptAt).getTime()) / 60_000,
-        )
-        await appendDomainLog(
-          d.id,
-          'ssl_check',
-          `Still provisioning after ${elapsedMin}m (${meta.attempts} checks, bare=${bareOk ? 'ok' : 'no'} www=${wwwOk ? 'ok' : 'no'})`,
-          false,
-        )
-      }
-    }
-  }
+  // Health checks are now handled by the background domain-health-checker job
+  // GET endpoint is a pure read — no side effects
 
   return c.json({
     domains: result.map((d) => ({
@@ -625,8 +407,11 @@ domains.get('/:projectId', async (c) => {
       status: d.status,
       registrar: d.registrar,
       dnsVerified: d.dnsVerified,
-      kvMapped: d.kvMapped,
+      routingConfigured: d.routingConfigured,
+      isPrimary: (d as any).isPrimary ?? true,
+      redirectTarget: (d as any).redirectTarget ?? null,
       lastError: d.lastError,
+      sslMeta: d.sslMeta ?? null,
       logs: d.logs ?? [],
       purchasedAt: d.purchasedAt?.toISOString() ?? null,
       expiresAt: d.expiresAt?.toISOString() ?? null,
@@ -682,7 +467,8 @@ domains.post(
         .updateTable('domain')
         .set({
           status: 'ssl_provisioning',
-          lastError: serializeSslMeta(freshMeta),
+          sslMeta: freshMeta as any,
+          lastError: null,
           updatedAt: new Date(),
         })
         .where('id', '=', domainId)
@@ -779,6 +565,72 @@ domains.delete('/:projectId/:domainId', async (c) => {
 })
 
 /**
+ * POST /api/domains/set-primary
+ * Promote an alias domain to primary (demotes current primary to alias).
+ */
+domains.post(
+  '/set-primary',
+  zValidator(
+    'json',
+    z.object({
+      projectId: z.string().uuid(),
+      domainId: z.string().uuid(),
+    }),
+  ),
+  async (c) => {
+    const user = c.get('user')!
+    const { projectId, domainId } = c.req.valid('json')
+
+    const domain = await db
+      .selectFrom('domain')
+      .selectAll()
+      .where('id', '=', domainId)
+      .where('projectId', '=', projectId)
+      .where('userId', '=', user.id)
+      .where('status', '=', 'active')
+      .executeTakeFirst()
+
+    if (!domain) throw new HttpError(404, 'Domain not found or not active')
+
+    if (domain.isPrimary) {
+      return c.json({ ok: true, message: 'Already primary' })
+    }
+
+    // Demote current primary to alias
+    await db
+      .updateTable('domain')
+      .set({
+        isPrimary: false,
+        redirectTarget: domain.domainName,
+        updatedAt: new Date(),
+      })
+      .where('projectId', '=', projectId)
+      .where('isPrimary', '=', true)
+      .execute()
+
+    // Promote selected domain to primary
+    await db
+      .updateTable('domain')
+      .set({
+        isPrimary: true,
+        redirectTarget: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', domainId)
+      .execute()
+
+    await appendDomainLog(
+      domainId,
+      'set_primary',
+      `${domain.domainName} is now the primary domain`,
+      true,
+    )
+
+    return c.json({ ok: true, primaryDomain: domain.domainName })
+  },
+)
+
+/**
  * POST /api/domains/mock-purchase
  * Dev-only: simulate a successful domain purchase without Entri/payment
  */
@@ -833,7 +685,6 @@ export default domains
 export const domainWebhooks = new Hono<AppContext>()
 
 const SIGNATURE_MAX_AGE_S = 300 // 5 minutes
-const ENTRI_PRODUCTION_IP = '3.14.77.245'
 
 /** SHA-256 hex digest of a string. */
 function sha256(input: string): string {
@@ -911,17 +762,11 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
     })
 
     if (!result.valid) {
-      if (isProduction && result.version) {
-        log.warn(
-          { version: result.version, error: result.error },
-          '[ENTRI-WEBHOOK] signature rejected',
-        )
-        return c.json({ error: 'Invalid signature' }, 401)
-      }
       log.warn(
         { version: result.version, error: result.error },
-        '[ENTRI-WEBHOOK] signature invalid, continuing',
+        '[ENTRI-WEBHOOK] signature invalid — rejecting',
       )
+      return c.json({ error: 'Invalid signature' }, 401)
     }
   }
 
@@ -1032,6 +877,21 @@ async function findPendingDomain(
 }
 
 async function processDomainWebhook(payload: any) {
+  // Idempotency: skip if we already processed this event
+  if (payload.id) {
+    const existing = await db
+      .selectFrom('domain_webhook_event')
+      .select('status')
+      .where('entriEventId', '=', payload.id)
+      .where('status', '=', 'processed')
+      .executeTakeFirst()
+
+    if (existing) {
+      log.info({ eventId: payload.id }, '[ENTRI-WEBHOOK] duplicate event, skipping')
+      return
+    }
+  }
+
   const eventType = payload.type || payload.event
   const domainName = payload.purchased_domains?.[0] || payload.domain
   const { userIdentifier, projectId: extractedProjectId } = parseWebhookUserId(payload.user_id)
@@ -1095,29 +955,72 @@ async function processDomainWebhook(payload: any) {
       }
 
       const now = new Date()
-      const newRecord = await db
-        .insertInto('domain')
-        .values({
-          projectId: project.id,
-          userId: resolvedUserId,
-          organizationId: project.organizationId,
-          domainName: finalDomainName,
-          status: propagationOk ? 'ssl_provisioning' : 'dns_configuring',
-          registrar: payload.provider || payload.registrar || 'entri',
-          entriFlowId: payload.id || null,
-          purchasedAt: now,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning(['id', 'projectId'])
+      // Domain expiry: use Entri payload if available, else default to 1 year
+      const expiresAt = payload.expiration_date
+        ? new Date(payload.expiration_date)
+        : payload.registration_years
+          ? new Date(
+              now.getTime() + Number(payload.registration_years) * 365.25 * 24 * 60 * 60 * 1000,
+            )
+          : new Date(now.getTime() + 365.25 * 24 * 60 * 60 * 1000)
+
+      // Check if domain name already exists (e.g., from a previous attempt)
+      let existingByName = await db
+        .selectFrom('domain')
+        .select(['id', 'projectId'])
+        .where('domainName', '=', finalDomainName)
         .executeTakeFirst()
+
+      let newRecord: { id: string } | undefined
+
+      if (existingByName) {
+        // Reuse existing record — update it with new data
+        await db
+          .updateTable('domain')
+          .set({
+            projectId: project.id,
+            userId: resolvedUserId,
+            organizationId: project.organizationId,
+            status: propagationOk ? 'ssl_provisioning' : 'dns_configuring',
+            registrar: payload.provider || payload.registrar || 'entri',
+            entriFlowId: payload.id || null,
+            purchasedAt: now,
+            expiresAt,
+            lastError: null,
+            sslMeta: null,
+            dnsVerified: propagationOk,
+            routingConfigured: propagationOk,
+            updatedAt: now,
+          })
+          .where('id', '=', existingByName.id)
+          .execute()
+        newRecord = { id: existingByName.id }
+      } else {
+        newRecord = await db
+          .insertInto('domain')
+          .values({
+            projectId: project.id,
+            userId: resolvedUserId,
+            organizationId: project.organizationId,
+            domainName: finalDomainName,
+            status: propagationOk ? 'ssl_provisioning' : 'dns_configuring',
+            registrar: payload.provider || payload.registrar || 'entri',
+            entriFlowId: payload.id || null,
+            purchasedAt: now,
+            expiresAt,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning(['id'])
+          .executeTakeFirst()
+      }
 
       // Entri Power handles SSL for both bare and www — no CF custom hostname needed.
       // Just mark DNS as verified and let the health check loop confirm SSL readiness.
-      if (propagationOk && newRecord?.id) {
+      if (propagationOk && newRecord?.id && !existingByName) {
         await db
           .updateTable('domain')
-          .set({ dnsVerified: true, kvMapped: true })
+          .set({ dnsVerified: true, routingConfigured: true })
           .where('id', '=', newRecord.id)
           .execute()
         await appendDomainLog(
@@ -1129,8 +1032,8 @@ async function processDomainWebhook(payload: any) {
       } else if (newRecord?.id) {
         await appendDomainLog(
           newRecord.id,
-          'webhook_domain_created',
-          `Domain record created (DNS ${propagationOk ? 'ok' : 'pending'})`,
+          existingByName ? 'webhook_domain_reused' : 'webhook_domain_created',
+          `Domain record ${existingByName ? 'reused' : 'created'} (DNS ${propagationOk ? 'ok' : 'pending'})`,
         )
       }
 
@@ -1160,6 +1063,12 @@ async function processDomainWebhook(payload: any) {
     // Just update status and let health check loop confirm SSL readiness.
     const finalStatus = propagationOk ? 'ssl_provisioning' : 'dns_configuring'
 
+    const expiresAt = payload.expiration_date
+      ? new Date(payload.expiration_date)
+      : payload.registration_years
+        ? new Date(Date.now() + Number(payload.registration_years) * 365.25 * 24 * 60 * 60 * 1000)
+        : new Date(Date.now() + 365.25 * 24 * 60 * 60 * 1000)
+
     await db
       .updateTable('domain')
       .set({
@@ -1167,10 +1076,11 @@ async function processDomainWebhook(payload: any) {
         status: finalStatus,
         registrar: payload.provider || payload.registrar || null,
         entriFlowId: payload.id || null,
-        kvMapped: propagationOk,
+        routingConfigured: propagationOk,
         dnsVerified: propagationOk,
         lastError: null,
         purchasedAt: new Date(),
+        expiresAt,
         updatedAt: new Date(),
       })
       .where('id', '=', domainRecord!.id)
@@ -1240,7 +1150,7 @@ async function processDomainWebhook(payload: any) {
         .set({
           status: 'ssl_provisioning',
           dnsVerified: true,
-          kvMapped: true,
+          routingConfigured: true,
           lastError: null,
           updatedAt: new Date(),
         })

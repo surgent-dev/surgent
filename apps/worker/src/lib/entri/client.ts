@@ -25,6 +25,9 @@ export interface DomainAvailabilityResult {
   checkedAt: string
 }
 
+const availabilityCache = new Map<string, { result: DomainAvailabilityResult; expiresAt: number }>()
+const CACHE_TTL = 60_000 // 60 seconds
+
 export class EntriClient {
   private headers() {
     if (!config.entri.apiKey) throw new HttpError(503, 'Entri API not configured')
@@ -38,6 +41,13 @@ export class EntriClient {
   async checkAvailability(domain: string): Promise<DomainAvailabilityResult> {
     if (config.entri.devMode) {
       return this.mockCheckAvailability(domain)
+    }
+
+    // Check cache first
+    const cached = availabilityCache.get(domain)
+    if (cached && cached.expiresAt > Date.now()) {
+      log.debug({ domain }, 'availability cache hit')
+      return cached.result
     }
 
     log.debug({ domain }, 'checking domain availability')
@@ -59,6 +69,10 @@ export class EntriClient {
 
     const data = (await res.json()) as DomainAvailabilityResult
     log.info({ domain, available: data.available, reason: data.reason }, 'availability result')
+
+    // Cache result
+    availabilityCache.set(domain, { result: data, expiresAt: Date.now() + CACHE_TTL })
+
     return data
   }
 

@@ -27,7 +27,8 @@ import {
   useProjectDomains,
   useOnDomainPurchased,
   useRemoveDomain,
-  parseSslProvisioningMeta,
+  useSetPrimaryDomain,
+  useDomainConfig,
   type DomainLogEntry,
 } from '@/queries/domains'
 
@@ -106,47 +107,135 @@ function getActiveStep(status: string) {
   return -1
 }
 
-function ProgressSteps({ status }: { status: string }) {
+/** User-friendly SSL phase description based on elapsed time */
+function getSslPhase(sslMeta: { attempts: number; firstAttemptAt: string } | null | undefined): {
+  label: string
+  hint: string
+  showTechnical: boolean
+} {
+  if (!sslMeta)
+    return {
+      label: 'Setting up HTTPS...',
+      hint: 'This usually takes 2-5 minutes',
+      showTechnical: false,
+    }
+
+  const elapsedMin = Math.round((Date.now() - new Date(sslMeta.firstAttemptAt).getTime()) / 60_000)
+
+  if (elapsedMin < 2)
+    return {
+      label: 'Requesting certificate...',
+      hint: 'Almost instant for most domains',
+      showTechnical: false,
+    }
+  if (elapsedMin < 5)
+    return {
+      label: 'Waiting for verification...',
+      hint: 'Should be ready any moment now',
+      showTechnical: false,
+    }
+  if (elapsedMin < 15)
+    return {
+      label: 'Still working on it...',
+      hint: 'New domains can take a bit longer',
+      showTechnical: true,
+    }
+  if (elapsedMin < 30)
+    return {
+      label: 'Taking a while...',
+      hint: 'Hang tight — this sometimes takes up to 30 minutes',
+      showTechnical: true,
+    }
+  return {
+    label: 'Extended provisioning',
+    hint: 'If this persists, try the Retry SSL button below',
+    showTechnical: true,
+  }
+}
+
+function ProgressSteps({
+  status,
+  sslMeta,
+}: {
+  status: string
+  sslMeta?: {
+    _type: string
+    attempts: number
+    firstAttemptAt: string
+    lastAttemptAt: string
+  } | null
+}) {
   const active = getActiveStep(status)
   if (active < 0) return null
 
+  const isProvisioning = status === 'ssl_provisioning'
+  const phase = isProvisioning ? getSslPhase(sslMeta) : null
+
+  // Cosmetic visual progress for SSL (asymptotic, never reaches 100%)
+  const sslVisualProgress = useMemo(() => {
+    if (!isProvisioning || !sslMeta) return 0
+    const elapsedMin = (Date.now() - new Date(sslMeta.firstAttemptAt).getTime()) / 60_000
+    return Math.min(90, Math.round((1 - Math.exp(-elapsedMin / 4)) * 95))
+  }, [isProvisioning, sslMeta])
+
   return (
-    <div className="flex items-center gap-1.5">
-      {STEPS.map((step, i) => {
-        const done = i < active
-        const current = i === active - 1 && status !== 'active'
-        return (
-          <div key={step.key} className="flex items-center gap-1.5">
-            {i > 0 && (
-              <div
-                className={`w-4 h-px transition-colors ${done ? 'bg-emerald-500' : 'bg-muted-foreground/20'}`}
-              />
-            )}
-            <div className="flex items-center gap-1">
-              <div
-                className={`size-1.5 rounded-full transition-colors ${
-                  done
-                    ? 'bg-emerald-500'
-                    : current
-                      ? 'bg-brand animate-pulse'
-                      : 'bg-muted-foreground/20'
-                }`}
-              />
-              <span
-                className={`text-[10px] font-medium transition-colors ${
-                  done
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : current
-                      ? 'text-brand'
-                      : 'text-muted-foreground/40'
-                }`}
-              >
-                {step.label}
-              </span>
+    <div className="space-y-1.5">
+      {/* Step indicators */}
+      <div className="flex items-center gap-1.5">
+        {STEPS.map((step, i) => {
+          const done = i < active
+          const current = i === active - 1 && status !== 'active'
+          return (
+            <div key={step.key} className="flex items-center gap-1.5">
+              {i > 0 && (
+                <div
+                  className={`w-4 h-px transition-colors ${done ? 'bg-emerald-500' : 'bg-muted-foreground/20'}`}
+                />
+              )}
+              <div className="flex items-center gap-1">
+                <div
+                  className={`size-1.5 rounded-full transition-colors ${
+                    done
+                      ? 'bg-emerald-500'
+                      : current
+                        ? 'bg-brand animate-pulse'
+                        : 'bg-muted-foreground/20'
+                  }`}
+                />
+                <span
+                  className={`text-[10px] font-medium transition-colors ${
+                    done
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : current
+                        ? 'text-brand'
+                        : 'text-muted-foreground/40'
+                  }`}
+                >
+                  {step.label}
+                </span>
+              </div>
             </div>
+          )
+        })}
+      </div>
+
+      {/* SSL progress bar */}
+      {isProvisioning && (
+        <div className="space-y-1">
+          <div className="h-1 rounded-full bg-muted-foreground/10 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-brand transition-all duration-1000 ease-out"
+              style={{ width: `${sslVisualProgress}%` }}
+            />
           </div>
-        )
-      })}
+          {phase && (
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] font-medium text-brand">{phase.label}</span>
+              <span className="text-[10px] text-muted-foreground/50">{phase.hint}</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -190,6 +279,7 @@ function DomainStatusCard({
   status,
   isStale,
   lastError,
+  sslMeta,
   logs,
   onVisit,
   onRetry,
@@ -201,6 +291,12 @@ function DomainStatusCard({
   status: keyof typeof statusConfig
   isStale?: boolean
   lastError?: string | null
+  sslMeta?: {
+    _type: string
+    attempts: number
+    firstAttemptAt: string
+    lastAttemptAt: string
+  } | null
   logs?: DomainLogEntry[]
   onVisit?: string
   onRetry?: () => void
@@ -282,42 +378,34 @@ function DomainStatusCard({
         {/* Progress bar for in-progress states */}
         {isInProgress && !isStale && (
           <div className="px-3 pb-2.5">
-            <ProgressSteps status={status} />
+            <ProgressSteps status={status} sslMeta={sslMeta} />
           </div>
         )}
       </div>
 
-      {/* Description — dynamic for ssl_provisioning */}
-      {!isActive &&
-        !isError &&
-        !isStale &&
+      {/* Description — shown for non-SSL in-progress states */}
+      {!isActive && !isError && !isStale && !isProvisioning && (
+        <p className="text-[11px] text-muted-foreground/60 px-0.5">{cfg.description}</p>
+      )}
+
+      {/* Technical details for SSL (only shown after 5+ minutes) */}
+      {isProvisioning &&
+        sslMeta &&
         (() => {
-          if (isProvisioning) {
-            const meta = parseSslProvisioningMeta(lastError ?? null)
-            if (!meta || meta.attempts <= 3) {
-              return (
-                <p className="text-[11px] text-muted-foreground/60 px-0.5">
-                  Setting up HTTPS certificate. This usually takes a few minutes.
-                </p>
-              )
-            }
-            const elapsedMin = Math.round(
-              (Date.now() - new Date(meta.firstAttemptAt).getTime()) / 60_000,
-            )
-            return (
-              <p className="text-[11px] text-muted-foreground/60 px-0.5">
-                SSL certificate is being provisioned ({elapsedMin > 0 ? `${elapsedMin}m` : '<1m'},
-                check #{meta.attempts}).
-                {elapsedMin >= 5 && ' This can take longer for newly purchased domains.'} We'll keep
-                checking automatically.
-              </p>
-            )
-          }
-          return <p className="text-[11px] text-muted-foreground/60 px-0.5">{cfg.description}</p>
+          const phase = getSslPhase(sslMeta)
+          if (!phase.showTechnical) return null
+          const elapsedMin = Math.round(
+            (Date.now() - new Date(sslMeta.firstAttemptAt).getTime()) / 60_000,
+          )
+          return (
+            <p className="text-[10px] text-muted-foreground/40 px-0.5">
+              {elapsedMin}m elapsed, {sslMeta.attempts} checks
+            </p>
+          )
         })()}
 
-      {/* Error message — hide JSON meta from ssl_provisioning */}
-      {lastError && !parseSslProvisioningMeta(lastError ?? null) && (
+      {/* Error message */}
+      {lastError && (
         <p className="text-[11px] text-red-500/80 bg-red-500/5 px-2.5 py-1.5 rounded-md">
           {lastError}
         </p>
@@ -352,7 +440,7 @@ function DomainStatusCard({
               {isProvisioning
                 ? 'Retry SSL'
                 : isError
-                  ? parseSslProvisioningMeta(lastError ?? null) || lastError?.includes('SSL')
+                  ? sslMeta || lastError?.includes('SSL')
                     ? 'Retry SSL'
                     : 'Retry'
                   : 'Retry DNS'}
@@ -392,6 +480,13 @@ export function DomainSearchPanel({
   const [launching, setLaunching] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [connectInput, setConnectInput] = useState('')
+  const isValidDomain = useMemo(() => {
+    const input = connectInput.trim()
+    if (!input) return false
+    return /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/.test(
+      input,
+    )
+  }, [connectInput])
   const [retrying, setRetrying] = useState(false)
   const [awaitingWebhook, setAwaitingWebhook] = useState(false)
   const [pendingAction, setPendingAction] = useState<
@@ -407,21 +502,31 @@ export function DomainSearchPanel({
   const initConnect = useInitDomainConnect()
   const retryConnect = useRetryDomainConnect()
   const removeDomain = useRemoveDomain()
+  const setPrimary = useSetPrimaryDomain()
   const onPurchased = useOnDomainPurchased()
+  const { data: domainConfig } = useDomainConfig()
 
-  const activeDomain = domainsData?.domains?.find((d) => d.status === 'active')
-  const provisioningDomain = domainsData?.domains?.find((d) => d.status === 'ssl_provisioning')
-  const configuringDomain = domainsData?.domains?.find((d) => d.status === 'dns_configuring')
-  const pendingDomain = domainsData?.domains?.find((d) =>
-    ['pending', 'purchasing'].includes(d.status),
-  )
-  const errorDomain = domainsData?.domains?.find((d) => d.status === 'error')
-  const currentDomain =
-    activeDomain || provisioningDomain || configuringDomain || errorDomain || pendingDomain
+  // Multi-domain support: group domains by status
+  const activeDomains = domainsData?.domains?.filter((d) => d.status === 'active') ?? []
+  const inProgressDomains =
+    domainsData?.domains?.filter((d) =>
+      ['ssl_provisioning', 'dns_configuring', 'purchasing', 'pending'].includes(d.status),
+    ) ?? []
+  const errorDomains = domainsData?.domains?.filter((d) => d.status === 'error') ?? []
+  const allDomains = [...activeDomains, ...inProgressDomains, ...errorDomains]
+
+  const activeDomain = activeDomains[0]
+  const provisioningDomain = inProgressDomains.find((d) => d.status === 'ssl_provisioning')
+  const configuringDomain = inProgressDomains.find((d) => d.status === 'dns_configuring')
+  const pendingDomain = inProgressDomains.find((d) => ['pending', 'purchasing'].includes(d.status))
+  const currentDomain = allDomains[0]
+  const canAddMore = allDomains.length < 5
 
   const isConfigStale = useMemo(() => {
     if (!configuringDomain) return false
-    return Date.now() - new Date(configuringDomain.createdAt).getTime() > 5 * 60 * 1000
+    const elapsed = Date.now() - new Date(configuringDomain.createdAt).getTime()
+    // DNS propagation commonly takes 15-30 minutes; don't alarm users prematurely
+    return elapsed > 15 * 60 * 1000
   }, [configuringDomain])
 
   useEffect(() => {
@@ -477,10 +582,6 @@ export function DomainSearchPanel({
       try {
         const config = await initPurchase.mutateAsync({ projectId })
 
-        if ('provider' in config && config.provider === 'namecheap') {
-          onPurchased(projectId, 'domainName' in config ? String(config.domainName) : '')
-          return
-        }
         if (config.devMode) return
 
         const sellConfig: EntriConfig = {
@@ -584,32 +685,87 @@ export function DomainSearchPanel({
         <DomainStatusCard domainName="Setting up..." status="awaiting" />
       )}
 
-      {/* Current domain status */}
-      {currentDomain && (
-        <DomainStatusCard
-          domainName={currentDomain.domainName}
-          status={currentDomain.status as keyof typeof statusConfig}
-          isStale={configuringDomain ? isConfigStale : undefined}
-          lastError={currentDomain.lastError}
-          logs={currentDomain.logs}
-          onVisit={
-            activeDomain ? `https://${activeDomain.domainName.replace(/^www\./, '')}` : undefined
-          }
-          onRetry={
-            configuringDomain
-              ? () => handleRetryConnect(configuringDomain.id)
-              : errorDomain
-                ? () => handleRetryConnect(errorDomain.id)
-                : provisioningDomain &&
-                    (parseSslProvisioningMeta(provisioningDomain.lastError)?.attempts ?? 0) > 60
-                  ? () => handleRetryConnect(provisioningDomain.id)
+      {/* All domain status cards */}
+      {allDomains.map((domain) => (
+        <div key={domain.id} className="relative">
+          {domain.status === 'active' &&
+            allDomains.filter((d) => d.status === 'active').length > 1 && (
+              <div className="absolute -top-1.5 right-2 z-10">
+                <span
+                  className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                    domain.isPrimary
+                      ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                      : 'bg-muted text-muted-foreground border border-border'
+                  }`}
+                >
+                  {domain.isPrimary ? 'PRIMARY' : 'ALIAS'}
+                </span>
+              </div>
+            )}
+          <DomainStatusCard
+            domainName={domain.domainName}
+            status={domain.status as keyof typeof statusConfig}
+            isStale={
+              domain.status === 'dns_configuring'
+                ? Date.now() - new Date(domain.createdAt).getTime() > 15 * 60 * 1000
+                : undefined
+            }
+            lastError={domain.lastError}
+            sslMeta={domain.sslMeta}
+            logs={domain.logs}
+            onVisit={
+              domain.status === 'active'
+                ? `https://${domain.domainName.replace(/^www\./, '')}`
+                : undefined
+            }
+            onRetry={
+              ['dns_configuring', 'error'].includes(domain.status)
+                ? () => handleRetryConnect(domain.id)
+                : domain.status === 'ssl_provisioning' && (domain.sslMeta?.attempts ?? 0) > 20
+                  ? () => handleRetryConnect(domain.id)
                   : undefined
+            }
+            onRemove={() => removeDomain.mutate({ projectId, domainId: domain.id })}
+            retrying={retrying || retryConnect.isPending}
+            removing={removeDomain.isPending}
+          />
+          {domain.status === 'active' && !domain.isPrimary && (
+            <button
+              type="button"
+              onClick={() => setPrimary.mutate({ projectId, domainId: domain.id })}
+              disabled={setPrimary.isPending}
+              className="mt-1 text-[11px] text-brand hover:text-brand/80 transition-colors px-0.5"
+            >
+              Make primary
+            </button>
+          )}
+        </div>
+      ))}
+
+      {/* Graduated DNS propagation messaging */}
+      {configuringDomain &&
+        (() => {
+          const elapsed = Date.now() - new Date(configuringDomain.createdAt).getTime()
+          const minutes = Math.round(elapsed / 60_000)
+
+          if (isConfigStale) {
+            return (
+              <p className="text-[11px] text-amber-600/80 px-0.5">
+                DNS setup is taking longer than expected ({minutes}m). You can retry to re-open the
+                setup wizard.
+              </p>
+            )
           }
-          onRemove={() => removeDomain.mutate({ projectId, domainId: currentDomain.id })}
-          retrying={retrying || retryConnect.isPending}
-          removing={removeDomain.isPending}
-        />
-      )}
+          if (minutes >= 8) {
+            return (
+              <p className="text-[11px] text-muted-foreground/60 px-0.5">
+                Still propagating ({minutes}m). This is normal for some registrars and can take up
+                to 30 minutes.
+              </p>
+            )
+          }
+          return null
+        })()}
 
       {/* No domain — Buy / Connect */}
       {/* Deploying before domain action */}
@@ -622,7 +778,7 @@ export function DomainSearchPanel({
         </div>
       )}
 
-      {!currentDomain && !awaitingWebhook && !pendingAction && (
+      {canAddMore && !awaitingWebhook && !pendingAction && (
         <div className="space-y-3">
           {/* Mode tabs */}
           <div className="flex rounded-lg border bg-muted/40 p-0.5">
@@ -665,7 +821,7 @@ export function DomainSearchPanel({
                 <Button
                   className="h-9 shrink-0"
                   onClick={handleConnect}
-                  disabled={connecting || initConnect.isPending || !connectInput.trim()}
+                  disabled={connecting || initConnect.isPending || !isValidDomain}
                 >
                   {connecting || initConnect.isPending ? (
                     <Loader2 className="size-3.5 animate-spin mr-1.5" />
@@ -676,7 +832,11 @@ export function DomainSearchPanel({
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground/50 px-0.5">
-                We'll configure DNS automatically for most providers.
+                {connectInput.trim() && !isValidDomain ? (
+                  <span className="text-amber-500">Enter a valid domain (e.g., myapp.com)</span>
+                ) : (
+                  "We'll configure DNS automatically for most providers."
+                )}
               </p>
             </div>
           ) : (
@@ -694,15 +854,17 @@ export function DomainSearchPanel({
                 )}
                 Search & buy a domain
               </Button>
-              <button
-                type="button"
-                onClick={() => handleBuyDomain(true)}
-                disabled={launching || initPurchase.isPending}
-                className="w-full h-8 rounded-md border border-dashed border-brand/30 bg-brand/5 text-xs font-medium text-brand hover:bg-brand/10 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                <Sparkle className="size-3.5" weight="fill" />
-                Get a free domain
-              </button>
+              {domainConfig?.freeDomainEnabled && (
+                <button
+                  type="button"
+                  onClick={() => handleBuyDomain(true)}
+                  disabled={launching || initPurchase.isPending}
+                  className="w-full h-8 rounded-md border border-dashed border-brand/30 bg-brand/5 text-xs font-medium text-brand hover:bg-brand/10 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  <Sparkle className="size-3.5" weight="fill" />
+                  Get a free domain
+                </button>
+              )}
             </div>
           )}
         </div>

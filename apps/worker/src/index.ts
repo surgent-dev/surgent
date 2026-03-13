@@ -245,6 +245,14 @@ const port = Number(config.server.port)
 
   const host = config.server.host
 
+  // Background domain health checks (every 10 seconds)
+  const { runDomainHealthChecks } = await import('@/jobs/domain-health-checker')
+  setInterval(runDomainHealthChecks, 10_000)
+
+  // Domain reconciler (every 5 minutes)
+  const { reconcileStuckDomains } = await import('@/jobs/domain-reconciler')
+  setInterval(reconcileStuckDomains, 5 * 60 * 1000)
+
   Bun.serve({
     hostname: host,
     port,

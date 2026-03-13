@@ -1,14 +1,12 @@
 /**
  * Domain provider abstraction.
- *
- * Every concrete provider (Entri, Namecheap, …) must implement this interface
- * so the domain routes can stay provider-agnostic.
+ * Simplified: Entri handles purchase + DNS via its own SDK, so only
+ * availability checking is done via API.
  */
 
 export interface DomainAvailabilityResult {
   domain: string
   available: boolean
-  /** Optional price in USD (only some providers return this) */
   price?: number
   reason: 'AVAILABLE' | 'UNAVAILABLE' | 'UNSUPPORTED_TLD' | 'ERROR'
   checkedAt: string
@@ -52,20 +50,5 @@ export interface DomainContact {
 
 export interface DomainProvider {
   readonly name: string
-
-  /** Check whether one or more domains are available for registration. */
   checkAvailability(domains: string[]): Promise<DomainAvailabilityResult[]>
-
-  /** Get registration pricing for TLDs. */
-  getPricing(tlds?: string[]): Promise<DomainPricing[]>
-
-  /** Register a domain. */
-  registerDomain(
-    domain: string,
-    years: number,
-    contact: DomainContact,
-  ): Promise<DomainRegistrationResult>
-
-  /** Point a domain's DNS at the given records. */
-  setDnsRecords(domain: string, records: DnsRecord[]): Promise<void>
 }

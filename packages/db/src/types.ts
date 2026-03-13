@@ -803,6 +803,13 @@ export interface DomainLogEntry {
   success?: boolean
 }
 
+export interface SslProvisioningMeta {
+  _type: 'ssl_provisioning_meta'
+  attempts: number
+  firstAttemptAt: string
+  lastAttemptAt: string
+}
+
 export interface DomainTable {
   id: Generated<string>
   projectId: string | null
@@ -814,8 +821,11 @@ export interface DomainTable {
   entriFlowId: string | null
   cfCustomDomainId: string | null
   dnsVerified: Generated<boolean>
-  kvMapped: Generated<boolean>
+  routingConfigured: Generated<boolean>
   lastError: string | null
+  sslMeta: SslProvisioningMeta | null
+  isPrimary: Generated<boolean>
+  redirectTarget: string | null
   logs: Generated<DomainLogEntry[]>
   purchasedAt: Date | null
   expiresAt: Date | null

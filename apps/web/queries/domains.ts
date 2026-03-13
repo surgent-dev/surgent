@@ -50,23 +50,7 @@ export interface DomainLogEntry {
   success?: boolean
 }
 
-export interface Domain {
-  id: string
-  projectId: string | null
-  domainName: string
-  status: 'pending' | 'purchasing' | 'dns_configuring' | 'ssl_provisioning' | 'active' | 'error'
-  registrar: string | null
-  dnsVerified: boolean
-  kvMapped: boolean
-  lastError: string | null
-  logs: DomainLogEntry[]
-  purchasedAt: string | null
-  expiresAt: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-// SSL provisioning metadata (stored as JSON in lastError during provisioning)
+// SSL provisioning metadata (dedicated sslMeta column)
 export interface SslProvisioningMeta {
   _type: 'ssl_provisioning_meta'
   attempts: number
@@ -74,13 +58,23 @@ export interface SslProvisioningMeta {
   lastAttemptAt: string
 }
 
-export function parseSslProvisioningMeta(lastError: string | null): SslProvisioningMeta | null {
-  if (!lastError) return null
-  try {
-    const parsed = JSON.parse(lastError)
-    if (parsed?._type === 'ssl_provisioning_meta') return parsed
-  } catch {}
-  return null
+export interface Domain {
+  id: string
+  projectId: string | null
+  domainName: string
+  status: 'pending' | 'purchasing' | 'dns_configuring' | 'ssl_provisioning' | 'active' | 'error'
+  registrar: string | null
+  dnsVerified: boolean
+  routingConfigured: boolean
+  lastError: string | null
+  sslMeta: SslProvisioningMeta | null
+  isPrimary: boolean
+  redirectTarget: string | null
+  logs: DomainLogEntry[]
+  purchasedAt: string | null
+  expiresAt: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 // Hooks
@@ -101,7 +95,7 @@ export function useProjectDomains(projectId?: string, fastPoll?: boolean) {
       // For ssl_provisioning, slow down polling to match backend backoff
       const provisioning = domains?.find((d) => d.status === 'ssl_provisioning')
       if (provisioning) {
-        const meta = parseSslProvisioningMeta(provisioning.lastError)
+        const meta = provisioning.sslMeta
         if (meta && meta.attempts > 40) return 15000
         if (meta && meta.attempts > 20) return 8000
         return 3000
@@ -177,6 +171,21 @@ export function useRemoveDomain() {
   })
 }
 
+export function useSetPrimaryDomain() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: { projectId: string; domainId: string }) =>
+      http.post('api/domains/set-primary', { json: params }).json<{ ok: boolean }>(),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['domains', vars.projectId] })
+      toast.success('Primary domain updated')
+    },
+    onError: () => {
+      toast.error('Failed to update primary domain')
+    },
+  })
+}
+
 export function useMockDomainPurchase() {
   const qc = useQueryClient()
   return useMutation({
@@ -184,13 +193,25 @@ export function useMockDomainPurchase() {
       http
         .post('api/domains/mock-purchase', { json: params })
         .json<{ ok: boolean; domainName: string; status: string }>(),
-    onSuccess: (data, vars) => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['domains'] })
       toast.success(`[DEV] Domain ${data.domainName} activated instantly`)
     },
     onError: () => {
       toast.error('Mock purchase failed')
     },
+  })
+}
+
+export interface DomainConfig {
+  freeDomainEnabled: boolean
+}
+
+export function useDomainConfig() {
+  return useQuery({
+    queryKey: ['domain-config'],
+    queryFn: () => http.get('api/domains/config').json<DomainConfig>(),
+    staleTime: 5 * 60 * 1000,
   })
 }
 
