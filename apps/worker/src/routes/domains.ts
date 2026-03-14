@@ -304,16 +304,16 @@ domains.post(
 
     const token = await generateEntriToken(user.id)
 
-    // Check if this domain name already exists (e.g., from a previous failed attempt)
+    // Check if this domain name already exists (e.g., from a previous attempt or re-connect)
     const now = new Date()
     let domainRecord = await db
       .selectFrom('domain')
-      .select(['id'])
+      .select(['id', 'status'])
       .where('domainName', '=', domain)
       .executeTakeFirst()
 
     if (domainRecord) {
-      // Reuse the existing record — reset it to dns_configuring with clean logs
+      // Reuse existing record — reset with clean logs
       await db
         .updateTable('domain')
         .set({
@@ -349,11 +349,46 @@ domains.post(
           createdAt: now,
           updatedAt: now,
         })
-        .returning(['id'])
+        .returning(['id', 'status'])
         .executeTakeFirst()
     }
 
     await appendDomainLog(domainRecord!.id, 'connect_initiated', `DNS setup started for ${domain}`)
+
+    // Quick check: if domain is already reachable (re-connect of previously live domain),
+    // fast-track it to ssl_provisioning so the health checker can promote it immediately
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 3000)
+      const res = await fetch(`https://${domain}`, {
+        method: 'HEAD',
+        signal: controller.signal,
+        redirect: 'follow',
+      })
+      clearTimeout(timeout)
+      if (res.status < 500) {
+        await db
+          .updateTable('domain')
+          .set({
+            status: 'ssl_provisioning',
+            dnsVerified: true,
+            routingConfigured: true,
+            updatedAt: new Date(),
+          })
+          .where('id', '=', domainRecord!.id)
+          .execute()
+        await appendDomainLog(
+          domainRecord!.id,
+          'auto_promote',
+          'Domain already reachable, fast-tracked to SSL check',
+          true,
+        )
+        log.info({ domainId: domainRecord!.id, domain }, 'domain already reachable, fast-tracked')
+      }
+    } catch {
+      // Domain not reachable yet — normal for new connections, health checker will pick it up
+    }
+
     log.info({ projectId, domainId: domainRecord?.id, domain }, 'domain connect initialized')
 
     return c.json({
@@ -762,11 +797,17 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
     })
 
     if (!result.valid) {
+      if (isProduction) {
+        log.warn(
+          { version: result.version, error: result.error },
+          '[ENTRI-WEBHOOK] signature invalid — rejecting',
+        )
+        return c.json({ error: 'Invalid signature' }, 401)
+      }
       log.warn(
         { version: result.version, error: result.error },
-        '[ENTRI-WEBHOOK] signature invalid — rejecting',
+        '[ENTRI-WEBHOOK] signature invalid — allowing in dev mode',
       )
-      return c.json({ error: 'Invalid signature' }, 401)
     }
   }
 
@@ -1112,6 +1153,38 @@ async function processDomainWebhook(payload: any) {
         .where('entriEventId', '=', payload.id)
         .execute()
     }
+  } else if (eventType === 'domain.propagation.timeout') {
+    // Entri gave up waiting for DNS to propagate — mark domain as error
+    const resolvedUserId = userIdentifier ? await resolveUserId(userIdentifier) : null
+    const timedOutDomain = await findPendingDomain(domainName, resolvedUserId, extractedProjectId)
+
+    if (timedOutDomain) {
+      const failReason =
+        'DNS propagation timed out. Please verify your DNS records are configured correctly and retry.'
+      await appendDomainLog(timedOutDomain.id, 'propagation_timeout', failReason, false)
+      await db
+        .updateTable('domain')
+        .set({ status: 'error', lastError: failReason, updatedAt: new Date() })
+        .where('id', '=', timedOutDomain.id)
+        .execute()
+      log.warn(
+        { domainId: timedOutDomain.id, domainName, userIdentifier },
+        '[ENTRI-WEBHOOK] DNS propagation timed out',
+      )
+    } else {
+      log.warn(
+        { domainName, userIdentifier },
+        '[ENTRI-WEBHOOK] propagation timeout but no matching domain record',
+      )
+    }
+
+    if (payload.id) {
+      await db
+        .updateTable('domain_webhook_event')
+        .set({ status: 'processed', processedAt: new Date() })
+        .where('entriEventId', '=', payload.id)
+        .execute()
+    }
   } else if (eventType === 'domain.failed' || eventType === 'domainFailed') {
     const failReason =
       payload.error || payload.reason || 'Domain setup failed (provider reported failure)'
@@ -1168,6 +1241,54 @@ async function processDomainWebhook(payload: any) {
       }
 
       log.info({ domainName, status: 'ssl_provisioning' }, '[ENTRI-WEBHOOK] DNS propagated')
+    }
+  } else if (eventType === 'purchase.confirmation.expired') {
+    // User started a purchase but never confirmed/paid
+    const resolvedUserId = userIdentifier ? await resolveUserId(userIdentifier) : null
+
+    if (resolvedUserId) {
+      const pendingDomain = await db
+        .selectFrom('domain')
+        .selectAll()
+        .where('userId', '=', resolvedUserId)
+        .where('status', 'in', ['pending', 'purchasing'])
+        .orderBy('createdAt', 'desc')
+        .executeTakeFirst()
+
+      if (pendingDomain) {
+        await appendDomainLog(
+          pendingDomain.id,
+          'purchase_expired',
+          'Domain purchase was not completed in time. You can try again.',
+          false,
+        )
+        await db
+          .updateTable('domain')
+          .set({
+            status: 'error',
+            lastError: 'Purchase was not completed in time. You can try again.',
+            updatedAt: new Date(),
+          })
+          .where('id', '=', pendingDomain.id)
+          .execute()
+        log.info(
+          { domainId: pendingDomain.id, domainName: pendingDomain.domainName, userIdentifier },
+          '[ENTRI-WEBHOOK] purchase confirmation expired',
+        )
+      }
+    } else {
+      log.info(
+        { domainName, userIdentifier },
+        '[ENTRI-WEBHOOK] purchase expired but no user to look up',
+      )
+    }
+
+    if (payload.id) {
+      await db
+        .updateTable('domain_webhook_event')
+        .set({ status: 'processed', processedAt: new Date() })
+        .where('entriEventId', '=', payload.id)
+        .execute()
     }
   } else {
     log.info({ eventType }, '[ENTRI-WEBHOOK] unhandled event type')

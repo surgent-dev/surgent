@@ -192,7 +192,6 @@ export async function runDomainHealthChecks() {
             d.id,
             'ssl_check',
             `Still provisioning after ${elapsedMin}m (${meta.attempts} checks, bare=${bareOk ? 'ok' : 'no'} www=${wwwOk ? 'ok' : 'no'})`,
-            false,
           )
         }
       }

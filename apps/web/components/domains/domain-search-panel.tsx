@@ -755,7 +755,7 @@ export function DomainSearchPanel({
             onRetry={
               ['dns_configuring', 'error'].includes(domain.status)
                 ? () => handleRetryConnect(domain.id)
-                : domain.status === 'ssl_provisioning' && (domain.sslMeta?.attempts ?? 0) > 20
+                : domain.status === 'ssl_provisioning' && (domain.sslMeta?.attempts ?? 0) > 60
                   ? () => handleRetryConnect(domain.id)
                   : undefined
             }
