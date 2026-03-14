@@ -58,6 +58,11 @@ function duration(start?: string, end?: string) {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
 }
 
+function copyError(error: string) {
+  navigator.clipboard.writeText(error)
+  toast.success('Copied to clipboard')
+}
+
 export default function DeploymentStatusDialog({ open, onOpenChange, projectId, worker }: Props) {
   const [rollId, setRollId] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
@@ -140,25 +145,39 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
         {/* Progress banner */}
         {latest && !['deployed'].includes(latest.status) && (
           <div
-            className={`h-10 px-5 border-b flex items-center gap-2.5 text-sm ${TERMINAL.includes(latest.status) ? 'bg-destructive/5' : 'bg-brand/5'}`}
+            className={`px-5 py-3 border-b ${TERMINAL.includes(latest.status) ? 'bg-destructive/5' : 'bg-brand/5'}`}
           >
-            {TERMINAL.includes(latest.status) ? (
-              <span className="size-1.5 rounded-full bg-destructive" />
-            ) : (
-              <Loader2 className="size-3.5 animate-spin text-brand" />
-            )}
-            <span
-              className={
-                TERMINAL.includes(latest.status) ? 'text-destructive' : 'text-muted-foreground'
-              }
-            >
-              {STATUS[latest.status] || latest.status}
-            </span>
-            <span className="text-xs text-muted-foreground/60 font-mono">
-              {latest.id.slice(0, 8)}
-            </span>
-            {latest.error && (
-              <span className="text-xs text-destructive/70 truncate flex-1">{latest.error}</span>
+            <div className="flex items-center gap-2.5 text-sm">
+              {TERMINAL.includes(latest.status) ? (
+                <span className="size-1.5 rounded-full bg-destructive" />
+              ) : (
+                <Loader2 className="size-3.5 animate-spin text-brand" />
+              )}
+              <span
+                className={
+                  TERMINAL.includes(latest.status) ? 'text-destructive' : 'text-muted-foreground'
+                }
+              >
+                {STATUS[latest.status] || latest.status}
+              </span>
+              <span className="text-xs text-muted-foreground/60 font-mono">
+                {latest.id.slice(0, 8)}
+              </span>
+            </div>
+            {latest.error && TERMINAL.includes(latest.status) && (
+              <button
+                type="button"
+                onClick={() => copyError(latest.error!)}
+                className="group mt-2 w-full text-left rounded-md border border-destructive/10 bg-background/50 px-3 py-2 cursor-copy"
+              >
+                <p className="text-[11px] font-mono text-destructive/80 whitespace-pre-wrap break-all line-clamp-4">
+                  {latest.error}
+                </p>
+                <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 group-hover:text-muted-foreground transition-colors">
+                  <Copy className="size-3" />
+                  Click to copy
+                </span>
+              </button>
             )}
           </div>
         )}
@@ -298,7 +317,17 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                             </span>
                           </div>
                           {d.error && (
-                            <p className="text-xs text-destructive/70 mt-0.5 truncate">{d.error}</p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                copyError(d.error!)
+                              }}
+                              className="mt-1 flex items-center gap-1.5 text-[11px] text-destructive/70 hover:text-destructive transition-colors cursor-copy"
+                            >
+                              <span className="truncate max-w-[320px] font-mono">{d.error}</span>
+                              <Copy className="size-3 shrink-0 opacity-50" />
+                            </button>
                           )}
                         </div>
                       </div>

@@ -247,6 +247,7 @@ export async function createDeployment(args: {
   cloudflareVersionId?: string | null
   rollbackOf?: string | null
 }) {
+  const createdAt = new Date()
   const row = await db
     .insertInto('deployment')
     .values({
@@ -261,11 +262,14 @@ export async function createDeployment(args: {
       cloudflareDeploymentId: args.cloudflareDeploymentId ?? null,
       cloudflareVersionId: args.cloudflareVersionId ?? null,
       rollbackOf: args.rollbackOf ?? null,
-      createdAt: new Date(),
+      createdAt,
     })
-    .returning(['id'])
+    .returning(['id', 'createdAt'])
     .executeTakeFirstOrThrow()
-  return { id: row.id as string }
+  return {
+    id: row.id as string,
+    createdAt: row.createdAt ?? createdAt,
+  }
 }
 
 type DeploymentUpdate = {

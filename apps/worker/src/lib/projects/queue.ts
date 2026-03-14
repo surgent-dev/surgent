@@ -68,7 +68,6 @@ export async function registerProjectWorkers(): Promise<void> {
   })
 
   await boss.createQueue(DEPLOY_QUEUE, {
-    policy: 'key_strict_fifo',
     retryLimit: 1,
     retryBackoff: true,
     expireInSeconds: 1_800,
@@ -218,7 +217,6 @@ export async function enqueueProjectCreateJob(data: CreateProjectJobData): Promi
 export async function enqueueProjectDeployJob(data: DeployProjectJobData): Promise<string | null> {
   return getBoss().send(DEPLOY_QUEUE, data, {
     id: data.deploymentId,
-    singletonKey: data.projectId,
   })
 }
 
