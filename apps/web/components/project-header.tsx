@@ -56,7 +56,7 @@ import { useGitHubStatus } from '@/queries/github'
 import UserMenu from '@/components/project-header/user-menu'
 import PayDialogs from '@/components/project-header/pay-dialogs'
 import SellDialog from '@/components/project-header/sell-dialog'
-import { PreviewButton } from '@/components/publish'
+import { ChatgptConnect } from '@/components/chatgpt-connect'
 
 // Types
 interface ProjectHeaderProps {
@@ -352,6 +352,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
         {/* Action buttons */}
         <div className="flex items-center gap-1.5 pr-2">
+          {/* ChatGPT Connect */}
+          <ChatgptConnect />
+
           {/* Download */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -477,9 +480,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               <span className="hidden sm:inline">{isDeployed ? 'Live' : 'Failed'}</span>
             </Button>
           )}
-
-          {/* Preview */}
-          <PreviewButton />
 
           {/* Publish */}
           <DropdownMenu open={isPublishOpen} onOpenChange={handlePublishOpenChange}>
@@ -641,9 +641,22 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 {latestDeployment &&
                   TERMINAL_STATUSES.includes(latestDeployment.status) &&
                   !['deployed', 'cancelled'].includes(latestDeployment.status) && (
-                    <p className="text-xs text-destructive truncate">
-                      {latestDeployment.error || 'Deployment failed'}
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(latestDeployment.error || 'Deployment failed')
+                        toast.success('Copied to clipboard', { position: 'top-right' })
+                      }}
+                      className="group w-full text-left rounded-md bg-destructive/5 border border-destructive/10 px-2.5 py-2 cursor-copy"
+                    >
+                      <p className="text-[11px] font-mono text-destructive/80 line-clamp-3">
+                        {latestDeployment.error || 'Deployment failed'}
+                      </p>
+                      <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 group-hover:text-muted-foreground transition-colors">
+                        <Copy className="size-3" />
+                        Click to copy
+                      </span>
+                    </button>
                   )}
               </div>
 

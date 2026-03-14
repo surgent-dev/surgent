@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Loader2,
   ExternalLink,
@@ -17,47 +17,37 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { http } from '@/lib/http'
-
-type ProviderInfo = {
-  id: string
-  models: Record<string, { name?: string; limit?: { context: number } }>
-}
-
-type ProviderList = {
-  all: ProviderInfo[]
-  connected: string[]
-}
-
-type AuthMethod = {
-  type: 'oauth' | 'api'
-  label: string
-}
-
-type AuthMethodsMap = Record<string, AuthMethod[]>
+import {
+  getErrorMessage,
+  invalidateProviderQueries,
+  openProviderOAuthPopup,
+} from '@/lib/provider-oauth'
+import { ChatgptAuthFlow } from '@/components/chatgpt-connect'
+import { useProviderAuthMethods, useProvidersQuery } from '@/queries/providers'
 
 type OAuthAuthorizeResponse = {
   url: string
   method: 'auto' | 'code'
   instructions?: string
+  requestId?: string
 }
 
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  projectId?: string
 }
 
-const ALLOWED_PROVIDERS = ['opencode', 'openai', 'anthropic', 'google']
+const ALLOWED_PROVIDERS = ['openai', 'anthropic', 'google']
 
 const PROVIDER_META: Record<string, { label: string; icon: string }> = {
-  opencode: { label: 'OpenCode', icon: '/opencode-logo.svg' },
   openai: { label: 'OpenAI', icon: '/OpenAI-logo.svg' },
   anthropic: { label: 'Claude', icon: '/claude-logo.svg' },
   google: { label: 'Gemini', icon: '/google-gemini.svg' },
 }
 
-export default function ProviderDialog({ open, onOpenChange, projectId }: Props) {
+export default function ProviderDialog({ open, onOpenChange }: Props) {
   const queryClient = useQueryClient()
+  const popupRef = useRef<Window | null>(null)
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
   const [step, setStep] = useState<'list' | 'auth-methods' | 'oauth' | 'api-key'>('list')
   const [apiKeyInput, setApiKeyInput] = useState('')
@@ -66,23 +56,15 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
     method?: 'auto' | 'code'
     instructions?: string
     methodIndex?: number
+    requestId?: string
     code?: string
   }>({})
   const [error, setError] = useState<string | null>(null)
 
-  // Hardcoded providers - no API call
-  const providers: ProviderList = {
-    all: ALLOWED_PROVIDERS.map((id) => ({ id, models: {} })),
-    connected: ['opencode'], // opencode is always connected
-  }
-  const loadingProviders = false
+  const { data: providerRows, isLoading: loadingProviders } = useProvidersQuery({ enabled: open })
 
-  const { data: authMethods, isLoading: loadingAuth } = useQuery<AuthMethodsMap>({
-    queryKey: ['provider-auth', projectId],
-    enabled: Boolean(projectId) && open,
-    staleTime: 60_000,
-    queryFn: async () => http.get(`api/agent/${projectId}/provider/auth`).json(),
-  })
+  const connected = Array.from(new Set(providerRows?.map((item) => item.provider) ?? []))
+  const { data: authMethods, isLoading: loadingAuth } = useProviderAuthMethods({ enabled: open })
 
   const authorizeMutation = useMutation({
     mutationFn: async ({
@@ -93,7 +75,7 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
       methodIndex: number
     }) => {
       const resp = await http
-        .post(`api/agent/${projectId}/provider/${providerId}/oauth/authorize`, {
+        .post(`api/providers/${providerId}/oauth/authorize`, {
           json: { method: methodIndex },
         })
         .json<OAuthAuthorizeResponse>()
@@ -102,9 +84,14 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
     onSuccess: (data, { methodIndex }) => {
       setOauthState({ ...data, methodIndex, code: '' })
       setStep('oauth')
-      if (data.url) window.open(data.url, '_blank')
+      if (!data.url) return
+      popupRef.current = openProviderOAuthPopup(data.url)
     },
-    onError: (err: Error) => setError(err.message),
+    onError: (err) => {
+      popupRef.current?.close()
+      popupRef.current = null
+      setError(getErrorMessage(err, 'Failed to start authorization'))
+    },
   })
 
   const callbackMutation = useMutation({
@@ -118,42 +105,42 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
       code?: string
     }) => {
       await http
-        .post(`api/agent/${projectId}/provider/${providerId}/oauth/callback`, {
-          json: { method: methodIndex, code },
+        .post(`api/providers/${providerId}/oauth/callback`, {
+          json: { method: methodIndex, code, requestId: oauthState.requestId },
         })
         .json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['providers', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['provider-auth', projectId] })
+      invalidateProviderQueries(queryClient)
       resetState()
     },
-    onError: (err: Error) => setError(err.message),
+    onError: (err) => setError(getErrorMessage(err, 'Authorization failed')),
   })
 
   const apiKeyMutation = useMutation({
     mutationFn: async ({ providerId, key }: { providerId: string; key: string }) => {
       await http
-        .put(`api/agent/${projectId}/auth/${providerId}`, {
-          json: { type: 'api', key },
+        .post('api/providers', {
+          json: { provider: providerId, credentials: key },
         })
         .json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['providers', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['provider-auth', projectId] })
+      invalidateProviderQueries(queryClient)
       resetState()
     },
-    onError: (err: Error) => setError(err.message),
+    onError: (err) => setError(getErrorMessage(err, 'Failed to save API key')),
   })
 
-  const resetState = () => {
+  const resetState = useCallback(() => {
+    popupRef.current?.close()
+    popupRef.current = null
     setSelectedProvider(null)
     setStep('list')
     setApiKeyInput('')
     setOauthState({})
     setError(null)
-  }
+  }, [])
 
   const handleClose = (isOpen: boolean) => {
     if (!isOpen) resetState()
@@ -173,9 +160,14 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
     if (!method) return
     if (method.type === 'api') {
       setStep('api-key')
-    } else {
-      authorizeMutation.mutate({ providerId: selectedProvider, methodIndex })
+      return
     }
+    if (selectedProvider === 'openai') {
+      setError(null)
+      setStep('oauth')
+      return
+    }
+    authorizeMutation.mutate({ providerId: selectedProvider, methodIndex })
   }
 
   const handleOAuthComplete = () => {
@@ -192,9 +184,14 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
     apiKeyMutation.mutate({ providerId: selectedProvider, key: apiKeyInput.trim() })
   }
 
-  const connected = providers?.connected ?? []
-  const allProviders = providers?.all ?? []
   const meta = selectedProvider ? PROVIDER_META[selectedProvider] : null
+  const showSyncDelayNote = selectedProvider === 'anthropic'
+
+  useEffect(() => {
+    return () => {
+      popupRef.current?.close()
+    }
+  }, [])
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -232,13 +229,13 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
                 <Loader2 className="size-4 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              allProviders.map((p) => {
-                const isConnected = connected.includes(p.id)
-                const { label, icon } = PROVIDER_META[p.id] || { label: p.id, icon: '' }
+              ALLOWED_PROVIDERS.map((providerId) => {
+                const isConnected = connected.includes(providerId)
+                const { label, icon } = PROVIDER_META[providerId] || { label: providerId, icon: '' }
                 return (
                   <button
-                    key={p.id}
-                    onClick={() => handleSelectProvider(p.id)}
+                    key={providerId}
+                    onClick={() => handleSelectProvider(providerId)}
                     className="w-full h-11 flex items-center gap-3 px-3 rounded-lg text-sm hover:bg-muted transition-colors"
                   >
                     {icon && <Image src={icon} alt="" width={18} height={18} />}
@@ -269,14 +266,10 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
                 {meta?.icon && <Image src={meta.icon} alt="" width={20} height={20} />}
                 <span className="font-semibold">{meta?.label}</span>
               </div>
-              {(selectedProvider === 'anthropic' || selectedProvider === 'github-copilot') && (
+              {showSyncDelayNote && (
                 <div className="flex items-start gap-2 px-3 py-2 mb-3 rounded-lg text-[11px] text-muted-foreground bg-warning/10 border border-warning/20">
                   <Info className="size-3.5 shrink-0 mt-0.5 text-warning" />
-                  <span>
-                    {selectedProvider === 'anthropic'
-                      ? 'Claude subscription may take ~5 mins to sync after connecting.'
-                      : 'Copilot subscription may take ~5 mins to sync after connecting.'}
-                  </span>
+                  <span>Claude subscription may take ~5 mins to sync after connecting.</span>
                 </div>
               )}
               {loadingAuth ? (
@@ -316,72 +309,67 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
           )}
 
           {/* OAuth */}
-          {step === 'oauth' &&
-            (() => {
-              // Extract code from instructions like "Enter code: XXXX-XXXX"
-              const codeMatch = oauthState.instructions?.match(/:\s*([A-Z0-9]{4}-[A-Z0-9]{4})/i)
-              const deviceCode = codeMatch?.[1]
-              return (
-                <>
+          {step === 'oauth' && selectedProvider === 'openai' && (
+            <>
+              <button
+                onClick={() => setStep('auth-methods')}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3"
+              >
+                <ChevronLeft className="size-3" /> Back
+              </button>
+              <ChatgptAuthFlow
+                compact
+                onClose={() => {
+                  invalidateProviderQueries(queryClient)
+                  resetState()
+                }}
+              />
+            </>
+          )}
+
+          {step === 'oauth' && selectedProvider !== 'openai' && (
+            <>
+              <button
+                onClick={() => setStep('auth-methods')}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3"
+              >
+                <ChevronLeft className="size-3" /> Back
+              </button>
+              <div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  {oauthState.instructions || 'Complete authorization in the browser window.'}
+                </p>
+                {oauthState.method === 'code' && (
+                  <Input
+                    value={oauthState.code || ''}
+                    onChange={(e) => setOauthState((s) => ({ ...s, code: e.target.value }))}
+                    placeholder="Paste code"
+                    className="h-10 text-sm mt-4"
+                  />
+                )}
+                <Button
+                  onClick={handleOAuthComplete}
+                  disabled={
+                    oauthState.method === 'code'
+                      ? !oauthState.code?.trim() || callbackMutation.isPending
+                      : callbackMutation.isPending
+                  }
+                  className="w-full h-10 mt-4"
+                >
+                  {callbackMutation.isPending && <Loader2 className="size-4 mr-2 animate-spin" />}
+                  Done
+                </Button>
+                {oauthState.method !== 'code' && (
                   <button
-                    onClick={() => setStep('auth-methods')}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3"
+                    onClick={() => oauthState.url && openProviderOAuthPopup(oauthState.url)}
+                    className="w-full h-8 mt-2 text-xs text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5"
                   >
-                    <ChevronLeft className="size-3" /> Back
+                    <ExternalLink className="size-3" /> Open link again
                   </button>
-                  <div>
-                    {deviceCode ? (
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground mb-3">
-                          Enter this code in your browser:
-                        </p>
-                        <button
-                          className="inline-block text-2xl font-mono font-bold tracking-[0.3em] py-4 px-6 bg-muted rounded-lg select-all cursor-pointer hover:bg-muted/80 transition-colors border border-dashed"
-                          onClick={() => navigator.clipboard.writeText(deviceCode)}
-                        >
-                          {deviceCode}
-                        </button>
-                        <p className="text-[10px] text-muted-foreground mt-2">Click to copy</p>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground mb-3">
-                        {oauthState.instructions || 'Complete authorization in the browser window.'}
-                      </p>
-                    )}
-                    {oauthState.method === 'code' && (
-                      <Input
-                        value={oauthState.code || ''}
-                        onChange={(e) => setOauthState((s) => ({ ...s, code: e.target.value }))}
-                        placeholder="Paste code"
-                        className="h-10 text-sm mt-4"
-                      />
-                    )}
-                    <Button
-                      onClick={handleOAuthComplete}
-                      disabled={
-                        oauthState.method === 'code'
-                          ? !oauthState.code?.trim() || callbackMutation.isPending
-                          : callbackMutation.isPending
-                      }
-                      className="w-full h-10 mt-4"
-                    >
-                      {callbackMutation.isPending && (
-                        <Loader2 className="size-4 mr-2 animate-spin" />
-                      )}
-                      Done
-                    </Button>
-                    {oauthState.method !== 'code' && (
-                      <button
-                        onClick={() => oauthState.url && window.open(oauthState.url, '_blank')}
-                        className="w-full h-8 mt-2 text-xs text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5"
-                      >
-                        <ExternalLink className="size-3" /> Open link again
-                      </button>
-                    )}
-                  </div>
-                </>
-              )
-            })()}
+                )}
+              </div>
+            </>
+          )}
 
           {/* API Key */}
           {step === 'api-key' && (
@@ -399,14 +387,10 @@ export default function ProviderDialog({ open, onOpenChange, projectId }: Props)
                 {meta?.icon && <Image src={meta.icon} alt="" width={20} height={20} />}
                 <span className="font-semibold">{meta?.label}</span>
               </div>
-              {(selectedProvider === 'anthropic' || selectedProvider === 'github-copilot') && (
+              {showSyncDelayNote && (
                 <div className="flex items-start gap-2 px-3 py-2 mb-3 rounded-lg text-[11px] text-muted-foreground bg-warning/10 border border-warning/20">
                   <Info className="size-3.5 shrink-0 mt-0.5 text-warning" />
-                  <span>
-                    {selectedProvider === 'anthropic'
-                      ? 'Claude subscription may take ~5 mins to sync after connecting.'
-                      : 'Copilot subscription may take ~5 mins to sync after connecting.'}
-                  </span>
+                  <span>Claude subscription may take ~5 mins to sync after connecting.</span>
                 </div>
               )}
               <div className="space-y-3">

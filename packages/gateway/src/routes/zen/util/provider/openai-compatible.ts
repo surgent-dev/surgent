@@ -33,7 +33,6 @@ export const oaCompatHelper: ProviderHelper = () => ({
       ...(body.stream ? { stream_options: { include_usage: true } } : {}),
     }
   },
-  createBinaryStreamDecoder: () => undefined,
   streamSeparator: '\n\n',
   createUsageParser: () => {
     let usage: Usage

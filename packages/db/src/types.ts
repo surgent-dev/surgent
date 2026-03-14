@@ -362,7 +362,8 @@ export interface UsageTable {
 
 export interface ProviderTable {
   id: string
-  projectId: string
+  projectId: string | null
+  organizationId: string
   provider: string
   credentials: string
   createdAt?: Date

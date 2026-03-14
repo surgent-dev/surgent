@@ -1,6 +1,6 @@
 import { ProviderHelper, CommonRequest, CommonResponse, CommonChunk } from './provider'
 
-type Usage = {
+export type OpenaiUsage = {
   input_tokens?: number
   input_tokens_details?: {
     cached_tokens?: number
@@ -12,6 +12,30 @@ type Usage = {
   total_tokens?: number
 }
 
+export function normalizeOpenaiUsage(usage: OpenaiUsage) {
+  if (!usage)
+    return {
+      inputTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: undefined,
+      cacheReadTokens: undefined,
+      cacheWrite5mTokens: undefined,
+      cacheWrite1hTokens: undefined,
+    }
+  const inputTokens = usage.input_tokens ?? 0
+  const outputTokens = usage.output_tokens ?? 0
+  const reasoningTokens = usage.output_tokens_details?.reasoning_tokens ?? undefined
+  const cacheReadTokens = usage.input_tokens_details?.cached_tokens ?? undefined
+  return {
+    inputTokens: inputTokens - (cacheReadTokens ?? 0),
+    outputTokens: outputTokens - (reasoningTokens ?? 0),
+    reasoningTokens,
+    cacheReadTokens,
+    cacheWrite5mTokens: undefined,
+    cacheWrite1hTokens: undefined,
+  }
+}
+
 export const openaiHelper: ProviderHelper = () => ({
   format: 'openai',
   modifyUrl: (providerApi: string) => providerApi + '/responses',
@@ -21,10 +45,9 @@ export const openaiHelper: ProviderHelper = () => ({
   modifyBody: (body: Record<string, any>) => {
     return body
   },
-  createBinaryStreamDecoder: () => undefined,
   streamSeparator: '\n\n',
   createUsageParser: () => {
-    let usage: Usage
+    let usage: OpenaiUsage
 
     return {
       parse: (chunk: string) => {
@@ -34,7 +57,7 @@ export const openaiHelper: ProviderHelper = () => ({
 
         let json
         try {
-          json = JSON.parse(data.slice(6)) as { response?: { usage?: Usage } }
+          json = JSON.parse(data.slice(6)) as { response?: { usage?: OpenaiUsage } }
         } catch (e) {
           return
         }
@@ -45,29 +68,7 @@ export const openaiHelper: ProviderHelper = () => ({
       retrieve: () => usage,
     }
   },
-  normalizeUsage: (usage: Usage) => {
-    if (!usage)
-      return {
-        inputTokens: 0,
-        outputTokens: 0,
-        reasoningTokens: undefined,
-        cacheReadTokens: undefined,
-        cacheWrite5mTokens: undefined,
-        cacheWrite1hTokens: undefined,
-      }
-    const inputTokens = usage.input_tokens ?? 0
-    const outputTokens = usage.output_tokens ?? 0
-    const reasoningTokens = usage.output_tokens_details?.reasoning_tokens ?? undefined
-    const cacheReadTokens = usage.input_tokens_details?.cached_tokens ?? undefined
-    return {
-      inputTokens: inputTokens - (cacheReadTokens ?? 0),
-      outputTokens: outputTokens - (reasoningTokens ?? 0),
-      reasoningTokens,
-      cacheReadTokens,
-      cacheWrite5mTokens: undefined,
-      cacheWrite1hTokens: undefined,
-    }
-  },
+  normalizeUsage: normalizeOpenaiUsage,
 })
 
 export function fromOpenaiRequest(body: any): CommonRequest {

@@ -38,12 +38,13 @@ export type ProviderHelper = (input: { reqModel: string; providerModel: string }
   modifyUrl: (providerApi: string, isStream?: boolean) => string
   modifyHeaders: (headers: Headers, body: Record<string, any>, apiKey: string) => void
   modifyBody: (body: Record<string, any>) => Record<string, any>
-  createBinaryStreamDecoder: () => ((chunk: Uint8Array) => Uint8Array | undefined) | undefined
+  createBinaryStreamDecoder?: () => ((chunk: Uint8Array) => Uint8Array | undefined) | undefined
   streamSeparator: string
   createUsageParser: () => {
     parse: (chunk: string) => void
     retrieve: () => any
   }
+  parseNonStreamResponse?: (response: Response) => Promise<any>
   normalizeUsage: (usage: any) => UsageInfo
 }
 
