@@ -50,6 +50,7 @@ import { cn } from '@/lib/utils'
 import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
 import { FunLoadingState } from '@/components/ui/fun-loading'
 import { PreviewErrorOverlay } from '@/components/agent/preview-error-overlay'
+import { DeviceFrameSelector } from '@/components/publish/device-frame-selector'
 
 export interface ProjectTab {
   id: string
@@ -87,6 +88,18 @@ function EmptyState({
 
 function LoadingState(_props: { icon?: typeof Database; message?: string }) {
   return <FunLoadingState />
+}
+
+function DeviceFrameControls() {
+  const deviceFrame = useSandbox((s) => s.deviceFrame)
+  const setDeviceFrame = useSandbox((s) => s.setDeviceFrame)
+
+  return (
+    <DeviceFrameSelector
+      value={deviceFrame ?? 'desktop'}
+      onChange={(frame) => setDeviceFrame(frame === 'desktop' ? null : frame)}
+    />
+  )
 }
 
 function BrowserNavControls() {
@@ -530,8 +543,9 @@ export default function ProjectTools({
           {addTabMenu}
         </div>
         {showBrowserNav && (
-          <div className="flex items-center pr-2">
+          <div className="flex items-center gap-2 pr-2">
             <BrowserNavControls />
+            <DeviceFrameControls />
           </div>
         )}
       </div>
