@@ -238,7 +238,15 @@ export default function ProviderDialog({ open, onOpenChange }: Props) {
                     onClick={() => handleSelectProvider(providerId)}
                     className="w-full h-11 flex items-center gap-3 px-3 rounded-lg text-sm hover:bg-muted transition-colors"
                   >
-                    {icon && <Image src={icon} alt="" width={18} height={18} />}
+                    {icon && (
+                      <Image
+                        src={icon}
+                        alt=""
+                        width={18}
+                        height={18}
+                        className={icon.includes('OpenAI') ? 'dark:invert' : ''}
+                      />
+                    )}
                     <span className="flex-1 text-left font-medium">{label}</span>
                     {isConnected ? (
                       <span className="flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full bg-success/10 text-success">
@@ -263,7 +271,15 @@ export default function ProviderDialog({ open, onOpenChange }: Props) {
                 <ChevronLeft className="size-3" /> Back
               </button>
               <div className="flex items-center gap-2 mb-3">
-                {meta?.icon && <Image src={meta.icon} alt="" width={20} height={20} />}
+                {meta?.icon && (
+                  <Image
+                    src={meta.icon}
+                    alt=""
+                    width={20}
+                    height={20}
+                    className={meta.icon.includes('OpenAI') ? 'dark:invert' : ''}
+                  />
+                )}
                 <span className="font-semibold">{meta?.label}</span>
               </div>
               {showSyncDelayNote && (
@@ -384,7 +400,15 @@ export default function ProviderDialog({ open, onOpenChange }: Props) {
                 <ChevronLeft className="size-3" /> Back
               </button>
               <div className="flex items-center gap-2 mb-3">
-                {meta?.icon && <Image src={meta.icon} alt="" width={20} height={20} />}
+                {meta?.icon && (
+                  <Image
+                    src={meta.icon}
+                    alt=""
+                    width={20}
+                    height={20}
+                    className={meta.icon.includes('OpenAI') ? 'dark:invert' : ''}
+                  />
+                )}
                 <span className="font-semibold">{meta?.label}</span>
               </div>
               {showSyncDelayNote && (

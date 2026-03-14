@@ -145,7 +145,7 @@ export function ChatgptAuthFlow({
                 alt=""
                 width={28}
                 height={28}
-                className="shrink-0 w-7 h-7"
+                className="shrink-0 w-7 h-7 dark:invert"
               />
             </div>
             <p className={compact ? 'text-sm font-semibold' : 'text-lg font-semibold'}>
@@ -308,7 +308,7 @@ function ConnectedView({ onClose }: { onClose: () => void }) {
               alt=""
               width={28}
               height={28}
-              className="shrink-0 w-7 h-7"
+              className="shrink-0 w-7 h-7 dark:invert"
             />
           </div>
           <p className="text-lg font-semibold">ChatGPT Connected</p>
@@ -354,15 +354,26 @@ export function ChatgptConnect() {
         <TooltipTrigger asChild>
           <button
             onClick={() => setOpen(true)}
-            className="relative flex items-center gap-2 h-9 px-3 rounded-md border border-border/60 bg-background hover:bg-muted/60 transition-colors text-[13px] font-medium"
+            className="group relative flex items-center gap-2 h-9 px-3 rounded-lg border border-border/60 bg-background text-[13px] font-medium transition-all duration-500 hover:border-border"
           >
-            <span className="flex shrink-0 items-center justify-center w-5 h-5">
-              <Image src="/OpenAI-logo.svg" alt="" width={20} height={20} className="w-5 h-5" />
+            {/* Shimmer — subtle white highlight that slides across on hover */}
+            <span className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-foreground/[0.04] to-transparent rounded-lg" />
+
+            <span className="relative flex shrink-0 items-center justify-center w-5 h-5">
+              <Image
+                src="/OpenAI-logo.svg"
+                alt=""
+                width={20}
+                height={20}
+                className="w-5 h-5 dark:invert"
+              />
             </span>
-            <span className="hidden sm:inline whitespace-nowrap">
+            <span className="relative hidden sm:inline whitespace-nowrap text-muted-foreground group-hover:text-foreground transition-colors duration-300">
               {isConnected ? 'ChatGPT' : 'Connect ChatGPT'}
             </span>
-            {isConnected && <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />}
+            {isConnected && (
+              <span className="relative size-1.5 rounded-full bg-emerald-500 shrink-0" />
+            )}
           </button>
         </TooltipTrigger>
         <TooltipContent>

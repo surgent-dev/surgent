@@ -89,7 +89,13 @@ function ConnectedProvider({ row }: { row: ProviderRow }) {
       <div className="group flex items-center gap-3 px-4 py-3">
         <div className="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
           {meta?.icon ? (
-            <Image src={meta.icon} alt="" width={18} height={18} />
+            <Image
+              src={meta.icon}
+              alt=""
+              width={18}
+              height={18}
+              className={meta.icon.includes('OpenAI') ? 'dark:invert' : ''}
+            />
           ) : (
             <Key className="size-4 text-muted-foreground" />
           )}
@@ -198,7 +204,15 @@ function ApiKeyForm({ connected, onDone }: { connected: string[]; onDone: () => 
   return (
     <div className="rounded-lg border border-border/60 bg-accent/40 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        {meta?.icon && <Image src={meta.icon} alt="" width={18} height={18} />}
+        {meta?.icon && (
+          <Image
+            src={meta.icon}
+            alt=""
+            width={18}
+            height={18}
+            className={meta.icon.includes('OpenAI') ? 'dark:invert' : ''}
+          />
+        )}
         <span className="text-[13px] font-semibold">{meta?.label}</span>
         <button
           onClick={() => {
@@ -273,7 +287,13 @@ export function ProvidersTab() {
             <div className="mb-4 rounded-lg border border-border/50 bg-gradient-to-r from-emerald-500/5 to-transparent p-4">
               <div className="flex items-start gap-3">
                 <div className="size-9 rounded-lg bg-background border border-border/50 flex items-center justify-center shrink-0 mt-0.5">
-                  <Image src="/OpenAI-logo.svg" alt="" width={20} height={20} />
+                  <Image
+                    src="/OpenAI-logo.svg"
+                    alt=""
+                    width={20}
+                    height={20}
+                    className="dark:invert"
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] font-semibold">Use your ChatGPT subscription</p>
