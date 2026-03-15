@@ -27,6 +27,7 @@ type Props = {
     files?: FilePart[],
     model?: string,
     providerID?: string,
+    variant?: string,
   ) => void | Promise<void>
   disabled?: boolean
   placeholder?: string
@@ -133,6 +134,7 @@ export default function ChatInput({
   const [attachments, setAttachments] = useState<UploadingAttachment[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [selectedSubagent, setSelectedSubagent] = useState<string | undefined>()
+  const [maxMode, setMaxMode] = useState(false)
   const [showSubagentDropdown, setShowSubagentDropdown] = useState(false)
   const [subagentFilter, setSubagentFilter] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
@@ -153,6 +155,11 @@ export default function ChatInput({
   const handleModelSelect = (modelId: string, providerId: string) => {
     onModelChange?.(modelId, providerId)
   }
+
+  useEffect(() => {
+    if (currentModel?.maxVariant) return
+    setMaxMode(false)
+  }, [currentModel])
 
   // Filter subagents based on @ mention
   const filteredSubagents = useMemo(() => {
@@ -281,7 +288,13 @@ export default function ChatInput({
     setSelectedSubagent(undefined)
     const model = currentModel ?? models[0]
     if (!model) return
-    onSubmit(text, fileParts.length ? fileParts : undefined, model.id, model.providerId)
+    onSubmit(
+      text,
+      fileParts.length ? fileParts : undefined,
+      model.id,
+      model.providerId,
+      maxMode ? model.maxVariant : undefined,
+    )
   }
 
   // Handle keyboard navigation in subagent dropdown
@@ -503,6 +516,28 @@ export default function ChatInput({
               selectedModel={selectedModel}
               onSelect={handleModelSelect}
             />
+
+            {currentModel?.maxVariant && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setMaxMode((value) => !value)}
+                    className={cn(
+                      'h-8 px-3 rounded-lg text-xs transition-all border cursor-pointer',
+                      maxMode
+                        ? 'border-violet-500/40 bg-violet-500/12 text-violet-700 dark:text-violet-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+                        : 'border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/60',
+                    )}
+                  >
+                    <span className="font-semibold italic tracking-[0.01em]">Think harder</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={8}>
+                  Uses more reasoning and more budget.
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
 
           {isWorking ? (

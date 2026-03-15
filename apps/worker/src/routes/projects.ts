@@ -51,6 +51,7 @@ import { createLogger } from '@/lib/logger'
 
 const log = createLogger('projects')
 const projects = new Hono<AppContext>()
+const TERMINAL_DEPLOYMENT_STATUSES = ['deployed', 'deploy_failed', 'build_failed', 'cancelled']
 
 const idParam = z.object({ id: z.string().uuid() })
 const listingBody = z.object({
@@ -91,6 +92,32 @@ function serializeListing(row: {
     createdAt: row.createdAt?.toISOString?.() ?? null,
     updatedAt: row.updatedAt?.toISOString?.() ?? null,
   }
+}
+
+async function supersedeOlderDeployments(projectId: string, deploymentId: string, createdAt: Date) {
+  const rows = await db
+    .selectFrom('deployment')
+    .select('id')
+    .where('projectId', '=', projectId)
+    .where('createdAt', '<', createdAt)
+    .where('status', 'not in', TERMINAL_DEPLOYMENT_STATUSES)
+    .execute()
+
+  const ids = rows.map((item) => item.id).filter((id): id is string => Boolean(id))
+  if (!ids.length) return
+
+  await db
+    .updateTable('deployment')
+    .set({
+      status: 'cancelled',
+      error: `Replaced by newer deployment ${deploymentId.slice(0, 8)}`,
+      finishedAt: new Date(),
+    })
+    .where('id', 'in', ids)
+    .execute()
+
+  await Promise.allSettled(ids.map((id) => cancelProjectDeployJob(id)))
+  log.info({ projectId, deploymentId, supersededDeployments: ids }, 'superseded older deployments')
 }
 
 // ── Public routes (no auth required) ──
@@ -1042,6 +1069,13 @@ projects.post(
         throw sendErr
       }
 
+      await supersedeOlderDeployments(id, deployment.id, deployment.createdAt).catch((error) => {
+        log.warn(
+          { projectId: id, deploymentId: deployment.id, error },
+          'failed to supersede older deployments',
+        )
+      })
+
       console.log('[deploy] scheduled', { projectId: id, deploymentId: deployment.id })
       return c.json({ deploymentId: deployment.id, status: 'queued' })
     } catch (err: any) {
@@ -1116,8 +1150,7 @@ projects.post(
       return c.json({ error: 'Deployment not found' }, 404)
     }
 
-    const terminalStatuses = ['deployed', 'deploy_failed', 'build_failed', 'cancelled']
-    if (terminalStatuses.includes(deployment.status)) {
+    if (TERMINAL_DEPLOYMENT_STATUSES.includes(deployment.status)) {
       return c.json({ error: 'Deployment is not in progress' }, 409)
     }
 

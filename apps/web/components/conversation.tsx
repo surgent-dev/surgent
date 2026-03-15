@@ -28,7 +28,7 @@ import {
   MoreHorizontal,
 } from 'lucide-react'
 import { Chat, ArrowElbowDownRight } from '@phosphor-icons/react'
-import { MODELS, type ProviderModel } from '@/lib/models'
+import { MODELS, applyChatgptConnection, type ProviderModel } from '@/lib/models'
 import ChatInput, { type FilePart } from './chat-input'
 import { useSandbox } from '@/hooks/use-sandbox'
 import useAgentStream, { type SessionStatusRetry } from '@/lib/use-agent-stream'
@@ -48,6 +48,7 @@ import {
   type SendPartInput,
   type AgentModelOverride,
 } from '@/queries/chats'
+import { useProvidersQuery } from '@/queries/providers'
 import ProviderDialog from '@/components/provider-dialog'
 import { useFunMessage } from '@/components/ui/fun-loading'
 
@@ -371,7 +372,13 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     setPendingPrompt(null)
   }, [pendingPrompt, setPendingPrompt])
 
-  const handleSend = (text: string, files?: FilePart[], model?: string, providerID?: string) => {
+  const handleSend = (
+    text: string,
+    files?: FilePart[],
+    model?: string,
+    providerID?: string,
+    variant?: string,
+  ) => {
     const trimmed = text.trim()
     if ((!trimmed && !files?.length) || inputWorking || !activeId) return
 
@@ -435,6 +442,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         parts: requestParts,
         model,
         providerID,
+        variant,
         agentOverrides,
       },
       {
@@ -562,13 +570,25 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     queryFn: async () => http.get(`api/agent/${projectId}/provider`).json<ProviderResponse>(),
   })
 
+  const { data: providerRows } = useProvidersQuery()
+  const chatgptConnected =
+    providerRows?.some((r) => r.provider === 'openai' && r.authType === 'chatgpt') ?? false
+
   const availableModels = useMemo(() => {
-    if (!providerData) return MODELS
-    const provider = providerData.all?.find((item) => item.id === 'opencode')
-    if (!provider?.models) return MODELS
-    const fromProvider = MODELS.filter((model) => Boolean(provider.models[model.id]))
-    return fromProvider.length ? fromProvider : MODELS
-  }, [providerData])
+    let models: ProviderModel[]
+    if (!providerData) {
+      models = MODELS
+    } else {
+      const provider = providerData.all?.find((item) => item.id === 'opencode')
+      if (!provider?.models) {
+        models = MODELS
+      } else {
+        const fromProvider = MODELS.filter((model) => Boolean(provider.models[model.id]))
+        models = fromProvider.length ? fromProvider : MODELS
+      }
+    }
+    return applyChatgptConnection(models, chatgptConnected)
+  }, [providerData, chatgptConnected])
 
   const handleModelChange = (modelId: string, providerId: string) => {
     setSelectedModel({ modelId, providerId })
@@ -920,7 +940,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         </div>
       </div>
 
-      <ProviderDialog open={providerOpen} onOpenChange={setProviderOpen} projectId={projectId} />
+      <ProviderDialog open={providerOpen} onOpenChange={setProviderOpen} />
     </div>
   )
 }

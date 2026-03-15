@@ -3,6 +3,14 @@ import type { Context } from 'hono'
 export interface Bindings {
   STAGE: string
   ZEN_MODELS?: string
+  ZEN_MODELS1?: string
+  ZEN_MODELS2?: string
+  ZEN_MODELS3?: string
+  ZEN_MODELS4?: string
+  ZEN_MODELS5?: string
+  ZEN_MODELS6?: string
+  ZEN_MODELS7?: string
+  ZEN_MODELS8?: string
   GATEWAY_KV: KVNamespace
   POSTGRES_TYPE?: string
   GATEWAY_DATA?: R2Bucket

@@ -24,7 +24,15 @@ import type { UsageInfo } from './provider/provider'
 import { anthropicHelper } from './provider/anthropic'
 import { googleHelper } from './provider/google'
 import { openaiHelper } from './provider/openai'
+import { openaiChatgptHelper } from './provider/openai-chatgpt'
 import { oaCompatHelper } from './provider/openai-compatible'
+import {
+  parseProviderCredentials,
+  refreshChatgptCredentials,
+  serializeProviderCredentials,
+  shouldRefreshChatgptCredentials,
+  type ProviderCredentials,
+} from './provider/credentials'
 import { createRateLimiter } from './rateLimiter'
 import { createDataDumper } from './dataDumper'
 import { createTrialLimiter } from './trialLimiter'
@@ -38,7 +46,10 @@ type RetryOptions = {
 }
 
 type ProviderInfo = {
-  credentials?: string | null
+  id: string
+  provider: string
+  credentials: string
+  auth: ProviderCredentials
 }
 
 type UsageBillingMode = 'surgent' | 'byok' | 'anonymous'
@@ -69,6 +80,8 @@ type AuthInfo = {
 function centsToMicroCents(amount: number) {
   return Math.round(amount * 1_000_000)
 }
+
+const SURGENT_MARKUP_MULTIPLIER = 1.3
 
 function isAllowanceEligible(tier: string, status: string) {
   if (tier === 'free') return true
@@ -243,7 +256,7 @@ export async function handleZenRequest(
         stickyProvider,
       )
       validateModelSettings(authInfo)
-      updateProviderKey(authInfo, providerInfo)
+      await updateProviderKey(authInfo, providerInfo)
       logger.metric({ provider: providerInfo.id })
 
       const startTimestamp = Date.now()
@@ -339,8 +352,13 @@ export async function handleZenRequest(
 
     if (!isStream) {
       const responseConverter = createResponseConverter(providerInfo.format, opts.format)
-      const json: { usage?: unknown } = await res.json()
+      const json: { usage?: unknown } = providerInfo.parseNonStreamResponse
+        ? await providerInfo.parseNonStreamResponse(res)
+        : await res.json()
       const body = JSON.stringify(responseConverter(json))
+      if (providerInfo.parseNonStreamResponse) {
+        resHeaders.set('content-type', 'application/json; charset=utf-8')
+      }
       logger.metric({ response_length: body.length })
       logger.debug('RESPONSE: ' + body)
       dataDumper?.provideResponse(body)
@@ -358,7 +376,7 @@ export async function handleZenRequest(
 
     const streamConverter = createStreamPartConverter(providerInfo.format, opts.format)
     const usageParser = providerInfo.createUsageParser()
-    const binaryDecoder = providerInfo.createBinaryStreamDecoder()
+    const binaryDecoder = providerInfo.createBinaryStreamDecoder?.()
     const stream = new ReadableStream({
       start(controller) {
         const reader = res.body?.getReader()
@@ -549,7 +567,15 @@ export async function handleZenRequest(
     if (!providerConfig) throw new ModelError(`Provider ${modelProvider.id} not supported`)
 
     const providerModel = modelProvider.model
+    const providerAuth = authInfo?.provider?.auth
     const helper = (() => {
+      if (providerAuth?.type === 'chatgpt' && providerConfig.format === 'openai') {
+        return openaiChatgptHelper({
+          reqModel,
+          providerModel,
+          auth: providerAuth,
+        })
+      }
       if (providerConfig.format === 'anthropic') return anthropicHelper({ reqModel, providerModel })
       if (providerConfig.format === 'google') return googleHelper({ reqModel, providerModel })
       if (providerConfig.format === 'openai') return openaiHelper({ reqModel, providerModel })
@@ -577,7 +603,7 @@ export async function handleZenRequest(
       .innerJoin('project as pr', 'pr.id', 'k.projectId')
       .leftJoin('provider as p', (join) =>
         join
-          .onRef('p.projectId', '=', 'k.projectId')
+          .onRef('p.organizationId', '=', 'pr.organizationId')
           .on('p.provider', '=', byokProvider)
           .on('p.deletedAt', 'is', null),
       )
@@ -595,6 +621,8 @@ export async function handleZenRequest(
         ref('k.userId').as('userId'),
         ref('k.enabled').as('enabled'),
         ref('k.expiresAt').as('expiresAt'),
+        ref('p.id').as('providerId'),
+        ref('p.provider').as('providerName'),
         ref('p.credentials').as('providerCredentials'),
         ref('m.id').as('disabledModelId'),
         ref('bs.tier').as('billingTier'),
@@ -611,7 +639,18 @@ export async function handleZenRequest(
       row.providerCredentials === null
         ? null
         : {
+            id: row.providerId!,
+            provider: row.providerName ?? byokProvider,
             credentials: row.providerCredentials,
+            auth: (() => {
+              try {
+                return parseProviderCredentials(row.providerCredentials)
+              } catch (error) {
+                const message =
+                  error instanceof Error ? error.message : 'Invalid provider credentials.'
+                throw new AuthError(message)
+              }
+            })(),
           }
 
     logger.metric({
@@ -636,9 +675,72 @@ export async function handleZenRequest(
     if (authInfo.isDisabled) throw new ModelError('Model is disabled')
   }
 
-  function updateProviderKey(authInfo: AuthInfo | undefined, providerInfo: ProviderSelection) {
+  async function updateProviderKey(
+    authInfo: AuthInfo | undefined,
+    providerInfo: ProviderSelection,
+  ) {
     if (!authInfo?.provider?.credentials) return
-    providerInfo.apiKey = authInfo.provider.credentials
+    const auth = authInfo.provider.auth
+    if (auth.type === 'api') {
+      providerInfo.apiKey = auth.apiKey
+      return
+    }
+    if (!shouldRefreshChatgptCredentials(auth)) return
+
+    let next
+    try {
+      next = await refreshChatgptCredentials(auth)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'ChatGPT authentication failed.'
+      throw new AuthError(message)
+    }
+    const previousCredentials = authInfo.provider.credentials
+    const nextCredentials = serializeProviderCredentials(next)
+    const result = await db
+      .updateTable('provider')
+      .set({
+        credentials: nextCredentials,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', authInfo.provider.id)
+      .where('credentials', '=', previousCredentials)
+      .executeTakeFirst()
+
+    if (result && result.numUpdatedRows > 0n) {
+      auth.accessToken = next.accessToken
+      auth.refreshToken = next.refreshToken
+      auth.accountId = next.accountId
+      auth.expiresAt = next.expiresAt
+      authInfo.provider.credentials = nextCredentials
+      return
+    }
+
+    const latest = await db
+      .selectFrom('provider')
+      .select('credentials')
+      .where('id', '=', authInfo.provider.id)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst()
+    if (!latest?.credentials) {
+      throw new AuthError('ChatGPT authentication state was lost.')
+    }
+
+    let resolved
+    try {
+      resolved = parseProviderCredentials(latest.credentials)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid provider credentials.'
+      throw new AuthError(message)
+    }
+    if (resolved.type !== 'chatgpt') {
+      throw new AuthError('ChatGPT authentication state is invalid.')
+    }
+
+    auth.accessToken = resolved.accessToken
+    auth.refreshToken = resolved.refreshToken
+    auth.accountId = resolved.accountId
+    auth.expiresAt = resolved.expiresAt
+    authInfo.provider.credentials = latest.credentials
   }
 
   async function ensureBillingAccess(authInfo: AuthInfo | undefined) {
@@ -728,13 +830,15 @@ export async function handleZenRequest(
     const cacheReadCost = calcCost(modelCost.cacheRead, cacheReadTokens)
     const cacheWrite5mCost = calcCost(modelCost.cacheWrite5m, cacheWrite5mTokens)
     const cacheWrite1hCost = calcCost(modelCost.cacheWrite1h, cacheWrite1hTokens)
-    const totalCostInCent =
+    const baseCostInCent =
       inputCost +
       outputCost +
       (reasoningCost ?? 0) +
       (cacheReadCost ?? 0) +
       (cacheWrite5mCost ?? 0) +
       (cacheWrite1hCost ?? 0)
+    const totalCostInCent =
+      billing.mode === 'surgent' ? baseCostInCent * SURGENT_MARKUP_MULTIPLIER : baseCostInCent
 
     logger.metric({
       'tokens.input': inputTokens,
@@ -749,6 +853,7 @@ export async function handleZenRequest(
       'cost.cache_read': cacheReadCost ? Math.round(cacheReadCost) : undefined,
       'cost.cache_write_5m': cacheWrite5mCost ? Math.round(cacheWrite5mCost) : undefined,
       'cost.cache_write_1h': cacheWrite1hCost ? Math.round(cacheWrite1hCost) : undefined,
+      'cost.base_total': Math.round(baseCostInCent),
       'cost.total': Math.round(totalCostInCent),
     })
 

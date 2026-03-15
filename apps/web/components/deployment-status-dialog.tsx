@@ -59,6 +59,11 @@ function duration(start?: string, end?: string) {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
 }
 
+function copyError(error: string) {
+  navigator.clipboard.writeText(error)
+  toast.success('Copied to clipboard')
+}
+
 export default function DeploymentStatusDialog({ open, onOpenChange, projectId, worker }: Props) {
   const queryClient = useQueryClient()
   const [rollId, setRollId] = useState<string | null>(null)
@@ -364,7 +369,17 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                             </span>
                           </div>
                           {d.error && (
-                            <p className="text-xs text-destructive/70 mt-0.5 truncate">{d.error}</p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                copyError(d.error!)
+                              }}
+                              className="mt-1 flex items-center gap-1.5 text-[11px] text-destructive/70 hover:text-destructive transition-colors cursor-copy"
+                            >
+                              <span className="truncate max-w-[320px] font-mono">{d.error}</span>
+                              <Copy className="size-3 shrink-0 opacity-50" />
+                            </button>
                           )}
                         </div>
                       </div>

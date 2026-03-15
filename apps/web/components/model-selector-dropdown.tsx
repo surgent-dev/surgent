@@ -34,6 +34,11 @@ export default function ModelSelectorDropdown({ models, selectedModel, onSelect 
             <>
               <Image src={currentInfo.icon} alt="" width={14} height={14} className="opacity-80" />
               <span className="font-medium">{currentInfo.name}</span>
+              {currentModel?.free && (
+                <span className="text-[10px] font-medium px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  $0
+                </span>
+              )}
             </>
           ) : (
             <span>Select model</span>
@@ -70,6 +75,11 @@ export default function ModelSelectorDropdown({ models, selectedModel, onSelect 
                       )}
                     >
                       {info.badge}
+                    </span>
+                  )}
+                  {model.free && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      $0
                     </span>
                   )}
                 </div>
