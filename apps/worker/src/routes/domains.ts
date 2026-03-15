@@ -48,24 +48,6 @@ interface SslProvisioningMeta {
   lastAttemptAt: string
 }
 
-// ─── TXT domain verification ─────────────────────────────────
-
-/** Generate a deterministic verification token for a project's domain. */
-function generateVerifyToken(projectId: string): string {
-  const secret = config.entri.secret || 'surgent-verify'
-  return sha256(`${projectId}:${secret}`).slice(0, 32)
-}
-
-/** Build the TXT verification record for inclusion in Entri DNS config. */
-function buildVerifyTxtRecord(projectId: string) {
-  return {
-    type: 'TXT' as const,
-    host: '_surgent-verify',
-    value: `surgent-verify=${generateVerifyToken(projectId)}`,
-    ttl: 300,
-  }
-}
-
 const domains = new Hono<AppContext>()
 
 // ─── Auth-protected routes ───────────────────────────────────
@@ -193,7 +175,6 @@ domains.post(
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
       { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
-      buildVerifyTxtRecord(projectId),
     ]
 
     // ── Entri: return config for frontend modal ──────────────
@@ -299,7 +280,6 @@ domains.post(
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
       { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
-      buildVerifyTxtRecord(projectId),
     ]
 
     const token = await generateEntriToken(user.id)
@@ -536,7 +516,6 @@ domains.post(
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
       { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
-      buildVerifyTxtRecord(projectId),
     ]
 
     const token = await generateEntriToken(user.id)
