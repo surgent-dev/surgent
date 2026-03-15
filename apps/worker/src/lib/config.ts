@@ -144,6 +144,7 @@ export const config = {
     secret: env.ENTRI_SECRET,
     apiKey: env.ENTRI_API_KEY,
     webhookSecret: env.ENTRI_WEBHOOK_SECRET,
+    powerAuthToken: env.ENTRI_POWER_AUTH_TOKEN,
     devMode: env.ENTRI_DEV_MODE === 'true',
   },
   freeDomain: {
