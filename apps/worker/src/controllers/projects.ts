@@ -583,11 +583,17 @@ export async function resumeProject(
   args: ResumeProjectArgs,
 ): Promise<{ sandboxId: string; previewUrl: string }> {
   const workingDirectory = workspacePath(args.projectId)
-  const devEnv = await getProjectEnvVars(args.projectId, 'development', { includeServer: false })
+  const [appEnv, serverEnv] = await Promise.all([
+    getProjectEnvVars(args.projectId, 'development', { includeServer: false }),
+    getProjectEnvVars(args.projectId, 'development'),
+  ])
   const opencodeConfigDir = config.opencode.configDir
-  const opencodeKey = devEnv.OPENCODE_API_KEY || devEnv.SURGENT_API_KEY
+  const opencodeKey = serverEnv.OPENCODE_API_KEY || serverEnv.SURGENT_API_KEY
   const opencodeEnv = {
-    ...devEnv,
+    ...appEnv,
+    ...(serverEnv.SURGENT_API_KEY || opencodeKey
+      ? { SURGENT_API_KEY: serverEnv.SURGENT_API_KEY || opencodeKey }
+      : {}),
     ...(opencodeKey ? { OPENCODE_API_KEY: opencodeKey } : {}),
     ...(config.surgent.baseUrl ? { SURGENT_BASE_URL: config.surgent.baseUrl } : {}),
     ...(config.opencode.baseUrl ? { OPENCODE_BASE_URL: config.opencode.baseUrl } : {}),
@@ -611,7 +617,7 @@ export async function resumeProject(
         workingDirectory,
         metadata.processName,
         metadata.startCommand,
-        devEnv,
+        appEnv,
       )
     }
 
