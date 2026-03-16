@@ -546,6 +546,9 @@ export function AdminDashboard({ data }: { data: AdminOverview }) {
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
           <div className="flex items-center gap-2">
             <Button variant="outline" asChild>
+              <Link href="/admin/usage">Usage</Link>
+            </Button>
+            <Button variant="outline" asChild>
               <Link href="/admin/ops">Ops</Link>
             </Button>
             <AdminRangeSelect />
