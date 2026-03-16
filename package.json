@@ -11,8 +11,6 @@
     "check-types": "turbo run check-types",
     "typecheck": "bun turbo typecheck",
     "prepare": "husky",
-    "random": "echo 'Random script'",
-    "hello": "echo 'Hello World!'",
     "db:migrate": "bun --filter @repo/db db:migrate",
     "db:rollback": "bun --filter @repo/db db:rollback",
     "db:migrate-dump": "bun --filter @repo/db db:migrate-dump",
