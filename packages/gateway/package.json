@@ -7,7 +7,7 @@
     "start": "bunx wrangler dev --verbose --port 8080 --inspector-port 9231",
     "deploy": "echo 'Use deploy:dev or deploy:prod' && exit 1",
     "deploy:dev": "bunx wrangler deploy --env dev",
-    "deploy:prod": "if [ \"$CONFIRM_PROD\" != \"1\" ]; then echo \"Set CONFIRM_PROD=1 to deploy to prod\"; exit 1; fi; bunx wrangler deploy",
+    "deploy:prod": "if [ \"$CONFIRM_PROD\" != \"1\" ]; then echo \"Set CONFIRM_PROD=1 to deploy to prod\"; exit 1; fi; bunx wrangler deploy --env \"\"",
     "generate-types": "bunx wrangler types"
   },
   "dependencies": {

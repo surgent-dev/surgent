@@ -4,7 +4,12 @@
   "compatibility_date": "2025-10-21",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
-  "routes": ["ai.surgent.dev/zen/*"],
+  "routes": [
+    {
+      "pattern": "ai.surgent.dev/zen/*",
+      "zone_name": "surgent.dev"
+    }
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
