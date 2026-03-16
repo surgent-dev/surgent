@@ -191,7 +191,6 @@ export interface OrganizationTable {
   createdBy: string | null
   platformFeePercent: number | null
   platformFeeFixed: number | null
-  stripeCustomerId: string | null
   createdAt?: Date
   updatedAt?: Date
 }
@@ -203,6 +202,8 @@ export interface BillingAccountTable {
   defaultPaymentMethodId: string | null
   paymentMethodBrand: string | null
   paymentMethodLast4: string | null
+  includedBalanceMicros: string
+  includedBalancePeriodStart: Date | null
   prepaidBalanceMicros: string
   autoReloadEnabled: boolean
   autoReloadThresholdMicros: string | null
@@ -230,8 +231,6 @@ export interface BillingSubscriptionTable {
   cancelAtPeriodEnd: boolean
   canceledAt: Date | null
   monthlyAllowanceMicros: string
-  includedUsageMicros: string
-  includedUsagePeriodStart: Date | null
   stripeCouponId: string | null
   stripeDiscountId: string | null
   stripePromotionCodeId: string | null
@@ -352,7 +351,10 @@ export interface UsageTable {
   cacheReadTokens: number | null
   cacheWrite5mTokens: number | null
   cacheWrite1hTokens: number | null
-  cost: string
+  providerCostMicros: string | null
+  billedCostMicros: string | null
+  markupBps: number | null
+  billingMode: string | null
   keyId: string | null
   enrichment: any | null
   createdAt?: Date

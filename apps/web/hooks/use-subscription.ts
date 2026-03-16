@@ -24,6 +24,7 @@ export type BillingSnapshot = {
   usedMicros: number
   usedPercent: number
   monthlyAllowanceMicros: number
+  monthlySpendLimitMicros: number
   paymentMethodBrand: string | null
   paymentMethodLast4: string | null
   stripeCouponId: string | null

@@ -543,7 +543,7 @@ projects.get('/usage', requireAuth, async (c) => {
 
   const totals = (await base
     .select([
-      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::bigint::text`.as('cost'),
       sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
       sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
       sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
@@ -554,13 +554,13 @@ projects.get('/usage', requireAuth, async (c) => {
     .select([
       'usage.projectId as projectId',
       'project.name as projectName',
-      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::bigint::text`.as('cost'),
       sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
       sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
       sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
     ])
     .groupBy(['usage.projectId', 'project.name'])
-    .orderBy(sql`COALESCE(SUM(cost), 0)`, 'desc')
+    .orderBy(sql`COALESCE(SUM("usage"."billedCostMicros"), 0)`, 'desc')
     .limit(50)
     .execute()
 
@@ -568,7 +568,7 @@ projects.get('/usage', requireAuth, async (c) => {
     .select([
       'usage.model as model',
       'usage.provider as provider',
-      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::bigint::text`.as('cost'),
       sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
       sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
       sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
@@ -586,7 +586,7 @@ projects.get('/usage', requireAuth, async (c) => {
       sql<string>`to_char(date_trunc('day', "usage"."createdAt" AT TIME ZONE 'UTC'), 'YYYY-MM-DD')`.as(
         'date',
       ),
-      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::bigint::text`.as('cost'),
       sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
       sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
       sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
@@ -605,7 +605,7 @@ projects.get('/usage', requireAuth, async (c) => {
       'usage.provider as provider',
       'usage.inputTokens as inputTokens',
       'usage.outputTokens as outputTokens',
-      'usage.cost',
+      'usage.billedCostMicros as cost',
       'usage.createdAt',
     ])
     .orderBy('usage.createdAt', 'desc')
