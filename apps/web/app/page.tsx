@@ -9,9 +9,6 @@ import { useRouter } from 'next/navigation'
 import { LandingNav } from '@/components/landing/nav'
 import { LandingHero } from '@/components/landing/hero'
 import { LandingFooter } from '@/components/landing/footer'
-// import { LandingEarningProjects } from '@/components/landing/earning-projects'
-// import { LandingHighlights } from '@/components/landing/highlights'
-// import { LandingFeatures } from '@/components/landing/features'
 
 function IndexContent() {
   const waitlistMode = isWaitlistMode()

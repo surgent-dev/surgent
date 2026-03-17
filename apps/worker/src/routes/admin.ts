@@ -280,4 +280,145 @@ admin.get('/ops/jobs', requireAdmin, async (c) => {
   return c.json(jobs)
 })
 
+admin.get('/usage', requireAdmin, async (c) => {
+  const { range, start } = getStart(c.req.query('range') || 'month')
+  const now = new Date()
+  const monthly = useMonthlyBuckets(range)
+
+  const baseUsage = db
+    .selectFrom('usage')
+    .innerJoin('project', 'project.id', 'usage.projectId')
+    .where('usage.deletedAt', 'is', null)
+    .where('project.deletedAt', 'is', null)
+    .where('usage.createdAt', '>=', start)
+
+  const [overview, chartRows, activeChart, topUsers, modelUsage] = await Promise.all([
+    baseUsage
+      .select([
+        sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::text`.as('revenue'),
+        sql<string>`COALESCE(SUM("usage"."providerCostMicros"), 0)::text`.as('providerCost'),
+        sql<string>`COUNT(*)::text`.as('requests'),
+        sql<string>`COUNT(DISTINCT "project"."userId")::text`.as('activeUsers'),
+      ])
+      .executeTakeFirst(),
+
+    baseUsage
+      .select([
+        sql<string>`${monthly ? sql`to_char("usage"."createdAt", 'YYYY-MM')` : sql`to_char("usage"."createdAt", 'YYYY-MM-DD')`}`.as(
+          'date',
+        ),
+        sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::text`.as('revenue'),
+        sql<string>`COALESCE(SUM("usage"."providerCostMicros"), 0)::text`.as('providerCost'),
+        sql<string>`COUNT(*)::text`.as('requests'),
+      ])
+      .groupBy(sql`1`)
+      .orderBy(sql`1`)
+      .execute(),
+
+    baseUsage
+      .select([
+        sql<string>`${monthly ? sql`to_char("usage"."createdAt", 'YYYY-MM')` : sql`to_char("usage"."createdAt", 'YYYY-MM-DD')`}`.as(
+          'date',
+        ),
+        sql<string>`COUNT(DISTINCT "project"."userId")::text`.as('count'),
+      ])
+      .groupBy(sql`1`)
+      .orderBy(sql`1`)
+      .execute(),
+
+    baseUsage
+      .innerJoin('user', 'user.id', 'project.userId')
+      .select([
+        'user.id as userId',
+        'user.name as userName',
+        'user.email as userEmail',
+        sql<string>`COUNT(*)::text`.as('requestCount'),
+        sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::text`.as('totalSpend'),
+        sql<string>`COUNT(DISTINCT "usage"."projectId")::text`.as('projectCount'),
+      ])
+      .groupBy(['user.id', 'user.name', 'user.email'])
+      .orderBy(sql`SUM("usage"."billedCostMicros") desc`)
+      .limit(25)
+      .execute(),
+
+    baseUsage
+      .select([
+        'usage.model',
+        'usage.provider',
+        sql<string>`COUNT(*)::text`.as('requests'),
+        sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::text`.as('billedCost'),
+        sql<string>`COALESCE(SUM("usage"."providerCostMicros"), 0)::text`.as('providerCost'),
+        sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::text`.as('inputTokens'),
+        sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::text`.as('outputTokens'),
+      ])
+      .groupBy(['usage.model', 'usage.provider'])
+      .orderBy(sql`COUNT(*) desc`)
+      .limit(20)
+      .execute(),
+  ])
+
+  const topUserIds = topUsers.map((u) => u.userId)
+  const userProjects =
+    topUserIds.length > 0
+      ? await baseUsage
+          .innerJoin('user', 'user.id', 'project.userId')
+          .select([
+            'user.id as userId',
+            'usage.projectId',
+            'project.name as projectName',
+            sql<string>`COUNT(*)::text`.as('requests'),
+            sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::text`.as('spend'),
+          ])
+          .where('user.id', 'in', topUserIds)
+          .groupBy(['user.id', 'usage.projectId', 'project.name'])
+          .orderBy(sql`SUM("usage"."billedCostMicros") desc`)
+          .execute()
+      : []
+
+  const userProjectMap = new Map<string, Array<(typeof userProjects)[0]>>()
+  for (const row of userProjects) {
+    const arr = userProjectMap.get(row.userId) ?? []
+    arr.push(row)
+    userProjectMap.set(row.userId, arr)
+  }
+
+  const allDates = monthly ? generateMonthsBetween(start, now) : generateDaysBetween(start, now)
+  const revenueMap = new Map(chartRows.map((r) => [r.date, r]))
+  const activeMap = new Map(activeChart.map((r) => [r.date, r]))
+
+  const rev = Number(overview?.revenue ?? 0)
+  const prov = Number(overview?.providerCost ?? 0)
+
+  return c.json({
+    range,
+    start: start.toISOString(),
+    overview: {
+      totalRevenueMicros: overview?.revenue ?? '0',
+      totalProviderCostMicros: overview?.providerCost ?? '0',
+      marginMicros: String(rev - prov),
+      marginPercent: rev > 0 ? (((rev - prov) / rev) * 100).toFixed(1) : '0',
+      activeUsers: overview?.activeUsers ?? '0',
+      totalRequests: overview?.requests ?? '0',
+    },
+    revenueChart: allDates.map((date) => {
+      const row = revenueMap.get(date)
+      return {
+        date,
+        revenue: row?.revenue ?? '0',
+        providerCost: row?.providerCost ?? '0',
+        requests: row?.requests ?? '0',
+      }
+    }),
+    activeUsersChart: allDates.map((date) => ({
+      date,
+      count: activeMap.get(date)?.count ?? '0',
+    })),
+    topUsers: topUsers.map((u) => ({
+      ...u,
+      projects: userProjectMap.get(u.userId) ?? [],
+    })),
+    modelUsage,
+  })
+})
+
 export default admin

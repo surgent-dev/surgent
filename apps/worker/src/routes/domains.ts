@@ -5,14 +5,14 @@ import { sql } from 'kysely'
 import { requireAuth } from '@/middleware/auth'
 import { db } from '@/lib/db'
 import { generateEntriToken } from '@/lib/entri/jwt'
-import { getDomainProvider, expandDomainQuery } from '@/lib/domains'
-import { disconnectCustomDomain } from '@/lib/cloudflare/custom-hostnames'
+import { expandDomainQuery } from '@/lib/domains'
+import { checkAvailability } from '@/lib/entri/client'
 import { config } from '@/lib/config'
 import { HttpError } from '@/lib/errors'
 import { rateLimit } from '@/middleware/rate-limit'
 import { createLogger } from '@/lib/logger'
 import type { AppContext } from '@/types/application'
-import type { DomainLogEntry } from '@repo/db'
+import type { DomainLogEntry, DomainStatus, SslProvisioningMeta } from '@repo/db'
 
 const log = createLogger('domains')
 
@@ -39,13 +39,108 @@ async function appendDomainLog(
     .execute()
 }
 
-// ─── SSL provisioning metadata (dedicated sslMeta JSONB column) ────
+interface EntriWebhookPayload {
+  id?: string
+  type?: string
+  event?: string
+  job_id?: string
+  jobId?: string
+  domain?: string
+  purchased_domains?: string[]
+  user_id?: string
+  provider?: string
+  registrar?: string
+  setup_type?: string
+  propagation_status?: string
+  secure_status?: string
+  power_status?: string
+  free_domain?: boolean
+  cname_target?: string
+  expiration_date?: string
+  registration_years?: number | string
+  error?: string
+  reason?: string
+  dns_status?: string
+  data?: Record<string, unknown>
+}
 
-interface SslProvisioningMeta {
-  _type: 'ssl_provisioning_meta'
-  attempts: number
-  firstAttemptAt: string
-  lastAttemptAt: string
+const TRANSITIONAL_DOMAIN_STATUSES: DomainStatus[] = [
+  'pending',
+  'purchasing',
+  'dns_configuring',
+  'ssl_provisioning',
+]
+
+function normalizeProviderStatus(value: string | undefined): string | null {
+  if (!value) return null
+  return value.toLowerCase()
+}
+
+function getWebhookJobId(payload: EntriWebhookPayload): string | null {
+  return payload.job_id || payload.jobId || null
+}
+
+function isProviderReady(value: string | null): boolean {
+  return value === 'success' || value === 'exempt'
+}
+
+function buildSslProvisioningMeta(existing?: SslProvisioningMeta | null): SslProvisioningMeta {
+  const now = new Date().toISOString()
+  if (existing?._type === 'ssl_provisioning_meta') {
+    return {
+      ...existing,
+      attempts: existing.attempts + 1,
+      lastAttemptAt: now,
+    }
+  }
+  return {
+    _type: 'ssl_provisioning_meta',
+    attempts: 1,
+    firstAttemptAt: now,
+    lastAttemptAt: now,
+  }
+}
+
+function deriveDomainStatus(
+  payload: EntriWebhookPayload,
+  state: {
+    propagationStatus: string | null
+    secureStatus: string | null
+    powerStatus: string | null
+  },
+): DomainStatus {
+  if (
+    payload.type === 'domain.propagation.timeout' ||
+    payload.event === 'domain.propagation.timeout'
+  ) {
+    return 'error'
+  }
+
+  if (payload.type === 'domain.failed' || payload.event === 'domainFailed') {
+    return 'error'
+  }
+
+  if (
+    state.propagationStatus === 'failed' ||
+    state.secureStatus === 'failed' ||
+    state.powerStatus === 'failed'
+  ) {
+    return 'error'
+  }
+
+  if (state.propagationStatus !== 'success') {
+    return 'dns_configuring'
+  }
+
+  const requiresPower = payload.setup_type === 'power' || state.powerStatus !== null
+  const secureReady = isProviderReady(state.secureStatus)
+  const powerReady = !requiresPower || isProviderReady(state.powerStatus)
+
+  if (secureReady && powerReady) {
+    return 'active'
+  }
+
+  return 'ssl_provisioning'
 }
 
 const domains = new Hono<AppContext>()
@@ -80,12 +175,11 @@ domains.post(
   ),
   async (c) => {
     const { domain } = c.req.valid('json')
-    const provider = await getDomainProvider()
 
     // Expand bare queries (e.g. "coolapp") into multiple TLDs.
     // If the query already has a dot (e.g. "coolapp.com"), check just that one.
     const domainsToCheck = domain.includes('.') ? [domain] : expandDomainQuery(domain)
-    const results = await provider.checkAvailability(domainsToCheck)
+    const results = await Promise.all(domainsToCheck.map((name) => checkAvailability(name)))
 
     return c.json(results)
   },
@@ -126,15 +220,20 @@ domains.post(
       throw new HttpError(403, 'Forbidden')
     }
 
-    // Check domain limits
-    const domainCount = await db
+    // Wipe all non-active domains for this project — one process at a time
+    await db
+      .deleteFrom('domain')
+      .where('projectId', '=', projectId)
+      .where('status', '!=', 'active')
+      .execute()
+
+    const activeDomainCount = await db
       .selectFrom('domain')
       .select(db.fn.count('id').as('count'))
       .where('projectId', '=', projectId)
-      .where('status', '!=', 'error')
       .executeTakeFirst()
 
-    if (Number(domainCount?.count ?? 0) >= 5) {
+    if (Number(activeDomainCount?.count ?? 0) >= 5) {
       throw new HttpError(409, 'Maximum 5 domains per project')
     }
 
@@ -148,7 +247,7 @@ domains.post(
         .selectFrom('domain')
         .select(db.fn.count('id').as('count'))
         .where('userId', '=', user.id)
-        .where('registrar', 'like', '%free%')
+        .where('freeDomain', '=', true)
         .executeTakeFirst()
 
       if (Number(freeCount?.count ?? 0) >= config.freeDomain.maxPerUser) {
@@ -169,12 +268,11 @@ domains.post(
 
     const deployDomain = config.cloudflare.deployDomain
 
-    // Entri Power: root A record proxied by Entri + www CNAME via Entri's cname_target
+    // Entri Power: apex A record proxied by Entri
     const applicationUrl = `https://${worker.scriptName}.${deployDomain}`
 
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
-      { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
     ]
 
     // ── Entri: return config for frontend modal ──────────────
@@ -183,7 +281,10 @@ domains.post(
     // if the user closes the modal without buying.
     const token = await generateEntriToken(user.id)
 
-    log.info({ projectId, suggestedDomain }, 'domain purchase initialized (Entri modal)')
+    log.info(
+      { projectId, suggestedDomain, freeDomain: Boolean(freeDomain) },
+      'domain purchase initialized (Entri modal)',
+    )
 
     return c.json({
       token,
@@ -197,6 +298,125 @@ domains.post(
         lastName: user.name?.split(' ').slice(1).join(' ') || '',
       },
     })
+  },
+)
+
+domains.post(
+  '/bind-entri-flow',
+  zValidator(
+    'json',
+    z.object({
+      projectId: z.string().uuid(),
+      entriFlowId: z.string().min(1).max(255),
+      domain: z.string().min(3).max(255),
+      domainId: z.string().uuid().optional(),
+      freeDomain: z.boolean().optional(),
+    }),
+  ),
+  async (c) => {
+    const user = c.get('user')!
+    const session = c.get('session')!
+    const payload = c.req.valid('json')
+    const { projectId, entriFlowId, domainId, freeDomain } = payload
+    const domain = payload.domain.replace(/^www\./i, '')
+
+    const project = await db
+      .selectFrom('project')
+      .select(['id', 'organizationId'])
+      .where('id', '=', projectId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst()
+
+    if (!project) throw new HttpError(404, 'Project not found')
+
+    if (session.activeOrganizationId && project.organizationId !== session.activeOrganizationId) {
+      throw new HttpError(403, 'Forbidden')
+    }
+
+    const existingPrimary = await db
+      .selectFrom('domain')
+      .select(['id'])
+      .where('projectId', '=', projectId)
+      .where('isPrimary', '=', true)
+      .where('status', 'in', ['active', 'ssl_provisioning', 'purchasing', 'dns_configuring'])
+      .executeTakeFirst()
+
+    if (domainId) {
+      const record = await db
+        .selectFrom('domain')
+        .selectAll()
+        .where('id', '=', domainId)
+        .where('projectId', '=', projectId)
+        .where('userId', '=', user.id)
+        .executeTakeFirst()
+
+      if (!record) throw new HttpError(404, 'Domain not found')
+
+      await db
+        .updateTable('domain')
+        .set({
+          domainName: domain,
+          entriFlowId,
+          freeDomain: freeDomain ?? record.freeDomain,
+          updatedAt: new Date(),
+        })
+        .where('id', '=', domainId)
+        .execute()
+
+      await appendDomainLog(domainId, 'entri_flow_bound', `Linked Entri flow for ${domain}`)
+      return c.json({ ok: true, domainId })
+    }
+
+    const existingDomain = await db
+      .selectFrom('domain')
+      .selectAll()
+      .where('domainName', '=', domain)
+      .executeTakeFirst()
+
+    if (existingDomain?.projectId && existingDomain.projectId !== projectId) {
+      throw new HttpError(409, 'Domain is already connected to another project')
+    }
+
+    if (existingDomain) {
+      await db
+        .updateTable('domain')
+        .set({
+          entriFlowId,
+          freeDomain: freeDomain ?? existingDomain.freeDomain,
+          updatedAt: new Date(),
+        })
+        .where('id', '=', existingDomain.id)
+        .execute()
+
+      await appendDomainLog(
+        existingDomain.id,
+        'entri_flow_bound',
+        `Linked Entri flow for ${domain}`,
+      )
+      return c.json({ ok: true, domainId: existingDomain.id })
+    }
+
+    const now = new Date()
+    const record = await db
+      .insertInto('domain')
+      .values({
+        projectId,
+        userId: user.id,
+        organizationId: project.organizationId,
+        domainName: domain,
+        status: 'purchasing',
+        registrar: 'entri',
+        entriFlowId,
+        freeDomain: Boolean(freeDomain),
+        isPrimary: !existingPrimary,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning(['id'])
+      .executeTakeFirstOrThrow()
+
+    await appendDomainLog(record.id, 'purchase_started', `Purchase started for ${domain}`)
+    return c.json({ ok: true, domainId: record.id })
   },
 )
 
@@ -237,29 +457,43 @@ domains.post(
       throw new HttpError(403, 'Forbidden')
     }
 
-    // Check domain limits
-    const domainCount = await db
+    // Block if another user/project owns this domain (any state)
+    const existingDomain = await db
+      .selectFrom('domain')
+      .select(['id', 'projectId', 'status', 'userId'])
+      .where('domainName', '=', domain)
+      .executeTakeFirst()
+
+    if (existingDomain && existingDomain.projectId !== projectId) {
+      throw new HttpError(409, 'Domain is already in use by another project')
+    }
+
+    // Wipe all non-active domains for THIS project only — one process at a time
+    await db
+      .deleteFrom('domain')
+      .where('projectId', '=', projectId)
+      .where('status', '!=', 'active')
+      .execute()
+
+    const activeDomainCount = await db
       .selectFrom('domain')
       .select(db.fn.count('id').as('count'))
       .where('projectId', '=', projectId)
-      .where('status', '!=', 'error')
       .executeTakeFirst()
 
-    if (Number(domainCount?.count ?? 0) >= 5) {
+    if (Number(activeDomainCount?.count ?? 0) >= 5) {
       throw new HttpError(409, 'Maximum 5 domains per project')
     }
 
-    // Check if project already has a primary domain
-    const existingPrimary = await db
+    const hasActivePrimary = await db
       .selectFrom('domain')
-      .select(['id', 'domainName'])
+      .select('id')
       .where('projectId', '=', projectId)
       .where('isPrimary', '=', true)
-      .where('status', 'in', ['active', 'ssl_provisioning', 'purchasing', 'dns_configuring'])
+      .where('status', '=', 'active')
       .executeTakeFirst()
 
-    const isPrimary = !existingPrimary
-    const redirectTarget = existingPrimary ? existingPrimary.domainName : null
+    const isPrimary = !hasActivePrimary
 
     // Get worker script name for DNS target
     const worker = await db
@@ -274,100 +508,33 @@ domains.post(
 
     const deployDomain = config.cloudflare.deployDomain
 
-    // Entri Power: root A record proxied by Entri + www CNAME via Entri's cname_target
+    // Entri Power: apex A record proxied by Entri
     const applicationUrl = `https://${worker.scriptName}.${deployDomain}`
 
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
-      { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
     ]
 
     const token = await generateEntriToken(user.id)
 
-    // Check if this domain name already exists (e.g., from a previous attempt or re-connect)
     const now = new Date()
-    let domainRecord = await db
-      .selectFrom('domain')
-      .select(['id', 'status'])
-      .where('domainName', '=', domain)
-      .executeTakeFirst()
-
-    if (domainRecord) {
-      // Reuse existing record — reset with clean logs
-      await db
-        .updateTable('domain')
-        .set({
-          projectId,
-          userId: user.id,
-          organizationId: session.activeOrganizationId,
-          status: 'dns_configuring',
-          registrar: 'entri-connect',
-          isPrimary,
-          redirectTarget,
-          lastError: null,
-          sslMeta: null,
-          dnsVerified: false,
-          routingConfigured: false,
-          logs: sql`'[]'::jsonb`,
-          updatedAt: now,
-        })
-        .where('id', '=', domainRecord.id)
-        .execute()
-    } else {
-      // Create new domain record
-      domainRecord = await db
-        .insertInto('domain')
-        .values({
-          projectId,
-          userId: user.id,
-          organizationId: session.activeOrganizationId,
-          domainName: domain,
-          status: 'dns_configuring',
-          registrar: 'entri-connect',
-          isPrimary,
-          redirectTarget,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning(['id', 'status'])
-        .executeTakeFirst()
-    }
+    const domainRecord = await db
+      .insertInto('domain')
+      .values({
+        projectId,
+        userId: user.id,
+        organizationId: project.organizationId,
+        domainName: domain,
+        status: 'dns_configuring',
+        registrar: 'entri-connect',
+        isPrimary,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning(['id', 'status'])
+      .executeTakeFirstOrThrow()
 
     await appendDomainLog(domainRecord!.id, 'connect_initiated', `DNS setup started for ${domain}`)
-
-    // Quick check: if domain is already reachable (re-connect of previously live domain),
-    // fast-track it to ssl_provisioning so the health checker can promote it immediately
-    try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 3000)
-      const res = await fetch(`https://${domain}`, {
-        method: 'HEAD',
-        signal: controller.signal,
-        redirect: 'follow',
-      })
-      clearTimeout(timeout)
-      if (res.status < 500) {
-        await db
-          .updateTable('domain')
-          .set({
-            status: 'ssl_provisioning',
-            dnsVerified: true,
-            routingConfigured: true,
-            updatedAt: new Date(),
-          })
-          .where('id', '=', domainRecord!.id)
-          .execute()
-        await appendDomainLog(
-          domainRecord!.id,
-          'auto_promote',
-          'Domain already reachable, fast-tracked to SSL check',
-          true,
-        )
-        log.info({ domainId: domainRecord!.id, domain }, 'domain already reachable, fast-tracked')
-      }
-    } catch {
-      // Domain not reachable yet — normal for new connections, health checker will pick it up
-    }
 
     log.info({ projectId, domainId: domainRecord?.id, domain }, 'domain connect initialized')
 
@@ -411,9 +578,6 @@ domains.get('/:projectId', async (c) => {
     .orderBy('createdAt', 'desc')
     .execute()
 
-  // Health checks are now handled by the background domain-health-checker job
-  // GET endpoint is a pure read — no side effects
-
   return c.json({
     domains: result.map((d) => ({
       id: d.id,
@@ -421,10 +585,7 @@ domains.get('/:projectId', async (c) => {
       domainName: d.domainName,
       status: d.status,
       registrar: d.registrar,
-      dnsVerified: d.dnsVerified,
-      routingConfigured: d.routingConfigured,
-      isPrimary: (d as any).isPrimary ?? true,
-      redirectTarget: (d as any).redirectTarget ?? null,
+      isPrimary: d.isPrimary,
       lastError: d.lastError,
       sslMeta: d.sslMeta ?? null,
       logs: d.logs ?? [],
@@ -464,70 +625,43 @@ domains.post(
 
     if (!domainRecord) throw new HttpError(404, 'Domain not found')
 
-    if (!['dns_configuring', 'ssl_provisioning', 'error'].includes(domainRecord.status)) {
+    if (!['dns_configuring', 'error'].includes(domainRecord.status)) {
       throw new HttpError(400, 'Domain is not in a retryable state')
     }
 
-    // Smart retry: if DNS is already verified, just retry SSL provisioning
-    // (don't re-open Entri modal — DNS is already configured)
-    const isSslRetry = domainRecord.dnsVerified
-    if (isSslRetry) {
-      const freshMeta: SslProvisioningMeta = {
-        _type: 'ssl_provisioning_meta',
-        attempts: 0,
-        firstAttemptAt: new Date().toISOString(),
-        lastAttemptAt: new Date().toISOString(),
-      }
-      await db
-        .updateTable('domain')
-        .set({
-          status: 'ssl_provisioning',
-          sslMeta: freshMeta as any,
-          lastError: null,
-          updatedAt: new Date(),
-        })
-        .where('id', '=', domainId)
-        .execute()
-
-      await appendDomainLog(
-        domainId,
-        'retry_ssl',
-        `Retrying SSL provisioning (DNS already verified)`,
-      )
-      log.info({ projectId, domainId, domainName: domainRecord.domainName }, 'SSL retry started')
-
-      return c.json({ sslRetryOnly: true, domainId })
-    }
-
-    // Full retry: re-open Entri modal for DNS setup
     const worker = await db
       .selectFrom('worker')
       .select(['scriptName'])
       .where('projectId', '=', projectId)
       .executeTakeFirst()
 
+    if (!worker?.scriptName) {
+      throw new HttpError(400, 'Deploy your app before adding a custom domain')
+    }
+
     const deployDomain = config.cloudflare.deployDomain
 
-    // Entri Power: root A record proxied by Entri + www CNAME via Entri's cname_target
-    const applicationUrl = worker?.scriptName
-      ? `https://${worker.scriptName}.${deployDomain}`
-      : `https://${deployDomain}`
+    const applicationUrl = `https://${worker.scriptName}.${deployDomain}`
 
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
-      { type: 'CNAME', host: 'www', value: '{CNAME_TARGET}', ttl: 300, applicationUrl },
     ]
 
     const token = await generateEntriToken(user.id)
 
-    // Reset status to dns_configuring if it was error
-    if (domainRecord.status === 'error') {
-      await db
-        .updateTable('domain')
-        .set({ status: 'dns_configuring', lastError: null, updatedAt: new Date() })
-        .where('id', '=', domainId)
-        .execute()
-    }
+    await db
+      .updateTable('domain')
+      .set({
+        status: 'dns_configuring',
+        propagationStatus: null,
+        secureStatus: null,
+        powerStatus: null,
+        lastError: null,
+        sslMeta: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', domainId)
+      .execute()
 
     await appendDomainLog(
       domainId,
@@ -549,7 +683,7 @@ domains.post(
 
 /**
  * DELETE /api/domains/:projectId/:domainId
- * Remove a domain record (does not cancel at registrar)
+ * Remove a domain record.
  */
 domains.delete('/:projectId/:domainId', async (c) => {
   const user = c.get('user')!
@@ -566,10 +700,6 @@ domains.delete('/:projectId/:domainId', async (c) => {
 
   // Already deleted (duplicate request) — return success idempotently
   if (!domain) return c.json({ deleted: true })
-
-  // Disconnect from Cloudflare (custom hostname + KV mapping)
-  await appendDomainLog(domainId, 'domain_removing', 'User requested domain removal')
-  await disconnectCustomDomain(domain.domainName, domain.cfCustomDomainId)
 
   await db.deleteFrom('domain').where('id', '=', domainId).execute()
 
@@ -615,7 +745,6 @@ domains.post(
       .updateTable('domain')
       .set({
         isPrimary: false,
-        redirectTarget: domain.domainName,
         updatedAt: new Date(),
       })
       .where('projectId', '=', projectId)
@@ -627,7 +756,6 @@ domains.post(
       .updateTable('domain')
       .set({
         isPrimary: true,
-        redirectTarget: null,
         updatedAt: new Date(),
       })
       .where('id', '=', domainId)
@@ -680,6 +808,10 @@ domains.post(
         domainName,
         status: 'active',
         registrar: 'mock-dev',
+        propagationStatus: 'success',
+        secureStatus: 'success',
+        powerStatus: 'success',
+        lastWebhookAt: new Date(),
         purchasedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -750,9 +882,9 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
   const isProduction = process.env.NODE_ENV === 'production'
 
   // Parse payload first — needed for both signature verification and processing
-  let payload: any
+  let payload: EntriWebhookPayload
   try {
-    payload = JSON.parse(body)
+    payload = JSON.parse(body) as EntriWebhookPayload
   } catch {
     return c.json({ error: 'Invalid payload' }, 400)
   }
@@ -804,21 +936,46 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
   )
 
   // Store webhook event
-  await db
-    .insertInto('domain_webhook_event')
-    .values({
-      entriEventId: payload.id || null,
-      eventType,
-      domainName: payload.domain || payload.purchased_domains?.[0] || null,
-      payload: payload as Record<string, unknown>,
-      status: 'pending',
-    })
-    .execute()
+  const existingEvent = payload.id
+    ? await db
+        .selectFrom('domain_webhook_event')
+        .select(['status'])
+        .where('entriEventId', '=', payload.id)
+        .executeTakeFirst()
+    : null
+
+  if (existingEvent?.status === 'processed') {
+    log.info({ eventId: payload.id }, '[ENTRI-WEBHOOK] duplicate event, skipping')
+    return c.json({ received: true }, 202)
+  }
+
+  if (payload.id && existingEvent) {
+    await db
+      .updateTable('domain_webhook_event')
+      .set({ status: 'pending', error: null, processedAt: null })
+      .where('entriEventId', '=', payload.id)
+      .execute()
+  } else {
+    // Duplicate check already handled above (existingEvent query), just insert
+    await db
+      .insertInto('domain_webhook_event')
+      .values({
+        entriEventId: payload.id || null,
+        eventType,
+        domainName: payload.domain || payload.purchased_domains?.[0] || null,
+        payload: payload as Record<string, unknown>,
+        status: 'pending',
+      })
+      .execute()
+  }
 
   // Process synchronously (domain events are low volume)
   try {
     await processDomainWebhook(payload)
+    await markWebhookEventStatus(payload.id || null, 'processed')
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Webhook processing failed'
+    await markWebhookEventStatus(payload.id || null, 'failed', message)
     log.error({ err, eventType }, '[ENTRI-WEBHOOK] processing error')
   }
 
@@ -864,412 +1021,374 @@ async function resolveUserId(userIdentifier: string): Promise<string | null> {
   return user?.id ?? null
 }
 
-/** Find a pending domain by name, or by userId+projectId */
-async function findPendingDomain(
-  domainName: string | null,
-  resolvedUserId: string | null,
-  projectId: string | null,
+async function markWebhookEventStatus(
+  entriEventId: string | null,
+  status: 'processed' | 'failed',
+  error?: string,
 ) {
-  if (domainName) {
-    const record = await db
-      .selectFrom('domain')
-      .selectAll()
-      .where('domainName', '=', domainName)
-      .where('status', 'in', ['pending', 'purchasing', 'dns_configuring'])
-      .orderBy('createdAt', 'desc')
-      .executeTakeFirst()
+  if (!entriEventId) return
+
+  await db
+    .updateTable('domain_webhook_event')
+    .set({
+      status,
+      error: error || null,
+      processedAt: new Date(),
+    })
+    .where('entriEventId', '=', entriEventId)
+    .execute()
+}
+
+/** Find a domain record by webhook correlation data. */
+async function findDomainRecord(
+  domainName: string | null,
+  entriFlowId: string | null,
+  statuses?: DomainStatus[],
+) {
+  if (entriFlowId) {
+    let q = db.selectFrom('domain').selectAll().where('entriFlowId', '=', entriFlowId)
+
+    if (statuses) {
+      q = q.where('status', 'in', statuses)
+    }
+
+    const record = await q.orderBy('updatedAt', 'desc').executeTakeFirst()
     if (record) return record
   }
 
-  if (!resolvedUserId) return null
+  if (domainName) {
+    let q = db.selectFrom('domain').selectAll().where('domainName', '=', domainName)
 
-  let q = db
-    .selectFrom('domain')
-    .selectAll()
-    .where('userId', '=', resolvedUserId)
-    .where('status', 'in', ['pending', 'purchasing', 'dns_configuring'])
+    if (statuses) {
+      q = q.where('status', 'in', statuses)
+    }
 
-  if (projectId) {
-    q = q.where('projectId', '=', projectId)
+    const record = await q.orderBy('updatedAt', 'desc').executeTakeFirst()
+    if (record) return record
   }
 
-  return q.orderBy('createdAt', 'desc').executeTakeFirst()
+  return null
 }
 
-async function processDomainWebhook(payload: any) {
-  // Idempotency: skip if we already processed this event
-  if (payload.id) {
-    const existing = await db
-      .selectFrom('domain_webhook_event')
-      .select('status')
-      .where('entriEventId', '=', payload.id)
-      .where('status', '=', 'processed')
-      .executeTakeFirst()
-
-    if (existing) {
-      log.info({ eventId: payload.id }, '[ENTRI-WEBHOOK] duplicate event, skipping')
-      return
-    }
-  }
-
+async function processDomainWebhook(payload: EntriWebhookPayload) {
   const eventType = payload.type || payload.event
   const domainName = payload.purchased_domains?.[0] || payload.domain
+  const entriFlowId = getWebhookJobId(payload)
   const { userIdentifier, projectId: extractedProjectId } = parseWebhookUserId(payload.user_id)
+  const resolvedUserId = userIdentifier ? await resolveUserId(userIdentifier) : null
 
-  if (
-    eventType === 'domain.added' ||
-    eventType === 'domain.purchased' ||
-    eventType === 'domainPurchased'
-  ) {
-    if (!userIdentifier && !domainName) {
-      log.warn('[ENTRI-WEBHOOK] no user_id or domain in payload')
-      return
-    }
+  const propagationStatus =
+    normalizeProviderStatus(payload.propagation_status) ||
+    (payload.dns_status === 'configured' ||
+    eventType === 'dns.propagated' ||
+    eventType === 'dnsConfigured'
+      ? 'success'
+      : null)
+  const secureStatus = normalizeProviderStatus(payload.secure_status)
+  const powerStatus = normalizeProviderStatus(payload.power_status)
 
-    const resolvedUserId = userIdentifier ? await resolveUserId(userIdentifier) : null
-    let domainRecord = await findPendingDomain(domainName, resolvedUserId, extractedProjectId)
+  const state = {
+    propagationStatus,
+    secureStatus,
+    powerStatus,
+  }
 
-    const propagationOk =
-      payload.propagation_status === 'success' ||
-      payload.dns_status === 'configured' ||
-      eventType === 'domain.purchased' ||
-      eventType === 'domainPurchased'
+  const explicitError =
+    eventType === 'domain.propagation.timeout'
+      ? 'DNS propagation timed out. Please verify your DNS records are configured correctly and retry.'
+      : eventType === 'domain.failed' || eventType === 'domainFailed'
+        ? payload.error || payload.reason || 'Domain setup failed (provider reported failure)'
+        : state.propagationStatus === 'failed' ||
+            state.secureStatus === 'failed' ||
+            state.powerStatus === 'failed'
+          ? payload.error || payload.reason || 'Domain setup failed (provider reported failure)'
+          : null
 
-    const finalDomainName = domainName || domainRecord?.domainName
-
-    if (!finalDomainName) {
-      log.warn({ userIdentifier }, '[ENTRI-WEBHOOK] no domain name in payload or record')
-      return
-    }
-
-    // If no existing domain record, create one (Sell flow doesn't pre-create records)
-    if (!domainRecord) {
-      if (!resolvedUserId) {
-        log.warn({ domainName }, '[ENTRI-WEBHOOK] no domain record and no userId to find project')
-        return
-      }
-
-      // Use projectId from encoded userId, or fall back to user's most recent project
-      const project = extractedProjectId
-        ? await db
-            .selectFrom('project')
-            .select(['id', 'organizationId'])
-            .where('id', '=', extractedProjectId)
-            .where('userId', '=', resolvedUserId)
-            .where('deletedAt', 'is', null)
-            .executeTakeFirst()
-        : await db
-            .selectFrom('project')
-            .select(['id', 'organizationId'])
-            .where('userId', '=', resolvedUserId)
-            .where('deletedAt', 'is', null)
-            .orderBy('createdAt', 'desc')
-            .executeTakeFirst()
-
-      if (!project) {
-        log.warn(
-          { userId: resolvedUserId, domainName },
-          '[ENTRI-WEBHOOK] no project found for user',
-        )
-        return
-      }
-
-      const now = new Date()
-      // Domain expiry: use Entri payload if available, else default to 1 year
-      const expiresAt = payload.expiration_date
-        ? new Date(payload.expiration_date)
-        : payload.registration_years
-          ? new Date(
-              now.getTime() + Number(payload.registration_years) * 365.25 * 24 * 60 * 60 * 1000,
-            )
-          : new Date(now.getTime() + 365.25 * 24 * 60 * 60 * 1000)
-
-      // Check if domain name already exists (e.g., from a previous attempt)
-      let existingByName = await db
-        .selectFrom('domain')
-        .select(['id', 'projectId'])
-        .where('domainName', '=', finalDomainName)
-        .executeTakeFirst()
-
-      let newRecord: { id: string } | undefined
-
-      if (existingByName) {
-        // Reuse existing record — update it with new data
-        await db
-          .updateTable('domain')
-          .set({
-            projectId: project.id,
-            userId: resolvedUserId,
-            organizationId: project.organizationId,
-            status: propagationOk ? 'ssl_provisioning' : 'dns_configuring',
-            registrar: payload.provider || payload.registrar || 'entri',
-            entriFlowId: payload.id || null,
-            purchasedAt: now,
-            expiresAt,
-            lastError: null,
-            sslMeta: null,
-            dnsVerified: propagationOk,
-            routingConfigured: propagationOk,
-            updatedAt: now,
-          })
-          .where('id', '=', existingByName.id)
-          .execute()
-        newRecord = { id: existingByName.id }
-      } else {
-        newRecord = await db
-          .insertInto('domain')
-          .values({
-            projectId: project.id,
-            userId: resolvedUserId,
-            organizationId: project.organizationId,
-            domainName: finalDomainName,
-            status: propagationOk ? 'ssl_provisioning' : 'dns_configuring',
-            registrar: payload.provider || payload.registrar || 'entri',
-            entriFlowId: payload.id || null,
-            purchasedAt: now,
-            expiresAt,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .returning(['id'])
-          .executeTakeFirst()
-      }
-
-      // Entri Power handles SSL for both bare and www — no CF custom hostname needed.
-      // Just mark DNS as verified and let the health check loop confirm SSL readiness.
-      if (propagationOk && newRecord?.id && !existingByName) {
-        await db
-          .updateTable('domain')
-          .set({ dnsVerified: true, routingConfigured: true })
-          .where('id', '=', newRecord.id)
-          .execute()
-        await appendDomainLog(
-          newRecord.id,
-          'webhook_domain_ready',
-          `DNS verified, waiting for Entri Power SSL provisioning`,
-          true,
-        )
-      } else if (newRecord?.id) {
-        await appendDomainLog(
-          newRecord.id,
-          existingByName ? 'webhook_domain_reused' : 'webhook_domain_created',
-          `Domain record ${existingByName ? 'reused' : 'created'} (DNS ${propagationOk ? 'ok' : 'pending'})`,
-        )
-      }
-
-      log.info(
-        {
-          domainId: newRecord?.id,
-          domainName: finalDomainName,
-          status: propagationOk ? 'ssl_provisioning' : 'dns_configuring',
-        },
-        '[ENTRI-WEBHOOK] domain created from webhook',
-      )
-      return
-    }
-
-    // Skip redundant logs when nothing changed (Entri retries propagation checks)
-    const statusUnchanged = !propagationOk && domainRecord!.status === 'dns_configuring'
-
-    if (!statusUnchanged) {
-      await appendDomainLog(
-        domainRecord!.id,
-        'webhook_received',
-        `Event: ${eventType}, DNS propagation: ${propagationOk ? 'ok' : 'pending'}`,
-      )
-    }
-
-    // Entri Power handles SSL — no CF custom hostname needed.
-    // Just update status and let health check loop confirm SSL readiness.
-    const finalStatus = propagationOk ? 'ssl_provisioning' : 'dns_configuring'
-
-    const expiresAt = payload.expiration_date
-      ? new Date(payload.expiration_date)
-      : payload.registration_years
-        ? new Date(Date.now() + Number(payload.registration_years) * 365.25 * 24 * 60 * 60 * 1000)
-        : new Date(Date.now() + 365.25 * 24 * 60 * 60 * 1000)
-
-    await db
-      .updateTable('domain')
-      .set({
-        domainName: finalDomainName,
-        status: finalStatus,
-        registrar: payload.provider || payload.registrar || null,
-        entriFlowId: payload.id || null,
-        routingConfigured: propagationOk,
-        dnsVerified: propagationOk,
-        lastError: null,
-        purchasedAt: new Date(),
-        expiresAt,
-        updatedAt: new Date(),
-      })
-      .where('id', '=', domainRecord!.id)
-      .execute()
-
-    if (!statusUnchanged) {
-      await appendDomainLog(
-        domainRecord!.id,
-        'status_change',
-        `Status → ${finalStatus}`,
-        finalStatus === 'ssl_provisioning',
-      )
-    }
-
-    log.info(
-      {
-        domainId: domainRecord?.id,
-        domainName: finalDomainName,
-        status: finalStatus,
-      },
-      '[ENTRI-WEBHOOK] domain updated',
-    )
-
-    // Update webhook event status
-    if (payload.id) {
-      await db
-        .updateTable('domain_webhook_event')
-        .set({ status: 'processed', processedAt: new Date() })
-        .where('entriEventId', '=', payload.id)
-        .execute()
-    }
-  } else if (eventType === 'domain.propagation.timeout') {
-    // Entri gave up waiting for DNS to propagate — mark domain as error
-    const resolvedUserId = userIdentifier ? await resolveUserId(userIdentifier) : null
-    const timedOutDomain = await findPendingDomain(domainName, resolvedUserId, extractedProjectId)
-
-    if (timedOutDomain) {
-      const failReason =
-        'DNS propagation timed out. Please verify your DNS records are configured correctly and retry.'
-      await appendDomainLog(timedOutDomain.id, 'propagation_timeout', failReason, false)
-      await db
-        .updateTable('domain')
-        .set({ status: 'error', lastError: failReason, updatedAt: new Date() })
-        .where('id', '=', timedOutDomain.id)
-        .execute()
-      log.warn(
-        { domainId: timedOutDomain.id, domainName, userIdentifier },
-        '[ENTRI-WEBHOOK] DNS propagation timed out',
-      )
-    } else {
-      log.warn(
-        { domainName, userIdentifier },
-        '[ENTRI-WEBHOOK] propagation timeout but no matching domain record',
-      )
-    }
-
-    if (payload.id) {
-      await db
-        .updateTable('domain_webhook_event')
-        .set({ status: 'processed', processedAt: new Date() })
-        .where('entriEventId', '=', payload.id)
-        .execute()
-    }
-  } else if (eventType === 'domain.failed' || eventType === 'domainFailed') {
-    const failReason =
-      payload.error || payload.reason || 'Domain setup failed (provider reported failure)'
-
-    // Find the specific domain that failed using shared lookup
-    const resolvedUserId = userIdentifier ? await resolveUserId(userIdentifier) : null
-    const failedDomain = await findPendingDomain(domainName, resolvedUserId, extractedProjectId)
-
-    if (failedDomain) {
-      await appendDomainLog(failedDomain.id, 'domain_failed', failReason, false)
-      await db
-        .updateTable('domain')
-        .set({ status: 'error', lastError: failReason, updatedAt: new Date() })
-        .where('id', '=', failedDomain.id)
-        .execute()
-    }
-
-    log.warn({ userIdentifier, domainName, eventType }, '[ENTRI-WEBHOOK] domain setup failed')
-  } else if (eventType === 'dns.propagated' || eventType === 'dnsConfigured') {
-    // DNS propagation complete — wire up Cloudflare
-    if (domainName) {
-      const domainRecord = await db
-        .selectFrom('domain')
-        .selectAll()
-        .where('domainName', '=', domainName)
-        .where('status', '=', 'dns_configuring')
-        .executeTakeFirst()
-
-      if (domainRecord) {
-        await appendDomainLog(domainRecord.id, 'dns_propagated', 'DNS records verified by provider')
-      }
-
-      // Entri Power handles SSL — just mark DNS verified and move to ssl_provisioning
-      await db
-        .updateTable('domain')
-        .set({
-          status: 'ssl_provisioning',
-          dnsVerified: true,
-          routingConfigured: true,
-          lastError: null,
-          updatedAt: new Date(),
-        })
-        .where('domainName', '=', domainName)
-        .where('status', '=', 'dns_configuring')
-        .execute()
-
-      if (domainRecord) {
-        await appendDomainLog(
-          domainRecord.id,
-          'status_change',
-          'DNS verified, waiting for Entri Power SSL',
-          true,
-        )
-      }
-
-      log.info({ domainName, status: 'ssl_provisioning' }, '[ENTRI-WEBHOOK] DNS propagated')
-    }
-  } else if (eventType === 'purchase.confirmation.expired') {
-    // User started a purchase but never confirmed/paid
-    const resolvedUserId = userIdentifier ? await resolveUserId(userIdentifier) : null
-
-    if (resolvedUserId) {
-      const pendingDomain = await db
-        .selectFrom('domain')
-        .selectAll()
-        .where('userId', '=', resolvedUserId)
-        .where('status', 'in', ['pending', 'purchasing'])
-        .orderBy('createdAt', 'desc')
-        .executeTakeFirst()
-
-      if (pendingDomain) {
-        await appendDomainLog(
-          pendingDomain.id,
-          'purchase_expired',
-          'Domain purchase was not completed in time. You can try again.',
-          false,
-        )
-        await db
-          .updateTable('domain')
-          .set({
-            status: 'error',
-            lastError: 'Purchase was not completed in time. You can try again.',
-            updatedAt: new Date(),
-          })
-          .where('id', '=', pendingDomain.id)
-          .execute()
-        log.info(
-          { domainId: pendingDomain.id, domainName: pendingDomain.domainName, userIdentifier },
-          '[ENTRI-WEBHOOK] purchase confirmation expired',
-        )
-      }
-    } else {
+  if (eventType === 'purchase.confirmation.expired') {
+    if (!resolvedUserId) {
       log.info(
         { domainName, userIdentifier },
         '[ENTRI-WEBHOOK] purchase expired but no user to look up',
       )
+      return
     }
 
-    if (payload.id) {
-      await db
-        .updateTable('domain_webhook_event')
-        .set({ status: 'processed', processedAt: new Date() })
-        .where('entriEventId', '=', payload.id)
-        .execute()
-    }
-  } else {
-    log.info({ eventType }, '[ENTRI-WEBHOOK] unhandled event type')
+    const pendingDomain = await findDomainRecord(domainName || null, entriFlowId, [
+      'pending',
+      'purchasing',
+    ])
+
+    if (!pendingDomain) return
+
+    const failReason = 'Purchase was not completed in time. You can try again.'
+    await appendDomainLog(pendingDomain.id, 'purchase_expired', failReason, false)
+    await db
+      .updateTable('domain')
+      .set({
+        status: 'error',
+        lastError: failReason,
+        lastWebhookAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where('id', '=', pendingDomain.id)
+      .execute()
+    return
   }
+
+  if (explicitError) {
+    const failedDomain = await findDomainRecord(domainName || null, entriFlowId, [
+      ...TRANSITIONAL_DOMAIN_STATUSES,
+      'error',
+    ])
+
+    if (!failedDomain) {
+      log.warn(
+        { domainName, userIdentifier, eventType, entriFlowId },
+        '[ENTRI-WEBHOOK] failure event but no matching domain record',
+      )
+      return
+    }
+
+    await appendDomainLog(failedDomain.id, 'domain_failed', explicitError, false)
+    await db
+      .updateTable('domain')
+      .set({
+        status: 'error',
+        entriFlowId: entriFlowId || failedDomain.entriFlowId,
+        propagationStatus,
+        secureStatus,
+        powerStatus,
+        cnameTarget: payload.cname_target || failedDomain.cnameTarget,
+        lastWebhookAt: new Date(),
+        lastError: explicitError,
+        sslMeta: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', failedDomain.id)
+      .execute()
+    return
+  }
+
+  if (!domainName && !resolvedUserId) {
+    log.warn('[ENTRI-WEBHOOK] no user_id or domain in payload')
+    return
+  }
+
+  let domainRecord = await findDomainRecord(domainName || null, entriFlowId)
+
+  if (domainRecord) {
+    if (resolvedUserId && domainRecord.userId !== resolvedUserId) {
+      log.warn(
+        { domainName, entriFlowId, owner: domainRecord.userId, resolvedUserId },
+        '[ENTRI-WEBHOOK] refusing to update domain owned by another user',
+      )
+      return
+    }
+
+    if (
+      extractedProjectId &&
+      domainRecord.projectId &&
+      domainRecord.projectId !== extractedProjectId
+    ) {
+      log.warn(
+        { domainName, entriFlowId, projectId: domainRecord.projectId, extractedProjectId },
+        '[ENTRI-WEBHOOK] refusing to update domain owned by another project',
+      )
+      return
+    }
+  }
+
+  const finalDomainName = domainName || domainRecord?.domainName
+  if (!finalDomainName) {
+    log.warn({ userIdentifier, entriFlowId }, '[ENTRI-WEBHOOK] no domain name in payload or record')
+    return
+  }
+
+  if (!domainRecord) {
+    if (!resolvedUserId) {
+      log.warn({ domainName }, '[ENTRI-WEBHOOK] no domain record and no userId to find project')
+      return
+    }
+
+    const project = extractedProjectId
+      ? await db
+          .selectFrom('project')
+          .select(['id', 'organizationId'])
+          .where('id', '=', extractedProjectId)
+          .where('userId', '=', resolvedUserId)
+          .where('deletedAt', 'is', null)
+          .executeTakeFirst()
+      : await db
+          .selectFrom('project')
+          .select(['id', 'organizationId'])
+          .where('userId', '=', resolvedUserId)
+          .where('deletedAt', 'is', null)
+          .orderBy('createdAt', 'desc')
+          .executeTakeFirst()
+
+    if (!project) {
+      log.warn({ userId: resolvedUserId, domainName }, '[ENTRI-WEBHOOK] no project found for user')
+      return
+    }
+
+    if (!project.id) {
+      log.warn({ userId: resolvedUserId, domainName }, '[ENTRI-WEBHOOK] project missing id')
+      return
+    }
+
+    const existingByName = await db
+      .selectFrom('domain')
+      .select(['id', 'projectId', 'userId'])
+      .where('domainName', '=', finalDomainName)
+      .executeTakeFirst()
+
+    if (
+      existingByName &&
+      (existingByName.projectId !== project.id || existingByName.userId !== resolvedUserId)
+    ) {
+      log.warn(
+        { domainName: finalDomainName, projectId: existingByName.projectId, resolvedUserId },
+        '[ENTRI-WEBHOOK] refusing to reuse domain owned by another project',
+      )
+      return
+    }
+
+    const now = new Date()
+    const expiresAt = payload.expiration_date
+      ? new Date(payload.expiration_date)
+      : payload.registration_years
+        ? new Date(
+            now.getTime() + Number(payload.registration_years) * 365.25 * 24 * 60 * 60 * 1000,
+          )
+        : null
+
+    const status = deriveDomainStatus(payload, state)
+    const sslMeta = status === 'ssl_provisioning' ? buildSslProvisioningMeta(null) : null
+
+    if (existingByName) {
+      await db
+        .updateTable('domain')
+        .set({
+          projectId: project.id,
+          userId: resolvedUserId,
+          organizationId: project.organizationId,
+          domainName: finalDomainName,
+          status,
+          registrar: payload.provider || payload.registrar || 'entri',
+          entriFlowId,
+          propagationStatus,
+          secureStatus,
+          powerStatus,
+          cnameTarget: payload.cname_target || null,
+          freeDomain: Boolean(payload.free_domain),
+          lastWebhookAt: now,
+          purchasedAt: now,
+          expiresAt,
+          lastError: null,
+          sslMeta: sslMeta as any,
+          updatedAt: now,
+        })
+        .where('id', '=', existingByName.id)
+        .execute()
+
+      domainRecord = await db
+        .selectFrom('domain')
+        .selectAll()
+        .where('id', '=', existingByName.id)
+        .executeTakeFirstOrThrow()
+    } else {
+      const existingPrimary = await db
+        .selectFrom('domain')
+        .select('id')
+        .where('projectId', '=', project.id)
+        .where('isPrimary', '=', true)
+        .where('status', 'in', ['active', 'ssl_provisioning', 'purchasing', 'dns_configuring'])
+        .executeTakeFirst()
+
+      domainRecord = await db
+        .insertInto('domain')
+        .values({
+          projectId: project.id,
+          userId: resolvedUserId,
+          organizationId: project.organizationId,
+          domainName: finalDomainName,
+          status,
+          registrar: payload.provider || payload.registrar || 'entri',
+          entriFlowId,
+          propagationStatus,
+          secureStatus,
+          powerStatus,
+          cnameTarget: payload.cname_target || null,
+          freeDomain: Boolean(payload.free_domain),
+          isPrimary: !existingPrimary,
+          lastWebhookAt: now,
+          purchasedAt: now,
+          expiresAt,
+          sslMeta: sslMeta as any,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow()
+    }
+
+    await appendDomainLog(
+      domainRecord.id,
+      'webhook_domain_created',
+      `Status → ${status}`,
+      status !== 'error',
+    )
+    return
+  }
+
+  const status = deriveDomainStatus(payload, state)
+  const now = new Date()
+  const expiresAt = payload.expiration_date
+    ? new Date(payload.expiration_date)
+    : payload.registration_years
+      ? new Date(now.getTime() + Number(payload.registration_years) * 365.25 * 24 * 60 * 60 * 1000)
+      : domainRecord.expiresAt
+  const lastError =
+    status === 'error' ? payload.error || payload.reason || domainRecord.lastError : null
+  const sslMeta =
+    status === 'ssl_provisioning'
+      ? buildSslProvisioningMeta(domainRecord.sslMeta as SslProvisioningMeta | null)
+      : null
+  const statusChanged = domainRecord.status !== status
+
+  await db
+    .updateTable('domain')
+    .set({
+      domainName: finalDomainName,
+      status,
+      registrar: payload.provider || payload.registrar || domainRecord.registrar,
+      entriFlowId: entriFlowId || domainRecord.entriFlowId,
+      propagationStatus,
+      secureStatus,
+      powerStatus,
+      cnameTarget: payload.cname_target || domainRecord.cnameTarget,
+      freeDomain: payload.free_domain ?? domainRecord.freeDomain,
+      lastWebhookAt: now,
+      purchasedAt:
+        domainRecord.purchasedAt ||
+        (eventType === 'domain.purchased' || eventType === 'domainPurchased' ? now : null),
+      expiresAt,
+      lastError,
+      sslMeta: sslMeta as any,
+      updatedAt: now,
+    })
+    .where('id', '=', domainRecord.id)
+    .execute()
+
+  if (statusChanged) {
+    await appendDomainLog(
+      domainRecord.id,
+      'status_change',
+      `Status → ${status}`,
+      status !== 'error',
+    )
+    return
+  }
+
+  await appendDomainLog(domainRecord.id, 'webhook_received', `Event: ${eventType}`)
 }

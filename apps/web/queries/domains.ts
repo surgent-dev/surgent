@@ -4,6 +4,20 @@ import { toast } from 'react-hot-toast'
 
 // Types
 
+export interface DomainLogEntry {
+  timestamp: string
+  event: string
+  detail?: string
+  success?: boolean
+}
+
+export interface SslProvisioningMeta {
+  _type: 'ssl_provisioning_meta'
+  attempts: number
+  firstAttemptAt: string
+  lastAttemptAt: string
+}
+
 export interface DomainAvailability {
   domain: string
   available: boolean
@@ -22,13 +36,13 @@ interface EntriPurchaseConfig {
     ttl: number
     applicationUrl?: string
   }>
-  domainId: string
+  domainId?: string
   prefilledDomain?: string
   devMode?: boolean
   contact: { email: string; firstName: string; lastName: string }
 }
 
-export interface EntriConnectConfig {
+interface EntriConnectConfig {
   token: string
   applicationId: string
   dnsRecords: Array<{
@@ -43,33 +57,15 @@ export interface EntriConnectConfig {
   userId: string
 }
 
-export interface DomainLogEntry {
-  timestamp: string
-  event: string
-  detail?: string
-  success?: boolean
-}
-
-// SSL provisioning metadata (dedicated sslMeta column)
-export interface SslProvisioningMeta {
-  _type: 'ssl_provisioning_meta'
-  attempts: number
-  firstAttemptAt: string
-  lastAttemptAt: string
-}
-
 export interface Domain {
   id: string
   projectId: string | null
   domainName: string
   status: 'pending' | 'purchasing' | 'dns_configuring' | 'ssl_provisioning' | 'active' | 'error'
   registrar: string | null
-  dnsVerified: boolean
-  routingConfigured: boolean
   lastError: string | null
   sslMeta: SslProvisioningMeta | null
   isPrimary: boolean
-  redirectTarget: string | null
   logs: DomainLogEntry[]
   purchasedAt: string | null
   expiresAt: string | null
@@ -120,7 +116,7 @@ export function useCheckDomainAvailability() {
 
 export function useInitDomainPurchase() {
   return useMutation({
-    mutationFn: (params: { projectId: string; suggestedDomain?: string }) =>
+    mutationFn: (params: { projectId: string; suggestedDomain?: string; freeDomain?: boolean }) =>
       http.post('api/domains/init-purchase', { json: params }).json<EntriPurchaseConfig>(),
     onError: () => {
       toast.error('Failed to initialize domain purchase')
@@ -138,9 +134,7 @@ export function useInitDomainConnect() {
   })
 }
 
-export type RetryConnectResult =
-  | (EntriConnectConfig & { sslRetryOnly?: never })
-  | { sslRetryOnly: true; domainId: string }
+export type RetryConnectResult = EntriConnectConfig
 
 export function useRetryDomainConnect() {
   const qc = useQueryClient()
@@ -152,6 +146,25 @@ export function useRetryDomainConnect() {
     },
     onError: () => {
       toast.error('Failed to retry domain connection')
+    },
+  })
+}
+
+export function useBindEntriFlow() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: {
+      projectId: string
+      entriFlowId: string
+      domain: string
+      domainId?: string
+      freeDomain?: boolean
+    }) => http.post('api/domains/bind-entri-flow', { json: params }).json<{ ok: boolean }>(),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['domains', vars.projectId] })
+    },
+    onError: () => {
+      toast.error('Failed to sync domain setup')
     },
   })
 }

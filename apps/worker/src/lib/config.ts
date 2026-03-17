@@ -80,7 +80,6 @@ export const config = {
     deployUrl: env.CLOUDFLARE_DEPLOY_URL,
     deployDomain: env.DEPLOY_DOMAIN || 'surgent.site',
     zoneId: env.CLOUDFLARE_ZONE_ID,
-    kvNamespaceId: env.CLOUDFLARE_DOMAIN_KV_NAMESPACE_ID,
   },
   deploy: {
     buildTimeoutMs: int(env.DEPLOY_BUILD_TIMEOUT_MS, 600_000),

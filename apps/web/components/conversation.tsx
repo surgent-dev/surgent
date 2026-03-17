@@ -29,12 +29,14 @@ import {
 } from 'lucide-react'
 import { Chat, ArrowElbowDownRight } from '@phosphor-icons/react'
 import { MODELS, applyChatgptConnection, type ProviderModel } from '@/lib/models'
+import { useCredits } from '@/hooks/use-credits'
 import ChatInput, { type FilePart } from './chat-input'
 import { useSandbox } from '@/hooks/use-sandbox'
 import useAgentStream, { type SessionStatusRetry } from '@/lib/use-agent-stream'
 import { computeWorkingFromParts } from '@/lib/agent-working'
 import { AgentThread } from '@/components/agent/agent-thread'
 import QuestionPrompt from '@/components/agent/question-prompt'
+import PlanDialog from '@/components/plan-dialog'
 import {
   useSessionsQuery,
   useCreateSession,
@@ -186,6 +188,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const credits = useCredits()
 
   const usageRef = useRef<{
     ctxTokens?: number
@@ -524,6 +527,18 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     )
   }
 
+  const isBillingError = (err: any) => {
+    if (!err) return false
+    const msg = err.data?.message || err.message || err.name || ''
+    const type = err.data?.type || err.type || ''
+    return (
+      type === 'CreditsError' ||
+      type === 'MonthlyLimitError' ||
+      msg.includes('usage balance') ||
+      msg.includes('spending limit')
+    )
+  }
+
   const lastAssistantError = (() => {
     const last = assistantMessages[assistantMessages.length - 1]
     const err = (last as any)?.error || (last as any)?.info?.error
@@ -533,7 +548,12 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     if (msg?.toLowerCase().includes('abort')) return undefined
     const isContext =
       isContextLengthExceeded(err) || code === 'context_length_exceeded' || msg?.includes('context')
-    return { message: isContext ? 'Context limit reached. Start a new session.' : msg, isContext }
+    const isBilling = isBillingError(err)
+    return {
+      message: isContext ? 'Context limit reached. Start a new session.' : msg,
+      isContext,
+      isBilling,
+    }
   })()
 
   // Unified error display (combines session errors and assistant errors)
@@ -542,6 +562,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       return {
         message: sessionsErrorMessage,
         isContext: false,
+        isBilling: false,
         isDismissible: false,
       }
     }
@@ -551,9 +572,11 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       if (msg.toLowerCase().includes('abort')) return null
       const isContext =
         (err.code || err.data?.code) === 'context_length_exceeded' || msg.includes('context')
+      const isBilling = isBillingError(err)
       return {
         message: isContext ? 'Context limit reached. Start a new session.' : msg,
         isContext,
+        isBilling,
         isDismissible: true,
       }
     }
@@ -864,7 +887,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
               <div
                 className={cn(
                   'mb-2 px-3 py-2 rounded-lg text-xs',
-                  displayError.isContext
+                  displayError.isContext || displayError.isBilling
                     ? 'bg-warning/8 text-warning'
                     : 'bg-destructive/8 text-destructive',
                 )}
@@ -874,27 +897,38 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                   <p className="flex-1 min-w-0 wrap-break-word line-clamp-2">
                     {displayError.message}
                   </p>
-                  {displayError.isDismissible && (
+                  {displayError.isBilling ? (
                     <button
-                      onClick={dismissError}
-                      className="p-1 rounded-md transition-colors shrink-0 hover:bg-muted/50"
-                      aria-label="Dismiss"
+                      onClick={() => credits.setPlanDialogOpen(true)}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-warning/15 hover:bg-warning/25 text-warning text-xs font-medium transition-colors shrink-0"
                     >
-                      <X className="size-3" />
+                      Upgrade
                     </button>
+                  ) : (
+                    <>
+                      {displayError.isDismissible && (
+                        <button
+                          onClick={dismissError}
+                          className="p-1 rounded-md transition-colors shrink-0 hover:bg-muted/50"
+                          aria-label="Dismiss"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      )}
+                      <button
+                        onClick={handleCreate}
+                        disabled={create.isPending}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-destructive/15 hover:bg-destructive/25 text-destructive text-xs font-medium transition-colors shrink-0 disabled:opacity-50"
+                      >
+                        {create.isPending ? (
+                          <Loader2 className="size-3 animate-spin" />
+                        ) : (
+                          <Plus className="size-3" />
+                        )}
+                        <span>New session</span>
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={handleCreate}
-                    disabled={create.isPending}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors shrink-0 hover:bg-muted/50"
-                  >
-                    {create.isPending ? (
-                      <Loader2 className="size-3 animate-spin" />
-                    ) : (
-                      <Plus className="size-3" />
-                    )}
-                    <span>New session</span>
-                  </button>
                 </div>
               </div>
             )}
@@ -941,6 +975,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       </div>
 
       <ProviderDialog open={providerOpen} onOpenChange={setProviderOpen} />
+      <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
     </div>
   )
 }

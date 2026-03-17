@@ -69,7 +69,6 @@ const SECRET_NAMES = [
   'ENTRI_WEBHOOK_SECRET',
   'ENTRI_POWER_AUTH_TOKEN',
   'CLOUDFLARE_ZONE_ID',
-  'CLOUDFLARE_DOMAIN_KV_NAMESPACE_ID',
 ] as const
 
 export class SurgentStack extends cdk.Stack {

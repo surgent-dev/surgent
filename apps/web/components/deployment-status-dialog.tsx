@@ -18,39 +18,14 @@ import { toast } from 'react-hot-toast'
 import { useDeploymentHistoryQuery, useRedeployVersion, useDeployProject } from '@/queries/projects'
 import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
 import { useProjectDomains } from '@/queries/domains'
+import { DEPLOYMENT_STATUS_LABELS, TERMINAL_DEPLOYMENT_STATUSES } from '@/lib/deployment'
+import { timeAgoDetailed, timeAgoCompact } from '@/lib/format'
 
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   projectId?: string
   worker?: { name: string; status: string | null; hostname: string | null } | null
-}
-
-const STATUS: Record<string, string> = {
-  deployed: 'Deployed',
-  deploying_convex: 'Deploying Convex',
-  building: 'Building',
-  uploading: 'Uploading',
-  starting: 'Starting',
-  queued: 'Queued',
-  deploy_failed: 'Failed',
-  build_failed: 'Build failed',
-  cancelled: 'Cancelled',
-}
-
-const TERMINAL = ['deployed', 'deploy_failed', 'build_failed', 'cancelled']
-
-function timeAgo(d: string) {
-  const now = Date.now()
-  const then = new Date(d).getTime()
-  const diff = Math.floor((now - then) / 1000)
-
-  if (diff < 60) return 'just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`
-
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function duration(start?: string, end?: string) {
@@ -82,7 +57,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
   const activeDomains = domainsData?.domains?.filter((d) => d.status === 'active') ?? []
   const hasCustomDomain = activeDomains.length > 0
   const latest = history?.[0]
-  const busy = latest && !TERMINAL.includes(latest.status)
+  const busy = latest && !TERMINAL_DEPLOYMENT_STATUSES.includes(latest.status)
 
   // Toast when deployment completes
   useEffect(() => {
@@ -90,7 +65,11 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
     const prev = prevStatusRef.current
     const curr = latest.status
 
-    if (prev && !TERMINAL.includes(prev) && TERMINAL.includes(curr)) {
+    if (
+      prev &&
+      !TERMINAL_DEPLOYMENT_STATUSES.includes(prev) &&
+      TERMINAL_DEPLOYMENT_STATUSES.includes(curr)
+    ) {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       if (curr === 'deployed') {
         toast.success(`Deployed to ${latest.scriptName}.surgent.site`, { position: 'bottom-left' })
@@ -139,6 +118,9 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
               <span className="text-sm font-semibold">
                 {isLive ? 'Live' : busy ? 'Deploying' : 'Offline'}
               </span>
+              {latest?.error && (
+                <span className="text-xs text-destructive/70 truncate">{latest.error}</span>
+              )}
             </div>
             <button
               type="button"
@@ -152,19 +134,21 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
           {/* Progress banner */}
           {latest && !['deployed'].includes(latest.status) && (
             <div
-              className={`h-10 px-4 sm:px-5 border-b flex items-center gap-2 text-sm min-w-0 ${TERMINAL.includes(latest.status) ? 'bg-destructive/5' : 'bg-brand/5'}`}
+              className={`h-10 px-4 sm:px-5 border-b flex items-center gap-2 text-sm min-w-0 ${TERMINAL_DEPLOYMENT_STATUSES.includes(latest.status) ? 'bg-destructive/5' : 'bg-brand/5'}`}
             >
-              {TERMINAL.includes(latest.status) ? (
+              {TERMINAL_DEPLOYMENT_STATUSES.includes(latest.status) ? (
                 <span className="size-1.5 rounded-full bg-destructive shrink-0" />
               ) : (
                 <Loader2 className="size-3.5 animate-spin text-brand shrink-0" />
               )}
               <span
                 className={`shrink-0 ${
-                  TERMINAL.includes(latest.status) ? 'text-destructive' : 'text-muted-foreground'
+                  TERMINAL_DEPLOYMENT_STATUSES.includes(latest.status)
+                    ? 'text-destructive'
+                    : 'text-muted-foreground'
                 }`}
               >
-                {STATUS[latest.status] || latest.status}
+                {DEPLOYMENT_STATUS_LABELS[latest.status] || latest.status}
               </span>
               <span className="text-xs text-muted-foreground/60 font-mono shrink-0">
                 {latest.id.slice(0, 8)}
@@ -332,7 +316,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
             <div className="divide-y">
               {history.slice(0, 20).map((d, i) => {
                 const fail = d.status.includes('failed')
-                const pend = !TERMINAL.includes(d.status)
+                const pend = !TERMINAL_DEPLOYMENT_STATUSES.includes(d.status)
                 const ok = d.status === 'deployed'
                 const snap = d.envSnapshot
                 const varEntries = snap?.vars
@@ -356,16 +340,19 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                             <span
                               className={`font-medium shrink-0 ${fail ? 'text-destructive' : pend ? 'text-amber-600 dark:text-amber-400' : ok ? 'text-emerald-600 dark:text-emerald-400' : ''}`}
                             >
-                              {STATUS[d.status] || d.status}
+                              {DEPLOYMENT_STATUS_LABELS[d.status] || d.status}
                             </span>
                             <span className="text-xs text-muted-foreground/50 font-mono truncate min-w-0">
                               {d.scriptName || '—'}
                             </span>
                             <span className="text-[11px] text-muted-foreground/40 shrink-0 hidden sm:inline">
-                              {timeAgo(d.createdAt)} · {duration(d.startedAt, d.deployedAt)}
+                              {timeAgoDetailed(d.createdAt)} · {duration(d.startedAt, d.deployedAt)}
                             </span>
                             <span className="text-[11px] text-muted-foreground/40 shrink-0 sm:hidden">
-                              {timeAgo(d.createdAt)}
+                              {timeAgoDetailed(d.createdAt)}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground/40 shrink-0 sm:hidden">
+                              {timeAgoCompact(d.createdAt)}
                             </span>
                           </div>
                           {d.error && (

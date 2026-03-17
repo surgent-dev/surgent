@@ -3,50 +3,29 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Check, CreditCard, ExternalLink, Loader2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { authClient } from '@/lib/auth-client'
+import { BrandLogo } from '@/components/brand-logo'
 import { http } from '@/lib/http'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatDateShort } from '@/lib/format'
+import { formatPrice } from '@/components/payments/utils'
 import { useMarketplaceListingQuery } from '@/queries/marketplace'
-
-interface User {
-  id: string
-  email: string
-  name?: string
-  image?: string
-}
-
-function formatDate(dateIso: string | null) {
-  if (!dateIso) return 'Recently listed'
-  return new Date(dateIso).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-function formatPrice(amount: number, currency: string | null) {
-  const symbol = currency === 'eur' ? '\u20AC' : currency === 'gbp' ? '\u00A3' : '$'
-  return `${symbol}${(amount / 100).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`
-}
+import type { MarketplaceUser } from '../types'
 
 export default function ListingPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<MarketplaceUser | null>(null)
   const [buying, setBuying] = useState(false)
   const { data: listing, isLoading, error } = useMarketplaceListingQuery(id)
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => {
-      if (data?.user) setUser(data.user as User)
+      if (data?.user) setUser(data.user as MarketplaceUser)
     })
   }, [])
 
@@ -119,22 +98,7 @@ export default function ListingPage() {
         <div className="max-w-4xl mx-auto w-full flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/" className="flex items-center gap-2 shrink-0">
-              <Image
-                src="/surgent-logo-dark.svg"
-                alt="Surgent"
-                width={119}
-                height={32}
-                className="h-7 w-auto hidden dark:block"
-                priority
-              />
-              <Image
-                src="/surgent-logo.svg"
-                alt="Surgent"
-                width={119}
-                height={32}
-                className="h-7 w-auto block dark:hidden"
-                priority
-              />
+              <BrandLogo />
             </Link>
             <span className="text-border shrink-0">/</span>
             <Link
@@ -193,7 +157,7 @@ export default function ListingPage() {
               <span className="text-sm text-muted-foreground">{listing.sellerName}</span>
               <span className="text-muted-foreground/30">&middot;</span>
               <span className="text-sm text-muted-foreground/70">
-                {formatDate(listing.updatedAt)}
+                {listing.updatedAt ? formatDateShort(listing.updatedAt) : 'Recently listed'}
               </span>
             </div>
           </div>
@@ -202,7 +166,7 @@ export default function ListingPage() {
             {listing.priceAmount != null && listing.priceAmount > 0 ? (
               <div className="text-right">
                 <span className="text-2xl font-bold tabular-nums tracking-tight">
-                  {formatPrice(listing.priceAmount, listing.priceCurrency)}
+                  {formatPrice(listing.priceAmount, listing.priceCurrency || 'usd')}
                 </span>
                 <p className="text-xs text-muted-foreground mt-0.5">One-time</p>
               </div>
@@ -230,7 +194,7 @@ export default function ListingPage() {
               )}
               {buying
                 ? 'Processing...'
-                : `Buy for ${formatPrice(listing.priceAmount, listing.priceCurrency)}`}
+                : `Buy for ${formatPrice(listing.priceAmount, listing.priceCurrency || 'usd')}`}
             </Button>
           ) : (
             <Button size="sm" className="h-9 text-xs">

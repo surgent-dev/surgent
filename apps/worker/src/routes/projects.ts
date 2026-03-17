@@ -14,6 +14,7 @@ import type { PayEnv } from '@/lib/pay/types'
 import { sanitizeHostname, getSandboxPreviewUrl } from '@/lib/utils'
 import {
   createDeploymentRecord,
+  resolveDeployScriptName,
   undeployProject,
   resumeProject,
   deployConvexProd,
@@ -556,7 +557,7 @@ projects.get('/usage', requireAuth, async (c) => {
 
   const totals = (await base
     .select([
-      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::bigint::text`.as('cost'),
       sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
       sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
       sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
@@ -567,13 +568,13 @@ projects.get('/usage', requireAuth, async (c) => {
     .select([
       'usage.projectId as projectId',
       'project.name as projectName',
-      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::bigint::text`.as('cost'),
       sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
       sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
       sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
     ])
     .groupBy(['usage.projectId', 'project.name'])
-    .orderBy(sql`COALESCE(SUM(cost), 0)`, 'desc')
+    .orderBy(sql`COALESCE(SUM("usage"."billedCostMicros"), 0)`, 'desc')
     .limit(50)
     .execute()
 
@@ -581,7 +582,7 @@ projects.get('/usage', requireAuth, async (c) => {
     .select([
       'usage.model as model',
       'usage.provider as provider',
-      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::bigint::text`.as('cost'),
       sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
       sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
       sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
@@ -599,7 +600,7 @@ projects.get('/usage', requireAuth, async (c) => {
       sql<string>`to_char(date_trunc('day', "usage"."createdAt" AT TIME ZONE 'UTC'), 'YYYY-MM-DD')`.as(
         'date',
       ),
-      sql<string>`COALESCE(SUM(cost), 0)::bigint::text`.as('cost'),
+      sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)::bigint::text`.as('cost'),
       sql<string>`COALESCE(COUNT(*), 0)::text`.as('messages'),
       sql<string>`COALESCE(SUM("usage"."inputTokens"), 0)::bigint::text`.as('inputTokens'),
       sql<string>`COALESCE(SUM("usage"."outputTokens"), 0)::bigint::text`.as('outputTokens'),
@@ -610,16 +611,16 @@ projects.get('/usage', requireAuth, async (c) => {
     .execute()
 
   const history = await base
-    .select([
-      'usage.id',
-      'usage.projectId as projectId',
-      'project.name as projectName',
-      'usage.model as model',
-      'usage.provider as provider',
-      'usage.inputTokens as inputTokens',
-      'usage.outputTokens as outputTokens',
-      'usage.cost',
-      'usage.createdAt',
+    .select((eb) => [
+      eb.ref('usage.id').as('id'),
+      eb.ref('usage.projectId').as('projectId'),
+      eb.ref('project.name').as('projectName'),
+      eb.ref('usage.model').as('model'),
+      eb.ref('usage.provider').as('provider'),
+      eb.ref('usage.inputTokens').as('inputTokens'),
+      eb.ref('usage.outputTokens').as('outputTokens'),
+      eb.ref('usage.billedCostMicros').as('cost'),
+      eb.ref('usage.createdAt').as('createdAt'),
     ])
     .orderBy('usage.createdAt', 'desc')
     .limit(limit)
@@ -981,12 +982,12 @@ projects.post(
   async (c) => {
     try {
       const { id } = c.req.valid('param')
-      const { deployName } = c.req.valid('json')
+      const { deployName: requestedDeployName } = c.req.valid('json')
 
       console.log('[deploy] request', {
         projectId: id,
         userId: c.get('user')?.id,
-        deployName,
+        deployName: requestedDeployName,
       })
 
       const project = await getProjectWithAuth(id, c.get('user')!)
@@ -997,7 +998,7 @@ projects.post(
       if (!publishAccess?.allowed) {
         return c.json({ error: 'Please upgrade your plan to publish.' }, 402)
       }
-      const name = deployName ? sanitizeHostname(deployName) : undefined
+      const name = requestedDeployName ? sanitizeHostname(requestedDeployName) : undefined
 
       if (name) {
         const available = await isHostnameAvailable(name, id)
@@ -1052,12 +1053,13 @@ projects.post(
         })
       }
 
-      const deployment = await createDeploymentRecord(id, name)
+      const deployName = resolveDeployScriptName(name)
+      const deployment = await createDeploymentRecord(id, deployName)
 
       try {
         await enqueueProjectDeployJob({
           projectId: id,
-          deployName: name,
+          deployName,
           deploymentId: deployment.id,
         })
       } catch (sendErr) {

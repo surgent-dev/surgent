@@ -28,7 +28,7 @@ export function openProviderOAuthPopup(url: string) {
   return popup
 }
 
-export function navigateProviderOAuthPopup(popup: Window | null, url: string) {
+function navigateProviderOAuthPopup(popup: Window | null, url: string) {
   if (!popup || popup.closed) return false
   popup.location.href = url
   popup.focus()

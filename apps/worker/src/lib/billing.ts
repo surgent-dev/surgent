@@ -26,7 +26,7 @@ export type TopupPaymentIntentResult =
       error?: string | null
     }
 
-type BillingPaymentKind = 'topup' | 'subscription' | 'reward' | 'auto_reload'
+type BillingPaymentKind = 'topup' | 'subscription' | 'reward'
 
 type PlanConfig = {
   tier: BillingTier
@@ -97,10 +97,9 @@ type BillingStateRow = {
     defaultPaymentMethodId: string | null
     paymentMethodBrand: string | null
     paymentMethodLast4: string | null
+    includedBalanceMicros: string | number
+    includedBalancePeriodStart: Date | null
     prepaidBalanceMicros: string | number
-    autoReloadEnabled: boolean
-    autoReloadThresholdMicros: string | number | null
-    autoReloadAmountMicros: string | number | null
     monthlySpendLimitMicros: string | number | null
     monthlySpendUsageMicros: string | number
     monthlySpendUsagePeriodStart: Date | null
@@ -121,8 +120,6 @@ type BillingStateRow = {
     cancelAtPeriodEnd: boolean
     canceledAt: Date | null
     monthlyAllowanceMicros: string | number
-    includedUsageMicros: string | number
-    includedUsagePeriodStart: Date | null
     stripeCouponId: string | null
     stripeDiscountId: string | null
     stripePromotionCodeId: string | null
@@ -236,6 +233,8 @@ const freePlan = (() => {
   if (!plan) throw new Error('Missing free billing plan config')
   return plan
 })()
+
+const PAID_MONTHLY_SPEND_LIMIT_MICROS = dollarsToMicros(500)
 
 function requireStripe() {
   if (!stripe) throw new Error('Stripe is not configured')
@@ -396,29 +395,24 @@ function allowanceEligible(row: BillingStateRow['subscription']) {
   return ALLOWANCE_STATUSES.has(row.status)
 }
 
-function getEffectiveIncludedUsage(row: BillingStateRow['subscription'], now = new Date()) {
+function getEffectiveIncludedBalance(row: BillingStateRow, now = new Date()) {
+  if (!allowanceEligible(row.subscription)) return 0
+
   const window = getAllowanceWindow(
     {
-      tier: row.tier,
-      interval: row.interval,
-      currentPeriodStart: row.currentPeriodStart,
-      currentPeriodEnd: row.currentPeriodEnd,
+      tier: row.subscription.tier,
+      interval: row.subscription.interval,
+      currentPeriodStart: row.subscription.currentPeriodStart,
+      currentPeriodEnd: row.subscription.currentPeriodEnd,
     },
     now,
   )
 
-  if (!sameAllowanceWindowStart(row.includedUsagePeriodStart, window.start)) {
-    return 0
+  if (!sameAllowanceWindowStart(row.account.includedBalancePeriodStart, window.start)) {
+    return asNumber(row.subscription.monthlyAllowanceMicros)
   }
 
-  return asNumber(row.includedUsageMicros)
-}
-
-function getIncludedBalance(row: BillingStateRow['subscription'], now = new Date()) {
-  if (!allowanceEligible(row)) return 0
-  const allowanceMicros = asNumber(row.monthlyAllowanceMicros)
-  if (allowanceMicros <= 0) return 0
-  return Math.max(allowanceMicros - getEffectiveIncludedUsage(row, now), 0)
+  return Math.max(asNumber(row.account.includedBalanceMicros), 0)
 }
 
 function getCatalogDisplay(): CatalogDisplay {
@@ -494,11 +488,10 @@ async function applyPrepaidBalanceDeltaTx(
   updatedAt = new Date(),
 ) {
   if (!amountMicros) return
-
   await tx
     .updateTable('billing_account')
     .set({
-      prepaidBalanceMicros: sql`"prepaidBalanceMicros" + ${String(amountMicros)}`,
+      prepaidBalanceMicros: sql`GREATEST(0, "prepaidBalanceMicros" + ${String(amountMicros)})`,
       updatedAt,
     })
     .where('organizationId', '=', organizationId)
@@ -506,9 +499,9 @@ async function applyPrepaidBalanceDeltaTx(
 }
 
 async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
-  const org = await tx
+  await tx
     .selectFrom('organization')
-    .select(['id', 'stripeCustomerId'])
+    .select('id')
     .where('id', '=', organizationId)
     .executeTakeFirstOrThrow()
 
@@ -519,7 +512,9 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
     .values({
       id: crypto.randomUUID(),
       organizationId,
-      stripeCustomerId: org.stripeCustomerId ?? null,
+      stripeCustomerId: null,
+      includedBalanceMicros: String(freePlan.monthlyAllowanceMicros),
+      includedBalancePeriodStart: startOfMonth(now),
       prepaidBalanceMicros: '0',
       autoReloadEnabled: false,
       monthlySpendLimitMicros: null,
@@ -531,7 +526,6 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
     })
     .onConflict((oc) =>
       oc.column('organizationId').doUpdateSet({
-        stripeCustomerId: org.stripeCustomerId ?? null,
         updatedAt: now,
       }),
     )
@@ -554,8 +548,6 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
       cancelAtPeriodEnd: false,
       canceledAt: null,
       monthlyAllowanceMicros: String(freePlan.monthlyAllowanceMicros),
-      includedUsageMicros: '0',
-      includedUsagePeriodStart: null,
       stripeCouponId: null,
       stripeDiscountId: null,
       stripePromotionCodeId: null,
@@ -613,7 +605,7 @@ async function getUsageSpentMicrosTx(tx: typeof db, organizationId: string, peri
   const row = await tx
     .selectFrom('usage')
     .innerJoin('project', 'project.id', 'usage.projectId')
-    .select(sql<string>`COALESCE(SUM("usage"."cost"), 0)`.as('spentMicros'))
+    .select(sql<string>`COALESCE(SUM("usage"."billedCostMicros"), 0)`.as('spentMicros'))
     .where('project.organizationId', '=', organizationId)
     .where('usage.deletedAt', 'is', null)
     .where('usage.createdAt', '>=', periodStart)
@@ -634,12 +626,14 @@ async function normalizeState(row: BillingStateRow) {
     },
     now,
   )
-  const includedRemainingMicros = getIncludedBalance(row.subscription, now)
+  const includedRemainingMicros = getEffectiveIncludedBalance(row, now)
   const prepaidBalanceMicros = asNumber(row.account.prepaidBalanceMicros)
   const monthlyAllowanceMicros = asNumber(row.subscription.monthlyAllowanceMicros)
   const monthlySpendLimitMicros = asNumber(row.account.monthlySpendLimitMicros)
   const totalBalanceMicros = includedRemainingMicros + prepaidBalanceMicros
   const usedMicros = getMonthlySpendUsage(row.account, allowanceWindow.start)
+  const aiBlockedByMonthlyLimit =
+    monthlySpendLimitMicros > 0 && usedMicros >= monthlySpendLimitMicros
   const totalBudgetMicros = totalBalanceMicros + usedMicros
   const balancePercent = totalBudgetMicros
     ? Math.max(0, Math.min((usedMicros / totalBudgetMicros) * 100, 100))
@@ -673,7 +667,7 @@ async function normalizeState(row: BillingStateRow) {
       privateProjects: plan.privateProjects,
       publishYourApp: plan.publishYourApp,
       downloadCode: plan.downloadCode,
-      canUseAi: totalBalanceMicros > 0,
+      canUseAi: totalBalanceMicros > 0 && !aiBlockedByMonthlyLimit,
     },
   }
 }
@@ -701,13 +695,13 @@ export async function ensureStripeCustomer(
   organizationId: string,
   args: { email?: string | null; name?: string | null },
 ) {
-  const organization = await db
-    .selectFrom('organization')
+  const account = await db
+    .selectFrom('billing_account')
     .select('stripeCustomerId')
-    .where('id', '=', organizationId)
+    .where('organizationId', '=', organizationId)
     .executeTakeFirstOrThrow()
 
-  if (organization.stripeCustomerId) return organization.stripeCustomerId
+  if (account.stripeCustomerId) return account.stripeCustomerId
 
   const client = requireStripe()
   const customer = await client.customers.create(
@@ -722,19 +716,11 @@ export async function ensureStripeCustomer(
   )
   const now = new Date()
 
-  await db.transaction().execute(async (tx) => {
-    await tx
-      .updateTable('organization')
-      .set({ stripeCustomerId: customer.id, updatedAt: now })
-      .where('id', '=', organizationId)
-      .execute()
-
-    await tx
-      .updateTable('billing_account')
-      .set({ stripeCustomerId: customer.id, updatedAt: now })
-      .where('organizationId', '=', organizationId)
-      .execute()
-  })
+  await db
+    .updateTable('billing_account')
+    .set({ stripeCustomerId: customer.id, updatedAt: now })
+    .where('organizationId', '=', organizationId)
+    .execute()
 
   return customer.id
 }
@@ -1040,12 +1026,12 @@ export async function syncStripeCustomerToBillingState(args: {
       ? asNumber(state.account.monthlySpendUsageMicros)
       : await getUsageSpentMicrosTx(tx, args.organizationId, allowanceWindow.start)
     const monthlySpendUsagePeriodStart = monthlySpendUsageMicros > 0 ? allowanceWindow.start : null
-
-    await tx
-      .updateTable('organization')
-      .set({ stripeCustomerId: customerId, updatedAt: now })
-      .where('id', '=', args.organizationId)
-      .execute()
+    const includedBalanceMicros = sameAllowanceWindowStart(
+      state.account.includedBalancePeriodStart,
+      allowanceWindow.start,
+    )
+      ? asNumber(state.account.includedBalanceMicros)
+      : plan.monthlyAllowanceMicros
 
     await tx
       .updateTable('billing_account')
@@ -1056,6 +1042,10 @@ export async function syncStripeCustomerToBillingState(args: {
           paymentMethod?.type === 'card' ? (paymentMethod.card?.brand ?? null) : null,
         paymentMethodLast4:
           paymentMethod?.type === 'card' ? (paymentMethod.card?.last4 ?? null) : null,
+        includedBalanceMicros: String(includedBalanceMicros),
+        includedBalancePeriodStart: allowanceWindow.start,
+        monthlySpendLimitMicros:
+          plan.tier === 'pro' ? String(PAID_MONTHLY_SPEND_LIMIT_MICROS) : null,
         monthlySpendUsageMicros: String(monthlySpendUsageMicros),
         monthlySpendUsagePeriodStart,
         updatedAt: now,
@@ -1098,12 +1088,12 @@ export async function syncStripeCustomerToBillingState(args: {
 
 export async function findOrganizationIdByStripeCustomerId(stripeCustomerId: string) {
   const row = await db
-    .selectFrom('organization')
-    .select('id')
+    .selectFrom('billing_account')
+    .select('organizationId')
     .where('stripeCustomerId', '=', stripeCustomerId)
     .executeTakeFirst()
 
-  return row?.id ?? null
+  return row?.organizationId ?? null
 }
 
 export async function createBillingCheckout(args: {
@@ -1493,7 +1483,7 @@ export async function refundBillingPayment(args: {
       .where('id', '=', payment.id)
       .execute()
 
-    if (payment.kind !== 'topup' && payment.kind !== 'auto_reload') return
+    if (payment.kind !== 'topup') return
 
     await applyPrepaidBalanceDeltaTx(tx, args.organizationId, -deltaMicros)
   })
@@ -1549,7 +1539,7 @@ export async function listBillingStateForUsage(organizationId: string) {
   )
   return {
     organizationId,
-    includedRemainingMicros: getIncludedBalance(row.subscription, now),
+    includedRemainingMicros: getEffectiveIncludedBalance(row, now),
     prepaidBalanceMicros: asNumber(row.account.prepaidBalanceMicros),
     monthlySpendLimitMicros: asNumber(row.account.monthlySpendLimitMicros),
     monthlyAllowanceMicros: asNumber(row.subscription.monthlyAllowanceMicros),
@@ -1557,7 +1547,6 @@ export async function listBillingStateForUsage(organizationId: string) {
     nextResetAt: allowanceWindow.end,
     tier: row.subscription.tier,
     status: row.subscription.status,
-    autoReloadEnabled: row.account.autoReloadEnabled,
   }
 }
 

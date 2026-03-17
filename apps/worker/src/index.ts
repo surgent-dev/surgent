@@ -19,7 +19,6 @@ import startups from './routes/startups'
 import { auth } from './lib/auth'
 import { config, validateDomainConfig } from './lib/config'
 import { db } from './lib/db'
-import { validateCloudflareConfig } from './lib/cloudflare/custom-hostnames'
 import { migrate } from '@repo/db'
 import {
   oauthProviderAuthServerMetadata,
@@ -239,7 +238,6 @@ const port = Number(config.server.port)
   // Validate domain-related configuration
   const domainWarnings = validateDomainConfig()
   for (const w of domainWarnings) log.warn(w)
-  await validateCloudflareConfig()
 
   await startBoss()
 

@@ -300,6 +300,12 @@ async function getOrCreateSandbox(opts: {
   return { sandbox, previewUrl: await sandbox.host(opts.port) }
 }
 
+export function resolveDeployScriptName(deployName?: string) {
+  return deployName
+    ? sanitizeHostname(deployName)
+    : `app-${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`
+}
+
 // ============================================================================
 // Main Functions
 // ============================================================================

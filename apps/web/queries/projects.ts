@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { ProjectsSchema, CreateProjectResponseSchema, ProjectSchema } from '@/lib/schemas/project'
+import { TERMINAL_DEPLOYMENT_STATUSES } from '@/lib/deployment'
 import { z } from 'zod'
 
 const PROJECT_POLL_INTERVAL_MS = 1000
@@ -512,8 +513,6 @@ const DeploymentStatusSchema = z.object({
 
 export type DeploymentStatus = z.infer<typeof DeploymentStatusSchema>
 
-const TERMINAL_STATUSES = ['deployed', 'deploy_failed', 'build_failed', 'cancelled']
-
 // Fetch latest deployment for a project
 async function fetchLatestDeployment(projectId: string): Promise<DeploymentStatus | null> {
   const data = await http.get(`api/projects/${projectId}/deployments`).json()
@@ -540,7 +539,7 @@ export function useLatestDeploymentQuery(projectId: string | undefined) {
     queryFn: async () => {
       const result = await fetchLatestDeployment(projectId!)
       // Invalidate project when deployment completes to refresh worker status
-      if (result && TERMINAL_STATUSES.includes(result.status)) {
+      if (result && TERMINAL_DEPLOYMENT_STATUSES.includes(result.status)) {
         queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       }
       return result
@@ -548,7 +547,7 @@ export function useLatestDeploymentQuery(projectId: string | undefined) {
     enabled: Boolean(projectId),
     refetchInterval: (query) => {
       const status = query.state.data?.status
-      if (!status || TERMINAL_STATUSES.includes(status)) {
+      if (!status || TERMINAL_DEPLOYMENT_STATUSES.includes(status)) {
         return false // Don't poll when done
       }
       return 2000 // Poll every 2s while in progress

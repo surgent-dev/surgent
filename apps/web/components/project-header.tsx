@@ -51,6 +51,11 @@ import {
 } from '@/queries/projects'
 import { useProjectDomains, useRemoveDomain } from '@/queries/domains'
 import { http } from '@/lib/http'
+import {
+  DEPLOYMENT_STATUS_LABELS,
+  TERMINAL_DEPLOYMENT_STATUSES,
+  sanitizeDeploymentHostname,
+} from '@/lib/deployment'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
 import { useGitHubStatus } from '@/queries/github'
@@ -71,30 +76,6 @@ interface ProjectHeaderProps {
 
 // Styles
 const iconBtn = 'p-1 hover:bg-muted/40 rounded-md transition-all duration-100'
-
-// Status labels
-const STATUS_LABELS: Record<string, string> = {
-  queued: 'Queued',
-  starting: 'Starting',
-  deploying_convex: 'Deploying Convex',
-  building: 'Building',
-  uploading: 'Uploading',
-  deployed: 'Deployed',
-  build_failed: 'Build failed',
-  deploy_failed: 'Deploy failed',
-  cancelled: 'Cancelled',
-}
-
-const TERMINAL_STATUSES = ['deployed', 'deploy_failed', 'build_failed', 'cancelled']
-
-function sanitizeHostname(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 63)
-}
 
 export default function ProjectHeader({ projectId, project }: ProjectHeaderProps) {
   const router = useRouter()
@@ -148,7 +129,11 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     const prev = prevStatusRef.current
     const curr = latestDeployment.status
 
-    if (prev && !TERMINAL_STATUSES.includes(prev) && TERMINAL_STATUSES.includes(curr)) {
+    if (
+      prev &&
+      !TERMINAL_DEPLOYMENT_STATUSES.includes(prev) &&
+      TERMINAL_DEPLOYMENT_STATUSES.includes(curr)
+    ) {
       // Refetch project data so worker info is up-to-date
       queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       if (curr === 'deployed') {
@@ -169,10 +154,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const isDeployed = workerStatus === 'active'
   const isFailed = workerStatus === 'error'
   const isDeploymentInProgress =
-    latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status)
+    latestDeployment && !TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status)
   const { data: generatedHostname } = useGenerateHostname(isPublishOpen && !workerName)
   // Hostname availability check
-  const sanitizedHostname = sanitizeHostname(hostnameInput)
+  const sanitizedHostname = sanitizeDeploymentHostname(hostnameInput)
   const isNewHostname = !workerName || sanitizedHostname !== workerName
   const { data: availability, isLoading: checkingHostname } = useHostnameAvailability(
     sanitizedHostname,
@@ -240,10 +225,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     setDownloading(true)
     try {
       const response = await http.get(`api/projects/${projectId}/download`, { timeout: 120000 })
-      if (response.status === 402) {
-        credits.setPlanDialogOpen(true)
-        return
-      }
       const blob = await response.blob()
       const disposition = response.headers.get('Content-Disposition')
       const filename =
@@ -254,8 +235,15 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       link.download = filename
       link.click()
       URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Download failed', { position: 'top-right' })
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 402) {
+        credits.setPlanDialogOpen(true)
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Download failed', {
+          position: 'top-right',
+        })
+      }
     } finally {
       setDownloading(false)
     }
@@ -626,23 +614,25 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 </div>
 
                 {/* In-progress status + cancel */}
-                {latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status) && (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <CircleNotch className="size-3 animate-spin text-brand shrink-0" />
-                    <span className="flex-1">
-                      {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCancelDeploy}
-                      disabled={cancelDeployment.isPending}
-                      className="flex items-center gap-1 text-[11px] text-destructive/70 hover:text-destructive transition-colors shrink-0"
-                    >
-                      <Stop className="size-3" weight="fill" />
-                      {cancelDeployment.isPending ? 'Cancelling' : 'Cancel'}
-                    </button>
-                  </div>
-                )}
+                {latestDeployment &&
+                  !TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status) && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <CircleNotch className="size-3 animate-spin text-brand shrink-0" />
+                      <span className="flex-1">
+                        {DEPLOYMENT_STATUS_LABELS[latestDeployment.status] ||
+                          latestDeployment.status}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCancelDeploy}
+                        disabled={cancelDeployment.isPending}
+                        className="flex items-center gap-1 text-[11px] text-destructive/70 hover:text-destructive transition-colors shrink-0"
+                      >
+                        <Stop className="size-3" weight="fill" />
+                        {cancelDeployment.isPending ? 'Cancelling' : 'Cancel'}
+                      </button>
+                    </div>
+                  )}
 
                 {/* Cancelled status */}
                 {latestDeployment?.status === 'cancelled' && (
@@ -651,7 +641,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
                 {/* Error status */}
                 {latestDeployment &&
-                  TERMINAL_STATUSES.includes(latestDeployment.status) &&
+                  TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status) &&
                   !['deployed', 'cancelled'].includes(latestDeployment.status) && (
                     <button
                       type="button"

@@ -38,6 +38,11 @@ import { useProjectDomains } from '@/queries/domains'
 import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
 import { QrCodeCard } from './qr-code-card'
 import { ShareButtons } from './share-buttons'
+import {
+  DEPLOYMENT_STATUS_LABELS,
+  TERMINAL_DEPLOYMENT_STATUSES,
+  sanitizeDeploymentHostname,
+} from '@/lib/deployment'
 
 interface PublishModalProps {
   open: boolean
@@ -49,28 +54,6 @@ interface PublishModalProps {
     worker?: { name: string; status: string | null; hostname: string | null } | null
   }
   onOpenHistory: () => void
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  queued: 'Queued',
-  starting: 'Starting',
-  deploying_convex: 'Deploying Convex',
-  building: 'Building',
-  uploading: 'Uploading',
-  deployed: 'Deployed',
-  build_failed: 'Build failed',
-  deploy_failed: 'Deploy failed',
-}
-
-const TERMINAL_STATUSES = ['deployed', 'deploy_failed', 'build_failed']
-
-function sanitizeHostname(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 63)
 }
 
 const iconBtn = 'p-1 hover:bg-muted/40 rounded-md transition-all duration-100'
@@ -101,9 +84,9 @@ export function PublishModal({
   const workerName = worker?.name
   const isDeployed = worker?.status === 'active'
   const isDeploymentInProgress =
-    latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status)
+    latestDeployment && !TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status)
 
-  const sanitizedHostname = sanitizeHostname(hostnameInput)
+  const sanitizedHostname = sanitizeDeploymentHostname(hostnameInput)
   const isNewHostname = !workerName || sanitizedHostname !== workerName
   const { data: availability, isLoading: checkingHostname } = useHostnameAvailability(
     sanitizedHostname,
@@ -125,7 +108,11 @@ export function PublishModal({
     if (!latestDeployment) return
     const prev = prevStatusRef.current
     const curr = latestDeployment.status
-    if (prev && !TERMINAL_STATUSES.includes(prev) && TERMINAL_STATUSES.includes(curr)) {
+    if (
+      prev &&
+      !TERMINAL_DEPLOYMENT_STATUSES.includes(prev) &&
+      TERMINAL_DEPLOYMENT_STATUSES.includes(curr)
+    ) {
       if (curr === 'deployed') {
         toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, {
           position: 'top-right',
@@ -326,16 +313,16 @@ export function PublishModal({
           </Button>
 
           {/* In-progress status */}
-          {latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status) && (
+          {latestDeployment && !TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status) && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <CircleNotch className="size-3 animate-spin text-brand" />
-              {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
+              {DEPLOYMENT_STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
             </div>
           )}
 
           {/* Error status */}
           {latestDeployment &&
-            TERMINAL_STATUSES.includes(latestDeployment.status) &&
+            TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status) &&
             latestDeployment.status !== 'deployed' && (
               <p className="text-xs text-destructive truncate">
                 {latestDeployment.error || 'Deployment failed'}

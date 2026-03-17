@@ -35,6 +35,7 @@ export type {
   DomainTable,
   DomainStatus,
   DomainLogEntry,
+  SslProvisioningMeta,
   DomainWebhookEventTable,
   TrustMrrStartupTable,
 } from './src/types'

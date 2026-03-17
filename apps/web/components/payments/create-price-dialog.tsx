@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
 import { Check, Loader2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
@@ -85,7 +85,7 @@ export function CreatePriceDialog({
     setValue,
     formState: { errors },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: standardSchemaResolver(schema),
     defaultValues: {
       name: '',
       price: '',

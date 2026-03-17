@@ -5,6 +5,14 @@ const isDev = process.env.APP_DEBUG === 'true' || process.env.NODE_ENV !== 'prod
 const TAG_COLORS: Record<string, string> = {
   WEBHOOK: '\x1b[36m', // cyan
   QUEUE: '\x1b[35m', // magenta
+  DOMAIN: '\x1b[33m', // yellow
+  AGENT: '\x1b[34m', // blue
+  PROJECT: '\x1b[32m', // green
+  PAY: '\x1b[36m', // cyan
+  BILLING: '\x1b[36m', // cyan
+  AUTH: '\x1b[90m', // gray
+  ADMIN: '\x1b[35m', // magenta
+  ENTRI: '\x1b[33m', // yellow
 }
 const RESET = '\x1b[39m'
 

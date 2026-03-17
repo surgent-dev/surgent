@@ -3,13 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, TrendingUp } from 'lucide-react'
+import { formatRevenueCompact } from '@/lib/inspirations'
 import { useStartupsQuery } from '@/queries/startups'
-
-function fmt(dollars: number): string {
-  if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`
-  if (dollars >= 1_000) return `$${(dollars / 1_000).toFixed(dollars >= 10_000 ? 0 : 1)}k`
-  return `$${dollars.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-}
 
 function screenshotUrl(website: string): string {
   return `https://image.thum.io/get/width/800/crop/500/noanimate/${website}`
@@ -132,7 +127,7 @@ export function LandingEarningProjects() {
                       className="font-(--font-geist) text-[16px] sm:text-[18px] text-foreground"
                       style={{ fontWeight: 700, letterSpacing: '-0.02em' }}
                     >
-                      {fmt(s.revenueMrr)}
+                      {formatRevenueCompact(s.revenueMrr)}
                     </span>
                   </div>
                   {hasGrowth && (

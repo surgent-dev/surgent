@@ -6,8 +6,7 @@
   "type": "module",
   "scripts": {
     "db:migrate": "bun ./src/migrate.ts",
-    "db:rollback": "bun ./src/migrate.ts down",
-    "db:migrate-dump": "bun ./src/migrate_dump.ts"
+    "db:rollback": "bun ./src/migrate.ts down"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

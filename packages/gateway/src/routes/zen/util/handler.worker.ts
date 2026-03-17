@@ -82,23 +82,27 @@ function centsToMicroCents(amount: number) {
 }
 
 const SURGENT_MARKUP_MULTIPLIER = 1.3
+const SURGENT_MARKUP_BPS = 3000
 
 function isAllowanceEligible(tier: string, status: string) {
   if (tier === 'free') return true
   return status === 'active' || status === 'trialing'
 }
 
-function getEffectiveIncludedUsage(
+function getEffectiveIncludedBalance(
   row: {
+    includedBalanceMicros: string | number | null
+    includedBalancePeriodStart: Date | null
     tier: string
     interval: string | null
+    status: string
+    monthlyAllowanceMicros: string | number | null
     currentPeriodStart: Date | null
     currentPeriodEnd: Date | null
-    includedUsageMicros: string | number | null
-    includedUsagePeriodStart: Date | null
   },
   now = new Date(),
 ) {
+  if (!isAllowanceEligible(row.tier, row.status)) return 0
   const window = getAllowanceWindow(
     {
       tier: row.tier,
@@ -109,11 +113,11 @@ function getEffectiveIncludedUsage(
     now,
   )
 
-  if (!sameAllowanceWindowStart(row.includedUsagePeriodStart, window.start)) {
-    return 0
+  if (!sameAllowanceWindowStart(row.includedBalancePeriodStart, window.start)) {
+    return Number(row.monthlyAllowanceMicros ?? 0)
   }
 
-  return Number(row.includedUsageMicros ?? 0)
+  return Math.max(Number(row.includedBalanceMicros ?? 0), 0)
 }
 
 function getMonthlySpendUsage(
@@ -128,25 +132,6 @@ function getMonthlySpendUsage(
   }
 
   return Number(row.monthlySpendUsageMicros ?? 0)
-}
-
-function getIncludedBalance(
-  row: {
-    tier: string
-    interval: string | null
-    status: string
-    monthlyAllowanceMicros: string | number | null
-    currentPeriodStart: Date | null
-    currentPeriodEnd: Date | null
-    includedUsageMicros: string | number | null
-    includedUsagePeriodStart: Date | null
-  },
-  now = new Date(),
-) {
-  if (!isAllowanceEligible(row.tier, row.status)) return 0
-  const allowance = Number(row.monthlyAllowanceMicros ?? 0)
-  if (allowance <= 0) return 0
-  return Math.max(allowance - getEffectiveIncludedUsage(row, now), 0)
 }
 
 function getUsageDebits(costMicro: number, included: number, prepaid: number) {
@@ -756,6 +741,8 @@ export async function handleZenRequest(
       )
       .select([
         'account.organizationId',
+        'account.includedBalanceMicros',
+        'account.includedBalancePeriodStart',
         'account.prepaidBalanceMicros',
         'account.monthlySpendLimitMicros',
         'account.monthlySpendUsageMicros',
@@ -766,8 +753,6 @@ export async function handleZenRequest(
         'subscription.monthlyAllowanceMicros',
         'subscription.currentPeriodStart',
         'subscription.currentPeriodEnd',
-        'subscription.includedUsageMicros',
-        'subscription.includedUsagePeriodStart',
       ])
       .where('account.organizationId', '=', authInfo.organizationId)
       .executeTakeFirst()
@@ -782,7 +767,7 @@ export async function handleZenRequest(
       },
       now,
     )
-    const included = getIncludedBalance(state, now)
+    const included = getEffectiveIncludedBalance(state, now)
     const prepaid = Number(state.prepaidBalanceMicros ?? 0)
     const monthlySpendLimitMicros = Number(state.monthlySpendLimitMicros ?? 0)
     if (monthlySpendLimitMicros > 0) {
@@ -859,8 +844,8 @@ export async function handleZenRequest(
 
     if (!authInfo) return
 
-    const costMicro = authInfo.provider?.credentials ? 0 : centsToMicroCents(totalCostInCent)
-    const costBig = BigInt(costMicro)
+    const providerCostMicro = centsToMicroCents(baseCostInCent)
+    const billedCostMicro = authInfo.provider?.credentials ? 0 : centsToMicroCents(totalCostInCent)
     let uncoveredMicros = 0
 
     await db.transaction().execute(async (tx) => {
@@ -869,7 +854,7 @@ export async function handleZenRequest(
       let includedDebit = 0
       let prepaidDebit = 0
 
-      if (costMicro > 0) {
+      if (billedCostMicro > 0) {
         const state = await tx
           .selectFrom('billing_account as account')
           .innerJoin(
@@ -878,6 +863,8 @@ export async function handleZenRequest(
             'account.organizationId',
           )
           .select([
+            'account.includedBalanceMicros',
+            'account.includedBalancePeriodStart',
             'account.prepaidBalanceMicros',
             'account.monthlySpendUsageMicros',
             'account.monthlySpendUsagePeriodStart',
@@ -887,8 +874,6 @@ export async function handleZenRequest(
             'subscription.monthlyAllowanceMicros',
             'subscription.currentPeriodStart',
             'subscription.currentPeriodEnd',
-            'subscription.includedUsageMicros',
-            'subscription.includedUsagePeriodStart',
           ])
           .where('account.organizationId', '=', authInfo.organizationId)
           .forUpdate()
@@ -898,7 +883,7 @@ export async function handleZenRequest(
           throw new CreditsError('Billing state is not ready yet. Please try again.')
         }
 
-        const included = getIncludedBalance(state, now)
+        const included = getEffectiveIncludedBalance(state, now)
         const allowanceWindow = getAllowanceWindow(
           {
             tier: state.tier,
@@ -909,52 +894,44 @@ export async function handleZenRequest(
           now,
         )
         const debits = getUsageDebits(
-          costMicro,
+          billedCostMicro,
           included,
           Math.max(Number(state.prepaidBalanceMicros ?? 0), 0),
         )
         includedDebit = debits.includedDebit
         prepaidDebit = debits.prepaidDebit
         uncoveredMicros = debits.uncoveredMicros
+        const nextIncludedBalanceMicros =
+          includedDebit > 0
+            ? sameAllowanceWindowStart(state.includedBalancePeriodStart, allowanceWindow.start)
+              ? Math.max(Number(state.includedBalanceMicros ?? 0) - includedDebit, 0)
+              : Math.max(Number(state.monthlyAllowanceMicros ?? 0) - includedDebit, 0)
+            : Number(state.includedBalanceMicros ?? 0)
+        const nextIncludedBalancePeriodStart =
+          includedDebit > 0 ? allowanceWindow.start : state.includedBalancePeriodStart
+        const nextMonthlySpendUsageMicros = sameAllowanceWindowStart(
+          state.monthlySpendUsagePeriodStart,
+          allowanceWindow.start,
+        )
+          ? Number(state.monthlySpendUsageMicros ?? 0) + billedCostMicro
+          : billedCostMicro
+        const nextPrepaidBalanceMicros = Math.max(
+          Number(state.prepaidBalanceMicros ?? 0) - prepaidDebit,
+          0,
+        )
 
-        if (includedDebit > 0) {
-          const includedUsageMicros = sameAllowanceWindowStart(
-            state.includedUsagePeriodStart,
-            allowanceWindow.start,
-          )
-            ? Number(state.includedUsageMicros ?? 0) + includedDebit
-            : includedDebit
-
-          await tx
-            .updateTable('billing_subscription')
-            .set({
-              includedUsageMicros: String(includedUsageMicros),
-              includedUsagePeriodStart: allowanceWindow.start,
-              updatedAt: now,
-            })
-            .where('organizationId', '=', authInfo.organizationId)
-            .execute()
-        }
-
-        const coveredMicros = includedDebit + prepaidDebit
-        if (coveredMicros > 0) {
-          const monthlySpendUsageMicros = sameAllowanceWindowStart(
-            state.monthlySpendUsagePeriodStart,
-            allowanceWindow.start,
-          )
-            ? Number(state.monthlySpendUsageMicros ?? 0) + coveredMicros
-            : coveredMicros
-
-          await tx
-            .updateTable('billing_account')
-            .set({
-              monthlySpendUsageMicros: String(monthlySpendUsageMicros),
-              monthlySpendUsagePeriodStart: allowanceWindow.start,
-              updatedAt: now,
-            })
-            .where('organizationId', '=', authInfo.organizationId)
-            .execute()
-        }
+        await tx
+          .updateTable('billing_account')
+          .set({
+            includedBalanceMicros: String(nextIncludedBalanceMicros),
+            includedBalancePeriodStart: nextIncludedBalancePeriodStart,
+            prepaidBalanceMicros: String(nextPrepaidBalanceMicros),
+            monthlySpendUsageMicros: String(nextMonthlySpendUsageMicros),
+            monthlySpendUsagePeriodStart: allowanceWindow.start,
+            updatedAt: now,
+          })
+          .where('organizationId', '=', authInfo.organizationId)
+          .execute()
       }
 
       await tx
@@ -970,7 +947,10 @@ export async function handleZenRequest(
           cacheReadTokens,
           cacheWrite5mTokens,
           cacheWrite1hTokens,
-          cost: String(costBig),
+          providerCostMicros: String(providerCostMicro),
+          billedCostMicros: String(billedCostMicro),
+          markupBps: billing.mode === 'surgent' ? SURGENT_MARKUP_BPS : 0,
+          billingMode: billing.mode,
           keyId: authInfo.apiKeyId,
           enrichment: {
             billing,
@@ -993,17 +973,6 @@ export async function handleZenRequest(
           billing_settlement_included_micros: includedDebit,
         })
       }
-
-      if (prepaidDebit > 0) {
-        await tx
-          .updateTable('billing_account')
-          .set({
-            prepaidBalanceMicros: sql`GREATEST(0, "prepaidBalanceMicros" - ${String(prepaidDebit)})`,
-            updatedAt: now,
-          })
-          .where('organizationId', '=', authInfo.organizationId)
-          .execute()
-      }
     })
 
     if (uncoveredMicros > 0) {
@@ -1011,20 +980,20 @@ export async function handleZenRequest(
         {
           organizationId: authInfo.organizationId,
           projectId: authInfo.projectId,
-          costMicros: costMicro,
+          costMicros: billedCostMicro,
           uncoveredMicros,
         },
         'usage settled after response with insufficient balance',
       )
       logger.metric({
         billing_settlement: 'uncovered',
-        billing_cost_micros: costMicro,
+        billing_cost_micros: billedCostMicro,
         billing_uncovered_micros: uncoveredMicros,
       })
     }
 
     return {
-      costMicros: Number(costBig),
+      costMicros: billedCostMicro,
       uncoveredMicros,
     } satisfies UsageSettlement
   }
