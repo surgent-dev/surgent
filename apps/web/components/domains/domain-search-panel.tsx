@@ -38,8 +38,8 @@ type DomainStatus =
   | 'error'
 
 const STATUS_HINT: Partial<Record<DomainStatus, string>> = {
-  dns_configuring: 'Waiting for DNS to propagate',
-  ssl_provisioning: 'Setting up HTTPS certificate',
+  dns_configuring: 'Waiting for DNS to propagate — this can take up to 24 hours',
+  ssl_provisioning: 'Setting up HTTPS certificate — this can take up to 24 hours',
   purchasing: 'Processing purchase',
   pending: 'Waiting for confirmation',
 }
@@ -174,18 +174,23 @@ function DomainCard({
 
       {/* Active footer */}
       {isActive && (
-        <div className="flex items-center border-t px-4 py-2 bg-muted/20">
-          <span className="text-[12px] font-medium text-emerald-600 dark:text-emerald-400 mr-auto">
-            Live
-          </span>
-          <button
-            type="button"
-            onClick={onRemove}
-            disabled={removing}
-            className="text-[12px] text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-50"
-          >
-            {removing ? 'Removing...' : 'Disconnect'}
-          </button>
+        <div className="border-t bg-muted/20">
+          <div className="flex items-center px-4 py-2">
+            <span className="text-[12px] font-medium text-emerald-600 dark:text-emerald-400 mr-auto">
+              Live
+            </span>
+            <button
+              type="button"
+              onClick={onRemove}
+              disabled={removing}
+              className="text-[12px] text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-50"
+            >
+              {removing ? 'Removing...' : 'Disconnect'}
+            </button>
+          </div>
+          <p className="px-4 pb-2 text-[11px] text-muted-foreground/60 leading-relaxed">
+            DNS and SSL may take up to 24 hours to fully propagate
+          </p>
         </div>
       )}
     </div>
