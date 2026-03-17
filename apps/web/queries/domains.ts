@@ -1,11 +1,22 @@
 import { http } from '@/lib/http'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { DomainLogEntry, SslProvisioningMeta } from '@repo/db'
 import { toast } from 'react-hot-toast'
 
-export type { DomainLogEntry, SslProvisioningMeta } from '@repo/db'
-
 // Types
+
+export interface DomainLogEntry {
+  timestamp: string
+  event: string
+  detail?: string
+  success?: boolean
+}
+
+export interface SslProvisioningMeta {
+  _type: 'ssl_provisioning_meta'
+  attempts: number
+  firstAttemptAt: string
+  lastAttemptAt: string
+}
 
 export interface DomainAvailability {
   domain: string
