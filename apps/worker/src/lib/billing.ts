@@ -234,7 +234,7 @@ const freePlan = (() => {
   return plan
 })()
 
-const FREE_MONTHLY_SPEND_LIMIT_MICROS = freePlan.monthlyAllowanceMicros
+const PAID_MONTHLY_SPEND_LIMIT_MICROS = dollarsToMicros(500)
 
 function requireStripe() {
   if (!stripe) throw new Error('Stripe is not configured')
@@ -517,7 +517,7 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
       includedBalancePeriodStart: startOfMonth(now),
       prepaidBalanceMicros: '0',
       autoReloadEnabled: false,
-      monthlySpendLimitMicros: String(FREE_MONTHLY_SPEND_LIMIT_MICROS),
+      monthlySpendLimitMicros: null,
       monthlySpendUsageMicros: '0',
       monthlySpendUsagePeriodStart: null,
       currency: 'usd',
@@ -566,18 +566,6 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
     .where('organizationId', '=', organizationId)
     .where('tier', '=', 'free')
     .execute()
-
-  await sql`
-    UPDATE billing_account AS account
-    SET
-      "monthlySpendLimitMicros" = ${String(FREE_MONTHLY_SPEND_LIMIT_MICROS)},
-      "updatedAt" = ${now}
-    FROM billing_subscription AS subscription
-    WHERE subscription."organizationId" = account."organizationId"
-      AND subscription."organizationId" = ${organizationId}
-      AND subscription.tier = 'free'
-      AND account."monthlySpendLimitMicros" IS NULL
-  `.execute(tx)
 
   const account = await tx
     .selectFrom('billing_account')
@@ -1057,7 +1045,7 @@ export async function syncStripeCustomerToBillingState(args: {
         includedBalanceMicros: String(includedBalanceMicros),
         includedBalancePeriodStart: allowanceWindow.start,
         monthlySpendLimitMicros:
-          plan.tier === 'free' ? String(FREE_MONTHLY_SPEND_LIMIT_MICROS) : null,
+          plan.tier === 'pro' ? String(PAID_MONTHLY_SPEND_LIMIT_MICROS) : null,
         monthlySpendUsageMicros: String(monthlySpendUsageMicros),
         monthlySpendUsagePeriodStart,
         updatedAt: now,

@@ -82,11 +82,9 @@ function getAllowanceWindow(
 }
 
 const MONEY_SCALE = 100_000_000
-const DEFAULT_FREE_MONTHLY_SPEND_LIMIT_USD = 2
 
 export async function up(db: Kysely<any>): Promise<void> {
   const currentTime = new Date()
-  const freeMonthlySpendLimitMicros = Math.round(DEFAULT_FREE_MONTHLY_SPEND_LIMIT_USD * MONEY_SCALE)
 
   await sql`
     ALTER TABLE billing_account
@@ -139,15 +137,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     WHERE organization.id = account."organizationId"
       AND account."stripeCustomerId" IS NULL
       AND organization."stripeCustomerId" IS NOT NULL
-  `.execute(db)
-
-  await sql`
-    UPDATE billing_account AS account
-    SET "monthlySpendLimitMicros" = ${String(freeMonthlySpendLimitMicros)}
-    FROM billing_subscription AS subscription
-    WHERE subscription."organizationId" = account."organizationId"
-      AND subscription.tier = 'free'
-      AND account."monthlySpendLimitMicros" IS NULL
   `.execute(db)
 
   const states = await db
