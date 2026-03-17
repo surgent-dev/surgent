@@ -7,7 +7,6 @@ COPY apps/web/package.json ./apps/web/
 COPY apps/dispatch/package.json ./apps/dispatch/
 COPY apps/worker/package.json ./apps/worker/
 COPY packages/db/package.json ./packages/db/
-COPY packages/util/package.json ./packages/util/
 COPY packages/gateway/package.json ./packages/gateway/
 RUN HUSKY=0 bun install --frozen-lockfile
 
