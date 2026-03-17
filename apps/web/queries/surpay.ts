@@ -28,12 +28,6 @@ export interface SurpayConnectResponse {
   oauthUrl: string
 }
 
-// Re-throws with the extracted error message (ky beforeError hook already parses it)
-function extractError(error: any, fallback: string): never {
-  if (error instanceof Error && error.message) throw error
-  throw new Error(fallback)
-}
-
 // API functions
 async function fetchSurpayAccounts(): Promise<SurpayAccount[]> {
   return payHttp.get('accounts').json()
@@ -48,7 +42,7 @@ async function connectSurpay(projectId: string): Promise<SurpayConnectResponse> 
       })
       .json()
   } catch (e) {
-    return extractError(e, 'Failed to connect payment account')
+    throw e instanceof Error && e.message ? e : new Error('Failed to connect payment account')
   }
 }
 
@@ -81,7 +75,7 @@ async function connectWhop(
       })
       .json()
   } catch (e) {
-    return extractError(e, 'Failed to connect Whop')
+    throw e instanceof Error && e.message ? e : new Error('Failed to connect Whop')
   }
 }
 

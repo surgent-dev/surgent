@@ -2,7 +2,6 @@
 
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Geist, Geist_Mono } from 'next/font/google'
 import {
   ArrowUpRight,
@@ -15,53 +14,18 @@ import {
   Layers,
 } from 'lucide-react'
 import { Lightning } from '@phosphor-icons/react'
+import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
+import { formatMonthYear } from '@/lib/format'
+import { formatRevenueCompact, getDomainFromUrl } from '@/lib/inspirations'
 import { useStartupQuery } from '@/queries/startups'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
 
-function fmt(dollars: number): string {
-  if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`
-  if (dollars >= 1_000) return `$${(dollars / 1_000).toFixed(dollars >= 10_000 ? 0 : 1)}k`
-  return `$${dollars.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-}
-
 function fmtFull(dollars: number): string {
   return `$${dollars.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-}
-
-function domain(url: string): string {
-  return url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/.*$/, '')
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-}
-
-function BrandLogo() {
-  return (
-    <>
-      <Image
-        src="/surgent-logo-dark.svg"
-        alt="Surgent"
-        width={119}
-        height={32}
-        className="h-7 w-auto hidden dark:block"
-        priority
-      />
-      <Image
-        src="/surgent-logo.svg"
-        alt="Surgent"
-        width={119}
-        height={32}
-        className="h-7 w-auto block dark:hidden"
-        priority
-      />
-    </>
-  )
 }
 
 function StatCard({
@@ -276,7 +240,7 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
                   className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
                 >
                   <Globe className="h-3.5 w-3.5" />
-                  {domain(startup.website)}
+                  {getDomainFromUrl(startup.website)}
                   <ArrowUpRight className="h-3 w-3 opacity-50" />
                 </a>
               )}
@@ -323,7 +287,7 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-10">
           <StatCard
             label="Revenue / mo"
-            value={fmt(startup.revenueLast30Days)}
+            value={formatRevenueCompact(startup.revenueLast30Days)}
             icon={BarChart3}
             sub={
               hasGrowth
@@ -335,7 +299,7 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
           />
           <StatCard
             label="MRR"
-            value={fmt(startup.revenueMrr)}
+            value={formatRevenueCompact(startup.revenueMrr)}
             icon={CreditCard}
             sub={
               startup.activeSubscriptions > 0
@@ -345,7 +309,7 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
           />
           <StatCard
             label="Total Revenue"
-            value={fmt(startup.revenueTotal)}
+            value={formatRevenueCompact(startup.revenueTotal)}
             icon={Layers}
             sub="all time"
           />
@@ -357,7 +321,7 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
           <div>
             <DetailRow label="Founded">
               <Calendar className="h-4 w-4 text-[var(--page-muted-soft)]" />
-              {formatDate(startup.foundedDate)}
+              {formatMonthYear(startup.foundedDate)}
             </DetailRow>
             <DetailRow label="Payment provider">
               <CreditCard className="h-4 w-4 text-[var(--page-muted-soft)]" />
@@ -414,7 +378,7 @@ export default function StartupDetailPage({ params }: { params: Promise<{ slug: 
               )}
               {startup.firstListedForSaleAt && (
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Listed {formatDate(startup.firstListedForSaleAt)}
+                  Listed {formatMonthYear(startup.firstListedForSaleAt)}
                 </p>
               )}
             </div>

@@ -5,47 +5,23 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { authClient } from '@/lib/auth-client'
+import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatMarketplaceDate } from '@/lib/format'
 import { useMarketplaceListingsQuery } from '@/queries/marketplace'
-
-interface User {
-  id: string
-  email: string
-  name?: string
-  image?: string
-}
-
-function formatDate(dateIso: string | null) {
-  if (!dateIso) return 'Recently'
-  const d = new Date(dateIso)
-  const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-  const diffDays = Math.floor(diffMs / 86400000)
-  if (diffDays < 1) return 'Today'
-  if (diffDays === 1) return 'Yesterday'
-  if (diffDays < 7) return `${diffDays}d ago`
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-function formatPrice(amount: number, currency: string | null) {
-  const symbol = currency === 'eur' ? '\u20AC' : currency === 'gbp' ? '\u00A3' : '$'
-  return `${symbol}${(amount / 100).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`
-}
+import { formatPrice } from '@/components/payments/utils'
+import type { MarketplaceUser } from './types'
 
 export default function MarketplacePage() {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<MarketplaceUser | null>(null)
   const { data: listings = [], isLoading } = useMarketplaceListingsQuery(60)
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => {
-      if (data?.user) setUser(data.user as User)
+      if (data?.user) setUser(data.user as MarketplaceUser)
     })
   }, [])
 
@@ -87,22 +63,7 @@ export default function MarketplacePage() {
         <div className="max-w-6xl mx-auto w-full flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
-              <Image
-                src="/surgent-logo-dark.svg"
-                alt="Surgent"
-                width={119}
-                height={32}
-                className="h-7 w-auto hidden dark:block"
-                priority
-              />
-              <Image
-                src="/surgent-logo.svg"
-                alt="Surgent"
-                width={119}
-                height={32}
-                className="h-7 w-auto block dark:hidden"
-                priority
-              />
+              <BrandLogo />
             </Link>
             <span className="text-border">/</span>
             <span className="text-sm font-medium">Marketplace</span>
@@ -173,7 +134,7 @@ export default function MarketplacePage() {
                     </h2>
                     {listing.priceAmount != null && listing.priceAmount > 0 ? (
                       <span className="text-xs font-semibold tabular-nums shrink-0 rounded-full bg-foreground/[0.06] px-2.5 py-1">
-                        {formatPrice(listing.priceAmount, listing.priceCurrency)}
+                        {formatPrice(listing.priceAmount, listing.priceCurrency || 'usd')}
                       </span>
                     ) : (
                       <span className="text-xs font-medium shrink-0 rounded-full bg-emerald-500/10 text-emerald-600 px-2.5 py-1">
@@ -199,7 +160,7 @@ export default function MarketplacePage() {
                       {listing.sellerName}
                     </span>
                     <span className="text-xs text-muted-foreground/40 shrink-0 ml-auto">
-                      {formatDate(listing.updatedAt)}
+                      {formatMarketplaceDate(listing.updatedAt)}
                     </span>
                   </div>
                 </div>

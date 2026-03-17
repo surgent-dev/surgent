@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { BrandLogo } from '@/components/brand-logo'
+import { formatRevenueCompact, getDomainFromUrl } from '@/lib/inspirations'
 import UserMenu from '@/components/project-header/user-menu'
 import {
   ChevronLeft,
@@ -60,39 +61,6 @@ type SearchParams = {
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
-
-function fmt(dollars: number): string {
-  if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`
-  if (dollars >= 1_000) return `$${(dollars / 1_000).toFixed(dollars >= 10_000 ? 0 : 1)}k`
-  return `$${dollars.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-}
-
-function domain(url: string): string {
-  return url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/.*$/, '')
-}
-
-function BrandLogo() {
-  return (
-    <>
-      <Image
-        src="/surgent-logo-dark.svg"
-        alt="Surgent"
-        width={119}
-        height={32}
-        className="h-7 w-auto hidden dark:block"
-        priority
-      />
-      <Image
-        src="/surgent-logo.svg"
-        alt="Surgent"
-        width={119}
-        height={32}
-        className="h-7 w-auto block dark:hidden"
-        priority
-      />
-    </>
-  )
-}
 
 const CAT_ICONS: Record<string, React.ElementType> = {
   'Artificial Intelligence': AiIcon,
@@ -251,7 +219,7 @@ function StartupCard({ startup, index }: { startup: Startup; index: number }) {
             MRR
           </p>
           <span className="text-[14px] text-foreground" style={{ fontWeight: 600 }}>
-            {startup.revenueMrr > 0 ? fmt(startup.revenueMrr) : '—'}
+            {startup.revenueMrr > 0 ? formatRevenueCompact(startup.revenueMrr) : '—'}
           </span>
         </div>
 
@@ -260,7 +228,7 @@ function StartupCard({ startup, index }: { startup: Startup; index: number }) {
             Total Rev
           </p>
           <span className="text-[14px] text-foreground" style={{ fontWeight: 600 }}>
-            {startup.revenueTotal > 0 ? fmt(startup.revenueTotal) : '—'}
+            {startup.revenueTotal > 0 ? formatRevenueCompact(startup.revenueTotal) : '—'}
           </span>
         </div>
 
@@ -287,7 +255,7 @@ function StartupCard({ startup, index }: { startup: Startup; index: number }) {
             Website
           </p>
           <span className="text-[13px] text-muted-foreground truncate max-w-[120px]">
-            {domain(startup.website || '')}
+            {getDomainFromUrl(startup.website || '')}
           </span>
         </div>
       </div>

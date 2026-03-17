@@ -34,6 +34,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { formatDateShort, timeAgoDetailed } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type {
   AdminOpsAlert,
@@ -51,26 +52,9 @@ const JOBS_PER_PAGE = 20
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-function timeAgo(value: string) {
-  const mins = Math.floor((Date.now() - new Date(value).getTime()) / 60_000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ${mins % 60}m ago`
-  return `${Math.floor(hours / 24)}d ago`
-}
-
 function formatAge(minutes: number) {
   if (minutes < 60) return `${minutes}m`
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
-}
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
 }
 
 function formatDateTime(value: string | null) {
@@ -467,7 +451,7 @@ function ProjectFailures({ items }: { items: AdminOpsProjectItem[] }) {
               name={p.name}
               status="failed"
               email={p.userEmail}
-              time={timeAgo(p.updatedAt)}
+              time={timeAgoDetailed(p.updatedAt)}
               error={p.error}
             />
           ))
@@ -495,7 +479,7 @@ function DeployFailures({ items }: { items: AdminOpsDeploymentFailureItem[] }) {
               name={d.projectName}
               status={d.status.replace(/_/g, ' ')}
               email={d.userEmail}
-              time={timeAgo(d.finishedAt)}
+              time={timeAgoDetailed(d.finishedAt)}
               error={d.error}
             />
           ))
@@ -841,7 +825,7 @@ function JobsSheet({
                               ) : null}
                             </div>
                             <div className="pl-3 text-xs text-muted-foreground">
-                              created {timeAgo(job.createdOn)}
+                              created {timeAgoDetailed(job.createdOn)}
                             </div>
                             {job.singletonKey ? (
                               <div className="truncate pl-3 text-xs text-muted-foreground/70">
@@ -1144,7 +1128,9 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
           </div>
           <div className="flex items-center gap-3">
             <AdminRangeSelect basePath="/admin/ops" />
-            <span className="text-xs text-muted-foreground">{timeAgo(data.generatedAt)}</span>
+            <span className="text-xs text-muted-foreground">
+              {timeAgoDetailed(data.generatedAt)}
+            </span>
             <Button variant="ghost" size="icon" className="size-8" onClick={() => setLight(!light)}>
               {light ? <Moon className="size-3.5" /> : <Sun className="size-3.5" />}
             </Button>
@@ -1203,7 +1189,7 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
             <CardTitle className="flex items-center justify-between gap-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
               <span>Problems In Range</span>
               <span className="text-[11px] normal-case tracking-normal text-muted-foreground">
-                Since {data.start ? formatDate(data.start) : 'today'}
+                Since {data.start ? formatDateShort(data.start) : 'today'}
               </span>
             </CardTitle>
           </CardHeader>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-
+import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import Image from 'next/image'
@@ -47,9 +47,15 @@ import {
   useUpdateProjectVisibility,
   useLatestDeploymentQuery,
   useHostnameAvailability,
+  useGenerateHostname,
 } from '@/queries/projects'
 import { useProjectDomains, useRemoveDomain } from '@/queries/domains'
 import { http } from '@/lib/http'
+import {
+  DEPLOYMENT_STATUS_LABELS,
+  TERMINAL_DEPLOYMENT_STATUSES,
+  sanitizeDeploymentHostname,
+} from '@/lib/deployment'
 import GitHubDialog from '@/components/github-dialog'
 import DeploymentStatusDialog from '@/components/deployment-status-dialog'
 import { useGitHubStatus } from '@/queries/github'
@@ -71,34 +77,12 @@ interface ProjectHeaderProps {
 // Styles
 const iconBtn = 'p-1 hover:bg-muted/40 rounded-md transition-all duration-100'
 
-// Status labels
-const STATUS_LABELS: Record<string, string> = {
-  queued: 'Queued',
-  starting: 'Starting',
-  deploying_convex: 'Deploying Convex',
-  building: 'Building',
-  uploading: 'Uploading',
-  deployed: 'Deployed',
-  build_failed: 'Build failed',
-  deploy_failed: 'Deploy failed',
-  cancelled: 'Cancelled',
-}
-
-const TERMINAL_STATUSES = ['deployed', 'deploy_failed', 'build_failed', 'cancelled']
-
-function sanitizeHostname(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 63)
-}
-
 export default function ProjectHeader({ projectId, project }: ProjectHeaderProps) {
   const router = useRouter()
   const credits = useCredits()
   const canToggleVisibility = credits.snapshot?.features.privateProjects ?? false
+
+  const queryClient = useQueryClient()
 
   // Dialog states
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
@@ -128,7 +112,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const removeDomain = useRemoveDomain()
 
   // Domain states
-  const activeDomain = domainsData?.domains?.find((d) => d.status === 'active')
+  const activeDomains = domainsData?.domains?.filter((d) => d.status === 'active') ?? []
+  const activeDomain = activeDomains[0]
   const configuringDomain = domainsData?.domains?.find((d) => d.status === 'dns_configuring')
   const pendingDomain = domainsData?.domains?.find(
     (d) => d.status === 'pending' || d.status === 'purchasing',
@@ -144,7 +129,13 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     const prev = prevStatusRef.current
     const curr = latestDeployment.status
 
-    if (prev && !TERMINAL_STATUSES.includes(prev) && TERMINAL_STATUSES.includes(curr)) {
+    if (
+      prev &&
+      !TERMINAL_DEPLOYMENT_STATUSES.includes(prev) &&
+      TERMINAL_DEPLOYMENT_STATUSES.includes(curr)
+    ) {
+      // Refetch project data so worker info is up-to-date
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       if (curr === 'deployed') {
         toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, {
           position: 'top-right',
@@ -154,7 +145,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       }
     }
     prevStatusRef.current = curr
-  }, [latestDeployment])
+  }, [latestDeployment, queryClient, projectId])
 
   // Derived state
   const worker = project?.worker
@@ -163,9 +154,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const isDeployed = workerStatus === 'active'
   const isFailed = workerStatus === 'error'
   const isDeploymentInProgress =
-    latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status)
+    latestDeployment && !TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status)
+  const { data: generatedHostname } = useGenerateHostname(isPublishOpen && !workerName)
   // Hostname availability check
-  const sanitizedHostname = sanitizeHostname(hostnameInput)
+  const sanitizedHostname = sanitizeDeploymentHostname(hostnameInput)
   const isNewHostname = !workerName || sanitizedHostname !== workerName
   const { data: availability, isLoading: checkingHostname } = useHostnameAvailability(
     sanitizedHostname,
@@ -208,7 +200,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       if (!projectId || isDeploying) return
       setIsDeploying(true)
       deployProject.mutate(
-        { id: projectId, deployName: name },
+        { id: projectId, deployName: name || undefined },
         {
           onSuccess: () => setIsDeploying(false),
           onError: (err: unknown) => {
@@ -233,6 +225,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     setDownloading(true)
     try {
       const response = await http.get(`api/projects/${projectId}/download`, { timeout: 120000 })
+      if (response.status === 402) {
+        credits.setPlanDialogOpen(true)
+        return
+      }
       const blob = await response.blob()
       const disposition = response.headers.get('Content-Disposition')
       const filename =
@@ -243,17 +239,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       link.download = filename
       link.click()
       URL.revokeObjectURL(url)
-    } catch (err) {
-      if (err instanceof Error && 'response' in err) {
-        const status = (err as { response: Response }).response.status
-        if (status === 402) {
-          credits.setPlanDialogOpen(true)
-          return
-        }
-      }
-      toast.error(err instanceof Error ? err.message : 'Download failed', {
-        position: 'top-right',
-      })
+    } catch {
+      toast.error('Download failed', { position: 'top-right' })
     } finally {
       setDownloading(false)
     }
@@ -274,20 +261,23 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const handlePublishOpenChange = (open: boolean) => {
     setIsPublishOpen(open)
     if (open) {
-      // Pre-fill with existing worker name, or generate a slug from the project name
-      const defaultHostname = workerName || sanitizeHostname(project?.name || '')
-      setHostnameInput(defaultHostname)
+      setHostnameInput(workerName || generatedHostname?.name || '')
       setIsEditingHostname(false)
     }
   }
 
-  const submitHostname = () => {
-    const name = !workerName || isEditingHostname ? hostnameInput.trim() : workerName
-    if (!name) return
-    if (isDeploymentInProgress) return
+  // Pre-fill with backend-generated hostname when it arrives (first deploy)
+  useEffect(() => {
+    if (!workerName && generatedHostname?.name && !hostnameInput) {
+      setHostnameInput(generatedHostname.name)
+    }
+  }, [generatedHostname, workerName, hostnameInput])
 
-    setPendingHostname(name)
-    handleDeploy(name)
+  const submitHostname = () => {
+    if (isDeploymentInProgress) return
+    const name = !workerName || isEditingHostname ? hostnameInput.trim() : workerName
+    if (name) setPendingHostname(name)
+    handleDeploy(name || '')
   }
 
   const handleCancelDeploy = () => {
@@ -509,7 +499,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               {/* Live URL — only when deployed and not editing */}
               {workerName && !isEditingHostname && (
                 <div className="p-3">
-                  <div className="flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/20 px-3 h-8 font-mono text-[13px]">
+                  <div
+                    className={`flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/20 px-3 h-8 font-mono text-[13px] ${activeDomain ? 'opacity-50' : ''}`}
+                  >
                     <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
                     <span className="flex-1 truncate">{workerName}.surgent.site</span>
                     <a
@@ -524,9 +516,11 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     <button onClick={copyUrl} className={iconBtn}>
                       <Copy className="size-3.5 text-muted-foreground" />
                     </button>
-                    <button onClick={startEditHostname} className={iconBtn}>
-                      <PencilSimple className="size-3.5 text-muted-foreground" />
-                    </button>
+                    {!activeDomain && (
+                      <button onClick={startEditHostname} className={iconBtn}>
+                        <PencilSimple className="size-3.5 text-muted-foreground" />
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -590,9 +584,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     disabled={
                       isDeploying ||
                       Boolean(isDeploymentInProgress) ||
-                      hostnameTaken ||
-                      checkingHostname ||
-                      (!workerName && !hostnameInput.trim())
+                      (isEditingHostname && (hostnameTaken || checkingHostname))
                     }
                   >
                     {isDeploying ? (
@@ -619,23 +611,25 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 </div>
 
                 {/* In-progress status + cancel */}
-                {latestDeployment && !TERMINAL_STATUSES.includes(latestDeployment.status) && (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <CircleNotch className="size-3 animate-spin text-brand shrink-0" />
-                    <span className="flex-1">
-                      {STATUS_LABELS[latestDeployment.status] || latestDeployment.status}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCancelDeploy}
-                      disabled={cancelDeployment.isPending}
-                      className="flex items-center gap-1 text-[11px] text-destructive/70 hover:text-destructive transition-colors shrink-0"
-                    >
-                      <Stop className="size-3" weight="fill" />
-                      {cancelDeployment.isPending ? 'Cancelling' : 'Cancel'}
-                    </button>
-                  </div>
-                )}
+                {latestDeployment &&
+                  !TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status) && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <CircleNotch className="size-3 animate-spin text-brand shrink-0" />
+                      <span className="flex-1">
+                        {DEPLOYMENT_STATUS_LABELS[latestDeployment.status] ||
+                          latestDeployment.status}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCancelDeploy}
+                        disabled={cancelDeployment.isPending}
+                        className="flex items-center gap-1 text-[11px] text-destructive/70 hover:text-destructive transition-colors shrink-0"
+                      >
+                        <Stop className="size-3" weight="fill" />
+                        {cancelDeployment.isPending ? 'Cancelling' : 'Cancel'}
+                      </button>
+                    </div>
+                  )}
 
                 {/* Cancelled status */}
                 {latestDeployment?.status === 'cancelled' && (
@@ -644,7 +638,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
                 {/* Error status */}
                 {latestDeployment &&
-                  TERMINAL_STATUSES.includes(latestDeployment.status) &&
+                  TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status) &&
                   !['deployed', 'cancelled'].includes(latestDeployment.status) && (
                     <button
                       type="button"
@@ -667,24 +661,40 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
               {/* Custom Domain */}
               <div className="border-t px-3 py-2.5">
-                {activeDomain ? (
-                  <div className="flex items-center gap-2 h-8 px-2.5 rounded-lg bg-emerald-500/6 border border-emerald-500/20">
-                    <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                    <span className="font-mono text-xs truncate flex-1">
-                      {activeDomain.domainName}
-                    </span>
-                    <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                      Live
-                    </span>
-                    <a
-                      href={`https://${activeDomain.domainName}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-0.5 hover:bg-emerald-500/10 rounded transition-colors"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <ArrowSquareOut className="size-3.5 text-emerald-600" />
-                    </a>
+                {activeDomains.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {activeDomains.map((d) => (
+                      <div
+                        key={d.id}
+                        className="flex items-center gap-2 h-8 px-2.5 rounded-lg bg-emerald-500/6 border border-emerald-500/20"
+                      >
+                        <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="font-mono text-xs truncate flex-1">{d.domainName}</span>
+                        <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                          Live
+                        </span>
+                        {activeDomains.length > 1 && (
+                          <span
+                            className={`text-[8px] font-semibold px-1 py-0.5 rounded-full ${
+                              d.isPrimary
+                                ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                : 'bg-muted text-muted-foreground border border-border'
+                            }`}
+                          >
+                            {d.isPrimary ? 'PRIMARY' : 'ALIAS'}
+                          </span>
+                        )}
+                        <a
+                          href={`https://${d.domainName}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-0.5 hover:bg-emerald-500/10 rounded transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ArrowSquareOut className="size-3.5 text-emerald-600" />
+                        </a>
+                      </div>
+                    ))}
                   </div>
                 ) : displayDomain ? (
                   <button

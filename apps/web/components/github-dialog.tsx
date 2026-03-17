@@ -21,6 +21,7 @@ import {
   useGitHubDisconnect,
   useGitHubCreateRepo,
 } from '@/queries/github'
+import { timeAgoCompact } from '@/lib/format'
 import { useGitLog, useGitPush, useGitPull, useGitStatus, useGitCommit } from '@/queries/git'
 import { cn } from '@/lib/utils'
 
@@ -28,18 +29,6 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   projectId?: string
-}
-
-function timeAgo(date: string): string {
-  const ms = Date.now() - new Date(date).getTime()
-  const mins = Math.floor(ms / 60000)
-  if (mins < 1) return 'now'
-  if (mins < 60) return `${mins}m`
-  const hrs = Math.floor(ms / 3600000)
-  if (hrs < 24) return `${hrs}h`
-  const days = Math.floor(ms / 86400000)
-  if (days < 7) return `${days}d`
-  return new Date(date).toLocaleDateString()
 }
 
 export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
@@ -345,7 +334,9 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
                           )}
                         />
                         <span className="truncate flex-1">{c.message}</span>
-                        <span className="text-[11px] text-muted-foreground">{timeAgo(c.date)}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {timeAgoCompact(c.date)}
+                        </span>
                       </div>
                     ))
                   ) : (

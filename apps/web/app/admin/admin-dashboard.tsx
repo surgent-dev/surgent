@@ -33,61 +33,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
-
-interface AdminOverview {
-  range: string
-  start: string
-  pagination: {
-    page: number
-    perPage: number
-    sort: 'asc' | 'desc'
-    totalUsers: number
-    totalProjects: number
-  }
-  totals: {
-    users: string
-    projects: string
-    usersInRange: string
-    projectsInRange: string
-  }
-  last10Users: Array<{
-    id: string
-    name: string
-    email: string
-    emailVerified: boolean
-    image: string | null
-    createdAt: string
-  }>
-  allUsers: Array<{
-    id: string
-    name: string
-    email: string
-    emailVerified: boolean
-    image: string | null
-    createdAt: string
-  }>
-  allProjects: Array<{
-    id: string
-    name: string
-    userId: string
-    createdAt: string
-    userName: string | null
-    userEmail: string
-    worker: { name: string; status: string | null; hostname: string | null } | null
-  }>
-  charts: {
-    users: Array<{ date: string; count: string }>
-    projects: Array<{ date: string; count: string }>
-  }
-}
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
+import { formatDateShort } from '@/lib/format'
+import type { AdminOverview } from './types'
 
 function formatChartTick(value: string) {
   if (value.length === 7) return value
@@ -262,7 +209,7 @@ function Last10UsersTable({
                   </Badge>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {formatDate(user.createdAt)}
+                  {formatDateShort(user.createdAt)}
                 </TableCell>
               </TableRow>
             ))}
@@ -392,7 +339,9 @@ function AllUsersTable({
                   {user.emailVerified ? 'Yes' : 'No'}
                 </Badge>
               </TableCell>
-              <TableCell className="text-muted-foreground">{formatDate(user.createdAt)}</TableCell>
+              <TableCell className="text-muted-foreground">
+                {formatDateShort(user.createdAt)}
+              </TableCell>
             </TableRow>
           ))}
           {users.length === 0 && (
@@ -504,7 +453,7 @@ function AllProjectsTable({
                 )}
               </TableCell>
               <TableCell className="text-muted-foreground">
-                {formatDate(project.createdAt)}
+                {formatDateShort(project.createdAt)}
               </TableCell>
             </TableRow>
           ))}
