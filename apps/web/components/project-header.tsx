@@ -225,10 +225,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
     setDownloading(true)
     try {
       const response = await http.get(`api/projects/${projectId}/download`, { timeout: 120000 })
-      if (response.status === 402) {
-        credits.setPlanDialogOpen(true)
-        return
-      }
       const blob = await response.blob()
       const disposition = response.headers.get('Content-Disposition')
       const filename =
@@ -239,8 +235,15 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       link.download = filename
       link.click()
       URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Download failed', { position: 'top-right' })
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 402) {
+        credits.setPlanDialogOpen(true)
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Download failed', {
+          position: 'top-right',
+        })
+      }
     } finally {
       setDownloading(false)
     }
