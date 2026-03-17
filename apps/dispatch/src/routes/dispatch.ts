@@ -3,7 +3,7 @@ import type { AppContext } from '@/types/application'
 
 const dispatch = new Hono<AppContext>()
 
-/** Known platform domain suffixes — everything else is a custom domain. */
+/** Known platform domain suffixes handled by the dispatch worker. */
 const PLATFORM_SUFFIXES = ['.surgent.site', '.surgent.dev']
 
 function extractSubdomain(hostname: string): string | null {
@@ -28,11 +28,6 @@ dispatch.all('/*', async (c) => {
   if (isPlatformHostname(hostname)) {
     // *.surgent.site — use subdomain as the script name (existing behavior)
     scriptName = extractSubdomain(hostname)
-  } else {
-    // Custom domain — look up the script name from KV
-    if (c.env.DOMAIN_MAP) {
-      scriptName = await c.env.DOMAIN_MAP.get(hostname)
-    }
   }
 
   if (!scriptName) {

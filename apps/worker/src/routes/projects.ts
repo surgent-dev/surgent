@@ -14,6 +14,7 @@ import type { PayEnv } from '@/lib/pay/types'
 import { sanitizeHostname, getSandboxPreviewUrl } from '@/lib/utils'
 import {
   createDeploymentRecord,
+  resolveDeployScriptName,
   undeployProject,
   resumeProject,
   deployConvexProd,
@@ -425,6 +426,19 @@ projects.use('*', async (c, next) => {
   return next()
 })
 
+// GET /projects/generate-hostname - Generate a random available hostname
+projects.get('/generate-hostname', async (c) => {
+  for (let i = 0; i < 5; i++) {
+    const name = `app-${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`
+    if (await isHostnameAvailable(name)) {
+      return c.json({ name })
+    }
+  }
+  // Fallback with longer suffix to guarantee uniqueness
+  const name = `app-${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`
+  return c.json({ name })
+})
+
 // GET /projects/check-hostname - Check if a hostname is available
 projects.get(
   '/check-hostname',
@@ -597,16 +611,16 @@ projects.get('/usage', requireAuth, async (c) => {
     .execute()
 
   const history = await base
-    .select([
-      'usage.id',
-      'usage.projectId as projectId',
-      'project.name as projectName',
-      'usage.model as model',
-      'usage.provider as provider',
-      'usage.inputTokens as inputTokens',
-      'usage.outputTokens as outputTokens',
-      'usage.billedCostMicros as cost',
-      'usage.createdAt',
+    .select((eb) => [
+      eb.ref('usage.id').as('id'),
+      eb.ref('usage.projectId').as('projectId'),
+      eb.ref('project.name').as('projectName'),
+      eb.ref('usage.model').as('model'),
+      eb.ref('usage.provider').as('provider'),
+      eb.ref('usage.inputTokens').as('inputTokens'),
+      eb.ref('usage.outputTokens').as('outputTokens'),
+      eb.ref('usage.billedCostMicros').as('cost'),
+      eb.ref('usage.createdAt').as('createdAt'),
     ])
     .orderBy('usage.createdAt', 'desc')
     .limit(limit)
@@ -968,12 +982,12 @@ projects.post(
   async (c) => {
     try {
       const { id } = c.req.valid('param')
-      const { deployName } = c.req.valid('json')
+      const { deployName: requestedDeployName } = c.req.valid('json')
 
       console.log('[deploy] request', {
         projectId: id,
         userId: c.get('user')?.id,
-        deployName,
+        deployName: requestedDeployName,
       })
 
       const project = await getProjectWithAuth(id, c.get('user')!)
@@ -984,7 +998,7 @@ projects.post(
       if (!publishAccess?.allowed) {
         return c.json({ error: 'Please upgrade your plan to publish.' }, 402)
       }
-      const name = deployName ? sanitizeHostname(deployName) : undefined
+      const name = requestedDeployName ? sanitizeHostname(requestedDeployName) : undefined
 
       if (name) {
         const available = await isHostnameAvailable(name, id)
@@ -1039,12 +1053,13 @@ projects.post(
         })
       }
 
-      const deployment = await createDeploymentRecord(id, name)
+      const deployName = resolveDeployScriptName(name)
+      const deployment = await createDeploymentRecord(id, deployName)
 
       try {
         await enqueueProjectDeployJob({
           projectId: id,
-          deployName: name,
+          deployName,
           deploymentId: deployment.id,
         })
       } catch (sendErr) {

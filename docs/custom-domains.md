@@ -12,7 +12,7 @@ User (browser)
   ├─ Purchase      → POST /api/domains/init-purchase
   │                     ├─ create pending domain record
   │                     ├─ generate Entri JWT (1hr)
-  │                     ├─ build DNS records (CNAME → worker.surgent.site)
+  │                     ├─ build DNS records (A → {ENTRI_SERVERS})
   │                     └─ return config for Entri modal
   │
   ├─ Entri Modal (SDK)
@@ -53,8 +53,7 @@ User clicks "Purchase"
 │    dnsTarget = {scriptName}.surgent.site
 │    fallback  = {projectId[0:8]}.surgent.site
 ├─ generate DNS records:
-│    CNAME @   → dnsTarget (TTL 300)
-│    CNAME www → dnsTarget (TTL 300)
+│    A @ → {ENTRI_SERVERS} (TTL 300)
 ├─ create pending domain record in DB
 ├─ generate Entri JWT (HS256, 1hr expiry)
 │
@@ -167,8 +166,13 @@ Initialize the Entri purchase flow. Creates a pending domain record and returns 
   "token": "eyJhbGci...",
   "applicationId": "entri-app-id",
   "dnsRecords": [
-    { "type": "CNAME", "host": "@", "value": "worker-name.surgent.site", "ttl": 300 },
-    { "type": "CNAME", "host": "www", "value": "worker-name.surgent.site", "ttl": 300 }
+    {
+      "type": "A",
+      "host": "@",
+      "value": "{ENTRI_SERVERS}",
+      "ttl": 300,
+      "applicationUrl": "https://worker-name.surgent.site"
+    }
   ],
   "domainId": "uuid",
   "prefilledDomain": "myapp.com",
@@ -320,7 +324,7 @@ When a domain is purchased, two CNAME records are configured to point to the pro
 
 ```
 @   CNAME → {scriptName}.surgent.site   TTL 300
-www CNAME → {scriptName}.surgent.site   TTL 300
+A @ → {ENTRI_SERVERS}   TTL 300
 ```
 
 The `scriptName` comes from the `worker` table for the project. If no worker exists, falls back to `{projectId[0:8]}.surgent.site`.

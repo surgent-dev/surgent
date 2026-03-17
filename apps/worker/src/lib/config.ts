@@ -80,7 +80,6 @@ export const config = {
     deployUrl: env.CLOUDFLARE_DEPLOY_URL,
     deployDomain: env.DEPLOY_DOMAIN || 'surgent.site',
     zoneId: env.CLOUDFLARE_ZONE_ID,
-    kvNamespaceId: env.CLOUDFLARE_DOMAIN_KV_NAMESPACE_ID,
   },
   deploy: {
     buildTimeoutMs: int(env.DEPLOY_BUILD_TIMEOUT_MS, 600_000),
@@ -121,7 +120,7 @@ export const config = {
     secretKey: env.STRIPE_SECRET_KEY,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
     free: {
-      allowanceUsd: float(env.STRIPE_FREE_ALLOWANCE_USD, 2),
+      allowanceUsd: float(env.STRIPE_FREE_ALLOWANCE_USD, 3),
     },
     pro: {
       month: {
@@ -139,20 +138,17 @@ export const config = {
       minUsd: float(env.STRIPE_TOPUP_MIN_USD, 10),
     },
   },
-  domainProvider: (env.DOMAIN_PROVIDER || 'entri') as 'entri' | 'namecheap',
-  namecheap: {
-    apiUser: env.NAMECHEAP_API_USER || '',
-    apiKey: env.NAMECHEAP_API_KEY || '',
-    userName: env.NAMECHEAP_USERNAME || '',
-    clientIp: env.NAMECHEAP_CLIENT_IP || '',
-    sandbox: env.NAMECHEAP_SANDBOX !== 'false',
-  },
   entri: {
     applicationId: env.ENTRI_APP_ID,
     secret: env.ENTRI_SECRET,
     apiKey: env.ENTRI_API_KEY,
     webhookSecret: env.ENTRI_WEBHOOK_SECRET,
+    powerAuthToken: env.ENTRI_POWER_AUTH_TOKEN,
     devMode: env.ENTRI_DEV_MODE === 'true',
+  },
+  freeDomain: {
+    enabled: env.FREE_DOMAIN_ENABLED === 'true',
+    maxPerUser: int(env.FREE_DOMAIN_MAX_PER_USER, 1),
   },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
@@ -170,7 +166,7 @@ export const config = {
 export function validateDomainConfig(): string[] {
   const warnings: string[] = []
 
-  if (config.domainProvider === 'entri' && !config.entri.devMode) {
+  if (!config.entri.devMode) {
     if (!config.entri.applicationId) warnings.push('ENTRI_APP_ID is required for Entri integration')
     if (!config.entri.secret) warnings.push('ENTRI_SECRET is required for Entri JWT generation')
     if (!config.entri.apiKey)

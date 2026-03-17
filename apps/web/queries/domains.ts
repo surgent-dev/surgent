@@ -1,6 +1,9 @@
 import { http } from '@/lib/http'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { DomainLogEntry, SslProvisioningMeta } from '@repo/db'
 import { toast } from 'react-hot-toast'
+
+export type { DomainLogEntry, SslProvisioningMeta } from '@repo/db'
 
 // Types
 
@@ -15,42 +18,48 @@ export interface DomainAvailability {
 interface EntriPurchaseConfig {
   token: string
   applicationId: string
-  dnsRecords: Array<{ type: string; host: string; value: string; ttl: number }>
-  domainId: string
+  dnsRecords: Array<{
+    type: string
+    host: string
+    value: string
+    ttl: number
+    applicationUrl?: string
+  }>
+  domainId?: string
   prefilledDomain?: string
   devMode?: boolean
   contact: { email: string; firstName: string; lastName: string }
 }
 
-export interface EntriConnectConfig {
+interface EntriConnectConfig {
   token: string
   applicationId: string
-  dnsRecords: Array<{ type: string; host: string; value: string; ttl: number }>
+  dnsRecords: Array<{
+    type: string
+    host: string
+    value: string
+    ttl: number
+    applicationUrl?: string
+  }>
   domainId: string
   prefilledDomain: string
   userId: string
-}
-
-export interface DomainLogEntry {
-  timestamp: string
-  event: string
-  detail?: string
-  success?: boolean
 }
 
 export interface Domain {
   id: string
   projectId: string | null
   domainName: string
-  status: 'pending' | 'purchasing' | 'dns_configuring' | 'active' | 'error'
+  status: 'pending' | 'purchasing' | 'dns_configuring' | 'ssl_provisioning' | 'active' | 'error'
   registrar: string | null
-  dnsVerified: boolean
-  kvMapped: boolean
   lastError: string | null
+  sslMeta: SslProvisioningMeta | null
+  isPrimary: boolean
   logs: DomainLogEntry[]
   purchasedAt: string | null
   expiresAt: string | null
   createdAt: string
+  updatedAt: string
 }
 
 // Hooks
@@ -61,13 +70,23 @@ export function useProjectDomains(projectId?: string, fastPoll?: boolean) {
     queryFn: () => http.get(`api/domains/${projectId}`).json<{ domains: Domain[] }>(),
     enabled: Boolean(projectId),
     refetchInterval: (query) => {
-      // Fast poll after purchase/connect attempt (waiting for webhook to create record)
       if (fastPoll) return 2000
       const domains = query.state.data?.domains
       const hasPending = domains?.some((d) =>
         ['pending', 'purchasing', 'dns_configuring'].includes(d.status),
       )
-      return hasPending ? 3000 : 30000
+      if (hasPending) return 3000
+
+      // For ssl_provisioning, slow down polling to match backend backoff
+      const provisioning = domains?.find((d) => d.status === 'ssl_provisioning')
+      if (provisioning) {
+        const meta = provisioning.sslMeta
+        if (meta && meta.attempts > 40) return 15000
+        if (meta && meta.attempts > 20) return 8000
+        return 3000
+      }
+
+      return 30000
     },
   })
 }
@@ -86,7 +105,7 @@ export function useCheckDomainAvailability() {
 
 export function useInitDomainPurchase() {
   return useMutation({
-    mutationFn: (params: { projectId: string; suggestedDomain?: string }) =>
+    mutationFn: (params: { projectId: string; suggestedDomain?: string; freeDomain?: boolean }) =>
       http.post('api/domains/init-purchase', { json: params }).json<EntriPurchaseConfig>(),
     onError: () => {
       toast.error('Failed to initialize domain purchase')
@@ -104,16 +123,37 @@ export function useInitDomainConnect() {
   })
 }
 
+export type RetryConnectResult = EntriConnectConfig
+
 export function useRetryDomainConnect() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (params: { projectId: string; domainId: string }) =>
-      http.post('api/domains/retry-connect', { json: params }).json<EntriConnectConfig>(),
+      http.post('api/domains/retry-connect', { json: params }).json<RetryConnectResult>(),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['domains', vars.projectId] })
     },
     onError: () => {
       toast.error('Failed to retry domain connection')
+    },
+  })
+}
+
+export function useBindEntriFlow() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: {
+      projectId: string
+      entriFlowId: string
+      domain: string
+      domainId?: string
+      freeDomain?: boolean
+    }) => http.post('api/domains/bind-entri-flow', { json: params }).json<{ ok: boolean }>(),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['domains', vars.projectId] })
+    },
+    onError: () => {
+      toast.error('Failed to sync domain setup')
     },
   })
 }
@@ -133,6 +173,21 @@ export function useRemoveDomain() {
   })
 }
 
+export function useSetPrimaryDomain() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: { projectId: string; domainId: string }) =>
+      http.post('api/domains/set-primary', { json: params }).json<{ ok: boolean }>(),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['domains', vars.projectId] })
+      toast.success('Primary domain updated')
+    },
+    onError: () => {
+      toast.error('Failed to update primary domain')
+    },
+  })
+}
+
 export function useMockDomainPurchase() {
   const qc = useQueryClient()
   return useMutation({
@@ -140,13 +195,25 @@ export function useMockDomainPurchase() {
       http
         .post('api/domains/mock-purchase', { json: params })
         .json<{ ok: boolean; domainName: string; status: string }>(),
-    onSuccess: (data, vars) => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['domains'] })
       toast.success(`[DEV] Domain ${data.domainName} activated instantly`)
     },
     onError: () => {
       toast.error('Mock purchase failed')
     },
+  })
+}
+
+export interface DomainConfig {
+  freeDomainEnabled: boolean
+}
+
+export function useDomainConfig() {
+  return useQuery({
+    queryKey: ['domain-config'],
+    queryFn: () => http.get('api/domains/config').json<DomainConfig>(),
+    staleTime: 5 * 60 * 1000,
   })
 }
 

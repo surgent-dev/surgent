@@ -5,253 +5,242 @@ import { Loader2 } from 'lucide-react'
 import {
   Globe,
   ArrowSquareOut,
-  Trash,
   ShoppingCart,
   ArrowClockwise,
-  Warning,
   Link,
   CheckCircle,
+  Copy,
+  Gift,
   XCircle,
-  Clock,
 } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { showEntri, purchaseDomain, type EntriConfig } from 'entrijs'
+import { toast } from 'react-hot-toast'
 import {
   useInitDomainPurchase,
   useInitDomainConnect,
+  useBindEntriFlow,
   useRetryDomainConnect,
   useProjectDomains,
   useOnDomainPurchased,
   useRemoveDomain,
-  type DomainLogEntry,
+  useDomainConfig,
 } from '@/queries/domains'
 
-// ─── Status badge config ─────────────────────────────────────────
-const statusConfig = {
-  active: { label: 'Live', color: 'emerald', bg: 'bg-emerald-500/6 border-emerald-500/20' },
-  dns_configuring: {
-    label: 'Configuring DNS',
-    color: 'amber',
-    bg: 'bg-amber-500/6 border-amber-500/20',
-  },
-  purchasing: { label: 'Purchasing', color: 'amber', bg: 'bg-amber-500/6 border-amber-500/20' },
-  pending: { label: 'Pending', color: 'amber', bg: 'bg-amber-500/6 border-amber-500/20' },
-  error: { label: 'Failed', color: 'red', bg: 'bg-red-500/6 border-red-500/20' },
-  awaiting: { label: 'Setting up', color: 'brand', bg: 'bg-brand/5 border-brand/20' },
-} as const
+// ─── Helpers ────────────────────────────────────────────────────
 
-const dotColor: Record<string, string> = {
-  emerald: 'bg-emerald-500',
-  amber: 'bg-amber-500',
-  red: 'bg-red-500',
-  brand: 'bg-brand',
+type DomainStatus =
+  | 'pending'
+  | 'purchasing'
+  | 'dns_configuring'
+  | 'ssl_provisioning'
+  | 'active'
+  | 'error'
+
+const STATUS_HINT: Partial<Record<DomainStatus, string>> = {
+  dns_configuring: 'Waiting for DNS to propagate',
+  ssl_provisioning: 'Setting up HTTPS certificate',
+  purchasing: 'Processing purchase',
+  pending: 'Waiting for confirmation',
 }
 
-const textColor: Record<string, string> = {
-  emerald: 'text-emerald-600 dark:text-emerald-400',
-  amber: 'text-amber-600 dark:text-amber-400',
-  red: 'text-red-500',
-  brand: 'text-brand',
+function isInProgress(s: DomainStatus) {
+  return s !== 'active' && s !== 'error'
 }
 
-// ─── Activity log ────────────────────────────────────────────────
-function DomainLogs({ logs }: { logs?: DomainLogEntry[] }) {
-  if (!logs?.length) return null
+const DOMAIN_RE =
+  /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/
 
-  return (
-    <details className="group">
-      <summary className="text-[11px] text-muted-foreground/50 cursor-pointer hover:text-muted-foreground select-none">
-        Activity ({logs.length})
-      </summary>
-      <div className="mt-1.5 space-y-0.5 max-h-32 overflow-y-auto">
-        {logs.map((entry, i) => (
-          <div key={i} className="flex items-start gap-1.5 text-[10px] text-muted-foreground/80">
-            {entry.success === true ? (
-              <CheckCircle className="size-3 text-emerald-500 shrink-0 mt-0.5" weight="fill" />
-            ) : entry.success === false ? (
-              <XCircle className="size-3 text-red-500 shrink-0 mt-0.5" weight="fill" />
-            ) : (
-              <Clock className="size-3 text-muted-foreground/40 shrink-0 mt-0.5" weight="fill" />
-            )}
-            <span className="flex-1 break-words">{entry.detail || entry.event}</span>
-            <span className="text-muted-foreground/40 shrink-0 tabular-nums">
-              {new Date(entry.timestamp).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-          </div>
-        ))}
-      </div>
-    </details>
-  )
-}
+// ─── Domain card ────────────────────────────────────────────────
 
-// ─── Domain status card (unified for all states) ─────────────────
-function DomainStatusCard({
+function DomainCard({
   domainName,
   status,
-  isStale,
   lastError,
-  logs,
-  onVisit,
   onRetry,
   onRemove,
   retrying,
   removing,
 }: {
   domainName: string
-  status: keyof typeof statusConfig
-  isStale?: boolean
+  status: DomainStatus
   lastError?: string | null
-  logs?: DomainLogEntry[]
-  onVisit?: string
   onRetry?: () => void
-  onRemove?: () => void
+  onRemove: () => void
   retrying?: boolean
   removing?: boolean
 }) {
-  const cfg = statusConfig[status]
-  const isPending = status === 'pending' || status === 'purchasing'
   const isActive = status === 'active'
   const isError = status === 'error'
-  const showSpinner = isPending || (status === 'dns_configuring' && !isStale)
+  const inProgress = isInProgress(status)
+  const url = `https://${domainName.replace(/^www\./, '')}`
 
   return (
-    <div className="space-y-2.5">
-      <div
-        className={`flex items-center gap-2.5 h-10 px-3 rounded-lg border ${cfg.bg} font-mono text-sm`}
-      >
-        {showSpinner ? (
-          <Loader2 className={`size-3.5 animate-spin ${textColor[cfg.color]} shrink-0`} />
-        ) : isStale ? (
-          <Warning className="size-3.5 text-amber-500 shrink-0" weight="fill" />
+    <div className="rounded-lg border bg-card overflow-hidden">
+      {/* Main row */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        {/* Status indicator */}
+        {isActive ? (
+          <CheckCircle className="size-4 text-emerald-500 shrink-0" weight="fill" />
+        ) : isError ? (
+          <XCircle className="size-4 text-red-500 shrink-0" weight="fill" />
         ) : (
-          <span
-            className={`size-2 rounded-full shrink-0 ${dotColor[cfg.color]} ${isActive ? '' : 'animate-pulse'}`}
-          />
+          <Loader2 className="size-4 animate-spin text-muted-foreground/60 shrink-0" />
         )}
-        <span className="flex-1 truncate">
-          {domainName === 'pending' ? 'Processing...' : domainName}
-        </span>
-        <span className={`text-[11px] font-medium ${textColor[cfg.color]}`}>
-          {isStale ? 'Stuck' : cfg.label}
-        </span>
-        {onVisit && (
-          <a
-            href={onVisit}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1 hover:bg-muted rounded transition-colors"
-          >
-            <ArrowSquareOut className="size-3.5 text-muted-foreground" />
-          </a>
-        )}
-        {onRemove && !onRetry && (
+
+        {/* Domain name */}
+        <div className="flex-1 min-w-0">
+          {isActive ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block truncate font-mono text-[13px] hover:underline underline-offset-2"
+            >
+              {domainName}
+            </a>
+          ) : (
+            <span className="block truncate font-mono text-[13px] text-muted-foreground">
+              {domainName}
+            </span>
+          )}
+          {inProgress && STATUS_HINT[status] && (
+            <p className="text-[11px] text-muted-foreground/60 mt-0.5">{STATUS_HINT[status]}</p>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center shrink-0">
+          {isActive && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(url)
+                  toast.success('Copied')
+                }}
+                className="p-1.5 rounded-md hover:bg-muted transition-colors"
+              >
+                <Copy className="size-3.5 text-muted-foreground" />
+              </button>
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-md hover:bg-muted transition-colors"
+              >
+                <ArrowSquareOut className="size-3.5 text-muted-foreground" />
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Error message */}
+      {isError && lastError && (
+        <div className="px-4 pb-3 -mt-1">
+          <p className="text-[11px] text-red-500/80 leading-relaxed">{lastError}</p>
+        </div>
+      )}
+
+      {/* Footer actions */}
+      {(isError || inProgress) && (
+        <div className="flex items-center border-t px-4 py-2 bg-muted/20">
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={retrying}
+              className="text-[12px] font-medium text-foreground/80 hover:text-foreground transition-colors disabled:opacity-50 flex items-center gap-1.5 mr-auto"
+            >
+              {retrying ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <ArrowClockwise className="size-3" weight="bold" />
+              )}
+              Retry
+            </button>
+          )}
           <button
             type="button"
             onClick={onRemove}
             disabled={removing}
-            className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+            className="text-[12px] text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-50 ml-auto"
           >
-            <Trash className="size-3.5" />
+            {removing ? 'Removing...' : 'Remove'}
           </button>
-        )}
-      </div>
-
-      {lastError && (
-        <p className="text-[11px] text-red-500/80 bg-red-500/5 px-2.5 py-1.5 rounded-md">
-          {lastError}
-        </p>
+        </div>
       )}
 
-      {isStale && !lastError && (
-        <p className="text-[11px] text-amber-600/80">
-          DNS not configured yet. Retry to re-open the setup wizard.
-        </p>
-      )}
-
-      <DomainLogs logs={logs} />
-
-      {(onRetry || (onRemove && (isError || isStale))) && (
-        <div className="flex gap-2">
-          {onRetry && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs flex-1"
-              onClick={onRetry}
-              disabled={retrying}
-            >
-              {retrying ? (
-                <Loader2 className="size-3 animate-spin mr-1.5" />
-              ) : (
-                <ArrowClockwise className="size-3 mr-1.5" weight="bold" />
-              )}
-              {isError ? 'Retry' : 'Retry DNS'}
-            </Button>
-          )}
-          {onRemove && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs text-muted-foreground hover:text-destructive"
-              onClick={onRemove}
-              disabled={removing}
-            >
-              <Trash className="size-3 mr-1" />
-              Remove
-            </Button>
-          )}
+      {/* Active footer */}
+      {isActive && (
+        <div className="flex items-center border-t px-4 py-2 bg-muted/20">
+          <span className="text-[12px] font-medium text-emerald-600 dark:text-emerald-400 mr-auto">
+            Live
+          </span>
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={removing}
+            className="text-[12px] text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-50"
+          >
+            {removing ? 'Removing...' : 'Disconnect'}
+          </button>
         </div>
       )}
     </div>
   )
 }
 
-// ─── Main panel ──────────────────────────────────────────────────
+// ─── Main panel ─────────────────────────────────────────────────
+
 interface DomainSearchPanelProps {
   projectId: string
+  hasDeployment?: boolean
+  onDeploy?: () => void
 }
 
-export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
-  const [mode, setMode] = useState<'buy' | 'connect'>('buy')
+export function DomainSearchPanel({
+  projectId,
+  hasDeployment = true,
+  onDeploy,
+}: DomainSearchPanelProps) {
+  const [mode, setMode] = useState<'buy' | 'connect'>('connect')
   const [launching, setLaunching] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [connectInput, setConnectInput] = useState('')
   const [retrying, setRetrying] = useState(false)
   const [awaitingWebhook, setAwaitingWebhook] = useState(false)
+  const [pendingAction, setPendingAction] = useState<
+    { type: 'buy'; free?: boolean } | { type: 'connect' } | null
+  >(null)
   const awaitingTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const pendingEntriRef = useRef<{ domainId?: string; freeDomain?: boolean } | null>(null)
 
-  const { data: domainsData, isLoading: domainsLoading } = useProjectDomains(
-    projectId,
-    awaitingWebhook,
-  )
+  const isValidDomain = useMemo(() => DOMAIN_RE.test(connectInput.trim()), [connectInput])
+
+  const { data: domainsData, isLoading } = useProjectDomains(projectId, awaitingWebhook)
   const initPurchase = useInitDomainPurchase()
   const initConnect = useInitDomainConnect()
   const retryConnect = useRetryDomainConnect()
+  const bindEntriFlow = useBindEntriFlow()
   const removeDomain = useRemoveDomain()
   const onPurchased = useOnDomainPurchased()
+  const { data: domainConfig } = useDomainConfig()
 
-  const activeDomain = domainsData?.domains?.find((d) => d.status === 'active')
-  const configuringDomain = domainsData?.domains?.find((d) => d.status === 'dns_configuring')
-  const pendingDomain = domainsData?.domains?.find((d) =>
-    ['pending', 'purchasing'].includes(d.status),
-  )
-  const errorDomain = domainsData?.domains?.find((d) => d.status === 'error')
-  const currentDomain = activeDomain || configuringDomain || errorDomain || pendingDomain
-
-  const isConfigStale = useMemo(() => {
-    if (!configuringDomain) return false
-    return Date.now() - new Date(configuringDomain.createdAt).getTime() > 5 * 60 * 1000
-  }, [configuringDomain])
+  const domains = domainsData?.domains ?? []
+  const activeDomain = domains.find((d) => d.status === 'active')
+  const pendingDomain = domains.find((d) => isInProgress(d.status as DomainStatus))
+  const errorDomain = domains.find((d) => d.status === 'error')
+  const currentDomain = activeDomain || pendingDomain || errorDomain
+  const showConnectForm = !awaitingWebhook && !pendingAction && !pendingDomain
 
   useEffect(() => {
-    if (awaitingWebhook && (activeDomain || configuringDomain || pendingDomain)) {
+    if (awaitingWebhook && currentDomain) {
       setAwaitingWebhook(false)
       clearTimeout(awaitingTimerRef.current)
     }
-  }, [awaitingWebhook, activeDomain, configuringDomain, pendingDomain])
+  }, [awaitingWebhook, currentDomain])
 
   const startAwaitingWebhook = useCallback(() => {
     clearTimeout(awaitingTimerRef.current)
@@ -262,47 +251,83 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
   useEffect(() => () => clearTimeout(awaitingTimerRef.current), [])
 
   useEffect(() => {
+    if (!hasDeployment || !pendingAction) return
+    const action = pendingAction
+    setPendingAction(null)
+    if (action.type === 'buy') handleBuyDomain(action.free)
+    else handleConnect()
+  }, [hasDeployment, pendingAction]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
-      if (detail?.success && detail?.domain) {
-        onPurchased(projectId, detail.domain)
-        startAwaitingWebhook()
+      const domain =
+        typeof detail?.domain === 'string' ? detail.domain.replace(/^www\./i, '') : null
+      const entriFlowId = detail?.jobId || detail?.job_id || null
+      if (!domain) return
+
+      const pending = pendingEntriRef.current
+      pendingEntriRef.current = null
+      onPurchased(projectId, domain)
+      startAwaitingWebhook()
+
+      if (entriFlowId) {
+        bindEntriFlow.mutate({
+          projectId,
+          domain,
+          entriFlowId,
+          ...(pending?.domainId ? { domainId: pending.domainId } : {}),
+          ...(pending?.freeDomain ? { freeDomain: true } : {}),
+        })
       }
     }
-    window.addEventListener('onEntriClose', handler)
-    return () => window.removeEventListener('onEntriClose', handler)
-  }, [projectId, onPurchased, startAwaitingWebhook])
+    window.addEventListener('onEntriSuccess', handler)
+    return () => window.removeEventListener('onEntriSuccess', handler)
+  }, [bindEntriFlow, projectId, onPurchased, startAwaitingWebhook])
 
-  const handleBuyDomain = useCallback(async () => {
-    setLaunching(true)
-    try {
-      const config = await initPurchase.mutateAsync({ projectId })
-
-      if ('provider' in config && config.provider === 'namecheap') {
-        onPurchased(projectId, 'domainName' in config ? String(config.domainName) : '')
+  const handleBuyDomain = useCallback(
+    async (free?: boolean) => {
+      if (!hasDeployment) {
+        setPendingAction({ type: 'buy', free })
+        onDeploy?.()
         return
       }
-      if (config.devMode) return
-
-      const sellConfig: EntriConfig = {
-        applicationId: config.applicationId,
-        token: config.token,
-        dnsRecords: config.dnsRecords,
-        userId: JSON.stringify({ projectId, email: config.contact.email }),
-        whiteLabel: { sell: { contact: config.contact } },
+      setLaunching(true)
+      try {
+        const config = await initPurchase.mutateAsync({
+          projectId,
+          ...(free ? { freeDomain: true } : {}),
+        })
+        if (config.devMode) return
+        const sellConfig: EntriConfig = {
+          applicationId: config.applicationId,
+          token: config.token,
+          dnsRecords: config.dnsRecords,
+          userId: JSON.stringify({ projectId, email: config.contact.email }),
+          whiteLabel: { sell: { contact: config.contact } },
+          power: true,
+          ...(free && { freeDomain: true }),
+        }
+        pendingEntriRef.current = { freeDomain: Boolean(free) }
+        await purchaseDomain(sellConfig)
+      } finally {
+        setLaunching(false)
       }
-      await purchaseDomain(sellConfig)
-      startAwaitingWebhook()
-    } finally {
-      setLaunching(false)
-    }
-  }, [projectId, initPurchase, startAwaitingWebhook, onPurchased])
+    },
+    [projectId, hasDeployment, onDeploy, initPurchase],
+  )
 
   const handleConnect = useCallback(async () => {
     if (!connectInput.trim()) return
+    if (!hasDeployment) {
+      setPendingAction({ type: 'connect' })
+      onDeploy?.()
+      return
+    }
     setConnecting(true)
     try {
       const config = await initConnect.mutateAsync({ projectId, domain: connectInput.trim() })
+      pendingEntriRef.current = { domainId: config.domainId }
       try {
         await showEntri({
           applicationId: config.applicationId,
@@ -310,32 +335,34 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
           prefilledDomain: config.prefilledDomain,
           dnsRecords: config.dnsRecords,
           userId: config.userId,
+          power: true,
         })
-      } catch (entriErr) {
-        console.error('Entri Connect error:', entriErr)
+      } catch {
+        // User closed Entri modal
       }
-      startAwaitingWebhook()
       setConnectInput('')
     } finally {
       setConnecting(false)
     }
-  }, [projectId, connectInput, initConnect, startAwaitingWebhook])
+  }, [projectId, connectInput, hasDeployment, onDeploy, initConnect])
 
-  const handleRetryConnect = useCallback(
+  const handleRetry = useCallback(
     async (domainId: string) => {
       setRetrying(true)
       try {
-        const config = await retryConnect.mutateAsync({ projectId, domainId })
+        const result = await retryConnect.mutateAsync({ projectId, domainId })
+        pendingEntriRef.current = { domainId }
         try {
           await showEntri({
-            applicationId: config.applicationId,
-            token: config.token,
-            prefilledDomain: config.prefilledDomain,
-            dnsRecords: config.dnsRecords,
-            userId: config.userId,
+            applicationId: result.applicationId,
+            token: result.token,
+            prefilledDomain: result.prefilledDomain,
+            dnsRecords: result.dnsRecords,
+            userId: result.userId,
+            power: true,
           })
-        } catch (entriErr) {
-          console.error('Entri Connect retry error:', entriErr)
+        } catch {
+          // User closed Entri modal
         }
       } finally {
         setRetrying(false)
@@ -344,116 +371,134 @@ export function DomainSearchPanel({ projectId }: DomainSearchPanelProps) {
     [projectId, retryConnect],
   )
 
-  // ─── Loading ───────────────────────────────────────────────────
-  if (domainsLoading) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin mr-2" /> Loading
+      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="px-5 py-4 space-y-3">
-      {/* Section header */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider font-medium">
-        <Globe className="size-3.5 text-brand" weight="bold" />
+    <div className="px-4 sm:px-5 py-4 space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-2 text-[11px] text-muted-foreground/70 uppercase tracking-widest font-semibold">
+        <Globe className="size-3.5" weight="bold" />
         Custom Domain
       </div>
 
       {/* Awaiting webhook */}
       {awaitingWebhook && !currentDomain && (
-        <DomainStatusCard domainName="Setting up..." status="awaiting" />
+        <div className="rounded-lg border bg-card px-4 py-3 flex items-center gap-3">
+          <Loader2 className="size-4 animate-spin text-muted-foreground/60" />
+          <span className="text-[13px] text-muted-foreground">Setting up your domain...</span>
+        </div>
       )}
 
-      {/* Active / configuring / error / pending domain */}
+      {/* Domain card — active, pending, or error */}
       {currentDomain && (
-        <DomainStatusCard
+        <DomainCard
           domainName={currentDomain.domainName}
-          status={currentDomain.status as keyof typeof statusConfig}
-          isStale={configuringDomain ? isConfigStale : undefined}
+          status={currentDomain.status as DomainStatus}
           lastError={currentDomain.lastError}
-          logs={currentDomain.logs}
-          onVisit={activeDomain ? `https://${activeDomain.domainName}` : undefined}
           onRetry={
-            configuringDomain
-              ? () => handleRetryConnect(configuringDomain.id)
-              : errorDomain
-                ? () => handleRetryConnect(errorDomain.id)
-                : undefined
+            ['dns_configuring', 'ssl_provisioning', 'error'].includes(currentDomain.status)
+              ? () => handleRetry(currentDomain.id)
+              : undefined
           }
           onRemove={() => removeDomain.mutate({ projectId, domainId: currentDomain.id })}
-          retrying={retrying || retryConnect.isPending}
+          retrying={retrying}
           removing={removeDomain.isPending}
         />
       )}
 
-      {/* No domain — Buy / Connect */}
-      {!currentDomain && !awaitingWebhook && (
-        <>
-          <div className="flex rounded-lg border bg-muted/40 p-0.5">
-            <button
-              type="button"
-              onClick={() => setMode('buy')}
-              className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
-                mode === 'buy'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Buy new
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('connect')}
-              className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
-                mode === 'connect'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              I have one
-            </button>
+      {/* Deploy-first message */}
+      {pendingAction && !hasDeployment && (
+        <div className="rounded-lg border border-brand/20 bg-brand/5 px-4 py-3 flex items-center gap-3">
+          <Loader2 className="size-4 animate-spin text-brand shrink-0" />
+          <p className="text-[13px] text-muted-foreground">Deploying your app first...</p>
+        </div>
+      )}
+
+      {/* Connect / Buy form */}
+      {showConnectForm && (
+        <div className="space-y-3">
+          {/* Tabs */}
+          <div className="flex rounded-lg border bg-muted/30 p-0.5">
+            {(['connect', 'buy'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setMode(tab)}
+                className={`flex-1 text-[12px] font-medium py-1.5 rounded-md transition-all ${
+                  mode === tab
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab === 'connect' ? 'Connect domain' : 'Buy new'}
+              </button>
+            ))}
           </div>
 
-          {mode === 'buy' ? (
-            <Button
-              className="w-full h-9"
-              onClick={handleBuyDomain}
-              disabled={launching || initPurchase.isPending}
-            >
-              {launching || initPurchase.isPending ? (
-                <Loader2 className="size-3.5 animate-spin mr-2" />
-              ) : (
-                <ShoppingCart className="size-3.5 mr-2" weight="bold" />
+          {mode === 'connect' ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={connectInput}
+                  onChange={(e) => setConnectInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && isValidDomain && handleConnect()}
+                  placeholder="myapp.com"
+                  className="flex-1 min-w-0 h-9 px-3 rounded-lg border bg-background text-[13px] font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-shadow"
+                />
+                <Button
+                  size="sm"
+                  className="h-9 px-4 shrink-0"
+                  onClick={handleConnect}
+                  disabled={connecting || initConnect.isPending || !isValidDomain}
+                >
+                  {connecting || initConnect.isPending ? (
+                    <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <Link className="size-3.5 mr-1.5" weight="bold" />
+                  )}
+                  Connect
+                </Button>
+              </div>
+              {connectInput.trim() && !isValidDomain && (
+                <p className="text-[11px] text-amber-500">Enter a valid domain (e.g. myapp.com)</p>
               )}
-              Search & buy a domain
-            </Button>
+            </div>
           ) : (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={connectInput}
-                onChange={(e) => setConnectInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
-                placeholder="myapp.com"
-                className="flex-1 h-9 px-3 rounded-md border bg-background text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
-              />
+            <div className="space-y-2">
               <Button
-                className="h-9"
-                onClick={handleConnect}
-                disabled={connecting || initConnect.isPending || !connectInput.trim()}
+                variant="outline"
+                className="w-full h-9"
+                onClick={() => handleBuyDomain(false)}
+                disabled={launching || initPurchase.isPending}
               >
-                {connecting || initConnect.isPending ? (
+                {launching || initPurchase.isPending ? (
                   <Loader2 className="size-3.5 animate-spin mr-2" />
                 ) : (
-                  <Link className="size-3.5 mr-2" weight="bold" />
+                  <ShoppingCart className="size-3.5 mr-2" weight="bold" />
                 )}
-                Connect
+                Search & buy a domain
               </Button>
+              {domainConfig?.freeDomainEnabled && (
+                <button
+                  type="button"
+                  onClick={() => handleBuyDomain(true)}
+                  disabled={launching || initPurchase.isPending}
+                  className="w-full h-8 rounded-lg border border-dashed border-brand/30 bg-brand/5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  <Gift className="size-3.5" weight="fill" />
+                  Claim free domain
+                </button>
+              )}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   )

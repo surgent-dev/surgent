@@ -791,13 +791,26 @@ export interface PayCustomerTable {
   updatedAt?: Date
 }
 
-export type DomainStatus = 'pending' | 'purchasing' | 'dns_configuring' | 'active' | 'error'
+export type DomainStatus =
+  | 'pending'
+  | 'purchasing'
+  | 'dns_configuring'
+  | 'ssl_provisioning'
+  | 'active'
+  | 'error'
 
 export interface DomainLogEntry {
   timestamp: string
   event: string
   detail?: string
   success?: boolean
+}
+
+export interface SslProvisioningMeta {
+  _type: 'ssl_provisioning_meta'
+  attempts: number
+  firstAttemptAt: string
+  lastAttemptAt: string
 }
 
 export interface DomainTable {
@@ -809,10 +822,15 @@ export interface DomainTable {
   status: DomainStatus
   registrar: string | null
   entriFlowId: string | null
-  cfCustomDomainId: string | null
-  dnsVerified: Generated<boolean>
-  kvMapped: Generated<boolean>
+  propagationStatus: string | null
+  secureStatus: string | null
+  powerStatus: string | null
+  cnameTarget: string | null
+  freeDomain: Generated<boolean>
+  lastWebhookAt: Date | null
   lastError: string | null
+  sslMeta: SslProvisioningMeta | null
+  isPrimary: Generated<boolean>
   logs: Generated<DomainLogEntry[]>
   purchasedAt: Date | null
   expiresAt: Date | null

@@ -300,12 +300,17 @@ async function getOrCreateSandbox(opts: {
   return { sandbox, previewUrl: await sandbox.host(opts.port) }
 }
 
+export function resolveDeployScriptName(deployName?: string) {
+  return deployName
+    ? sanitizeHostname(deployName)
+    : `app-${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`
+}
+
 // ============================================================================
 // Main Functions
 // ============================================================================
 
-export async function createDeploymentRecord(projectId: string, deployName?: string) {
-  const scriptName = deployName ? sanitizeHostname(deployName) : `project-${projectId.slice(0, 8)}`
+export async function createDeploymentRecord(projectId: string, scriptName: string) {
   const hostname = `https://${scriptName}.${config.cloudflare.deployDomain}`
   return ProjectService.createDeployment({
     projectId,
@@ -325,7 +330,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
   const sandboxRow = await ProjectService.getSandboxByProjectId(projectId)
   if (!sandboxRow?.id) throw new Error('Sandbox not initialized')
 
-  const scriptName = rawName ? sanitizeHostname(rawName) : `project-${projectId.slice(0, 8)}`
+  const scriptName = resolveDeployScriptName(rawName)
   const workingDir = workspacePath(projectId)
   const accountId = config.cloudflare.accountId!
 
@@ -583,17 +588,11 @@ export async function resumeProject(
   args: ResumeProjectArgs,
 ): Promise<{ sandboxId: string; previewUrl: string }> {
   const workingDirectory = workspacePath(args.projectId)
-  const [appEnv, serverEnv] = await Promise.all([
-    getProjectEnvVars(args.projectId, 'development', { includeServer: false }),
-    getProjectEnvVars(args.projectId, 'development'),
-  ])
+  const devEnv = await getProjectEnvVars(args.projectId, 'development', { includeServer: false })
   const opencodeConfigDir = config.opencode.configDir
-  const opencodeKey = serverEnv.OPENCODE_API_KEY || serverEnv.SURGENT_API_KEY
+  const opencodeKey = devEnv.OPENCODE_API_KEY || devEnv.SURGENT_API_KEY
   const opencodeEnv = {
-    ...appEnv,
-    ...(serverEnv.SURGENT_API_KEY || opencodeKey
-      ? { SURGENT_API_KEY: serverEnv.SURGENT_API_KEY || opencodeKey }
-      : {}),
+    ...devEnv,
     ...(opencodeKey ? { OPENCODE_API_KEY: opencodeKey } : {}),
     ...(config.surgent.baseUrl ? { SURGENT_BASE_URL: config.surgent.baseUrl } : {}),
     ...(config.opencode.baseUrl ? { OPENCODE_BASE_URL: config.opencode.baseUrl } : {}),
@@ -617,7 +616,7 @@ export async function resumeProject(
         workingDirectory,
         metadata.processName,
         metadata.startCommand,
-        appEnv,
+        devEnv,
       )
     }
 
