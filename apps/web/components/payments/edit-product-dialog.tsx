@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
 import { AlertTriangle, Archive, Check, Loader2, Settings } from 'lucide-react'
 import { toast } from 'react-hot-toast'
@@ -50,7 +50,7 @@ export function EditProductDialog({
     reset,
     formState: { errors, isDirty },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: standardSchemaResolver(schema),
     defaultValues: {
       name: product.name,
       description: product.description ?? '',
