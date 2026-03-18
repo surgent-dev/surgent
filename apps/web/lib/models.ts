@@ -66,11 +66,16 @@ export const MODELS: ProviderModel[] = [
 export function applyChatgptConnection(models: ProviderModel[], connected: boolean) {
   if (!connected) return models
 
-  return models
+  const next = models
     .filter((model) => model.byokProvider !== 'openai' || model.chatgptIncluded)
     .map((model) =>
       model.byokProvider === 'openai' && model.chatgptIncluded ? { ...model, free: true } : model,
     )
+
+  const preferred = next.find((model) => model.id === 'gpt-5.4')
+  if (!preferred) return next
+
+  return [preferred, ...next.filter((model) => model !== preferred)]
 }
 
 export function getModel(id: string) {
