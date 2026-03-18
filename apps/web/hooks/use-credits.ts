@@ -22,6 +22,7 @@ export function useCredits() {
   const balance = microsToUsd(snapshot?.totalBalanceMicros ?? 0)
   const total = microsToUsd(snapshot?.totalBudgetMicros ?? 0)
   const used = Math.max(total - balance, 0)
+  const byokProviderCost = microsToUsd(snapshot?.byokProviderCostMicros ?? 0)
   const usedPercent = total > 0 ? Math.min((used / total) * 100, 100) : 0
   const unlimited = false
   const remaining = total > 0 ? Math.max((balance / total) * 100, 0) : 0
@@ -55,6 +56,7 @@ export function useCredits() {
     balance,
     total,
     used,
+    byokProviderCost,
     usedPercent,
     unlimited,
     remaining,

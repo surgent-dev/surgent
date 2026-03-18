@@ -68,6 +68,7 @@ type BillingSnapshot = {
   totalBalanceMicros: number
   totalBudgetMicros: number
   usedMicros: number
+  byokProviderCostMicros: number
   usedPercent: number
   monthlyAllowanceMicros: number
   monthlySpendLimitMicros: number
@@ -614,8 +615,25 @@ async function getUsageSpentMicrosTx(tx: typeof db, organizationId: string, peri
   return asNumber(row?.spentMicros)
 }
 
-async function normalizeState(row: BillingStateRow) {
-  const now = new Date()
+async function getByokProviderCostMicrosTx(
+  tx: typeof db,
+  organizationId: string,
+  periodStart: Date,
+) {
+  const row = await tx
+    .selectFrom('usage')
+    .innerJoin('project', 'project.id', 'usage.projectId')
+    .select(sql<string>`COALESCE(SUM("usage"."providerCostMicros"), 0)`.as('spentMicros'))
+    .where('project.organizationId', '=', organizationId)
+    .where('usage.deletedAt', 'is', null)
+    .where('usage.billingMode', '=', 'byok')
+    .where('usage.createdAt', '>=', periodStart)
+    .executeTakeFirst()
+
+  return asNumber(row?.spentMicros)
+}
+
+async function normalizeState(row: BillingStateRow, now = new Date()) {
   const plan = getPlanConfig(row.subscription.tier, row.subscription.interval)
   const allowanceWindow = getAllowanceWindow(
     {
@@ -673,11 +691,28 @@ async function normalizeState(row: BillingStateRow) {
 }
 
 async function getBillingBaseSnapshot(organizationId: string) {
-  const base = await normalizeState(await getBillingState(organizationId))
+  const now = new Date()
+  const state = await getBillingState(organizationId)
+  const base = await normalizeState(state, now)
   const founder = await getFounderCouponData(organizationId)
+  const allowanceWindow = getAllowanceWindow(
+    {
+      tier: state.subscription.tier,
+      interval: state.subscription.interval,
+      currentPeriodStart: state.subscription.currentPeriodStart,
+      currentPeriodEnd: state.subscription.currentPeriodEnd,
+    },
+    now,
+  )
+  const byokProviderCostMicros = await getByokProviderCostMicrosTx(
+    db,
+    organizationId,
+    allowanceWindow.start,
+  )
 
   return {
     ...base,
+    byokProviderCostMicros,
     hasMigrationCredit: founder.hasMigrationCredit,
     founderCouponCode: founder.founderCouponCode,
   }

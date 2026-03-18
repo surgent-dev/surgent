@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { authClient } from '@/lib/auth-client'
+import { useProvidersQuery } from '@/queries/providers'
 import TopupDialog from '@/components/topup-dialog'
 
 interface User {
@@ -31,8 +32,12 @@ export default function UserMenu({ onUpgrade }: UserMenuProps) {
   const router = useRouter()
   const { setTheme, resolvedTheme } = useTheme()
   const credits = useCredits()
+  const { data: providers } = useProvidersQuery()
   const [user, setUser] = useState<User | null>(null)
   const [topupOpen, setTopupOpen] = useState(false)
+  const hasChatgpt = providers?.some(
+    (row) => row.provider === 'openai' && row.authType === 'chatgpt',
+  )
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => data?.user && setUser(data.user as User))
@@ -66,7 +71,7 @@ export default function UserMenu({ onUpgrade }: UserMenuProps) {
             <>
               <div className="px-3 py-2.5 space-y-2">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-muted-foreground">Usage balance</span>
+                  <span className="text-xs text-muted-foreground">Surgent usage</span>
                   <span className="text-xs tabular-nums font-medium">
                     ${credits.used.toFixed(2)} / ${credits.total.toFixed(2)}
                   </span>
@@ -83,6 +88,17 @@ export default function UserMenu({ onUpgrade }: UserMenuProps) {
                     style={{ width: `${credits.usedPercent}%` }}
                   />
                 </div>
+                {hasChatgpt && (
+                  <>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xs text-muted-foreground">ChatGPT subscription</span>
+                      <span className="text-xs tabular-nums font-medium">Included</span>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      ${credits.byokProviderCost.toFixed(2)} used
+                    </div>
+                  </>
+                )}
                 {credits.snapshot?.tier !== 'pro' ? (
                   <Button variant="brand" className="w-full" onClick={() => onUpgrade?.()}>
                     <Lightning className="size-3" weight="fill" />

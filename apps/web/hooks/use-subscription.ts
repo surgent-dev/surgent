@@ -22,6 +22,7 @@ export type BillingSnapshot = {
   totalBalanceMicros: number
   totalBudgetMicros: number
   usedMicros: number
+  byokProviderCostMicros: number
   usedPercent: number
   monthlyAllowanceMicros: number
   monthlySpendLimitMicros: number
