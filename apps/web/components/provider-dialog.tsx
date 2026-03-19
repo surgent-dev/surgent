@@ -22,7 +22,6 @@ import {
   invalidateProviderQueries,
   openProviderOAuthPopup,
 } from '@/lib/provider-oauth'
-import { ChatgptAuthFlow } from '@/components/chatgpt-connect'
 import { useProviderAuthMethods, useProvidersQuery } from '@/queries/providers'
 
 type OAuthAuthorizeResponse = {
@@ -203,10 +202,8 @@ export default function ProviderDialog({ open, onOpenChange }: Props) {
         {step === 'list' && (
           <div className="mx-3 mt-3 p-3 rounded-lg bg-muted border border-dashed">
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Have <span className="font-medium text-foreground">Claude Pro</span>,{' '}
-              <span className="font-medium text-foreground">ChatGPT Plus</span>, or{' '}
-              <span className="font-medium text-foreground">Copilot</span>? Link it and pay{' '}
-              <span className="font-semibold text-success">$0</span> for AI.
+              Add your API keys to use your own provider billing and pay{' '}
+              <span className="font-semibold text-success">$0</span> for AI usage on Surgent.
             </p>
           </div>
         )}
@@ -325,25 +322,7 @@ export default function ProviderDialog({ open, onOpenChange }: Props) {
           )}
 
           {/* OAuth */}
-          {step === 'oauth' && selectedProvider === 'openai' && (
-            <>
-              <button
-                onClick={() => setStep('auth-methods')}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3"
-              >
-                <ChevronLeft className="size-3" /> Back
-              </button>
-              <ChatgptAuthFlow
-                compact
-                onClose={() => {
-                  invalidateProviderQueries(queryClient)
-                  resetState()
-                }}
-              />
-            </>
-          )}
-
-          {step === 'oauth' && selectedProvider !== 'openai' && (
+          {step === 'oauth' && (
             <>
               <button
                 onClick={() => setStep('auth-methods')}

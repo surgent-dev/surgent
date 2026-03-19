@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { Loader2, Trash2, Key, ExternalLink, Link2, Plus } from 'lucide-react'
+import { Loader2, Trash2, Key, Link2, Plus } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
 import {
@@ -23,9 +23,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { getErrorMessage } from '@/lib/provider-oauth'
-import { ChatgptAuthFlow } from '@/components/chatgpt-connect'
 
-type ConnectMode = 'idle' | 'chatgpt-auth' | 'api-key'
+type ConnectMode = 'idle' | 'api-key'
 
 const PROVIDERS = [
   {
@@ -33,8 +32,7 @@ const PROVIDERS = [
     label: 'OpenAI',
     icon: '/OpenAI-logo.svg',
     placeholder: 'sk-...',
-    subscription: true,
-    subscriptionLabel: 'ChatGPT Plus / Pro',
+    subscription: false,
   },
   {
     id: 'anthropic',
@@ -109,9 +107,7 @@ function ConnectedProvider({ row }: { row: ProviderRow }) {
             </span>
           </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            {row.authType === 'chatgpt' ? 'ChatGPT subscription' : 'API key'}
-            {' · '}
-            Updated {timeSince(row.updatedAt)}
+            API key · Updated {timeSince(row.updatedAt)}
           </p>
         </div>
         <button
@@ -266,9 +262,6 @@ export function ProvidersTab() {
 
   const connected = rows ?? []
   const connectedIds = connected.map((r) => r.provider)
-  const hasChatgpt = connected.some(
-    (row) => row.provider === 'openai' && row.authType === 'chatgpt',
-  )
 
   return (
     <div className="h-full flex flex-col">
@@ -278,49 +271,9 @@ export function ProvidersTab() {
           <div className="mb-6">
             <h3 className="text-[15px] font-semibold">API Keys</h3>
             <p className="text-[13px] text-muted-foreground mt-0.5">
-              Bring your own subscriptions or API keys. Usage goes through your account.
+              Bring your own API keys. Usage goes through your provider account.
             </p>
           </div>
-
-          {/* ChatGPT Subscription CTA — shown when no OpenAI connected and not actively connecting */}
-          {!hasChatgpt && mode === 'idle' && !isLoading && (
-            <div className="mb-4 rounded-lg border border-border/50 bg-gradient-to-r from-emerald-500/5 to-transparent p-4">
-              <div className="flex items-start gap-3">
-                <div className="size-9 rounded-lg bg-background border border-border/50 flex items-center justify-center shrink-0 mt-0.5">
-                  <Image
-                    src="/OpenAI-logo.svg"
-                    alt=""
-                    width={20}
-                    height={20}
-                    className="dark:invert"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold">Use your ChatGPT subscription</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5 leading-relaxed">
-                    Have ChatGPT Plus or Pro? Link it and pay{' '}
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">$0</span>{' '}
-                    for AI usage.
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => setMode('chatgpt-auth')}
-                  className="shrink-0 gap-1.5"
-                >
-                  <ExternalLink className="size-3.5" />
-                  Connect
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* ChatGPT OAuth flow */}
-          {mode === 'chatgpt-auth' && (
-            <div className="mb-4">
-              <ChatgptAuthFlow compact onClose={() => setMode('idle')} />
-            </div>
-          )}
 
           {/* API key flow */}
           {mode === 'api-key' && (
@@ -374,7 +327,7 @@ export function ProvidersTab() {
               </div>
               <p className="text-sm font-medium">No providers connected</p>
               <p className="text-[13px] text-muted-foreground mt-1 max-w-[280px]">
-                Connect your ChatGPT subscription above or add API keys to use your own billing.
+                Add API keys to use your own provider billing.
               </p>
             </div>
           )}

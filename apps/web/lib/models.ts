@@ -9,7 +9,6 @@ export type ProviderModel = {
   icon: string
   badge: string
   badgeColor: string
-  chatgptIncluded?: boolean
   free?: boolean
 }
 
@@ -37,7 +36,6 @@ export const MODELS: ProviderModel[] = [
     icon: '/OpenAI-logo.svg',
     badge: 'Latest',
     badgeColor: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
-    chatgptIncluded: true,
   },
   {
     id: 'gemini-3-pro',
@@ -62,16 +60,6 @@ export const MODELS: ProviderModel[] = [
     badgeColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   },
 ]
-
-export function applyChatgptConnection(models: ProviderModel[], connected: boolean) {
-  if (!connected) return models
-
-  return models
-    .filter((model) => model.byokProvider !== 'openai' || model.chatgptIncluded)
-    .map((model) =>
-      model.byokProvider === 'openai' && model.chatgptIncluded ? { ...model, free: true } : model,
-    )
-}
 
 export function getModel(id: string) {
   return MODELS.find((m) => m.id === id)

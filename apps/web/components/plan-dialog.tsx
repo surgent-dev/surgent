@@ -62,7 +62,7 @@ const FEATURES: ReadonlyArray<{
   {
     icon: Key,
     title: 'Bring your own keys',
-    desc: 'Use your existing OpenAI, Gemini, or ChatGPT subscription',
+    desc: 'Use your existing OpenAI, Anthropic, or Google API keys',
     bg: 'bg-orange-500/10 dark:bg-orange-400/10',
     text: 'text-orange-600 dark:text-orange-400',
   },

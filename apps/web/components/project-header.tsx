@@ -62,7 +62,6 @@ import { useGitHubStatus } from '@/queries/github'
 import UserMenu from '@/components/project-header/user-menu'
 import PayDialogs from '@/components/project-header/pay-dialogs'
 import SellDialog from '@/components/project-header/sell-dialog'
-import { ChatgptConnect } from '@/components/chatgpt-connect'
 
 // Types
 interface ProjectHeaderProps {
@@ -350,9 +349,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
         {/* Action buttons */}
         <div className="flex items-center gap-1.5 pr-2">
-          {/* ChatGPT Connect */}
-          <ChatgptConnect />
-
           {/* Download */}
           <Tooltip>
             <TooltipTrigger asChild>
