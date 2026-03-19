@@ -3,6 +3,7 @@ import type { Bindings } from '../../../types'
 
 export namespace ZenData {
   export const FormatSchema = z.enum(['anthropic', 'google', 'openai', 'oa-compat'])
+  export const ByokProviderSchema = z.enum(['openai', 'anthropic', 'google'])
   const TrialSchema = z.object({
     provider: z.string(),
     limits: z.array(
@@ -29,7 +30,7 @@ export namespace ZenData {
     cost: ModelCostSchema,
     cost200K: ModelCostSchema.optional(),
     allowAnonymous: z.boolean().optional(),
-    byokProvider: z.enum(['openai', 'anthropic', 'google']).optional(),
+    byokProvider: ByokProviderSchema.optional(),
     stickyProvider: z.enum(['strict', 'prefer']).optional(),
     trial: TrialSchema.optional(),
     rateLimit: z.number().optional(),
@@ -63,6 +64,10 @@ export namespace ZenData {
 
 export type ZenDataResponse = z.infer<typeof ZenData.ModelsSchema>
 
+function isByokProvider(provider: string) {
+  return provider === 'openai' || provider === 'anthropic' || provider === 'google'
+}
+
 function readModelsEnv(env: Bindings) {
   if (env.ZEN_MODELS) return env.ZEN_MODELS
   return [
@@ -84,6 +89,21 @@ export function loadZenData(env: Bindings): ZenDataResponse {
   if (!raw) {
     throw new Error('ZEN_MODELS is not configured')
   }
-  const json = JSON.parse(raw)
-  return ZenData.ModelsSchema.parse(json)
+  const data = ZenData.ModelsSchema.parse(JSON.parse(raw))
+
+  for (const [modelId, value] of Object.entries(data.models)) {
+    const models = Array.isArray(value) ? value : [value]
+
+    for (const model of models) {
+      const providers = model.providers.map((provider) => provider.id).filter(isByokProvider)
+
+      if (providers.length === 0) continue
+      if (!model.byokProvider) throw new Error(`Model ${modelId} is missing byokProvider`)
+      if (!providers.includes(model.byokProvider)) {
+        throw new Error(`Model ${modelId} has invalid byokProvider ${model.byokProvider}`)
+      }
+    }
+  }
+
+  return data
 }
