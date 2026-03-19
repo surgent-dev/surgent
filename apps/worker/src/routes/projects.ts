@@ -41,7 +41,11 @@ import {
   getEnvVarsByProjectId,
   deleteEnvVar,
 } from '@/services/projects'
-import { getConvexCredentials, syncEnvVarsToConvexForEnv } from '@/lib/convex-env'
+import {
+  getConvexCredentials,
+  resolveConvexIntegrationConfig,
+  syncEnvVarsToConvexForEnv,
+} from '@/lib/convex-env'
 import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
 import {
   cancelProjectDeployJob,
@@ -785,6 +789,15 @@ projects.get('/:id', zValidator('param', idParam), async (c) => {
     .where('projectId', '=', id)
     .execute()
 
+  const serializedIntegrations = await Promise.all(
+    integrations.map(async (i) => ({
+      provider: i.provider,
+      status: i.status,
+      config:
+        i.provider === 'convex' ? await resolveConvexIntegrationConfig(id, i.config) : i.config,
+    })),
+  )
+
   return c.json({
     ...project,
     sandbox: row?.sandboxId
@@ -801,11 +814,7 @@ projects.get('/:id', zValidator('param', idParam), async (c) => {
     worker: row?.workerName
       ? { name: row.workerName, status: row.workerStatus, hostname: row.workerHostname }
       : null,
-    integrations: integrations.map((i) => ({
-      provider: i.provider,
-      status: i.status,
-      config: i.config,
-    })),
+    integrations: serializedIntegrations,
   })
 })
 

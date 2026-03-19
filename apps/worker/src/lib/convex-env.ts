@@ -52,6 +52,44 @@ export function withDeployment(
   return { ...cfg, deployments: { ...cfg.deployments, [env]: dep } }
 }
 
+export async function resolveConvexIntegrationConfig(
+  projectId: string,
+  configValue: unknown,
+): Promise<ConvexIntegrationConfig> {
+  const cfg =
+    configValue && typeof configValue === 'object'
+      ? ({ ...configValue } as ConvexIntegrationConfig)
+      : {}
+  const deployments = { ...cfg.deployments }
+
+  const [dev, prod] = await Promise.all([
+    getConvexCredentials(projectId, 'development'),
+    getConvexCredentials(projectId, 'production'),
+  ])
+
+  if (dev) {
+    deployments.development = {
+      ...deployments.development,
+      name: dev.deploymentName,
+      url: dev.deploymentUrl,
+    }
+  } else {
+    delete deployments.development
+  }
+
+  if (prod) {
+    deployments.production = {
+      ...deployments.production,
+      name: prod.deploymentName,
+      url: prod.deploymentUrl,
+    }
+  } else {
+    delete deployments.production
+  }
+
+  return { ...cfg, deployments }
+}
+
 // Env vars that are inherently environment-specific and must not leak from dev to prod
 const ENV_SPECIFIC_KEYS = new Set(['SITE_URL'])
 

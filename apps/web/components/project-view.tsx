@@ -20,6 +20,20 @@ interface ProjectViewProps {
   initialPrompt?: string
 }
 
+type ConvexEnv = 'development' | 'production'
+
+interface ConvexDeployments {
+  development?: { name?: string }
+  production?: { name?: string }
+}
+
+function getConvexEnvs(deployments: ConvexDeployments | undefined): ConvexEnv[] {
+  return [
+    ...(deployments?.development?.name ? (['development'] as const) : []),
+    ...(deployments?.production?.name ? (['production'] as const) : []),
+  ]
+}
+
 export default function ProjectView({ projectId, onPreviewUrl, initialPrompt }: ProjectViewProps) {
   const { mutate: activateProject } = useActivateProject()
   const { isReady, stage, project } = useSandboxReady(projectId)
@@ -29,48 +43,39 @@ export default function ProjectView({ projectId, onPreviewUrl, initialPrompt }: 
   const lastActivatedId = useRef<string | undefined>(undefined)
   const isMobile = useIsMobile()
 
-  const convexDeployments = (
-    project?.integrations?.find((i) => i.provider === 'convex')?.config as any
-  )?.deployments
-  const hasConvexDev = Boolean(convexDeployments?.development?.name)
-  const hasConvexProd = Boolean(convexDeployments?.production?.name)
-  const convexTabsAdded = useRef(false)
+  const convexConfig = project?.integrations?.find((i) => i.provider === 'convex')?.config as
+    | { deployments?: ConvexDeployments }
+    | null
+    | undefined
+  const convexEnvs = getConvexEnvs(convexConfig?.deployments)
+  const hasConvex = convexEnvs.length > 0
 
-  const [tabs, setTabs] = useState<ProjectTab[]>([
+  const [tabs, setTabs] = useState<ProjectTab[]>([])
+  const [activeTabId, setActiveTabId] = useState('preview')
+  const [convexEnv, setConvexEnv] = useState<ConvexEnv | undefined>(undefined)
+  const tabCounter = useRef(0)
+  const currentConvexEnv = convexEnv && convexEnvs.includes(convexEnv) ? convexEnv : convexEnvs[0]
+  const visibleTabs: ProjectTab[] = [
     { id: 'preview', type: 'preview', title: 'Preview' },
+    ...(currentConvexEnv
+      ? [
+          {
+            id: 'convex',
+            type: 'convex' as const,
+            title: 'Database',
+            convexEnv: currentConvexEnv,
+            convexEnvs,
+          },
+        ]
+      : []),
     { id: 'payments', type: 'payments', title: 'Payments' },
     { id: 'settings', type: 'settings', title: 'Settings' },
-  ])
-  const [activeTabId, setActiveTabId] = useState('preview')
-  const tabCounter = useRef(0)
+    ...tabs,
+  ]
+  const currentActiveTabId = activeTabId === 'convex' && !hasConvex ? 'preview' : activeTabId
 
-  // Add single Convex database tab after Preview tab
-  useEffect(() => {
-    if (convexTabsAdded.current || (!hasConvexDev && !hasConvexProd)) return
-    convexTabsAdded.current = true
-
-    const envs: ('development' | 'production')[] = []
-    if (hasConvexDev) envs.push('development')
-    if (hasConvexProd) envs.push('production')
-
-    setTabs((prev) => {
-      const idx = prev.findIndex((t) => t.id === 'preview') + 1
-      return [
-        ...prev.slice(0, idx),
-        {
-          id: 'convex',
-          type: 'convex' as const,
-          title: 'Database',
-          convexEnv: envs[0],
-          convexEnvs: envs,
-        },
-        ...prev.slice(idx),
-      ]
-    })
-  }, [hasConvexDev, hasConvexProd])
-
-  const handleConvexEnvChange = useCallback((env: 'development' | 'production') => {
-    setTabs((prev) => prev.map((t) => (t.type === 'convex' ? { ...t, convexEnv: env } : t)))
+  const handleConvexEnvChange = useCallback((env: ConvexEnv) => {
+    setConvexEnv(env)
   }, [])
 
   const handleCloseTab = useCallback((tabId: string) => {
@@ -176,8 +181,8 @@ export default function ProjectView({ projectId, onPreviewUrl, initialPrompt }: 
                           projectId={projectId}
                           project={project}
                           onPreviewUrl={onPreviewUrl}
-                          tabs={tabs}
-                          activeTabId={activeTabId}
+                          tabs={visibleTabs}
+                          activeTabId={currentActiveTabId}
                           onTabChange={setActiveTabId}
                           onCloseTab={handleCloseTab}
                           onAddTab={handleAddTab}
@@ -205,8 +210,8 @@ export default function ProjectView({ projectId, onPreviewUrl, initialPrompt }: 
                         projectId={projectId}
                         project={project}
                         onPreviewUrl={onPreviewUrl}
-                        tabs={tabs}
-                        activeTabId={activeTabId}
+                        tabs={visibleTabs}
+                        activeTabId={currentActiveTabId}
                         onTabChange={setActiveTabId}
                         onCloseTab={handleCloseTab}
                         onAddTab={handleAddTab}
