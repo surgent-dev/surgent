@@ -2,9 +2,13 @@ import { betterAuth } from 'better-auth'
 import { admin, apiKey, jwt, organization } from 'better-auth/plugins'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import { createAccessControl } from 'better-auth/plugins/access'
+import { dubAnalytics } from '@dub/better-auth'
+import { Dub } from 'dub'
 import { db, dialect } from '@/lib/db'
 import { config } from './config'
 import { ensureBillingState } from './billing'
+
+const dub = new Dub()
 
 const ac = createAccessControl({
   organization: ['update', 'delete'],
@@ -93,6 +97,7 @@ export const auth = betterAuth({
   trustedOrigins: config.server.trustedOrigins,
 
   plugins: [
+    dubAnalytics({ dubClient: dub }),
     organization({
       ac,
       teams: { enabled: true },

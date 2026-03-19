@@ -929,6 +929,7 @@ async function createCheckoutTopupSession(args: {
         payment_method_save: 'enabled',
       },
       metadata: {
+        dubCustomerExternalId: args.userId,
         organizationId: args.organizationId,
         userId: args.userId,
         amountUsd: args.amountUsd.toFixed(2),
@@ -1191,6 +1192,7 @@ export async function createBillingCheckout(args: {
       },
       metadata: {
         organizationId: args.organizationId,
+        dubCustomerExternalId: args.userId,
         userId: args.userId,
         tier: 'pro',
         interval: args.interval,

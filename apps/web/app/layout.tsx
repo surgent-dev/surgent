@@ -2,6 +2,7 @@ import './globals.css'
 import Providers from '@/components/providers'
 import { Inter, JetBrains_Mono, Instrument_Serif, Geist } from 'next/font/google'
 import { GoogleAnalytics } from '@next/third-parties/google'
+import { Analytics as DubAnalytics } from '@dub/analytics/react'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata = {
@@ -52,6 +53,12 @@ export default function RootLayout({
       >
         <Providers>{children}</Providers>
         <Toaster position="top-right" />
+        <DubAnalytics
+          publishableKey={process.env.NEXT_PUBLIC_DUB_PUBLISHABLE_KEY}
+          domainsConfig={{
+            refer: 'go.surgent.dev',
+          }}
+        />
       </body>
       <GoogleAnalytics gaId="G-ZXHRJ2KM14" />
     </html>
