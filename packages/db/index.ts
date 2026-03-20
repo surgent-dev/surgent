@@ -22,6 +22,7 @@ export type {
   OAuthRefreshTokenTable,
   OAuthConsentTable,
   JwksTable,
+  ReferralTable,
   ProjectTable,
   ProjectStatus,
   ProjectMetadata,

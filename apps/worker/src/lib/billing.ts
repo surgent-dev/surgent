@@ -1349,6 +1349,8 @@ export async function applyTopupPaymentIntent(args: {
     })
   }
 
+  await import('@/lib/referrals').then((m) => m.grantReferralConversionReward(args.organizationId))
+
   return true
 }
 
@@ -1416,6 +1418,12 @@ export async function applyTopupCheckout(args: {
     paymentMethod,
     stripeCustomerId: customerId,
   })
+
+  if (args.session.payment_status === 'paid') {
+    await import('@/lib/referrals').then((m) =>
+      m.grantReferralConversionReward(args.organizationId),
+    )
+  }
 }
 
 export async function syncBillingPaymentFromInvoice(args: {
@@ -1481,6 +1489,12 @@ export async function syncBillingPaymentFromInvoice(args: {
     stripeCustomerId:
       typeof invoice.customer === 'string' ? invoice.customer : (invoice.customer?.id ?? null),
   })
+
+  if (args.status === 'paid') {
+    await import('@/lib/referrals').then((m) =>
+      m.grantReferralConversionReward(args.organizationId),
+    )
+  }
 }
 
 export async function refundBillingPayment(args: {

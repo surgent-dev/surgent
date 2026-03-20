@@ -15,6 +15,7 @@ export interface Database {
   billing_subscription: BillingSubscriptionTable
   billing_event: BillingEventTable
   billing_payment: BillingPaymentTable
+  referral: ReferralTable
   member: MemberTable
   organizationRole: OrganizationRoleTable
   team: TeamTable
@@ -267,6 +268,13 @@ export interface BillingPaymentTable {
   metadata: Record<string, unknown>
   createdAt?: Date
   updatedAt?: Date
+}
+
+export interface ReferralTable {
+  id: Generated<string>
+  referrerUserId: string
+  referredUserId: string
+  createdAt: Generated<Date>
 }
 
 export interface MemberTable {
