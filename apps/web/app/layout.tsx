@@ -1,24 +1,25 @@
 import './globals.css'
 import Providers from '@/components/providers'
-import { Inter, JetBrains_Mono, Instrument_Serif, Geist } from 'next/font/google'
+import {
+  Plus_Jakarta_Sans,
+  JetBrains_Mono,
+  Instrument_Serif,
+  Space_Grotesk,
+  Outfit,
+} from 'next/font/google'
 import { GoogleAnalytics } from '@next/third-parties/google'
 import { Analytics as DubAnalytics } from '@dub/analytics/react'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata = {
-  title: 'Surgent — Build faster with AI',
-  description: 'Describe what you want. surgent.dev turns ideas into working software.',
+  title: 'Surgent — AI that builds and grows your business',
+  description:
+    'Describe your business. Surgent builds your site, adds an AI sales agent, and grows your revenue on autopilot.',
 }
 
-const inter = Inter({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-})
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-jetbrains-mono',
+  variable: '--font-jakarta',
   display: 'swap',
 })
 
@@ -29,9 +30,21 @@ const instrumentSerif = Instrument_Serif({
   display: 'swap',
 })
 
-const geist = Geist({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
-  variable: '--font-geist',
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+})
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-space-grotesk',
+  display: 'swap',
+})
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  variable: '--font-outfit',
   display: 'swap',
 })
 
@@ -42,14 +55,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <link
-          href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap"
-          rel="stylesheet"
-        />
-      </head>
       <body
-        className={`antialiased ${inter.variable} ${jetbrainsMono.variable} ${instrumentSerif.variable} ${geist.variable}`}
+        className={`antialiased ${plusJakarta.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable} ${outfit.variable}`}
       >
         <Providers>{children}</Providers>
         <Toaster position="top-right" />
