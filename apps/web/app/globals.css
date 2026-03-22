@@ -6,11 +6,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+  --font-display: var(--font-display), ui-serif, Georgia, serif;
   --font-mono: var(--font-jetbrains-mono);
-  --font-display: var(--font-display);
-  --font-satoshi: 'Satoshi', var(--font-inter), sans-serif;
-  --font-geist: var(--font-geist), system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -70,41 +68,41 @@
 
 :root {
   --radius: 0.625rem;
-  /* Stripe-like light theme tokens */
-  --card: #ffffff;
-  --card-foreground: #0a2540; /* Stripe deep navy text */
+  /* Durable-inspired warm muted system — soft, human, approachable */
+  --card: #ffffff; /* Cards stay white to lift off the #fafafa bg */
+  --card-foreground: #333333;
   --popover: #ffffff;
-  --popover-foreground: #0a2540;
-  --primary: #303030;
-  --primary-hover: #1a1a1a;
+  --popover-foreground: #333333;
+  --primary: #333333; /* Muted black — like durable's black/80 */
+  --primary-hover: #1c1c1c;
   --primary-foreground: #ffffff;
-  --brand: #7c3aed; /* Violet 600 */
+  --brand: #0066ff; /* Electric blue — confident, pure, business-AI */
   --brand-foreground: #ffffff;
-  --secondary: #ffffff; /* Secondary surfaces/buttons are white */
-  --secondary-foreground: #0a2540;
-  --muted: #f6f9fc; /* Stripe subtle surface */
-  --muted-foreground: #425466;
-  --accent: #f6f9fc;
-  --accent-foreground: #0a2540;
-  --destructive: #e11d48; /* Red 600-ish */
-  --border: #e0e6eb; /* Stripe neutral border */
-  --input: #e0e6eb;
-  --ring: #7c3aed;
+  --secondary: #ffffff;
+  --secondary-foreground: #333333;
+  --muted: #f5f5f5; /* Neutral gray surface */
+  --muted-foreground: #737373; /* Muted gray — like durable's black/55 */
+  --accent: #f5f5f5;
+  --accent-foreground: #333333;
+  --destructive: #e11d48;
+  --border: #e5e5e5; /* Soft neutral border */
+  --input: #e5e5e5;
+  --ring: #0066ff;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --background: #ffffff;
-  --foreground: #0a2540;
+  --sidebar: #f5f5f5;
+  --sidebar-foreground: #333333;
+  --sidebar-primary: #333333;
+  --sidebar-primary-foreground: #f5f5f5;
+  --sidebar-accent: #ebebeb;
+  --sidebar-accent-foreground: #333333;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #a3a3a3;
+  --background: #fafafa; /* Slightly off-white — like intercall, cleaner than pure white */
+  --foreground: #333333; /* Muted black — soft, not harsh */
 
   /* Status + misc semantic colors */
   --success: #16a34a; /* Green 600 */
@@ -135,7 +133,7 @@
   --primary: #f5f5f5;
   --primary-hover: #e5e5e5;
   --primary-foreground: #111111;
-  --brand: #7c3aed;
+  --brand: #3388ff; /* Electric blue — brighter for dark mode contrast */
   --brand-foreground: #ffffff;
   --secondary: #222222;              /* p3 0.135 */
   --secondary-foreground: #f5f5f5;
@@ -422,31 +420,66 @@ body {
     inset 0 2px 1px 0 rgba(26, 26, 26, 0.2);
 }
 
-/* Primary: dark bg, gradient sheen, dark bevel */
+/* Primary: soft-black gradient, glass bevel */
 .btn-elevated-primary {
-  background-image: linear-gradient(180deg, transparent 63.53%, rgba(255, 255, 255, 0.15) 100%);
+  background-image: linear-gradient(rgba(255, 255, 255, 0.08), transparent 57%);
   box-shadow:
-    inset 0 -1px 0 1px rgba(0, 0, 0, 0.8),
-    inset 0 0 0 1px #303030,
-    inset 0 0.5px 0 1.5px rgba(255, 255, 255, 0.25);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+    0 1px 2px 0 rgba(0, 0, 0, 0.15);
 }
 .btn-elevated-primary:active {
-  box-shadow: inset 0 3px 0 0 #000;
+  background-image: linear-gradient(transparent 43%, rgba(255, 255, 255, 0.06) 100%);
+  box-shadow: inset 0 1px 3px 0 rgba(0, 0, 0, 0.3);
 }
 
-/* Brand: violet bg, color-matched bevel */
-.btn-elevated-brand {
-  background-image: linear-gradient(180deg, transparent 63.53%, rgba(255, 255, 255, 0.12) 100%);
-  box-shadow:
-    inset 0 -1px 0 1px rgba(0, 0, 0, 0.35),
-    inset 0 0 0 1px rgba(124, 58, 237, 0.8),
-    inset 0 0.5px 0 1.5px rgba(255, 255, 255, 0.2);
+/* Brand: dark muted button with glass + shine sweep (durable + intercall hybrid) */
+.btn-brand {
+  position: relative;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.85);
+  background-color: #333333;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.08), transparent 57%);
+  border: 1px solid #282828;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+              0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              background-image 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.btn-elevated-brand:active {
-  box-shadow:
-    inset -1px 0 1px 0 rgba(0, 0, 0, 0.2),
-    inset 1px 0 1px 0 rgba(0, 0, 0, 0.2),
-    inset 0 2px 0 0 rgba(0, 0, 0, 0.4);
+.btn-brand::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 25%;
+  height: 100%;
+  background-color: transparent;
+  filter: blur(12px);
+  rotate: -45deg;
+  transition: left 0s, background-color 0s;
+  pointer-events: none;
+}
+.btn-brand:hover {
+  color: #ffffff;
+  background-color: #2a2a2a;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.1), transparent 57%);
+  border-color: #222222;
+}
+.btn-brand:hover::before {
+  background-color: rgba(255, 255, 255, 0.3);
+  left: 120%;
+  transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0s;
+}
+.btn-brand:active {
+  background-color: #252525;
+  background-image: linear-gradient(transparent 43%, rgba(255, 255, 255, 0.05) 100%);
+  border-color: #1c1c1c;
+  box-shadow: inset 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  transition-duration: 0.1s;
 }
 
 /* Dark mode secondary */
@@ -607,13 +640,13 @@ body {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Landing violet glow */
+/* Landing subtle glow */
 .landing-glow {
   position: absolute;
   width: 600px;
   height: 400px;
   border-radius: 9999px;
-  background: rgba(124, 58, 237, 0.08);
+  background: rgba(0, 0, 0, 0.03);
   filter: blur(120px);
   pointer-events: none;
 }
@@ -638,7 +671,7 @@ body {
   height: 350px;
   top: 10%;
   left: 20%;
-  background: radial-gradient(ellipse, rgba(124, 58, 237, 0.35) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.04) 0%, transparent 70%);
   animation: aurora-drift-1 12s ease-in-out infinite alternate;
 }
 
@@ -701,7 +734,7 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 60% 50% at 20% 30%, rgba(124, 58, 237, 0.15), transparent 70%),
+    radial-gradient(ellipse 60% 50% at 20% 30%, rgba(0, 0, 0, 0.02), transparent 70%),
     radial-gradient(ellipse 50% 40% at 70% 20%, rgba(167, 139, 250, 0.1), transparent 65%),
     radial-gradient(ellipse 70% 35% at 50% 60%, rgba(192, 132, 252, 0.08), transparent 70%),
     radial-gradient(ellipse 40% 50% at 80% 50%, rgba(139, 92, 246, 0.12), transparent 60%);
@@ -714,7 +747,7 @@ body {
 
 .dark .aurora-shader {
   background:
-    radial-gradient(ellipse 60% 50% at 20% 30%, rgba(124, 58, 237, 0.22), transparent 70%),
+    radial-gradient(ellipse 60% 50% at 20% 30%, rgba(0, 0, 0, 0.03), transparent 70%),
     radial-gradient(ellipse 50% 40% at 70% 20%, rgba(167, 139, 250, 0.16), transparent 65%),
     radial-gradient(ellipse 70% 35% at 50% 60%, rgba(192, 132, 252, 0.12), transparent 70%),
     radial-gradient(ellipse 40% 50% at 80% 50%, rgba(139, 92, 246, 0.18), transparent 60%);
