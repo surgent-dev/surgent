@@ -14,6 +14,7 @@ import admin from './routes/admin'
 import providers from './routes/providers'
 import pay from './routes/pay'
 import billing from './routes/billing'
+import referrals from './routes/referrals'
 import domains, { domainWebhooks } from './routes/domains'
 import startups from './routes/startups'
 import { auth } from './lib/auth'
@@ -206,6 +207,7 @@ app.route('/api/admin', admin)
 app.route('/api/providers', providers)
 app.route('/api/pay', pay)
 app.route('/api/billing', billing)
+app.route('/api/referrals', referrals)
 app.route('/api/domains', domainWebhooks) // Webhook (before auth middleware applies)
 app.route('/api/domains', domains)
 app.route('/api/startups', startups)

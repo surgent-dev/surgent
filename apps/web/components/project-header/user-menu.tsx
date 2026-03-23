@@ -3,7 +3,16 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { SignOut, CreditCard, Lightning, Plus, Sun, Moon, SquaresFour } from '@phosphor-icons/react'
+import {
+  SignOut,
+  CreditCard,
+  Lightning,
+  Plus,
+  Sun,
+  Moon,
+  SquaresFour,
+  UserPlus,
+} from '@phosphor-icons/react'
 import { useCredits } from '@/hooks/use-credits'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -15,6 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { authClient } from '@/lib/auth-client'
 import TopupDialog from '@/components/topup-dialog'
+import ReferralDialog from '@/components/referral-dialog'
 
 interface User {
   id: string
@@ -33,6 +43,7 @@ export default function UserMenu({ onUpgrade }: UserMenuProps) {
   const credits = useCredits()
   const [user, setUser] = useState<User | null>(null)
   const [topupOpen, setTopupOpen] = useState(false)
+  const [referralOpen, setReferralOpen] = useState(false)
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => data?.user && setUser(data.user as User))
@@ -110,6 +121,10 @@ export default function UserMenu({ onUpgrade }: UserMenuProps) {
               <SquaresFour className="size-4" weight="duotone" />
               Dashboard
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setReferralOpen(true)}>
+              <UserPlus className="size-4" weight="duotone" />
+              Refer friends
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => credits.openBillingPortal()}>
               <CreditCard className="size-4" weight="duotone" />
               Billing
@@ -122,6 +137,7 @@ export default function UserMenu({ onUpgrade }: UserMenuProps) {
         </DropdownMenuContent>
       </DropdownMenu>
       <TopupDialog open={topupOpen} onOpenChange={setTopupOpen} />
+      <ReferralDialog open={referralOpen} onOpenChange={setReferralOpen} />
     </>
   )
 }
