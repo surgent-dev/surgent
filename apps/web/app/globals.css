@@ -76,7 +76,7 @@
   --primary: #333333; /* Muted black — like durable's black/80 */
   --primary-hover: #1c1c1c;
   --primary-foreground: #ffffff;
-  --brand: #0066ff; /* Electric blue — confident, pure, business-AI */
+  --brand: #7C5CFC; /* Warm violet — smart, approachable, AI-native */
   --brand-foreground: #ffffff;
   --secondary: #ffffff;
   --secondary-foreground: #333333;
@@ -87,7 +87,7 @@
   --destructive: #e11d48;
   --border: #e5e5e5; /* Soft neutral border */
   --input: #e5e5e5;
-  --ring: #0066ff;
+  --ring: #7C5CFC;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -133,7 +133,7 @@
   --primary: #f5f5f5;
   --primary-hover: #e5e5e5;
   --primary-foreground: #111111;
-  --brand: #3388ff; /* Electric blue — brighter for dark mode contrast */
+  --brand: #9B85FD; /* Warm violet — lighter for dark mode contrast */
   --brand-foreground: #ffffff;
   --secondary: #222222;              /* p3 0.135 */
   --secondary-foreground: #f5f5f5;
@@ -436,12 +436,12 @@ body {
 .btn-brand {
   position: relative;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.85);
-  background-color: #333333;
+  color: rgba(255, 255, 255, 0.9);
+  background-color: #1a1a1a;
   background-image: linear-gradient(rgba(255, 255, 255, 0.08), transparent 57%);
-  border: 1px solid #282828;
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
-              0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  border: 1px solid #111111;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+              0 1px 3px 0 rgba(0, 0, 0, 0.12);
   transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
               background-image 0.25s cubic-bezier(0.4, 0, 0.2, 1),
               border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
@@ -464,22 +464,118 @@ body {
 }
 .btn-brand:hover {
   color: #ffffff;
-  background-color: #2a2a2a;
+  background-color: #111111;
   background-image: linear-gradient(rgba(255, 255, 255, 0.1), transparent 57%);
-  border-color: #222222;
+  border-color: #000000;
 }
 .btn-brand:hover::before {
-  background-color: rgba(255, 255, 255, 0.3);
+  background-color: rgba(255, 255, 255, 0.25);
   left: 120%;
   transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
               background-color 0s;
 }
 .btn-brand:active {
-  background-color: #252525;
-  background-image: linear-gradient(transparent 43%, rgba(255, 255, 255, 0.05) 100%);
-  border-color: #1c1c1c;
-  box-shadow: inset 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  background-color: #0a0a0a;
+  background-image: linear-gradient(transparent 43%, rgba(255, 255, 255, 0.04) 100%);
+  border-color: #000000;
+  box-shadow: inset 0 1px 3px 0 rgba(0, 0, 0, 0.4);
   transition-duration: 0.1s;
+}
+.dark .btn-brand {
+  color: rgba(0, 0, 0, 0.85);
+  background-color: #f0f0f0;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.5), transparent 57%);
+  border-color: #e0e0e0;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+              0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+.dark .btn-brand:hover {
+  color: #000000;
+  background-color: #ffffff;
+  border-color: #f0f0f0;
+}
+.dark .btn-brand:hover::before {
+  background-color: rgba(255, 255, 255, 0.3);
+  left: 120%;
+  transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0s;
+}
+.dark .btn-brand:active {
+  background-color: #e5e5e5;
+  background-image: linear-gradient(transparent 43%, rgba(255, 255, 255, 0.3) 100%);
+  border-color: #d5d5d5;
+  box-shadow: inset 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Secondary: light gray button with glass + shine sweep */
+.btn-brand-secondary {
+  position: relative;
+  overflow: hidden;
+  color: hsl(220 10% 20%);
+  background-color: hsl(220 6% 93%);
+  background-image: linear-gradient(hsl(220 6% 97%), hsl(220 6% 91%) 57%);
+  border: 1px solid hsl(220 6% 78%);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              background-image 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-brand-secondary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 25%;
+  height: 100%;
+  background-color: transparent;
+  filter: blur(12px);
+  rotate: -45deg;
+  transition: left 0s, background-color 0s;
+  pointer-events: none;
+}
+.btn-brand-secondary:hover {
+  background-color: hsl(220 6% 89%);
+  background-image: linear-gradient(hsl(220 6% 94%), hsl(220 6% 87%) 57%);
+  border-color: hsl(220 6% 72%);
+}
+.btn-brand-secondary:hover::before {
+  background-color: rgba(255, 255, 255, 0.6);
+  left: 120%;
+  transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0s;
+}
+.btn-brand-secondary:active {
+  background-color: hsl(220 6% 86%);
+  background-image: linear-gradient(hsl(220 6% 86%) 43%, hsl(220 6% 91%) 100%);
+  border-color: hsl(220 6% 68%);
+  box-shadow: inset 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  transition-duration: 0.1s;
+}
+.dark .btn-brand-secondary {
+  border-color: hsl(220 6% 26%);
+  background-color: hsl(220 6% 18%);
+  background-image: linear-gradient(hsl(220 6% 22%), hsl(220 6% 16%) 57%);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  color: hsl(220 6% 82%);
+}
+.dark .btn-brand-secondary:hover {
+  border-color: hsl(220 6% 32%);
+  background-color: hsl(220 6% 22%);
+  background-image: linear-gradient(hsl(220 6% 26%), hsl(220 6% 20%) 57%);
+}
+.dark .btn-brand-secondary:hover::before {
+  background-color: rgba(255, 255, 255, 0.15);
+  left: 120%;
+  transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0s;
+}
+.dark .btn-brand-secondary:active {
+  background-color: hsl(220 6% 15%);
+  background-image: linear-gradient(hsl(220 6% 15%) 43%, hsl(220 6% 20%) 100%);
+  border-color: hsl(220 6% 22%);
+  box-shadow: inset 0 1px 3px 0 rgba(0, 0, 0, 0.3);
 }
 
 /* Dark mode secondary */
@@ -576,6 +672,17 @@ body {
   background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes landing-fade-in {
