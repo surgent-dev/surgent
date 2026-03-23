@@ -1,7 +1,8 @@
 {
   "name": "@repo/db",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./migrate": "./src/migrate.ts"
   },
   "type": "module",
   "scripts": {

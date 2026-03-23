@@ -1,36 +1,30 @@
-import * as path from 'path'
-import { promises as fs } from 'fs'
-import { Migrator, FileMigrationProvider, Kysely } from 'kysely'
+import { promises as fs } from 'node:fs'
+import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { FileMigrationProvider, Kysely, Migrator } from 'kysely'
 import { createClient } from './kysely_db'
 
-export async function migrate(db: Kysely<any>) {
-  const migrator = new Migrator({
+const migrationFolder = fileURLToPath(new URL('./migrations', import.meta.url))
+
+function createMigrator<DB>(db: Kysely<DB>) {
+  return new Migrator({
     db,
     provider: new FileMigrationProvider({
       fs,
       path,
-      // This needs to be an absolute path.
-      migrationFolder: path.join(__dirname, 'migrations'),
+      migrationFolder,
     }),
   })
-
-  const result = await migrator.migrateToLatest()
-  return result
 }
 
-export async function rollback(db: Kysely<any>) {
-  const migrator = new Migrator({
-    db,
-    provider: new FileMigrationProvider({
-      fs,
-      path,
-      // This needs to be an absolute path.
-      migrationFolder: path.join(__dirname, 'migrations'),
-    }),
-  })
+export async function migrate<DB>(db: Kysely<DB>) {
+  const migrator = createMigrator(db)
+  return migrator.migrateToLatest()
+}
 
-  const result = await migrator.migrateDown()
-  return result
+export async function rollback<DB>(db: Kysely<DB>) {
+  const migrator = createMigrator(db)
+  return migrator.migrateDown()
 }
 
 export async function runMigrations() {
@@ -70,4 +64,10 @@ export async function runMigrations() {
   console.log('🎉 Migration completed successfully')
 }
 
-if (import.meta.main) runMigrations()
+function isMain() {
+  const entry = process.argv[1]
+  if (!entry) return false
+  return path.resolve(entry) === fileURLToPath(import.meta.url)
+}
+
+if (isMain()) void runMigrations()

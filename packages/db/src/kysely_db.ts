@@ -1,10 +1,13 @@
+import { createRequire } from 'node:module'
 import { Kysely, PostgresDialect, type Dialect } from 'kysely'
 import type { Database as DatabaseInterface } from './types'
 
-export function createDialect(url: string, type?: string): Dialect {
-  type = type || process.env.POSTGRES_TYPE || 'pg'
+const require = createRequire(import.meta.url)
 
-  if (type === 'neon') {
+export function createDialect(url: string, type?: string): Dialect {
+  const driver = type || process.env.POSTGRES_TYPE || 'pg'
+
+  if (driver === 'neon') {
     const { neon } = require('@neondatabase/serverless')
     const { NeonDialect } = require('kysely-neon')
     return new NeonDialect({ neon: neon(url) })

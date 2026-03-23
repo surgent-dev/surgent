@@ -19,7 +19,7 @@ import startups from './routes/startups'
 import { auth } from './lib/auth'
 import { config, validateDomainConfig } from './lib/config'
 import { db } from './lib/db'
-import { migrate } from '@repo/db'
+import { migrate } from '@repo/db/migrate'
 import {
   oauthProviderAuthServerMetadata,
   oauthProviderOpenIdConfigMetadata,
