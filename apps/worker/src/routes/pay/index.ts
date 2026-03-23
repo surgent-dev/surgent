@@ -664,25 +664,35 @@ pay.post(
     })
 
     const inserted = await db.transaction().execute(async (trx) => {
-      const inserts = [
-        testCompany &&
-          trx
-            .insertInto('pay_account')
-            .values(makeRow(testCompany, 'test'))
-            .returningAll()
-            .executeTakeFirstOrThrow(),
-        liveCompany &&
-          trx
-            .insertInto('pay_account')
-            .values(makeRow(liveCompany, 'live'))
-            .returningAll()
-            .executeTakeFirstOrThrow(),
-      ].filter(Boolean)
-      const rows = await Promise.all(inserts)
-      return { test: rows.find((r) => r.env === 'test'), live: rows.find((r) => r.env === 'live') }
+      const rows = await Promise.all([
+        ...(testCompany
+          ? [
+              trx
+                .insertInto('pay_account')
+                .values(makeRow(testCompany, 'test'))
+                .returningAll()
+                .executeTakeFirstOrThrow(),
+            ]
+          : []),
+        ...(liveCompany
+          ? [
+              trx
+                .insertInto('pay_account')
+                .values(makeRow(liveCompany, 'live'))
+                .returningAll()
+                .executeTakeFirstOrThrow(),
+            ]
+          : []),
+      ])
+
+      return {
+        test: rows.find((row) => row.env === 'test'),
+        live: rows.find((row) => row.env === 'live'),
+      }
     })
 
-    const account = (existing[auth.env] ?? inserted[auth.env])!
+    const account = existing[auth.env] ?? inserted[auth.env]
+    if (!account) throw new Error(`failed to provision ${auth.env} pay account`)
 
     return c.json({
       accountId: requiredId(account.id, 'account'),
