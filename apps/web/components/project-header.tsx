@@ -298,7 +298,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
   return (
     <>
-      <header className="h-11 flex items-center bg-background shrink-0 pl-3 pr-4">
+      <header className="h-11 flex items-center bg-white dark:bg-background shrink-0 pl-3 pr-4">
         {/* Back */}
         <Button
           variant="ghost"
@@ -389,10 +389,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" aria-label="Support">
-                <span className="relative">
-                  <Headset className="size-4" weight="bold" />
-                  <span className="absolute -top-0.5 -right-0.5 size-1.5 bg-green-500 rounded-full" />
-                </span>
+                <Headset className="size-4" weight="bold" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -402,11 +399,8 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             >
               <div className="px-3.5 py-2.5 border-b border-border/60">
                 <div className="flex items-center gap-2">
-                  <span className="relative flex size-2">
-                    <span className="absolute inline-flex size-full rounded-full bg-green-400 opacity-75 animate-ping" />
-                    <span className="relative inline-flex size-2 rounded-full bg-green-500" />
-                  </span>
-                  <span className="text-[13px] font-medium">We&apos;re online</span>
+                  <span className="inline-flex size-1.5 rounded-full bg-foreground/30" />
+                  <span className="text-[13px] font-medium">Support</span>
                 </div>
               </div>
               <DropdownMenuItem
@@ -422,7 +416,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 className="gap-2 rounded-md px-2 py-2 text-[12px] cursor-pointer"
               >
                 <a href="https://discord.gg/DRWbFEtY" target="_blank" rel="noopener noreferrer">
-                  <DiscordLogo className="size-3.5 text-[#5865F2]" weight="fill" />
+                  <DiscordLogo className="size-3.5 text-muted-foreground/70" weight="fill" />
                   <span className="flex-1 text-[12px]">Discord</span>
                 </a>
               </DropdownMenuItem>
@@ -431,33 +425,12 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 className="gap-2 rounded-md px-2 py-2 text-[12px] cursor-pointer"
               >
                 <a href="https://t.me/bensurgent" target="_blank" rel="noopener noreferrer">
-                  <TelegramLogo className="size-3.5 text-[#26A5E4]" weight="fill" />
+                  <TelegramLogo className="size-3.5 text-muted-foreground/70" weight="fill" />
                   <span className="flex-1 text-[12px]">Telegram</span>
                 </a>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {/* Sell */}
-          <Button
-            variant="default"
-            disabled={!projectId}
-            aria-label="List on marketplace"
-            onClick={() => {
-              if (!projectId) return
-              if (!workerName) {
-                toast('Publish your app first before listing', {
-                  icon: '\uD83D\uDE80',
-                  position: 'top-right',
-                })
-                return
-              }
-              setIsSellOpen(true)
-            }}
-          >
-            <Tag className="size-4" weight="fill" />
-            <span className="hidden sm:inline">Sell</span>
-          </Button>
 
           {/* Status indicator */}
           {(isDeployed || isFailed) && (
@@ -613,7 +586,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 {latestDeployment &&
                   !TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status) && (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <CircleNotch className="size-3 animate-spin text-brand shrink-0" />
+                      <CircleNotch className="size-3 animate-spin text-foreground/50 shrink-0" />
                       <span className="flex-1">
                         {DEPLOYMENT_STATUS_LABELS[latestDeployment.status] ||
                           latestDeployment.status}
@@ -665,21 +638,13 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     {activeDomains.map((d) => (
                       <div
                         key={d.id}
-                        className="flex items-center gap-2 h-8 px-2.5 rounded-lg bg-emerald-500/6 border border-emerald-500/20"
+                        className="flex items-center gap-2 h-8 px-2.5 rounded-lg bg-muted/40 border border-border/50"
                       >
                         <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
                         <span className="font-mono text-xs truncate flex-1">{d.domainName}</span>
-                        <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                          Live
-                        </span>
+                        <span className="text-[10px] font-medium text-muted-foreground">Live</span>
                         {activeDomains.length > 1 && (
-                          <span
-                            className={`text-[8px] font-semibold px-1 py-0.5 rounded-full ${
-                              d.isPrimary
-                                ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                                : 'bg-muted text-muted-foreground border border-border'
-                            }`}
-                          >
+                          <span className="text-[8px] font-semibold px-1 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
                             {d.isPrimary ? 'PRIMARY' : 'ALIAS'}
                           </span>
                         )}
@@ -687,10 +652,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                           href={`https://${d.domainName}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-0.5 hover:bg-emerald-500/10 rounded transition-colors"
+                          className="p-0.5 hover:bg-muted rounded transition-colors"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <ArrowSquareOut className="size-3.5 text-emerald-600" />
+                          <ArrowSquareOut className="size-3.5 text-muted-foreground" />
                         </a>
                       </div>
                     ))}
@@ -731,7 +696,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                       setIsDeploymentStatusOpen(true)
                     }}
                   >
-                    <Globe className="size-3.5 text-brand shrink-0" weight="duotone" />
+                    <Globe className="size-3.5 text-foreground/50 shrink-0" weight="duotone" />
                     <span className="text-xs font-medium text-foreground/80">
                       Add custom domain
                     </span>
@@ -749,7 +714,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                   {!canToggleVisibility && (
                     <button
                       onClick={() => credits.setPlanDialogOpen(true)}
-                      className="ml-auto text-[10px] font-medium text-brand hover:text-brand/80 transition-colors"
+                      className="ml-auto text-[10px] font-medium text-foreground/60 hover:text-foreground transition-colors"
                     >
                       Upgrade
                     </button>
@@ -785,6 +750,29 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     </TooltipContent>
                   </Tooltip>
                 </div>
+              </div>
+
+              {/* Sell on marketplace */}
+              <div className="border-t px-3 py-2.5">
+                <button
+                  className="flex items-center gap-2 w-full h-8 px-2.5 rounded-lg border border-border hover:bg-muted/30 transition-colors"
+                  onClick={() => {
+                    setIsPublishOpen(false)
+                    if (!workerName) {
+                      toast('Publish your app first before listing', {
+                        icon: '\uD83D\uDE80',
+                        position: 'top-right',
+                      })
+                      return
+                    }
+                    setIsSellOpen(true)
+                  }}
+                >
+                  <Tag className="size-3.5 text-muted-foreground/70" weight="fill" />
+                  <span className="text-xs font-medium text-foreground/80">
+                    Sell on marketplace
+                  </span>
+                </button>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -351,14 +351,14 @@ export default function ChatInput({
       onDrop={handleDrop}
     >
       {isDragging && (
-        <div className="absolute inset-0 z-10 rounded-2xl border-2 border-dashed border-brand bg-brand/10 flex items-center justify-center pointer-events-none">
-          <span className="text-sm font-medium text-brand">Drop files here</span>
+        <div className="absolute inset-0 z-10 rounded-2xl border-2 border-dashed border-foreground/20 bg-foreground/5 flex items-center justify-center pointer-events-none">
+          <span className="text-sm font-medium text-foreground/60">Drop files here</span>
         </div>
       )}
       <div
         className={cn(
-          'rounded-2xl border bg-background overflow-hidden shadow-sm',
-          isDragging ? 'border-brand' : 'border-border/60',
+          'rounded-2xl border bg-muted/50 overflow-hidden',
+          isDragging ? 'border-foreground/20' : 'border-border/60',
         )}
       >
         {showCreditsBanner && (
@@ -371,7 +371,7 @@ export default function ChatInput({
             <button
               type="button"
               onClick={() => setPlanDialogOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-brand/25 bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand shrink-0 transition-colors hover:bg-brand/20"
+              className="inline-flex items-center gap-1.5 rounded-md border border-foreground/15 bg-foreground/5 px-2.5 py-1 text-xs font-medium text-foreground/70 shrink-0 transition-colors hover:bg-foreground/10"
             >
               <Lightning className="size-3" weight="fill" />
               Upgrade
@@ -430,7 +430,7 @@ export default function ChatInput({
                   index === highlightedIndex ? 'bg-accent' : '',
                 )}
               >
-                <span className="text-brand font-medium">@{agent.name}</span>
+                <span className="text-foreground font-medium">@{agent.name}</span>
                 {agent.description && (
                   <span className="text-muted-foreground ml-1.5">{agent.description}</span>
                 )}
@@ -445,7 +445,7 @@ export default function ChatInput({
             <button
               type="button"
               onClick={() => setSelectedSubagent(undefined)}
-              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-medium bg-brand text-brand-foreground"
+              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-medium bg-foreground text-background"
             >
               @{selectedSubagent}
               <X className="size-2.5" />
@@ -494,7 +494,7 @@ export default function ChatInput({
                   <div
                     className={cn(
                       'relative w-7 h-4 rounded-full',
-                      mode === 'plan' ? 'bg-brand' : 'bg-muted-foreground/30',
+                      mode === 'plan' ? 'bg-foreground' : 'bg-muted-foreground/30',
                     )}
                   >
                     <div
@@ -526,7 +526,7 @@ export default function ChatInput({
                     className={cn(
                       'h-8 px-3 rounded-lg text-xs transition-all border cursor-pointer',
                       maxMode
-                        ? 'border-violet-500/40 bg-violet-500/12 text-violet-700 dark:text-violet-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+                        ? 'border-foreground/20 bg-foreground/8 text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
                         : 'border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/60',
                     )}
                   >

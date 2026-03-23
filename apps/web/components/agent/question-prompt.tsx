@@ -116,7 +116,7 @@ export default function QuestionPrompt({ request, onReply, onReject, pending }: 
         <button
           onClick={() => onReply(answers)}
           disabled={!canSend || pending}
-          className="flex-1 h-8 text-sm font-medium rounded bg-brand text-white disabled:opacity-40"
+          className="flex-1 h-8 text-sm font-medium rounded btn-brand disabled:opacity-40"
         >
           {pending ? 'Sending...' : 'Send'}
         </button>

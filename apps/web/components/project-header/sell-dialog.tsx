@@ -298,7 +298,7 @@ export default function SellDialog({
                     className={cn(
                       'flex flex-col items-center justify-center gap-2 aspect-[16/9] rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-300',
                       dragging
-                        ? 'border-brand/50 bg-brand/5'
+                        ? 'border-foreground/20 bg-foreground/5'
                         : 'border-border hover:border-muted-foreground/30 hover:bg-muted',
                     )}
                   >
@@ -318,7 +318,7 @@ export default function SellDialog({
                     <img src={imagePreview} alt="Cover" className="w-full h-full object-cover" />
                     {uploading && (
                       <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] flex items-center justify-center">
-                        <CircleNotch className="size-5 animate-spin text-brand" />
+                        <CircleNotch className="size-5 animate-spin text-foreground/50" />
                       </div>
                     )}
                     {!uploading && (
@@ -408,6 +408,7 @@ export default function SellDialog({
                       className={field}
                     />
                     <Button
+                      variant="brand"
                       size="lg"
                       className="h-12 px-6 shrink-0 rounded-2xl"
                       disabled={!companyName.trim() || connecting}
@@ -474,7 +475,8 @@ export default function SellDialog({
                 Cancel
               </Button>
               <Button
-                className="flex-1 h-11 rounded-2xl font-bold shadow-[0_4px_12px_-4px_rgba(var(--brand-rgb),0.5)]"
+                variant="brand"
+                className="flex-1 h-11 rounded-2xl font-bold"
                 disabled={!canSubmit}
                 onClick={handleSubmit}
               >
@@ -491,7 +493,7 @@ export default function SellDialog({
 
           {/* ── Right: Live Preview ── */}
           <div className="hidden lg:flex w-[24rem] border-l border-border/50 flex-col relative overflow-hidden bg-muted/20">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,var(--color-brand)_0%,transparent_40%)] opacity-[0.03]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,var(--color-foreground)_0%,transparent_40%)] opacity-[0.03]" />
 
             <div className="relative flex-1 flex flex-col items-center justify-center px-10 py-10">
               <div className="w-full mb-6">
