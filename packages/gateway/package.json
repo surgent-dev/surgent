@@ -3,12 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bunx wrangler dev --port 8080 --inspector-port 9231",
-    "start": "bunx wrangler dev --verbose --port 8080 --inspector-port 9231",
+    "dev": "wrangler dev --port 8080 --inspector-port 9231",
+    "start": "wrangler dev --verbose --port 8080 --inspector-port 9231",
     "deploy": "echo 'Use deploy:dev or deploy:prod' && exit 1",
-    "deploy:dev": "bunx wrangler deploy --env dev",
-    "deploy:prod": "if [ \"$CONFIRM_PROD\" != \"1\" ]; then echo \"Set CONFIRM_PROD=1 to deploy to prod\"; exit 1; fi; bunx wrangler deploy --env \"\"",
-    "generate-types": "bunx wrangler types"
+    "deploy:dev": "wrangler deploy --env dev",
+    "deploy:prod": "if [ \"$CONFIRM_PROD\" != \"1\" ]; then echo \"Set CONFIRM_PROD=1 to deploy to prod\"; exit 1; fi; wrangler deploy --env \"\"",
+    "generate-types": "wrangler types"
   },
   "dependencies": {
     "@repo/db": "*",
@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20251008.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "wrangler": "^4.54.0"
   }
 }
