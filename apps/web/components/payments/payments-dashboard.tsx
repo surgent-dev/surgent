@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ArrowUpFromLine, CircleDollarSign, Loader2, Plus, ArrowRight } from 'lucide-react'
 import { CircleNotch } from '@phosphor-icons/react'
 import Image from 'next/image'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import {
   useProducts,
   useSyncProducts,

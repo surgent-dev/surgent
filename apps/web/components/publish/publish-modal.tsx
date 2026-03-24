@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import {
   RocketLaunch,
   PencilSimple,
@@ -114,11 +114,9 @@ export function PublishModal({
       TERMINAL_DEPLOYMENT_STATUSES.includes(curr)
     ) {
       if (curr === 'deployed') {
-        toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, {
-          position: 'top-right',
-        })
+        toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, {})
       } else {
-        toast.error('Deployment failed', { position: 'top-right' })
+        toast.error('Deployment failed')
       }
     }
     prevStatusRef.current = curr
@@ -159,9 +157,7 @@ export function PublishModal({
             if (resp?.status === 402) {
               credits.setPlanDialogOpen(true)
             } else {
-              toast.error(err instanceof Error ? err.message : 'Failed to deploy', {
-                position: 'top-right',
-              })
+              toast.error(err instanceof Error ? err.message : 'Failed to deploy', {})
             }
             setIsDeploying(false)
           },
@@ -181,7 +177,7 @@ export function PublishModal({
   const copyUrl = () => {
     if (!liveUrl) return
     navigator.clipboard.writeText(liveUrl)
-    toast.success('Copied', { position: 'top-right' })
+    toast.success('Copied')
   }
 
   return (
@@ -393,10 +389,7 @@ export function PublishModal({
                       updateVisibility.mutate(
                         { id: projectId, isPublic: checked },
                         {
-                          onError: () =>
-                            toast.error('Failed to update visibility', {
-                              position: 'top-right',
-                            }),
+                          onError: () => toast.error('Failed to update visibility', {}),
                         },
                       )
                     }}

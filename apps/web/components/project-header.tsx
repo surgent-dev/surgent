@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import Image from 'next/image'
 import {
   ArrowLeft,
@@ -136,11 +136,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       // Refetch project data so worker info is up-to-date
       queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       if (curr === 'deployed') {
-        toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, {
-          position: 'top-right',
-        })
+        toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, {})
       } else if (curr !== 'cancelled') {
-        toast.error(`Deployment failed`, { position: 'top-right' })
+        toast.error(`Deployment failed`)
       }
     }
     prevStatusRef.current = curr
@@ -189,7 +187,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       { id: projectId, name: trimmed },
       {
         onSuccess: () => setIsEditing(false),
-        onError: () => toast.error('Failed to rename', { position: 'top-right' }),
+        onError: () => toast.error('Failed to rename'),
       },
     )
   }
@@ -207,9 +205,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
             if (resp?.status === 402) {
               credits.setPlanDialogOpen(true)
             } else {
-              toast.error(err instanceof Error ? err.message : 'Failed to deploy', {
-                position: 'top-right',
-              })
+              toast.error(err instanceof Error ? err.message : 'Failed to deploy', {})
             }
             setIsDeploying(false)
           },
@@ -239,9 +235,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       if (status === 402) {
         credits.setPlanDialogOpen(true)
       } else {
-        toast.error(err instanceof Error ? err.message : 'Download failed', {
-          position: 'top-right',
-        })
+        toast.error(err instanceof Error ? err.message : 'Download failed', {})
       }
     } finally {
       setDownloading(false)
@@ -250,7 +244,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
 
   const copyUrl = () => {
     navigator.clipboard.writeText(`https://${workerName}.surgent.site`)
-    toast.success('Copied', { position: 'top-right' })
+    toast.success('Copied')
   }
 
   const startEditHostname = () => {
@@ -289,9 +283,9 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
       {
         onSuccess: () => {
           setIsDeploying(false)
-          toast.success('Deployment cancelled', { position: 'top-right' })
+          toast.success('Deployment cancelled')
         },
-        onError: () => toast.error('Failed to cancel', { position: 'top-right' }),
+        onError: () => toast.error('Failed to cancel'),
       },
     )
   }
@@ -616,7 +610,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                       type="button"
                       onClick={() => {
                         navigator.clipboard.writeText(latestDeployment.error || 'Deployment failed')
-                        toast.success('Copied to clipboard', { position: 'top-right' })
+                        toast.success('Copied to clipboard')
                       }}
                       className="group w-full text-left rounded-md bg-destructive/5 border border-destructive/10 px-2.5 py-2 cursor-copy"
                     >
@@ -730,10 +724,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                             updateVisibility.mutate(
                               { id: projectId, isPublic: checked },
                               {
-                                onError: () =>
-                                  toast.error('Failed to update visibility', {
-                                    position: 'top-right',
-                                  }),
+                                onError: () => toast.error('Failed to update visibility', {}),
                               },
                             )
                           }}
@@ -761,7 +752,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     if (!workerName) {
                       toast('Publish your app first before listing', {
                         icon: '\uD83D\uDE80',
-                        position: 'top-right',
                       })
                       return
                     }

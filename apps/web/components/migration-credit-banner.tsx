@@ -6,7 +6,7 @@ import { Ticket, CopySimple } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useSubscription } from '@/hooks/use-subscription'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 const COUPON_CODE = 'POIUYTR50'
 const DISMISS_KEY = 'migration-banner-dismissed'
@@ -51,7 +51,7 @@ export default function MigrationCreditBanner({
 
   const copyCoupon = () => {
     navigator.clipboard.writeText(COUPON_CODE)
-    toast.success('Coupon code copied!', { position: 'top-right' })
+    toast.success('Coupon code copied!')
   }
 
   return (

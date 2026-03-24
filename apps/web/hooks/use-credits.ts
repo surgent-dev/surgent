@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useBillingPortal, useSubscription } from './use-subscription'
 
 const INTERVAL_LABELS: Record<string, string> = {
@@ -45,9 +45,7 @@ export function useCredits() {
   const gate = () => {
     if (subscription.isLoading || !snapshot) return true
     if (snapshot.features.canUseAi) return true
-    toast.error('You have run out of usage balance. Please upgrade or add more balance.', {
-      position: 'top-right',
-    })
+    toast.error('You have run out of usage balance. Please upgrade or add more balance.', {})
     setPlanDialogOpen(true)
     return false
   }
@@ -79,7 +77,7 @@ export function useCredits() {
         window.location.href = url
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to open billing portal'
-        toast.error(message, { position: 'top-right' })
+        toast.error(message)
       }
     },
   }

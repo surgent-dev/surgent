@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { Loader2, ExternalLink, Check, ClipboardCheck } from 'lucide-react'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   useProvidersQuery,

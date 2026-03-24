@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { fireConfetti } from '@/lib/confetti'
 import { useBillingSync } from '@/hooks/use-subscription'
 
@@ -43,13 +43,13 @@ function BillingSyncEffect() {
     void sync
       .mutateAsync(sessionId)
       .then(({ kind }) => {
-        toast.success(getToastMessage(kind, billing), { position: 'top-right' })
+        toast.success(getToastMessage(kind, billing))
         if (billing === 'success') {
           void fireConfetti()
         }
       })
       .catch(() => {
-        toast.error('Unable to sync billing state', { position: 'top-right' })
+        toast.error('Unable to sync billing state')
       })
       .finally(clear)
   }, [pathname, router, searchParams, sync])

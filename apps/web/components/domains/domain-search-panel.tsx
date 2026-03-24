@@ -15,7 +15,7 @@ import {
 } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { showEntri, purchaseDomain, type EntriConfig } from 'entrijs'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import {
   useInitDomainPurchase,
   useInitDomainConnect,

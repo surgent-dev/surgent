@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { CircleNotch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import {
@@ -121,10 +121,7 @@ export default function PayDialogs({ projectId }: PayDialogsProps) {
                       setConflictAccountId(null)
                       window.location.href = data.oauthUrl
                     },
-                    onError: () =>
-                      toast.error('Failed to start payment connection', {
-                        position: 'top-right',
-                      }),
+                    onError: () => toast.error('Failed to start payment connection', {}),
                   })
                 }}
               >

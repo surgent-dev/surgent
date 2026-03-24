@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useCallback, useEffect, useState } from 'react'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { authClient } from '@/lib/auth-client'
 import { isWaitlistMode } from '@/lib/waitlist'
 import { WaitlistScreen } from '@/components/waitlist-screen'
@@ -120,21 +120,41 @@ function IndexContent() {
                   num: '01',
                   title: 'Describe your business',
                   desc: 'What you do, who you serve. A few sentences is enough.',
+                  icon: (
+                    <svg viewBox="0 0 24 24" className="size-[18px]" fill="currentColor">
+                      <path d="M3 5.5C3 3.567 4.567 2 6.5 2h11C19.433 2 21 3.567 21 5.5v8c0 1.933-1.567 3.5-3.5 3.5H11l-4.4 3.52a.75.75 0 01-1.2-.6V17c-1.4-.5-2.4-1.8-2.4-3.5v-8z" />
+                    </svg>
+                  ),
                 },
                 {
                   num: '02',
                   title: 'AI builds everything',
                   desc: 'Site, agent, lead capture, marketing — in minutes.',
+                  icon: (
+                    <svg viewBox="0 0 24 24" className="size-[18px]" fill="currentColor">
+                      <path d="M11.48 2.3a.75.75 0 011.04 0l2.83 2.72a.75.75 0 01-.52 1.28h-1.08v4.45h4.45V9.67a.75.75 0 011.28-.52l2.72 2.83a.75.75 0 010 1.04l-2.72 2.83a.75.75 0 01-1.28-.52v-1.08h-4.45v4.45h1.08a.75.75 0 01.52 1.28l-2.83 2.72a.75.75 0 01-1.04 0l-2.83-2.72a.75.75 0 01.52-1.28h1.08v-4.45H5.8v1.08a.75.75 0 01-1.28.52L1.8 13.02a.75.75 0 010-1.04l2.72-2.83a.75.75 0 011.28.52v1.08h4.45V6.3H9.17a.75.75 0 01-.52-1.28L11.48 2.3z" />
+                    </svg>
+                  ),
                 },
                 {
                   num: '03',
                   title: 'Launch & grow',
                   desc: 'Go live instantly. AI brings you customers on autopilot.',
+                  icon: (
+                    <svg viewBox="0 0 24 24" className="size-[18px]" fill="currentColor">
+                      <path d="M13.25 2.16a1.75 1.75 0 00-2.5 0C8.56 4.44 7 7.87 7 11c0 1.15.2 2.24.56 3.22L5.3 16.47a1.75 1.75 0 00-.3.98V20a1.75 1.75 0 001.75 1.75h2.5V18.5a2.75 2.75 0 015.5 0v3.25h2.5A1.75 1.75 0 0019 20v-2.55c0-.35-.1-.7-.3-.98l-2.26-2.25c.36-.98.56-2.07.56-3.22 0-3.13-1.56-6.56-3.75-8.84z" />
+                    </svg>
+                  ),
                 },
               ].map((item) => (
                 <div key={item.num}>
-                  <span className="text-[11px] font-mono text-foreground/50">{item.num}</span>
-                  <h3 className="text-sm font-medium text-foreground mt-2">{item.title}</h3>
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-7 rounded-lg bg-foreground/[0.06] flex items-center justify-center text-foreground/40">
+                      {item.icon}
+                    </div>
+                    <span className="text-[11px] font-mono text-foreground/50">{item.num}</span>
+                  </div>
+                  <h3 className="text-sm font-medium text-foreground mt-3">{item.title}</h3>
                   <p className="text-[13px] text-muted-foreground/40 leading-relaxed mt-1">
                     {item.desc}
                   </p>
