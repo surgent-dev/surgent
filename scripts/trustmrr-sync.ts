@@ -14,7 +14,7 @@ if (!dbUrl) {
   process.exit(1)
 }
 
-const db = createDb(dbUrl, process.env.POSTGRES_TYPE ?? 'pg')
+const db = createDb(dbUrl)
 
 interface TrustMrrStartup {
   name: string

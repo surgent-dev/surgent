@@ -102,7 +102,7 @@ mock.module('@/lib/config', () => ({
 }))
 
 mock.module('@/lib/db', () => {
-  const client = createClient(DATABASE_URL, 'postgres')
+  const client = createClient(DATABASE_URL)
   db = client.db
   return { db: client.db, dialect: client.dialect }
 })

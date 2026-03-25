@@ -1,22 +1,11 @@
-import { createRequire } from 'node:module'
-import { Kysely, PostgresDialect, type Dialect } from 'kysely'
+import pg from 'pg'
+import { Kysely, PostgresDialect } from 'kysely'
 import type { Database as DatabaseInterface } from './types'
 
-const require = createRequire(import.meta.url)
-
-export function createDialect(url: string, type?: string): Dialect {
-  const driver = type || process.env.POSTGRES_TYPE || 'pg'
-
-  if (driver === 'neon') {
-    const { neon } = require('@neondatabase/serverless')
-    const { NeonDialect } = require('kysely-neon')
-    return new NeonDialect({ neon: neon(url) })
-  }
-
+export function createDialect(url: string): PostgresDialect {
   // Serverless-friendly pool config:
   // - max:1 prevents pool exhaustion in workerd local dev
   // - In production, Hyperdrive handles connection pooling
-  const pg = require('pg')
   return new PostgresDialect({
     pool: new pg.Pool({
       connectionString: url,
@@ -27,16 +16,16 @@ export function createDialect(url: string, type?: string): Dialect {
   })
 }
 
-export function createDbFromDialect(dialect: Dialect) {
+export function createDbFromDialect(dialect: PostgresDialect) {
   return new Kysely<DatabaseInterface>({ dialect })
 }
 
-export function createClient(url: string, type: string) {
-  const dialect = createDialect(url, type)
+export function createClient(url: string) {
+  const dialect = createDialect(url)
   const db = createDbFromDialect(dialect)
   return { db, dialect }
 }
 
-export function createDb(url: string, type: string) {
-  return createClient(url, type).db
+export function createDb(url: string) {
+  return createClient(url).db
 }
