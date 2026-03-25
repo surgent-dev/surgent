@@ -19,7 +19,7 @@ import { useDeploymentHistoryQuery, useRedeployVersion, useDeployProject } from 
 import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
 import { useProjectDomains } from '@/queries/domains'
 import { DEPLOYMENT_STATUS_LABELS, TERMINAL_DEPLOYMENT_STATUSES } from '@/lib/deployment'
-import { timeAgoDetailed } from '@/lib/format'
+import { timeAgoDetailed, timeAgoCompact } from '@/lib/format'
 
 interface Props {
   open: boolean
@@ -118,6 +118,9 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
               <span className="text-sm font-semibold">
                 {isLive ? 'Live' : busy ? 'Deploying' : 'Offline'}
               </span>
+              {latest?.error && (
+                <span className="text-xs text-destructive/70 truncate">{latest.error}</span>
+              )}
             </div>
             <button
               type="button"
@@ -347,6 +350,9 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                             </span>
                             <span className="text-[11px] text-muted-foreground/40 shrink-0 sm:hidden">
                               {timeAgoDetailed(d.createdAt)}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground/40 shrink-0 sm:hidden">
+                              {timeAgoCompact(d.createdAt)}
                             </span>
                           </div>
                           {d.error && (

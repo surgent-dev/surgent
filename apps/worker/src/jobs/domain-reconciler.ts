@@ -14,7 +14,7 @@ export async function reconcileStuckDomains() {
     const stuckDomains = await db
       .selectFrom('domain')
       .selectAll()
-      .where('status', 'in', ['purchasing', 'dns_configuring', 'ssl_provisioning'])
+      .where('status', 'in', ['purchasing', 'dns_configuring'])
       .where('updatedAt', '<', stuckThreshold)
       .execute()
 
