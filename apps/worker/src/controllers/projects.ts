@@ -31,6 +31,7 @@ import {
 import { auth } from '@/lib/auth'
 import { WorkerDeployer } from '@/apis/deployer/deployer'
 import Cloudflare from 'cloudflare'
+import { ensureAnalytics, syncProjectAnalyticsDomain } from '@/services/analytics'
 
 const log = createLogger('projects')
 
@@ -43,7 +44,7 @@ const PREVIEW_PORT = 3000
 const DEFAULT_WORKER = `export default {
   async fetch(request, env) {
     return env.ASSETS.fetch(request);
-  }
+  },
 };`
 
 const DEFAULT_WRANGLER = {
@@ -407,6 +408,23 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     if (localEnv) deployConfig.vars = { ...localEnv, ...deployConfig.vars }
     if (Object.keys(envVars).length) deployConfig.vars = { ...deployConfig.vars, ...envVars }
 
+    log.info(
+      { projectId, analyticsUrl: config.analytics.url, domain: workerHostname },
+      'analytics: ensuring website',
+    )
+    const analytics = await ensureAnalytics({
+      projectId,
+      organizationId: project.organizationId,
+      userId: project.userId,
+      name: project.name,
+      domain: workerHostname,
+    })
+    if (analytics?.id) {
+      log.info({ projectId, websiteId: analytics.id }, 'analytics: website ensured')
+    } else {
+      log.warn({ projectId }, 'analytics: no websiteId returned — analytics will not be active')
+    }
+
     const assetPreview = assetPaths.slice(0, 12)
     const assetMore = assetPaths.length - assetPreview.length
     const envKeys = Object.keys(deployConfig.vars || {}).sort()
@@ -469,6 +487,8 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       hostname: workerHostname,
       status: 'active',
     })
+
+    await syncProjectAnalyticsDomain(projectId).catch(() => {})
 
     if (prevName && prevName !== scriptName) {
       await new WorkerDeployer()

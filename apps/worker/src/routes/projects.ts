@@ -53,6 +53,7 @@ import {
   enqueueProjectDeployJob,
 } from '@/lib/projects/queue'
 import { createLogger } from '@/lib/logger'
+import { ensureAnalytics, getAnalyticsWebsite, removeAnalytics } from '@/services/analytics'
 
 const log = createLogger('projects')
 const projects = new Hono<AppContext>()
@@ -851,6 +852,8 @@ projects.delete('/:id', zValidator('param', idParam), async (c) => {
 
   await getProjectWithAuth(id, c.get('user')!)
 
+  await removeAnalytics(id).catch(() => {})
+
   // Delete sandbox before soft deleting project
   await deleteSandbox({ projectId: id })
 
@@ -947,6 +950,14 @@ projects.post(
           destination: 'server',
         })
         .execute()
+
+      // Connect analytics (best-effort — doesn't block project creation)
+      await ensureAnalytics({
+        projectId,
+        organizationId,
+        userId,
+        name: projectName,
+      })
 
       // Queue project initialization in the background
       try {
@@ -1929,6 +1940,56 @@ fi
       const message = err instanceof Error ? err.message : 'Failed to create repository'
       return c.json({ error: message }, 500)
     }
+  },
+)
+
+const ANALYTICS_PROXY_PATHS = [
+  'stats',
+  'pageviews',
+  'metrics',
+  'active',
+  'sessions',
+  'events',
+  'realtime',
+] as const
+
+projects.get(
+  '/:id/analytics/:path{[a-z/]+}',
+  zValidator('param', z.object({ id: z.string().uuid(), path: z.string() })),
+  async (c) => {
+    const { id, path } = c.req.valid('param')
+    await getProjectWithAuth(id, c.get('user')!)
+
+    if (!ANALYTICS_PROXY_PATHS.some((p) => path === p || path.startsWith(`${p}/`))) {
+      return c.json({ error: 'Invalid analytics path' }, 400)
+    }
+
+    const website = await getAnalyticsWebsite(id)
+    if (!website?.id) {
+      return c.json({ error: 'Analytics not configured for this project' }, 404)
+    }
+
+    if (!config.analytics.url) {
+      return c.json({ error: 'Analytics service is not configured' }, 503)
+    }
+
+    const url = new URL(`/api/websites/${website.id}/${path}`, config.analytics.url)
+
+    // Forward query params
+    const incoming = new URL(c.req.url)
+    incoming.searchParams.forEach((v, k) => url.searchParams.set(k, v))
+
+    const res = await fetch(url)
+    const data = await res.json()
+    const headers = new Headers(res.headers)
+    headers.set('content-type', 'application/json; charset=utf-8')
+    headers.delete('content-length')
+
+    return new Response(JSON.stringify(data), {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    })
   },
 )
 
