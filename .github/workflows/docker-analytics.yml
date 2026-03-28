@@ -1,4 +1,4 @@
-name: Docker - Worker
+name: Docker - Analytics
 
 on:
   push:
@@ -7,14 +7,12 @@ on:
     tags:
       - v*
     paths:
-      - apps/worker/**
-      - apps/worker/Dockerfile
-      - packages/db/**
-      - packages/typescript-config/**
+      - apps/analytics/**
+      - apps/analytics/Dockerfile
       - package.json
       - bun.lock
       - bunfig.toml
-      - .github/workflows/docker-worker.yml
+      - .github/workflows/docker-analytics.yml
 
 permissions:
   contents: read
@@ -22,7 +20,7 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: surgent/worker
+  ECR_REPOSITORY: surgent/analytics
   ECR_REGISTRY: 784713213970.dkr.ecr.us-east-1.amazonaws.com
 
 jobs:
@@ -54,7 +52,7 @@ jobs:
         with:
           images: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
           labels: |
-            org.opencontainers.image.title=surgent/worker
+            org.opencontainers.image.title=surgent/analytics
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -67,7 +65,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: apps/worker/Dockerfile
+          file: apps/analytics/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -79,7 +77,7 @@ jobs:
         run: |
           SERVICE_JSON=$(aws ecs describe-services \
             --cluster surgent-cluster \
-            --services surgent-worker)
+            --services surgent-analytics)
 
           TASK_DEF=$(echo "$SERVICE_JSON" | jq -r '.services[0].taskDefinition')
           NETWORK_CONFIG=$(echo "$SERVICE_JSON" | jq -c '{awsvpcConfiguration: .services[0].networkConfiguration.awsvpcConfiguration}')
@@ -89,7 +87,7 @@ jobs:
             --launch-type FARGATE \
             --task-definition "$TASK_DEF" \
             --network-configuration "$NETWORK_CONFIG" \
-            --overrides '{"containerOverrides":[{"name":"worker","command":["bun","run","migrate-db"]}]}' \
+            --overrides '{"containerOverrides":[{"name":"analytics","command":["bun","run","migrate-storage"]}]}' \
             --query 'tasks[0].taskArn' \
             --output text)
 
@@ -100,7 +98,7 @@ jobs:
           EXIT_CODE=$(aws ecs describe-tasks \
             --cluster surgent-cluster \
             --tasks "$TASK_ARN" \
-            --query 'tasks[0].containers[?name==`worker`][0].exitCode' \
+            --query 'tasks[0].containers[?name==`analytics`][0].exitCode' \
             --output text)
 
           if [ "$EXIT_CODE" != "0" ]; then
@@ -116,5 +114,5 @@ jobs:
         run: |
           aws ecs update-service \
             --cluster surgent-cluster \
-            --service surgent-worker \
+            --service surgent-analytics \
             --force-new-deployment

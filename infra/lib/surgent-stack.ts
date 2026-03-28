@@ -7,9 +7,10 @@ import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2'
 import { Construct } from 'constructs'
 
-const SSM_PREFIX = '/surgent/prod'
+const WORKER_SSM_PREFIX = '/surgent/prod'
+const ANALYTICS_SSM_PREFIX = '/surgent/prod/analytics'
 
-const SECRET_NAMES = [
+const WORKER_SECRET_NAMES = [
   'BETTER_AUTH_SECRET',
   'BETTER_AUTH_URL',
   'BETTER_AUTH_ADMIN_EMAILS',
@@ -70,6 +71,36 @@ const SECRET_NAMES = [
   'CLOUDFLARE_ZONE_ID',
 ] as const
 
+const ANALYTICS_SECRET_NAMES = ['DATABASE_URL'] as const
+
+function createRepository(scope: Construct, id: string, repositoryName: string) {
+  return new ecr.Repository(scope, id, {
+    repositoryName,
+    removalPolicy: cdk.RemovalPolicy.RETAIN,
+    lifecycleRules: [
+      {
+        maxImageCount: 10,
+        description: 'Keep last 10 images',
+      },
+    ],
+  })
+}
+
+function loadSecrets(scope: Construct, prefix: string, names: readonly string[]) {
+  const secrets: Record<string, ecs.Secret> = {}
+  const key = prefix.replace(/[\/-]/g, '')
+
+  for (const name of names) {
+    secrets[name] = ecs.Secret.fromSsmParameter(
+      ssm.StringParameter.fromSecureStringParameterAttributes(scope, `Param${key}${name}`, {
+        parameterName: `${prefix}/${name}`,
+      }),
+    )
+  }
+
+  return secrets
+}
+
 export class SurgentStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props)
@@ -87,23 +118,16 @@ export class SurgentStack extends cdk.Stack {
       ],
     })
 
-    // ECR Repository with lifecycle policy
-    const repository = new ecr.Repository(this, 'SurgentWorkerRepo', {
-      repositoryName: 'surgent/worker',
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      emptyOnDelete: true,
-      lifecycleRules: [
-        {
-          maxImageCount: 10,
-          description: 'Keep last 10 images',
-        },
-      ],
-    })
+    const workerRepository = createRepository(this, 'SurgentWorkerRepo', 'surgent/worker')
+    const analyticsRepository = createRepository(this, 'SurgentAnalyticsRepo', 'surgent/analytics')
 
     // ECS Cluster
     const cluster = new ecs.Cluster(this, 'SurgentCluster', {
       vpc,
       clusterName: 'surgent-cluster',
+      defaultCloudMapNamespace: {
+        name: 'surgent.internal',
+      },
     })
 
     // Wildcard ACM Certificate for *.surgent.dev
@@ -112,15 +136,8 @@ export class SurgentStack extends cdk.Stack {
       validation: acm.CertificateValidation.fromDns(),
     })
 
-    // Load secrets from SSM Parameter Store
-    const secrets: Record<string, ecs.Secret> = {}
-    for (const name of SECRET_NAMES) {
-      secrets[name] = ecs.Secret.fromSsmParameter(
-        ssm.StringParameter.fromSecureStringParameterAttributes(this, `Param${name}`, {
-          parameterName: `${SSM_PREFIX}/${name}`,
-        }),
-      )
-    }
+    const workerSecrets = loadSecrets(this, WORKER_SSM_PREFIX, WORKER_SECRET_NAMES)
+    const analyticsSecrets = loadSecrets(this, ANALYTICS_SSM_PREFIX, ANALYTICS_SECRET_NAMES)
 
     // ==================== ALB ====================
 
@@ -156,14 +173,17 @@ export class SurgentStack extends cdk.Stack {
     })
 
     workerTaskDef.addContainer('worker', {
-      image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
+      image: ecs.ContainerImage.fromEcrRepository(workerRepository, 'latest'),
       containerName: 'worker',
       portMappings: [{ containerPort: 4000 }],
-      secrets,
+      secrets: {
+        ...workerSecrets,
+      },
       environment: {
         NODE_ENV: 'production',
         PORT: '4000',
         HOST: '0.0.0.0',
+        ANALYTICS_URL: 'http://analytics.surgent.internal:3007',
       },
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'surgent-worker' }),
     })
@@ -218,16 +238,114 @@ export class SurgentStack extends cdk.Stack {
 
     workerService.connections.allowFrom(alb, ec2.Port.tcp(4000), 'Allow traffic from ALB')
 
+    // ==================== ANALYTICS SERVICE ====================
+
+    const analyticsTaskDef = new ecs.FargateTaskDefinition(this, 'AnalyticsTaskDef', {
+      cpu: 512,
+      memoryLimitMiB: 1024,
+    })
+
+    analyticsTaskDef.addContainer('analytics', {
+      image: ecs.ContainerImage.fromEcrRepository(analyticsRepository, 'latest'),
+      containerName: 'analytics',
+      portMappings: [{ containerPort: 3007 }],
+      secrets: {
+        DATABASE_URL: analyticsSecrets.DATABASE_URL,
+      },
+      environment: {
+        NODE_ENV: 'production',
+        PORT: '3007',
+        HOSTNAME: '0.0.0.0',
+      },
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'surgent-analytics' }),
+    })
+
+    const analyticsService = new ecs.FargateService(this, 'SurgentAnalyticsService', {
+      cluster,
+      serviceName: 'surgent-analytics',
+      taskDefinition: analyticsTaskDef,
+      desiredCount: 2,
+      assignPublicIp: true,
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      healthCheckGracePeriod: cdk.Duration.seconds(60),
+      minHealthyPercent: 50,
+      maxHealthyPercent: 200,
+      cloudMapOptions: {
+        name: 'analytics',
+      },
+    })
+
+    const analyticsTargetGroup = new elbv2.ApplicationTargetGroup(this, 'AnalyticsTargetGroup', {
+      vpc,
+      port: 3007,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targetType: elbv2.TargetType.IP,
+      healthCheck: {
+        path: '/api/heartbeat',
+        port: '3007',
+        healthyHttpCodes: '200',
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+      },
+    })
+
+    analyticsService.attachToApplicationTargetGroup(analyticsTargetGroup)
+
+    httpsListener.addTargetGroups('AnalyticsPublicRule', {
+      targetGroups: [analyticsTargetGroup],
+      priority: 20,
+      conditions: [
+        elbv2.ListenerCondition.hostHeaders(['analytics.surgent.dev']),
+        elbv2.ListenerCondition.pathPatterns([
+          '/',
+          '/robots.txt',
+          '/script.js',
+          '/p/*',
+          '/q/*',
+          '/api/send',
+          '/api/heartbeat',
+          '/api/config',
+          '/api/batch',
+        ]),
+      ],
+    })
+
+    const analyticsScaling = analyticsService.autoScaleTaskCount({
+      minCapacity: 2,
+      maxCapacity: 6,
+    })
+
+    analyticsScaling.scaleOnRequestCount('AnalyticsRequestCountScaling', {
+      targetGroup: analyticsTargetGroup,
+      requestsPerTarget: 200,
+      scaleInCooldown: cdk.Duration.seconds(120),
+      scaleOutCooldown: cdk.Duration.seconds(60),
+    })
+
+    analyticsService.connections.allowFrom(alb, ec2.Port.tcp(3007), 'Allow traffic from ALB')
+    analyticsService.connections.allowFrom(
+      workerService,
+      ec2.Port.tcp(3007),
+      'Allow private worker traffic to analytics',
+    )
+
     // ==================== OUTPUTS ====================
 
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
-      description: 'ALB DNS name - point api.surgent.dev CNAME here',
+      description: 'ALB DNS name - point api.surgent.dev and analytics.surgent.dev CNAMEs here',
     })
 
-    new cdk.CfnOutput(this, 'RepositoryUri', {
-      value: repository.repositoryUri,
-      description: 'ECR repository URI for docker push',
+    new cdk.CfnOutput(this, 'WorkerRepositoryUri', {
+      value: workerRepository.repositoryUri,
+      description: 'Worker ECR repository URI for docker push',
+    })
+
+    new cdk.CfnOutput(this, 'AnalyticsRepositoryUri', {
+      value: analyticsRepository.repositoryUri,
+      description: 'Analytics ECR repository URI for docker push',
     })
 
     new cdk.CfnOutput(this, 'CertificateArn', {

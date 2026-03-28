@@ -4,19 +4,25 @@ Infrastructure for Surgent, managed via AWS CDK.
 
 ## Architecture Overview
 
-| Component        | Description                                                    |
-| :--------------- | :------------------------------------------------------------- |
-| **ECS Fargate**  | Serverless container execution for the worker service.         |
-| **ALB**          | Application Load Balancer handling HTTPS at `api.surgent.dev`. |
-| **ECR**          | Container registry for `surgent/worker` images.                |
-| **SSM**          | Parameter Store for secrets and environment variables.         |
-| **Auto-scaling** | 1 to 4 tasks based on 70% CPU utilization.                     |
+| Component        | Description                                                                              |
+| :--------------- | :--------------------------------------------------------------------------------------- |
+| **ECS Fargate**  | Runs both `surgent-worker` and `surgent-analytics`.                                      |
+| **ALB**          | Shared HTTPS load balancer for `api.surgent.dev` and the public analytics ingest routes. |
+| **ECR**          | Container registries for `surgent/worker` and `surgent/analytics`.                       |
+| **SSM**          | Parameter Store for production secrets and connection strings.                           |
+| **Auto-scaling** | Request-count-based scaling for both services.                                           |
 
 ## Deployment
 
 ### CI/CD
 
 Deploys are automated via GitHub Actions on push to the `main` branch.
+
+- [`.github/workflows/docker-worker.yml`](/Users/benrov/Projects/surgent/.github/workflows/docker-worker.yml)
+- [`.github/workflows/docker-analytics.yml`](/Users/benrov/Projects/surgent/.github/workflows/docker-analytics.yml)
+
+Production uses **ECR + ECS only**. `docker-compose.dev.yml` is for local development and is not part of the production path.
+The analytics deploy now runs a one-off ECS task to apply Postgres migrations before forcing a new service deployment.
 
 ### Manual Deploy
 
@@ -29,7 +35,14 @@ bun cdk deploy
 
 ## Managing Environment Variables
 
-All secrets are stored in AWS SSM Parameter Store under the prefix `/surgent/prod/`.
+Secrets are split by service in AWS SSM Parameter Store:
+
+- Worker: `/surgent/prod/{SECRET_NAME}`
+- Analytics: `/surgent/prod/analytics/{SECRET_NAME}`
+
+Analytics-specific production secrets currently include:
+
+- `DATABASE_URL`
 
 ### Adding a New Secret
 
@@ -41,9 +54,12 @@ All secrets are stored in AWS SSM Parameter Store under the prefix `/surgent/pro
       --type "SecureString" \
       --overwrite
     ```
-2.  **Register in CDK**: Add `NEW_KEY` to the `SECRET_NAMES` array in `lib/surgent-stack.ts`.
+    For analytics-only secrets, use `/surgent/prod/analytics/NEW_KEY` instead.
+2.  **Register in CDK**: Add `NEW_KEY` to the appropriate secret list in `lib/surgent-stack.ts`.
 3.  **Deploy**: Run `bun cdk deploy` to update the ECS Task Definition. Or push
     to prod branch.
+
+Analytics secrets live at `/surgent/prod/analytics/{SECRET_NAME}` and use the plain names above. They are not prefixed with `ANALYTICS_` in SSM.
 
 ### Updating an Existing Secret
 
@@ -55,24 +71,28 @@ All secrets are stored in AWS SSM Parameter Store under the prefix `/surgent/pro
       --type "SecureString" \
       --overwrite
     ```
+    For analytics-only secrets, update `/surgent/prod/analytics/EXISTING_KEY` instead.
 2.  **Restart Service**: ECS tasks fetch secrets at startup. Force a new deployment to pick up changes:
     ```bash
     aws ecs update-service --cluster surgent-cluster --service surgent-worker --force-new-deployment
+    aws ecs update-service --cluster surgent-cluster --service surgent-analytics --force-new-deployment
     ```
 
 ### Useful SSM Commands
 
-| Action        | Command                                                              |
-| :------------ | :------------------------------------------------------------------- |
-| **Get Value** | `aws ssm get-parameter --name "/surgent/prod/KEY" --with-decryption` |
-| **List All**  | `aws ssm get-parameters-by-path --path "/surgent/prod/"`             |
+| Action                     | Command                                                                        |
+| :------------------------- | :----------------------------------------------------------------------------- |
+| **Get worker value**       | `aws ssm get-parameter --name "/surgent/prod/KEY" --with-decryption`           |
+| **Get analytics value**    | `aws ssm get-parameter --name "/surgent/prod/analytics/KEY" --with-decryption` |
+| **List worker secrets**    | `aws ssm get-parameters-by-path --path "/surgent/prod/"`                       |
+| **List analytics secrets** | `aws ssm get-parameters-by-path --path "/surgent/prod/analytics/"`             |
 
 ## Operations
 
 ### Check Deployment Status
 
 ```bash
-aws ecs describe-services --cluster surgent-cluster --services surgent-worker
+aws ecs describe-services --cluster surgent-cluster --services surgent-worker surgent-analytics
 ```
 
 ### View Logs
@@ -87,6 +107,7 @@ aws logs tail $(aws logs describe-log-groups --log-group-name-prefix /ecs/Surgen
 
 ```bash
 aws ecs update-service --cluster surgent-cluster --service surgent-worker --force-new-deployment
+aws ecs update-service --cluster surgent-cluster --service surgent-analytics --force-new-deployment
 ```
 
 ## Troubleshooting
@@ -95,16 +116,16 @@ aws ecs update-service --cluster surgent-cluster --service surgent-worker --forc
 
 ```bash
 # Service status (running/desired/pending)
-aws ecs describe-services --cluster surgent-cluster --services surgent-worker \
-  --query 'services[0].{running:runningCount,desired:desiredCount,pending:pendingCount}'
+aws ecs describe-services --cluster surgent-cluster --services surgent-worker surgent-analytics \
+  --query 'services[*].{name:serviceName,running:runningCount,desired:desiredCount,pending:pendingCount}'
 
 # Recent events (errors show up here)
-aws ecs describe-services --cluster surgent-cluster --services surgent-worker \
-  --query 'services[0].events[0:5]'
+aws ecs describe-services --cluster surgent-cluster --services surgent-worker surgent-analytics \
+  --query 'services[*].{name:serviceName,events:events[0:5]}'
 
 # Deployment status
-aws ecs describe-services --cluster surgent-cluster --services surgent-worker \
-  --query 'services[0].deployments[*].{status:status,running:runningCount,desired:desiredCount}'
+aws ecs describe-services --cluster surgent-cluster --services surgent-worker surgent-analytics \
+  --query 'services[*].{name:serviceName,deployments:deployments[*].{status:status,running:runningCount,desired:desiredCount}}'
 ```
 
 ### Health Check Issues
@@ -140,9 +161,9 @@ aws ecr describe-images --repository-name surgent/worker \
 
 ### Common Issues
 
-| Issue                      | Cause                             | Fix                                     |
-| :------------------------- | :-------------------------------- | :-------------------------------------- |
-| `CannotPullContainerError` | Image not in ECR                  | Push image with `latest` tag            |
-| `ENOTFOUND` in logs        | Bad DATABASE_URL or network issue | Check SSM value, verify no extra quotes |
-| Health check 404           | Wrong health check path           | Verify `/health` endpoint exists        |
-| Tasks keep restarting      | Container crash                   | Check logs for stack trace              |
+| Issue                      | Cause                             | Fix                                                              |
+| :------------------------- | :-------------------------------- | :--------------------------------------------------------------- |
+| `CannotPullContainerError` | Image not in ECR                  | Push image with `latest` tag                                     |
+| `ENOTFOUND` in logs        | Bad DATABASE_URL or network issue | Check SSM value, verify no extra quotes                          |
+| Health check 404           | Wrong health check path           | Verify worker uses `/health` and analytics uses `/api/heartbeat` |
+| Tasks keep restarting      | Container crash                   | Check logs for stack trace                                       |

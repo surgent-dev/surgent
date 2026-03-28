@@ -53,8 +53,11 @@
     "zod": "^4.1.12"
   },
   "scripts": {
+    "check-db": "bun ../../packages/db/src/migrate.ts check",
     "dev": "APP_DEBUG=true bun --hot src/index.ts",
+    "migrate-db": "bun ../../packages/db/src/migrate.ts",
     "start": "bun src/index.ts",
+    "start-docker": "bun run check-db && SKIP_DB_MIGRATION=1 bun src/index.ts",
     "e2b:build:dev": "bun run src/e2b/build.ts",
     "e2b:build:prod": "NODE_ENV=production bun run src/e2b/build.ts",
     "e2b:build:dev-sandbox": "bun run src/e2b/build.dev.ts"

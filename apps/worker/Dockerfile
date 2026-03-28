@@ -20,4 +20,4 @@ ENV NODE_ENV=production PORT=4000
 EXPOSE 4000
 WORKDIR /app/apps/worker
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["bun", "src/index.ts"]
+CMD ["bun", "run", "start-docker"]

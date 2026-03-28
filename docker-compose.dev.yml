@@ -1,16 +1,23 @@
-# Development Docker Compose
+# Local development infrastructure
+#
+# Production uses ECR + ECS only. This file is local development infra only.
 #
 # Usage:
-#   Start:  docker-compose -f docker-compose.dev.yml up -d
-#   Stop:   docker-compose -f docker-compose.dev.yml down
-#   Logs:   docker-compose -f docker-compose.dev.yml logs -f postgres
+#   Start:  docker compose -f docker-compose.dev.yml up -d
+#   Stop:   docker compose -f docker-compose.dev.yml down
+#   Reset:  docker compose -f docker-compose.dev.yml down -v
 #
-# DATABASE_URL for your local development:
-#   postgres://surgent:password@localhost:5433/surgent
+# If you already have an existing postgres_data volume from an older setup,
+# run the reset command once so the init script can create surgent_analytics.
 #
-# Data persistence:
-#   A named volume is used so data survives container restarts.
-#   To completely reset: docker-compose -f docker-compose.dev.yml down -v
+# Databases:
+#   PostgreSQL:   surgent (web/worker), surgent_analytics (analytics)
+#
+# Connection URLs for .env.local:
+#   apps/worker/.env.local:
+#     DATABASE_URL=postgresql://surgent:password@localhost:5432/surgent
+#   apps/analytics/.env.local:
+#     DATABASE_URL=postgresql://surgent:password@localhost:5432/surgent_analytics
 
 services:
   postgres:
@@ -24,40 +31,13 @@ services:
       POSTGRES_USER: surgent
       POSTGRES_PASSWORD: password
     volumes:
-      - postgres_data:/var/lib/postgresql/data/18
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init/01-create-analytics-db.sh:/docker-entrypoint-initdb.d/01-create-analytics-db.sh:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U surgent -d surgent']
       interval: 10s
       timeout: 5s
       retries: 5
 
-  inngest:
-    image: inngest/inngest:latest
-    container_name: inngest-dev
-    restart: unless-stopped
-    ports:
-      - '8288:8288'
-    environment:
-      INNGEST_EVENT_KEY: local
-      INNGEST_SIGNING_KEY: local
-      INNGEST_LOG_LEVEL: info
-    command: inngest dev -u http://host.docker.internal:4000/api/inngest --no-discovery
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: pgadmin-dev
-    restart: unless-stopped
-    ports:
-      - '5050:80'
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@surgent.dev
-      PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-      - ./pgadmin-servers.json:/pgadmin4/servers.json:ro
-
 volumes:
   postgres_data:
-  pgadmin_data:
