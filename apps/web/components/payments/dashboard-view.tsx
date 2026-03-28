@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { format, subDays, isAfter } from 'date-fns'
+import { format } from 'date-fns'
 import { BadgeDollarSign, ChevronRight, Plus, Receipt, Repeat, Users } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
@@ -11,6 +11,7 @@ import {
   getTransactionIcon,
   getTransactionColor,
 } from './utils'
+import { getPaymentSummary } from './summary'
 import type { ProductWithPrices } from '@/queries/products'
 import type { Transaction } from '@/queries/transactions'
 import type { Subscription } from '@/queries/subscriptions'
@@ -79,37 +80,10 @@ export function DashboardView({
   subscriptions,
   onCreateProduct,
 }: DashboardViewProps) {
-  const stats = useMemo(() => {
-    const thirtyDaysAgo = subDays(new Date(), 30)
-    const recent = transactions.filter((t) => isAfter(new Date(t.createdAt), thirtyDaysAgo))
-    const currency = recent.find((t) => t.currency)?.currency || 'usd'
-    const grossRevenue = recent
-      .filter((t) => t.type === 'payment')
-      .reduce((sum, t) => sum + t.amount, 0)
-    const totalRefunds = recent
-      .filter((t) => t.type === 'refund')
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-    const totalDisputes = recent
-      .filter((t) => t.type === 'dispute')
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-    const totalFees = recent
-      .filter((t) => t.type === 'processor_fee')
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-    const netRevenue = grossRevenue - totalRefunds - totalDisputes - totalFees
-    return {
-      currency,
-      grossRevenue,
-      netRevenue,
-      totalRefunds,
-      totalDisputes,
-      totalFees,
-      paymentCount: recent.filter((t) => t.type === 'payment').length,
-      uniqueCustomers: new Set(recent.filter((t) => t.customerId).map((t) => t.customerId)).size,
-      activeSubscriptions: subscriptions.filter(
-        (s) => s.status === 'active' || s.status === 'trialing',
-      ).length,
-    }
-  }, [subscriptions, transactions])
+  const stats = useMemo(
+    () => getPaymentSummary(transactions, subscriptions),
+    [subscriptions, transactions],
+  )
 
   if (products.length === 0 && transactions.length === 0) {
     return (

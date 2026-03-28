@@ -1,32 +1,58 @@
 'use client'
 
-import { ChatCircle, MonitorPlay, ArrowsOutSimple } from '@phosphor-icons/react'
+import { useEffect, useRef } from 'react'
+import { useParams } from 'next/navigation'
+import EditorHeader from '@/components/editor/editor-header'
+import EditorTabs from '@/components/editor/editor-tabs'
+import Conversation from '@/components/conversation'
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
+import { useSandbox } from '@/hooks/use-sandbox'
+import { useSandboxReady } from '@/hooks/use-sandbox-ready'
+import { useActivateProject } from '@/queries/projects'
+import { ProjectEventProvider } from '@/context/project-events'
 
 export default function EditorPage() {
+  const { companyId: projectId } = useParams<{ companyId: string }>()
+  const { project } = useSandboxReady(projectId)
+  const { mutate: activateProject } = useActivateProject()
+  const setSandboxId = useSandbox((s) => s.setSandboxId)
+  const activated = useRef(false)
+
+  useEffect(() => setSandboxId(project?.sandbox?.id || null), [project, setSandboxId])
+
+  useEffect(() => {
+    if (
+      !project ||
+      project.status === 'provisioning' ||
+      project.status === 'failed' ||
+      activated.current
+    )
+      return
+    activated.current = true
+    activateProject({ id: projectId })
+  }, [activateProject, project, projectId])
+
   return (
-    <div className="flex flex-col h-full rounded-xl bg-foreground/[0.03] dark:bg-white/[0.04] overflow-hidden">
-      <div className="flex h-10 items-center px-3 gap-2 shrink-0">
-        <MonitorPlay className="size-4 text-muted-foreground" weight="duotone" />
-        <span className="text-[13px] text-muted-foreground">Preview</span>
-        <span className="text-xs text-muted-foreground/40 font-mono truncate">localhost:5173</span>
-        <div className="flex-1" />
-        <button className="inline-flex items-center justify-center size-7 rounded-lg bg-white/80 dark:bg-white/[0.05] border border-foreground/[0.04] text-foreground/55 hover:border-foreground/[0.08] hover:text-foreground transition-colors cursor-pointer">
-          <ArrowsOutSimple className="size-3.5" />
-        </button>
-        <button className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg bg-white/80 dark:bg-white/[0.05] border border-foreground/[0.04] text-[13px] font-medium text-foreground/55 hover:border-foreground/[0.08] hover:text-foreground transition-colors cursor-pointer">
-          <ChatCircle className="size-3.5" weight="fill" />
-          Chat
-        </button>
+    <ProjectEventProvider key={projectId} projectId={projectId}>
+      <div className="flex h-full flex-col gap-1.5">
+        <EditorHeader projectId={projectId} project={project} />
+
+        <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
+          <ResizablePanel defaultSize={65} minSize={35}>
+            <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
+              <EditorTabs projectId={projectId} project={project} />
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle className="mx-0.5 w-px bg-transparent after:w-2 hover:bg-border/50 transition-colors" />
+
+          <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
+            <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
+              <Conversation projectId={projectId} />
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto size-12 rounded-xl bg-foreground/[0.04] flex items-center justify-center mb-3">
-            <MonitorPlay className="size-6 text-muted-foreground/40" weight="duotone" />
-          </div>
-          <p className="text-sm font-medium">Website Editor</p>
-          <p className="text-xs text-muted-foreground/50 mt-1">Full-screen preview with AI chat</p>
-        </div>
-      </div>
-    </div>
+    </ProjectEventProvider>
   )
 }

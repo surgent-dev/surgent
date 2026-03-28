@@ -6,12 +6,15 @@ import Link from 'next/link'
 import { useTheme } from 'next-themes'
 import {
   House,
-  PencilSimpleLine,
+  PenNib,
   ChartLineUp,
-  GearSix,
   SignOut,
   Moon,
   Sun,
+  CreditCard,
+  Lightning,
+  Plus,
+  SquaresFour,
 } from '@phosphor-icons/react'
 import {
   DropdownMenu,
@@ -21,27 +24,40 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { authClient } from '@/lib/auth-client'
+import { useCredits } from '@/hooks/use-credits'
+import PlanDialog from '@/components/plan-dialog'
+import TopupDialog from '@/components/topup-dialog'
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 
 const NAV: { icon: PhosphorIcon; label: string; href: string }[] = [
   { icon: House, label: 'Dashboard', href: '' },
-  { icon: PencilSimpleLine, label: 'Editor', href: '/editor' },
+  { icon: PenNib, label: 'Studio', href: '/editor' },
   { icon: ChartLineUp, label: 'Analytics', href: '/analytics' },
-  { icon: GearSix, label: 'Settings', href: '/settings' },
 ]
 
 export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
   const pathname = usePathname()
   const router = useRouter()
   const { setTheme, resolvedTheme } = useTheme()
+  const credits = useCredits()
   const base = `/company/${companyId}`
   const [user, setUser] = useState<{ name?: string; email?: string; image?: string } | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [planOpen, setPlanOpen] = useState(false)
+  const [topupOpen, setTopupOpen] = useState(false)
 
   useEffect(() => {
-    authClient.getSession().then(({ data }) => data?.user && setUser(data.user))
+    authClient.getSession().then(({ data }) => {
+      if (data?.user)
+        setUser({
+          name: data.user.name,
+          email: data.user.email,
+          image: data.user.image ?? undefined,
+        })
+    })
   }, [])
 
   const on = (href: string) =>
@@ -98,7 +114,7 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
 
         <div className="flex-1" />
 
-        {/* User */}
+        {/* User menu */}
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger className="size-9 rounded-xl bg-muted/60 flex items-center justify-center text-xs font-medium overflow-hidden hover:bg-muted hover:rounded-lg transition-all duration-200 focus-visible:outline-none">
             {user?.image ? (
@@ -107,22 +123,86 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
               initial
             )}
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="right" align="end" sideOffset={8} className="min-w-40">
-            <div className="px-2.5 py-1.5">
+          <DropdownMenuContent side="right" align="end" sideOffset={8} className="w-56">
+            {/* User info */}
+            <div className="px-3 py-2">
               <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
               <p className="text-[11px] text-muted-foreground truncate">{user?.email}</p>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push('/dashboard')}>
-              <House className="size-3.5" /> All projects
-            </DropdownMenuItem>
+
+            {/* Credits */}
+            {credits.hasCustomer && !credits.unlimited && (
+              <>
+                <div className="px-3 py-2.5 space-y-2">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-[11px] text-muted-foreground">Usage</span>
+                    <span className="text-[11px] tabular-nums font-medium">
+                      ${credits.used.toFixed(2)} / ${credits.total.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="h-1 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all duration-300',
+                        credits.usedPercent >= 90
+                          ? 'bg-rose-500'
+                          : credits.usedPercent >= 70
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500',
+                      )}
+                      style={{ width: `${credits.usedPercent}%` }}
+                    />
+                  </div>
+                  {credits.snapshot?.tier !== 'pro' ? (
+                    <Button
+                      variant="brand"
+                      size="sm"
+                      className="w-full h-7 text-[11px]"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setPlanOpen(true)
+                      }}
+                    >
+                      <Lightning className="size-3" weight="fill" />
+                      Upgrade to Pro
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="brand"
+                      size="sm"
+                      className="w-full h-7 text-[11px]"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setTopupOpen(true)
+                      }}
+                    >
+                      <Plus className="size-3" weight="bold" />
+                      Add balance
+                    </Button>
+                  )}
+                </div>
+                <DropdownMenuSeparator />
+              </>
+            )}
+
+            {/* Actions */}
             <DropdownMenuItem onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}>
               {resolvedTheme === 'dark' ? (
                 <Sun className="size-3.5" />
               ) : (
                 <Moon className="size-3.5" />
               )}
-              {resolvedTheme === 'dark' ? 'Light' : 'Dark'}
+              {resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => router.push('/dashboard')}>
+              <SquaresFour className="size-3.5" weight="duotone" />
+              All projects
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => credits.openBillingPortal()}>
+              <CreditCard className="size-3.5" weight="duotone" />
+              Billing
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -159,6 +239,10 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
           )
         })}
       </nav>
+
+      {/* Dialogs */}
+      <PlanDialog open={planOpen} onOpenChange={setPlanOpen} />
+      <TopupDialog open={topupOpen} onOpenChange={setTopupOpen} />
     </TooltipProvider>
   )
 }
