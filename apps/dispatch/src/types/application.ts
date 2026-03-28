@@ -8,6 +8,7 @@ export type DispatchNamespace = {
 
 export type Bindings = {
   dispatcher?: DispatchNamespace
+  ANALYTICS_UPSTREAM?: string
 }
 
 export type AppContext = {
