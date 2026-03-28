@@ -1,6 +1,7 @@
 name: Docker
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     tags: [v*]
@@ -36,7 +37,7 @@ jobs:
 
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
         id: filter
-        if: github.ref_type != 'tag'
+        if: github.ref_type != 'tag' && github.event_name != 'workflow_dispatch'
         with:
           filters: |
             worker:
@@ -58,7 +59,7 @@ jobs:
           SERVICES='[]'
 
           # On tag push, build everything; otherwise only changed services
-          if [ "${{ github.ref_type }}" = "tag" ]; then
+          if [ "${{ github.ref_type }}" = "tag" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             WORKER=true
             ANALYTICS=true
           else
