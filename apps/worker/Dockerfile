@@ -3,6 +3,7 @@
 FROM oven/bun:1 AS deps
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
+COPY apps/analytics/package.json ./apps/analytics/
 COPY apps/web/package.json ./apps/web/
 COPY apps/dispatch/package.json ./apps/dispatch/
 COPY apps/worker/package.json ./apps/worker/
