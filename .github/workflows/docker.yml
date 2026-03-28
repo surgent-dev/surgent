@@ -1,0 +1,198 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: [v*]
+    paths:
+      - apps/worker/**
+      - apps/analytics/**
+      - packages/db/**
+      - packages/typescript-config/**
+      - package.json
+      - bun.lock
+      - bunfig.toml
+      - .github/workflows/docker.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 784713213970.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Detect which services have changed files
+  # ---------------------------------------------------------------------------
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+      has_changes: ${{ steps.build-matrix.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.ref_type != 'tag'
+        with:
+          filters: |
+            worker:
+              - apps/worker/**
+              - packages/db/**
+              - packages/typescript-config/**
+              - package.json
+              - bun.lock
+              - bunfig.toml
+            analytics:
+              - apps/analytics/**
+              - package.json
+              - bun.lock
+              - bunfig.toml
+
+      - name: Build service matrix
+        id: build-matrix
+        run: |
+          SERVICES='[]'
+
+          # On tag push, build everything; otherwise only changed services
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            WORKER=true
+            ANALYTICS=true
+          else
+            WORKER=${{ steps.filter.outputs.worker }}
+            ANALYTICS=${{ steps.filter.outputs.analytics }}
+          fi
+
+          if [ "$WORKER" = "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq -c '. + [{
+              "name":        "worker",
+              "dockerfile":  "apps/worker/Dockerfile",
+              "ecr_repo":    "surgent/worker",
+              "ecs_service": "surgent-worker",
+              "container":   "worker",
+              "migrate_cmd": "migrate-db"
+            }]')
+          fi
+
+          if [ "$ANALYTICS" = "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq -c '. + [{
+              "name":        "analytics",
+              "dockerfile":  "apps/analytics/Dockerfile",
+              "ecr_repo":    "surgent/analytics",
+              "ecs_service": "surgent-analytics",
+              "container":   "analytics",
+              "migrate_cmd": "migrate-storage"
+            }]')
+          fi
+
+          if [ "$SERVICES" = "[]" ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "matrix={\"include\":$SERVICES}" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # 2. Build, push, migrate, and deploy each changed service (in parallel)
+  # ---------------------------------------------------------------------------
+  build-and-deploy:
+    needs: changes
+    if: needs.changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.changes.outputs.matrix) }}
+    name: ${{ matrix.name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials via OIDC
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::784713213970:role/github-actions-ecr
+          role-session-name: github-actions-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/${{ matrix.ecr_repo }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.ecr_repo }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Run database migrations
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          SERVICE_JSON=$(aws ecs describe-services \
+            --cluster surgent-cluster \
+            --services ${{ matrix.ecs_service }})
+
+          TASK_DEF=$(echo "$SERVICE_JSON" | jq -r '.services[0].taskDefinition')
+          NETWORK_CONFIG=$(echo "$SERVICE_JSON" | jq -c '{awsvpcConfiguration: .services[0].networkConfiguration.awsvpcConfiguration}')
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster surgent-cluster \
+            --launch-type FARGATE \
+            --task-definition "$TASK_DEF" \
+            --network-configuration "$NETWORK_CONFIG" \
+            --overrides '{"containerOverrides":[{"name":"${{ matrix.container }}","command":["bun","run","${{ matrix.migrate_cmd }}"]}]}' \
+            --query 'tasks[0].taskArn' \
+            --output text)
+
+          aws ecs wait tasks-stopped \
+            --cluster surgent-cluster \
+            --tasks "$TASK_ARN"
+
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster surgent-cluster \
+            --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[?name==`${{ matrix.container }}`][0].exitCode' \
+            --output text)
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            aws ecs describe-tasks \
+              --cluster surgent-cluster \
+              --tasks "$TASK_ARN" \
+              --query 'tasks[0].{stopCode:stopCode,stoppedReason:stoppedReason,containers:containers[*].{name:name,exitCode:exitCode,reason:reason}}'
+            exit 1
+          fi
+
+      - name: Deploy to ECS
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          aws ecs update-service \
+            --cluster surgent-cluster \
+            --service ${{ matrix.ecs_service }} \
+            --force-new-deployment

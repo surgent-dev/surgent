@@ -19,12 +19,10 @@ WORKDIR /app/apps/analytics
 RUN bun run build-docker
 
 FROM oven/bun:1-slim AS production
-RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/* \
-  && addgroup --system --gid 1001 app && adduser --system --uid 1001 --ingroup app app
+RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=deps --chown=app:app /app/node_modules ./node_modules
-COPY --from=builder --chown=app:app /app/apps/analytics ./apps/analytics
-USER app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/apps/analytics ./apps/analytics
 ENV NODE_ENV=production PORT=3007
 EXPOSE 3007
 WORKDIR /app/apps/analytics
