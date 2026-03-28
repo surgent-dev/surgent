@@ -377,6 +377,7 @@ export function useConvexDashboardQuery(
     queryFn: () => fetchConvexDashboard(id!, env),
     enabled: Boolean(id) && enabled,
     staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: false,
   })
 }
 

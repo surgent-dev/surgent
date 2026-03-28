@@ -150,6 +150,9 @@ export const config = {
     enabled: env.FREE_DOMAIN_ENABLED === 'true',
     maxPerUser: int(env.FREE_DOMAIN_MAX_PER_USER, 1),
   },
+  analytics: {
+    url: env.ANALYTICS_URL || (env.NODE_ENV === 'production' ? undefined : 'http://127.0.0.1:3007'),
+  },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
     baseUrl: env.OPENCODE_BASE_URL,
@@ -177,6 +180,16 @@ export function validateDomainConfig(): string[] {
 
   if (env.NODE_ENV === 'production' && !config.entri.webhookSecret) {
     warnings.push('ENTRI_WEBHOOK_SECRET is not set — webhook signatures will not be verified')
+  }
+
+  return warnings
+}
+
+export function validateAnalyticsConfig(): string[] {
+  const warnings: string[] = []
+
+  if (env.NODE_ENV === 'production' && !config.analytics.url) {
+    warnings.push('ANALYTICS_URL is required in production')
   }
 
   return warnings

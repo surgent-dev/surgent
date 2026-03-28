@@ -13,6 +13,7 @@ import { rateLimit } from '@/middleware/rate-limit'
 import { createLogger } from '@/lib/logger'
 import type { AppContext } from '@/types/application'
 import type { DomainLogEntry, DomainStatus, SslProvisioningMeta } from '@repo/db'
+import { syncProjectAnalyticsDomain } from '@/services/analytics'
 
 const log = createLogger('domains')
 
@@ -702,6 +703,7 @@ domains.delete('/:projectId/:domainId', async (c) => {
   if (!domain) return c.json({ deleted: true })
 
   await db.deleteFrom('domain').where('id', '=', domainId).execute()
+  await syncProjectAnalyticsDomain(projectId).catch(() => {})
 
   log.info({ projectId, domainId, domainName: domain.domainName }, 'domain removed')
 
@@ -767,6 +769,8 @@ domains.post(
       `${domain.domainName} is now the primary domain`,
       true,
     )
+
+    await syncProjectAnalyticsDomain(projectId).catch(() => {})
 
     return c.json({ ok: true, primaryDomain: domain.domainName })
   },
@@ -1338,6 +1342,9 @@ async function processDomainWebhook(payload: EntriWebhookPayload) {
       `Status → ${status}`,
       status !== 'error',
     )
+    if (status === 'active' && domainRecord.isPrimary && domainRecord.projectId) {
+      await syncProjectAnalyticsDomain(domainRecord.projectId).catch(() => {})
+    }
     return
   }
 
@@ -1379,6 +1386,10 @@ async function processDomainWebhook(payload: EntriWebhookPayload) {
     })
     .where('id', '=', domainRecord.id)
     .execute()
+
+  if (status === 'active' && domainRecord.isPrimary && domainRecord.projectId) {
+    await syncProjectAnalyticsDomain(domainRecord.projectId).catch(() => {})
+  }
 
   if (statusChanged) {
     await appendDomainLog(

@@ -140,7 +140,7 @@ export default function ProjectView({ projectId, onPreviewUrl, initialPrompt }: 
   }, [project, setSandboxId])
 
   return (
-    <div className="h-dvh w-full bg-background flex flex-col overflow-hidden">
+    <div className="h-dvh w-full bg-white dark:bg-background flex flex-col overflow-hidden">
       <ProjectInitOverlay
         show={!isReady}
         stage={stage}
@@ -176,7 +176,7 @@ export default function ProjectView({ projectId, onPreviewUrl, initialPrompt }: 
                   </TabsContent>
                   <TabsContent value="preview" className="flex-1 min-h-0 flex flex-col">
                     <div className="flex-1 min-h-0 px-1 pb-1">
-                      <div className="h-full min-h-0 overflow-hidden rounded-xl border bg-background">
+                      <div className="h-full min-h-0 overflow-hidden rounded-xl border bg-white dark:bg-background">
                         <ProjectTools
                           projectId={projectId}
                           project={project}
@@ -205,7 +205,7 @@ export default function ProjectView({ projectId, onPreviewUrl, initialPrompt }: 
                     minSize={30}
                     className="!overflow-visible rounded-tl-xl"
                   >
-                    <div className="h-full bg-background border-l border-t rounded-tl-xl overflow-hidden">
+                    <div className="h-full bg-white dark:bg-background border-l border-t rounded-tl-xl overflow-hidden">
                       <ProjectTools
                         projectId={projectId}
                         project={project}

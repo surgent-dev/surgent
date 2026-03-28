@@ -1,0 +1,8 @@
+.env
+.env.*
+.turbo/
+node_modules/
+generated/
+geo/
+public/script.js
+coverage/

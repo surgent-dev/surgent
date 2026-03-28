@@ -14,7 +14,7 @@ import {
 } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useDeploymentHistoryQuery, useRedeployVersion, useDeployProject } from '@/queries/projects'
 import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
 import { useProjectDomains } from '@/queries/domains'

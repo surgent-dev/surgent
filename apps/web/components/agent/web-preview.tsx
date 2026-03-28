@@ -1,25 +1,22 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useSandbox, type IframeError } from '@/hooks/use-sandbox'
 import {
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ExternalLinkIcon,
-  RefreshCwIcon,
-} from 'lucide-react'
-import type { ComponentProps, ReactNode } from 'react'
+  ArrowClockwise,
+  ArrowSquareOut,
+  CaretLeft,
+  CaretRight,
+  CircleNotch,
+} from '@phosphor-icons/react'
+import type { ComponentProps } from 'react'
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 
 export type WebPreviewContextValue = {
   url: string
   setUrl: (url: string) => void
-  consoleOpen: boolean
-  setConsoleOpen: (open: boolean) => void
   canGoBack: boolean
   canGoForward: boolean
   goBack: () => void
@@ -172,7 +169,6 @@ export const WebPreview = ({
   onUrlChange,
   ...props
 }: WebPreviewProps) => {
-  const [consoleOpen, setConsoleOpen] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
   const [nav, setNav] = useState(() => ({
     history: [defaultUrl],
@@ -291,8 +287,6 @@ export const WebPreview = ({
   const contextValue: WebPreviewContextValue = {
     url,
     setUrl,
-    consoleOpen,
-    setConsoleOpen,
     canGoBack,
     canGoForward,
     goBack,
@@ -318,118 +312,80 @@ export const WebPreviewNavigation = ({
   children,
   ...props
 }: WebPreviewNavigationProps) => (
-  <div className={cn('flex items-center gap-1 border-b px-2 py-1.5', className)} {...props}>
+  <div
+    className={cn('flex shrink-0 items-center gap-1.5 border-b px-2 py-1.5', className)}
+    {...props}
+  >
     {children}
   </div>
 )
+
+const navBtnClass =
+  'inline-flex cursor-pointer items-center justify-center size-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-25 disabled:pointer-events-none disabled:cursor-default'
 
 export const WebPreviewNavButtons = () => {
   const { canGoBack, canGoForward, goBack, goForward, refresh, url } = useWebPreview()
 
   return (
-    <div className="flex items-center gap-1">
-      <TooltipProvider>
+    <TooltipProvider delayDuration={300}>
+      <div className="flex items-center">
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
               disabled={!canGoBack}
               onClick={goBack}
-              className="btn-control size-7"
-              aria-label="Go back"
+              className={navBtnClass}
+              aria-label="Back"
             >
-              <ChevronLeftIcon size={16} />
+              <CaretLeft className="size-3.5" weight="bold" />
             </button>
           </TooltipTrigger>
-          <TooltipContent>Go back</TooltipContent>
+          <TooltipContent>Back</TooltipContent>
         </Tooltip>
-      </TooltipProvider>
 
-      <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
               disabled={!canGoForward}
               onClick={goForward}
-              className="btn-control size-7"
-              aria-label="Go forward"
+              className={navBtnClass}
+              aria-label="Forward"
             >
-              <ChevronRightIcon size={16} />
+              <CaretRight className="size-3.5" weight="bold" />
             </button>
           </TooltipTrigger>
-          <TooltipContent>Go forward</TooltipContent>
+          <TooltipContent>Forward</TooltipContent>
         </Tooltip>
-      </TooltipProvider>
 
-      <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={refresh}
-              className="btn-control h-7 gap-1 px-2 text-xs"
-              aria-label="Refresh page"
-            >
-              <RefreshCwIcon size={14} />
-              Refresh
+            <button type="button" onClick={refresh} className={navBtnClass} aria-label="Refresh">
+              <ArrowClockwise className="size-3.5" />
             </button>
           </TooltipTrigger>
           <TooltipContent>Refresh</TooltipContent>
         </Tooltip>
-      </TooltipProvider>
 
-      <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <a
               href={url || '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className={cn('btn-control size-7', !url && 'pointer-events-none opacity-30')}
+              className={cn(navBtnClass, !url && 'pointer-events-none opacity-25')}
               aria-label="Open in new tab"
             >
-              <ExternalLinkIcon size={14} />
+              <ArrowSquareOut className="size-3.5" />
             </a>
           </TooltipTrigger>
           <TooltipContent>Open in new tab</TooltipContent>
         </Tooltip>
-      </TooltipProvider>
-    </div>
+      </div>
+    </TooltipProvider>
   )
 }
-
-export type WebPreviewNavigationButtonProps = ComponentProps<'button'> & {
-  tooltip?: string
-}
-
-export const WebPreviewNavigationButton = ({
-  onClick,
-  disabled,
-  tooltip,
-  children,
-  className,
-  ...props
-}: WebPreviewNavigationButtonProps) => (
-  <TooltipProvider>
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          className={cn('btn-control size-7', className)}
-          disabled={disabled}
-          onClick={onClick}
-          {...props}
-        >
-          {children}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>{tooltip}</p>
-      </TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
-)
 
 export type WebPreviewUrlProps = ComponentProps<'input'>
 
@@ -462,12 +418,12 @@ export const WebPreviewUrl = ({ className, ...props }: WebPreviewUrlProps) => {
   return (
     <div
       className={cn(
-        'flex h-7 w-full max-w-[280px] items-center rounded-lg border border-border/50 bg-muted/50 px-2.5',
+        'flex h-7 w-full max-w-sm items-center rounded-md border border-border/50 bg-muted/40 px-2.5',
         className,
       )}
     >
       <input
-        className="w-full bg-transparent text-sm text-muted-foreground outline-none placeholder:text-muted-foreground/50"
+        className="w-full bg-transparent text-[13px] text-muted-foreground outline-none placeholder:text-muted-foreground/40"
         value={path}
         onChange={(e) => setPath(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && handleNavigate()}
@@ -480,9 +436,7 @@ export const WebPreviewUrl = ({ className, ...props }: WebPreviewUrlProps) => {
   )
 }
 
-export type WebPreviewBodyProps = ComponentProps<'iframe'> & {
-  overlay?: ReactNode
-}
+export type WebPreviewBodyProps = ComponentProps<'iframe'>
 
 type PreviewStatus = 'idle' | 'loading' | 'ready' | 'failed'
 const WATCHDOG_MS = 10000
@@ -493,13 +447,13 @@ const DEVICE_DIMENSIONS: Record<string, { w: number; h: number }> = {
   tablet: { w: 768, h: 1024 },
 }
 
-export const WebPreviewBody = ({
-  className,
-  overlay,
-  src,
-  onLoad,
-  ...props
-}: WebPreviewBodyProps) => {
+const IFRAME_SANDBOX =
+  'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-presentation allow-pointer-lock allow-storage-access-by-user-activation allow-downloads'
+
+const IFRAME_ALLOW =
+  'autoplay; camera; clipboard-read; clipboard-write; geolocation; display-capture; encrypted-media; fullscreen; gamepad; gyroscope; magnetometer; microphone; midi; payment; usb; bluetooth; hid; serial; xr-spatial-tracking; screen-wake-lock; idle-detection; publickey-credentials-get; local-fonts; window-management'
+
+export const WebPreviewBody = ({ className, src, onLoad, ...props }: WebPreviewBodyProps) => {
   const { url, iframeRef, reloadTick, refresh } = useWebPreview()
   const setIframeError = useSandbox((s) => s.setIframeError)
   const previewRefreshTick = useSandbox((s) => s.previewRefreshTick)
@@ -616,16 +570,16 @@ export const WebPreviewBody = ({
   return (
     <div className="relative flex-1">
       {dims ? (
-        <div className="size-full flex items-start justify-center overflow-auto bg-muted/30 p-4">
+        <div className="flex size-full items-center justify-center overflow-auto bg-muted/20 p-4">
           <div
-            className="shrink-0 rounded-2xl border-2 border-border/60 bg-background shadow-lg overflow-hidden"
+            className="shrink-0 overflow-hidden rounded-2xl border border-border/60 bg-background shadow-sm"
             style={{ width: dims.w, height: dims.h }}
           >
             <iframe
               ref={iframeRef}
               className="size-full"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-presentation allow-pointer-lock allow-storage-access-by-user-activation allow-downloads"
-              allow="autoplay; camera; clipboard-read; clipboard-write; geolocation; display-capture; encrypted-media; fullscreen; gamepad; gyroscope; magnetometer; microphone; midi; payment; usb; bluetooth; hid; serial; xr-spatial-tracking; screen-wake-lock; idle-detection; publickey-credentials-get; local-fonts; window-management"
+              sandbox={IFRAME_SANDBOX}
+              allow={IFRAME_ALLOW}
               src={currentUrl || undefined}
               title="Preview"
               onLoad={handleLoad}
@@ -637,8 +591,8 @@ export const WebPreviewBody = ({
         <iframe
           ref={iframeRef}
           className={cn('size-full', className)}
-          sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-presentation allow-pointer-lock allow-storage-access-by-user-activation allow-downloads"
-          allow="autoplay; camera; clipboard-read; clipboard-write; geolocation; display-capture; encrypted-media; fullscreen; gamepad; gyroscope; magnetometer; microphone; midi; payment; usb; bluetooth; hid; serial; xr-spatial-tracking; screen-wake-lock; idle-detection; publickey-credentials-get; local-fonts; window-management"
+          sandbox={IFRAME_SANDBOX}
+          allow={IFRAME_ALLOW}
           src={currentUrl || undefined}
           title="Preview"
           onLoad={handleLoad}
@@ -646,20 +600,17 @@ export const WebPreviewBody = ({
         />
       )}
       {status === 'loading' && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <RefreshCwIcon className="size-5 animate-spin" />
-            <span className="text-sm">Loading preview...</span>
-          </div>
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
+          <CircleNotch weight="bold" className="size-4 animate-spin text-muted-foreground/50" />
         </div>
       )}
       {status === 'failed' && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/90 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4 text-center px-4">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
+          <div className="flex flex-col items-center gap-3 text-center px-4">
             <p className="text-sm text-muted-foreground">Preview is taking longer than expected.</p>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={handleRetry}>
-                <RefreshCwIcon className="size-4 mr-1.5" />
+                <ArrowClockwise className="size-3.5 mr-1.5" />
                 Retry
               </Button>
               <Button
@@ -669,7 +620,7 @@ export const WebPreviewBody = ({
                   currentUrl && window.open(currentUrl, '_blank', 'noopener,noreferrer')
                 }
               >
-                <ExternalLinkIcon className="size-4 mr-1.5" />
+                <ArrowSquareOut className="size-3.5 mr-1.5" />
                 Open in new tab
               </Button>
             </div>
@@ -682,73 +633,6 @@ export const WebPreviewBody = ({
           <div className="absolute inset-0 preview-glow-border opacity-0" />
         </div>
       )}
-      {overlay ? <div className="pointer-events-none absolute inset-0 z-10">{overlay}</div> : null}
     </div>
-  )
-}
-
-export type WebPreviewConsoleProps = ComponentProps<'div'> & {
-  logs?: Array<{
-    level: 'log' | 'warn' | 'error'
-    message: string
-    timestamp: Date
-  }>
-}
-
-export const WebPreviewConsole = ({
-  className,
-  logs = [],
-  children,
-  ...props
-}: WebPreviewConsoleProps) => {
-  const { consoleOpen, setConsoleOpen } = useWebPreview()
-
-  return (
-    <Collapsible
-      className={cn('border-t bg-muted/50 font-mono text-sm', className)}
-      onOpenChange={setConsoleOpen}
-      open={consoleOpen}
-      {...props}
-    >
-      <CollapsibleTrigger asChild>
-        <Button
-          className="flex w-full items-center justify-between p-4 text-left font-medium hover:bg-muted/50"
-          variant="ghost"
-        >
-          Console
-          <ChevronDownIcon
-            className={cn('h-4 w-4 transition-transform duration-200', consoleOpen && 'rotate-180')}
-          />
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent
-        className={cn(
-          'px-4 pb-4',
-          'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 outline-none data-[state=closed]:animate-out data-[state=open]:animate-in',
-        )}
-      >
-        <div className="max-h-48 space-y-1 overflow-y-auto">
-          {logs.length === 0 ? (
-            <p className="text-muted-foreground">No console output</p>
-          ) : (
-            logs.map((log, index) => (
-              <div
-                className={cn(
-                  'text-xs',
-                  log.level === 'error' && 'text-destructive',
-                  log.level === 'warn' && 'text-warning',
-                  log.level === 'log' && 'text-foreground',
-                )}
-                key={`${log.timestamp.getTime()}-${index}`}
-              >
-                <span className="text-muted-foreground">{log.timestamp.toLocaleTimeString()}</span>{' '}
-                {log.message}
-              </div>
-            ))
-          )}
-          {children}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
   )
 }

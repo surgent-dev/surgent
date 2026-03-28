@@ -12,7 +12,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   DropdownMenu,

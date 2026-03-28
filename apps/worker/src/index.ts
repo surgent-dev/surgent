@@ -18,9 +18,9 @@ import referrals from './routes/referrals'
 import domains, { domainWebhooks } from './routes/domains'
 import startups from './routes/startups'
 import { auth } from './lib/auth'
-import { config, validateDomainConfig } from './lib/config'
+import { config, validateAnalyticsConfig, validateDomainConfig } from './lib/config'
 import { db } from './lib/db'
-import { migrate } from '@repo/db'
+import { check, migrate } from '@repo/db/migrate'
 import {
   oauthProviderAuthServerMetadata,
   oauthProviderOpenIdConfigMetadata,
@@ -217,7 +217,18 @@ app.route('/preview', preview)
 // Start server
 const port = Number(config.server.port)
 
-;(async () => {
+async function ensureDatabase() {
+  if (process.env.SKIP_DB_MIGRATION === '1') {
+    return
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    log.info('checking database migrations')
+    await check(db)
+    log.info('database schema is up to date')
+    return
+  }
+
   log.info('running migrations')
   const result = await migrate(db)
   const { error, results } = result
@@ -225,21 +236,32 @@ const port = Number(config.server.port)
   results?.forEach((it) => {
     if (it.status === 'Success') {
       log.info({ migration: it.migrationName }, 'migration executed successfully')
-    } else if (it.status === 'Error') {
+      return
+    }
+
+    if (it.status === 'Error') {
       log.error({ migration: it.migrationName }, 'migration failed')
     }
   })
 
   if (error) {
-    log.fatal({ err: error }, 'failed to run migrations on startup')
-    process.exit(1)
+    throw error
   }
 
   log.info('migrations completed successfully')
+}
+
+async function startServer() {
+  await ensureDatabase()
 
   // Validate domain-related configuration
   const domainWarnings = validateDomainConfig()
   for (const w of domainWarnings) log.warn(w)
+
+  const analyticsWarnings = validateAnalyticsConfig()
+  if (analyticsWarnings.length) {
+    throw new Error(analyticsWarnings.join('; '))
+  }
 
   await startBoss()
 
@@ -285,4 +307,9 @@ const port = Number(config.server.port)
   }
   process.on('SIGTERM', () => shutdown('SIGTERM'))
   process.on('SIGINT', () => shutdown('SIGINT'))
-})()
+}
+
+void startServer().catch((error) => {
+  log.fatal({ err: error }, 'failed to start worker')
+  process.exit(1)
+})

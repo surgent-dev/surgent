@@ -13,7 +13,6 @@
     "prepare": "husky",
     "db:migrate": "bun --filter @repo/db db:migrate",
     "db:rollback": "bun --filter @repo/db db:rollback",
-    "tunnel": "bun scripts/tunnel.ts",
     "trustmrr:sync": "bun scripts/trustmrr-sync.ts"
   },
   "devDependencies": {
@@ -27,7 +26,7 @@
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "bun@1.3.8",
+  "packageManager": "bun@1.3.11",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -43,7 +42,9 @@
     "ai": "5.0.97",
     "convex": "1.31.6",
     "entrijs": "1.0.0",
-    "monaco-themes": "0.4.8"
+    "monaco-themes": "0.4.8",
+    "react-simple-maps": "3.0.0",
+    "sonner": "2.0.7"
   },
   "prettier": {
     "semi": false,

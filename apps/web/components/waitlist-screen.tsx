@@ -109,7 +109,7 @@ export function WaitlistScreen() {
                     <Button
                       onClick={join}
                       disabled={loading}
-                      className="h-12 px-6 text-base bg-brand text-brand-foreground hover:bg-brand/90 rounded-full transition-all"
+                      className="h-12 px-6 text-base btn-brand rounded-full"
                     >
                       {loading ? (
                         'Connecting...'

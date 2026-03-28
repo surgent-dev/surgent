@@ -65,6 +65,16 @@ export function getWorkerByProjectId(projectId: string) {
   return db.selectFrom('worker').selectAll().where('projectId', '=', projectId).executeTakeFirst()
 }
 
+export function getActivePrimaryDomainByProjectId(projectId: string) {
+  return db
+    .selectFrom('domain')
+    .select(['domainName'])
+    .where('projectId', '=', projectId)
+    .where('isPrimary', '=', true)
+    .where('status', '=', 'active')
+    .executeTakeFirst()
+}
+
 export function getEnvVarsByProjectId(projectId: string, environment: string) {
   return db
     .selectFrom('env_var')

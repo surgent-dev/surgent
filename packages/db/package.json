@@ -1,11 +1,13 @@
 {
   "name": "@repo/db",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./migrate": "./src/migrate.ts"
   },
   "type": "module",
   "scripts": {
     "db:migrate": "bun ./src/migrate.ts",
+    "db:check": "bun ./src/migrate.ts check",
     "db:rollback": "bun ./src/migrate.ts down"
   },
   "dependencies": {

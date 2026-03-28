@@ -74,6 +74,43 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Run database migrations
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          SERVICE_JSON=$(aws ecs describe-services \
+            --cluster surgent-cluster \
+            --services surgent-worker)
+
+          TASK_DEF=$(echo "$SERVICE_JSON" | jq -r '.services[0].taskDefinition')
+          NETWORK_CONFIG=$(echo "$SERVICE_JSON" | jq -c '{awsvpcConfiguration: .services[0].networkConfiguration.awsvpcConfiguration}')
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster surgent-cluster \
+            --launch-type FARGATE \
+            --task-definition "$TASK_DEF" \
+            --network-configuration "$NETWORK_CONFIG" \
+            --overrides '{"containerOverrides":[{"name":"worker","command":["bun","run","migrate-db"]}]}' \
+            --query 'tasks[0].taskArn' \
+            --output text)
+
+          aws ecs wait tasks-stopped \
+            --cluster surgent-cluster \
+            --tasks "$TASK_ARN"
+
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster surgent-cluster \
+            --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[?name==`worker`][0].exitCode' \
+            --output text)
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            aws ecs describe-tasks \
+              --cluster surgent-cluster \
+              --tasks "$TASK_ARN" \
+              --query 'tasks[0].{stopCode:stopCode,stoppedReason:stoppedReason,containers:containers[*].{name:name,exitCode:exitCode,reason:reason}}'
+            exit 1
+          fi
+
       - name: Deploy to ECS
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |

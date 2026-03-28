@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { CircleNotch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import {
@@ -94,10 +94,10 @@ export default function PayDialogs({ projectId }: PayDialogsProps) {
         <DialogContent overlayClassName="backdrop-blur-sm" className="sm:max-w-lg">
           <div className="flex flex-col items-center text-center pt-12 pb-2">
             <div className="relative flex items-center justify-center mb-14">
-              <div className="absolute size-28 rounded-full bg-brand/10" />
-              <div className="absolute size-20 rounded-full bg-brand/20" />
-              <div className="relative size-12 rounded-full bg-brand/30 border-2 border-brand/50 flex items-center justify-center">
-                <span className="text-brand text-xl font-semibold">i</span>
+              <div className="absolute size-28 rounded-full bg-foreground/5" />
+              <div className="absolute size-20 rounded-full bg-foreground/10" />
+              <div className="relative size-12 rounded-full bg-foreground/15 border-2 border-foreground/20 flex items-center justify-center">
+                <span className="text-foreground text-xl font-semibold">i</span>
               </div>
             </div>
 
@@ -121,10 +121,7 @@ export default function PayDialogs({ projectId }: PayDialogsProps) {
                       setConflictAccountId(null)
                       window.location.href = data.oauthUrl
                     },
-                    onError: () =>
-                      toast.error('Failed to start payment connection', {
-                        position: 'top-right',
-                      }),
+                    onError: () => toast.error('Failed to start payment connection', {}),
                   })
                 }}
               >

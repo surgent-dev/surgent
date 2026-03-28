@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -89,7 +89,7 @@ export default function PlanDialog({ open, onOpenChange }: PlanDialogProps) {
       window.location.href = url
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to start checkout'
-      toast.error(message, { position: 'top-right' })
+      toast.error(message)
     }
   }
 

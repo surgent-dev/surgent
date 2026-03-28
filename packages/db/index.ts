@@ -1,5 +1,4 @@
 export { createClient, createDb, createDbFromDialect, createDialect } from './src/kysely_db'
-export { migrate, rollback } from './src/migrate'
 export {
   getAllowanceWindow,
   getAnchoredMonthlyBounds,

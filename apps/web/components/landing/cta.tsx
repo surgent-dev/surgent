@@ -7,9 +7,9 @@ import { ArrowRight } from 'lucide-react'
 export function LandingCta() {
   return (
     <section className="relative py-24 sm:py-32 px-5 sm:px-6 overflow-hidden">
-      {/* Violet glow */}
+      {/* Subtle glow */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="w-[800px] h-[500px] rounded-full bg-brand/[0.06] blur-[150px]" />
+        <div className="w-[800px] h-[500px] rounded-full bg-foreground/[0.03] blur-[150px]" />
       </div>
 
       <motion.div
@@ -29,7 +29,7 @@ export function LandingCta() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 bg-brand text-white px-6 py-3 rounded-xl text-sm font-medium hover:bg-brand/90 transition-all"
+            className="inline-flex items-center gap-2 btn-brand px-6 py-3 rounded-xl text-sm font-medium"
           >
             Get started free
             <ArrowRight className="h-4 w-4" />

@@ -24,7 +24,7 @@ const TEST_ACCOUNT_ID = '00000000-0000-0000-0000-000000000004'
 const createdCheckoutIds: string[] = []
 
 beforeAll(async () => {
-  const client = createClient(DATABASE_URL, 'postgres')
+  const client = createClient(DATABASE_URL)
   db = client.db
 
   // Create prerequisite rows for FK constraints (idempotent)

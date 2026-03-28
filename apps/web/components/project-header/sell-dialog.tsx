@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Tag, UploadSimple, X, CircleNotch, Image as ImageIcon } from '@phosphor-icons/react'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -104,12 +104,10 @@ export default function SellDialog({
         })
         .json()
       queryClient.invalidateQueries({ queryKey: ['surpay-accounts'] })
-      toast.success('Payment account connected', { position: 'top-right' })
+      toast.success('Payment account connected')
       setCompanyName('')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to connect', {
-        position: 'top-right',
-      })
+      toast.error(err instanceof Error ? err.message : 'Failed to connect', {})
     } finally {
       setConnecting(false)
     }
@@ -147,11 +145,11 @@ export default function SellDialog({
 
   const handleImage = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image', { position: 'top-right' })
+      toast.error('Please upload an image')
       return
     }
     if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image must be under 10MB', { position: 'top-right' })
+      toast.error('Image must be under 10MB')
       return
     }
     setImageCleared(false)
@@ -161,7 +159,7 @@ export default function SellDialog({
       const { url } = await uploadFile(file)
       setImageUrl(url)
     } catch {
-      toast.error('Upload failed', { position: 'top-right' })
+      toast.error('Upload failed')
       setImagePreview(null)
       setImageUrl(null)
     } finally {
@@ -212,15 +210,11 @@ export default function SellDialog({
         priceId,
       })
 
-      toast.success(hasPaidPrice ? 'Listed for sale' : 'Listed on marketplace', {
-        position: 'top-right',
-      })
+      toast.success(hasPaidPrice ? 'Listed for sale' : 'Listed on marketplace', {})
       resetForm()
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create listing', {
-        position: 'top-right',
-      })
+      toast.error(err instanceof Error ? err.message : 'Failed to create listing', {})
     } finally {
       setSubmitting(false)
     }
@@ -298,7 +292,7 @@ export default function SellDialog({
                     className={cn(
                       'flex flex-col items-center justify-center gap-2 aspect-[16/9] rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-300',
                       dragging
-                        ? 'border-brand/50 bg-brand/5'
+                        ? 'border-foreground/20 bg-foreground/5'
                         : 'border-border hover:border-muted-foreground/30 hover:bg-muted',
                     )}
                   >
@@ -318,7 +312,7 @@ export default function SellDialog({
                     <img src={imagePreview} alt="Cover" className="w-full h-full object-cover" />
                     {uploading && (
                       <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] flex items-center justify-center">
-                        <CircleNotch className="size-5 animate-spin text-brand" />
+                        <CircleNotch className="size-5 animate-spin text-foreground/50" />
                       </div>
                     )}
                     {!uploading && (
@@ -408,6 +402,7 @@ export default function SellDialog({
                       className={field}
                     />
                     <Button
+                      variant="brand"
                       size="lg"
                       className="h-12 px-6 shrink-0 rounded-2xl"
                       disabled={!companyName.trim() || connecting}
@@ -474,7 +469,8 @@ export default function SellDialog({
                 Cancel
               </Button>
               <Button
-                className="flex-1 h-11 rounded-2xl font-bold shadow-[0_4px_12px_-4px_rgba(var(--brand-rgb),0.5)]"
+                variant="brand"
+                className="flex-1 h-11 rounded-2xl font-bold"
                 disabled={!canSubmit}
                 onClick={handleSubmit}
               >
@@ -491,7 +487,7 @@ export default function SellDialog({
 
           {/* ── Right: Live Preview ── */}
           <div className="hidden lg:flex w-[24rem] border-l border-border/50 flex-col relative overflow-hidden bg-muted/20">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,var(--color-brand)_0%,transparent_40%)] opacity-[0.03]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,var(--color-foreground)_0%,transparent_40%)] opacity-[0.03]" />
 
             <div className="relative flex-1 flex flex-col items-center justify-center px-10 py-10">
               <div className="w-full mb-6">

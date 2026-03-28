@@ -1,0 +1,58 @@
+'use client'
+
+import { useEffect, useRef } from 'react'
+import { useParams } from 'next/navigation'
+import EditorHeader from '@/components/editor/editor-header'
+import EditorTabs from '@/components/editor/editor-tabs'
+import Conversation from '@/components/conversation'
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
+import { useSandbox } from '@/hooks/use-sandbox'
+import { useSandboxReady } from '@/hooks/use-sandbox-ready'
+import { useActivateProject } from '@/queries/projects'
+import { ProjectEventProvider } from '@/context/project-events'
+
+export default function EditorPage() {
+  const { companyId: projectId } = useParams<{ companyId: string }>()
+  const { project } = useSandboxReady(projectId)
+  const { mutate: activateProject } = useActivateProject()
+  const setSandboxId = useSandbox((s) => s.setSandboxId)
+  const activated = useRef(false)
+
+  useEffect(() => setSandboxId(project?.sandbox?.id || null), [project, setSandboxId])
+
+  useEffect(() => {
+    if (
+      !project ||
+      project.status === 'provisioning' ||
+      project.status === 'failed' ||
+      activated.current
+    )
+      return
+    activated.current = true
+    activateProject({ id: projectId })
+  }, [activateProject, project, projectId])
+
+  return (
+    <ProjectEventProvider key={projectId} projectId={projectId}>
+      <div className="flex h-full flex-col gap-1.5">
+        <EditorHeader projectId={projectId} project={project} />
+
+        <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
+          <ResizablePanel defaultSize={65} minSize={35}>
+            <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
+              <EditorTabs projectId={projectId} project={project} />
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle className="mx-0.5 w-px bg-transparent after:w-2 hover:bg-border/50 transition-colors" />
+
+          <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
+            <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
+              <Conversation projectId={projectId} />
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+    </ProjectEventProvider>
+  )
+}
