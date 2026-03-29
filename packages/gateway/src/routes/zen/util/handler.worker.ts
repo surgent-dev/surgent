@@ -732,30 +732,36 @@ export async function handleZenRequest(
     if (!authInfo || authInfo.provider?.credentials) return
 
     const now = new Date()
+    // Wrap in transaction to bypass Hyperdrive query cache — billing
+    // state must always reflect the latest balance after topups/upgrades.
     const state = await db
-      .selectFrom('billing_account as account')
-      .innerJoin(
-        'billing_subscription as subscription',
-        'subscription.organizationId',
-        'account.organizationId',
+      .transaction()
+      .execute((tx) =>
+        tx
+          .selectFrom('billing_account as account')
+          .innerJoin(
+            'billing_subscription as subscription',
+            'subscription.organizationId',
+            'account.organizationId',
+          )
+          .select([
+            'account.organizationId',
+            'account.includedBalanceMicros',
+            'account.includedBalancePeriodStart',
+            'account.prepaidBalanceMicros',
+            'account.monthlySpendLimitMicros',
+            'account.monthlySpendUsageMicros',
+            'account.monthlySpendUsagePeriodStart',
+            'subscription.tier',
+            'subscription.interval',
+            'subscription.status',
+            'subscription.monthlyAllowanceMicros',
+            'subscription.currentPeriodStart',
+            'subscription.currentPeriodEnd',
+          ])
+          .where('account.organizationId', '=', authInfo.organizationId)
+          .executeTakeFirst(),
       )
-      .select([
-        'account.organizationId',
-        'account.includedBalanceMicros',
-        'account.includedBalancePeriodStart',
-        'account.prepaidBalanceMicros',
-        'account.monthlySpendLimitMicros',
-        'account.monthlySpendUsageMicros',
-        'account.monthlySpendUsagePeriodStart',
-        'subscription.tier',
-        'subscription.interval',
-        'subscription.status',
-        'subscription.monthlyAllowanceMicros',
-        'subscription.currentPeriodStart',
-        'subscription.currentPeriodEnd',
-      ])
-      .where('account.organizationId', '=', authInfo.organizationId)
-      .executeTakeFirst()
 
     if (!state) throw new CreditsError('Billing state is not ready yet. Please try again.')
     const allowanceWindow = getAllowanceWindow(
