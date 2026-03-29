@@ -32,9 +32,11 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  DollarSign,
+  Receipt,
 } from 'lucide-react'
 import { formatDateShort } from '@/lib/format'
-import type { AdminOverview } from './types'
+import type { AdminOverview, AdminTransactions } from './types'
 
 function formatChartTick(value: string) {
   if (value.length === 7) return value
@@ -166,6 +168,131 @@ function ProjectsChart({
             </AreaChart>
           </ResponsiveContainer>
         </ChartContainer>
+      </CardContent>
+    </Card>
+  )
+}
+
+function formatCents(cents: number): string {
+  const val = cents / 100
+  if (val >= 1000) return `$${(val / 1000).toFixed(1)}k`
+  if (val >= 1) return `$${val.toFixed(2)}`
+  if (val > 0) return `$${val.toFixed(2)}`
+  return '$0'
+}
+
+function TransactionsChart({
+  data,
+  totals,
+}: {
+  data: AdminTransactions['chart']
+  totals: AdminTransactions['totals']
+}) {
+  const chartData = data.map((d) => ({
+    date: d.date,
+    revenue: Number(d.revenue) / 100,
+    transactions: Number(d.transactions),
+  }))
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Transactions & Revenue</CardTitle>
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <span>{formatCents(Number(totals.grossRevenue))} gross</span>
+          <span>{Number(totals.transactionCount)} payments</span>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-4 mb-6">
+          <div>
+            <p className="text-xs text-muted-foreground">Gross Revenue</p>
+            <p className="text-lg font-semibold">{formatCents(Number(totals.grossRevenue))}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Net Revenue</p>
+            <p className="text-lg font-semibold">{formatCents(Number(totals.netRevenue))}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Refunds</p>
+            <p className="text-lg font-semibold">{formatCents(Number(totals.totalRefunds))}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Fees</p>
+            <p className="text-lg font-semibold">{formatCents(Number(totals.totalFees))}</p>
+          </div>
+        </div>
+        <ChartContainer
+          config={{
+            revenue: { label: 'Revenue', color: 'hsl(var(--chart-1))' },
+            transactions: { label: 'Transactions', color: 'hsl(var(--chart-3))' },
+          }}
+          className="h-[250px]"
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="txRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={formatChartTick}
+                className="text-xs"
+              />
+              <YAxis
+                yAxisId="left"
+                tickLine={false}
+                axisLine={false}
+                className="text-xs"
+                tickFormatter={(v) => `$${v}`}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tickLine={false}
+                axisLine={false}
+                className="text-xs"
+                allowDecimals={false}
+              />
+              <Tooltip content={<ChartTooltipContent />} />
+              <Area
+                yAxisId="left"
+                type="monotone"
+                dataKey="revenue"
+                stroke="hsl(var(--chart-1))"
+                fill="url(#txRevenueGradient)"
+                strokeWidth={2}
+              />
+              <Area
+                yAxisId="right"
+                type="monotone"
+                dataKey="transactions"
+                stroke="hsl(var(--chart-3))"
+                fill="none"
+                strokeWidth={2}
+                strokeDasharray="4 2"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </ChartContainer>
+        <div className="flex items-center gap-4 mt-2 justify-center text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-[2px] bg-[hsl(var(--chart-1))]" />
+            Revenue
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div
+              className="h-0.5 w-2.5 bg-[hsl(var(--chart-3))]"
+              style={{ borderTop: '2px dashed hsl(var(--chart-3))' }}
+            />
+            Transactions
+          </div>
+        </div>
       </CardContent>
     </Card>
   )
@@ -476,7 +603,13 @@ function AllProjectsTable({
   )
 }
 
-export function AdminDashboard({ data }: { data: AdminOverview }) {
+export function AdminDashboard({
+  data,
+  transactions,
+}: {
+  data: AdminOverview
+  transactions: AdminTransactions | null
+}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tab = searchParams.get('tab') || 'users'
@@ -509,7 +642,35 @@ export function AdminDashboard({ data }: { data: AdminOverview }) {
           <StatCard title="Users in Range" value={data.totals.usersInRange} icon={UserPlus} />
           <StatCard title="Total Projects" value={data.totals.projects} icon={FolderKanban} />
           <StatCard title="Projects in Range" value={data.totals.projectsInRange} icon={Layers} />
+          {transactions && (
+            <>
+              <StatCard
+                title="Gross Revenue"
+                value={formatCents(Number(transactions.totals.grossRevenue))}
+                icon={DollarSign}
+              />
+              <StatCard
+                title="Net Revenue"
+                value={formatCents(Number(transactions.totals.netRevenue))}
+                icon={DollarSign}
+              />
+              <StatCard
+                title="Payments"
+                value={Number(transactions.totals.transactionCount).toLocaleString()}
+                icon={Receipt}
+              />
+              <StatCard
+                title="Total Events"
+                value={Number(transactions.totals.totalEvents).toLocaleString()}
+                icon={Receipt}
+              />
+            </>
+          )}
         </div>
+
+        {transactions && (
+          <TransactionsChart data={transactions.chart} totals={transactions.totals} />
+        )}
 
         <div className="grid gap-4 md:grid-cols-2">
           <SignupsChart data={data.charts.users} total={data.totals.usersInRange} />

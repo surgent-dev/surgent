@@ -44,3 +44,17 @@ export interface AdminOverview {
     projects: Array<{ date: string; count: string }>
   }
 }
+
+export interface AdminTransactions {
+  range: string
+  start: string
+  totals: {
+    grossRevenue: string
+    netRevenue: string
+    totalRefunds: string
+    totalFees: string
+    transactionCount: string
+    totalEvents: string
+  }
+  chart: Array<{ date: string; revenue: string; transactions: string }>
+}

@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { AdminDashboard } from './admin-dashboard'
-import type { AdminOverview } from './types'
+import type { AdminOverview, AdminTransactions } from './types'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
 
@@ -19,9 +19,11 @@ interface SearchParams {
   deployed?: string
 }
 
-async function fetchAdminData(
-  params: SearchParams,
-): Promise<{ data: AdminOverview | null; error?: AdminFetchError }> {
+async function fetchAdminData(params: SearchParams): Promise<{
+  data: AdminOverview | null
+  transactions: AdminTransactions | null
+  error?: AdminFetchError
+}> {
   const cookieStore = await cookies()
   const cookieHeader = cookieStore
     .getAll()
@@ -34,25 +36,29 @@ async function fetchAdminData(
   const sort = params.sort || 'desc'
   const qp = new URLSearchParams({ range, page, perPage, sort })
   if (params.deployed) qp.set('deployed', params.deployed)
-  const url = `${BACKEND_URL}/api/admin/overview?${qp.toString()}`
+  const overviewUrl = `${BACKEND_URL}/api/admin/overview?${qp.toString()}`
+  const txUrl = `${BACKEND_URL}/api/admin/transactions?range=${range}`
 
-  const res = await fetch(url, {
-    headers: { Cookie: cookieHeader },
-    cache: 'no-store',
-  })
+  const [res, txRes] = await Promise.all([
+    fetch(overviewUrl, { headers: { Cookie: cookieHeader }, cache: 'no-store' }),
+    fetch(txUrl, { headers: { Cookie: cookieHeader }, cache: 'no-store' }),
+  ])
 
   if (res.status === 401) redirect('/login')
   if (res.status === 403) {
-    return { data: null, error: await res.json() }
+    return { data: null, transactions: null, error: await res.json() }
   }
-  if (!res.ok) return { data: null, error: { error: 'Failed to load admin data' } }
+  if (!res.ok)
+    return { data: null, transactions: null, error: { error: 'Failed to load admin data' } }
 
-  return { data: await res.json() }
+  const transactions: AdminTransactions | null = txRes.ok ? await txRes.json() : null
+
+  return { data: await res.json(), transactions }
 }
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams
-  const { data, error } = await fetchAdminData(params)
+  const { data, transactions, error } = await fetchAdminData(params)
 
   if (!data) {
     return (
@@ -71,7 +77,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     <Suspense
       fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}
     >
-      <AdminDashboard data={data} />
+      <AdminDashboard data={data} transactions={transactions} />
     </Suspense>
   )
 }

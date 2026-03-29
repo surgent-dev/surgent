@@ -250,6 +250,79 @@ admin.get('/overview', requireAdmin, async (c) => {
   })
 })
 
+admin.get('/transactions', requireAdmin, async (c) => {
+  const { range, start } = getStart(c.req.query('range') || 'today')
+  const now = new Date()
+  const monthly = useMonthlyBuckets(range)
+
+  const baseTx = db
+    .selectFrom('pay_transaction')
+    .where('env', '=', 'live')
+    .where('createdAt', '>=', start)
+
+  const dateExpr = monthly
+    ? sql<string>`to_char("createdAt", 'YYYY-MM')`
+    : sql<string>`to_char("createdAt", 'YYYY-MM-DD')`
+
+  const [totals, chartRows] = await Promise.all([
+    baseTx
+      .select([
+        sql<string>`COALESCE(SUM(CASE WHEN kind = 'payment' AND direction = 'inflow' THEN amount ELSE 0 END), 0)::text`.as(
+          'grossRevenue',
+        ),
+        sql<string>`COALESCE(SUM(CASE WHEN kind = 'refund' THEN ABS(amount) ELSE 0 END), 0)::text`.as(
+          'totalRefunds',
+        ),
+        sql<string>`COALESCE(SUM(CASE WHEN kind = 'processor_fee' THEN ABS(amount) ELSE 0 END), 0)::text`.as(
+          'totalFees',
+        ),
+        sql<string>`COUNT(CASE WHEN kind = 'payment' THEN 1 END)::text`.as('transactionCount'),
+        sql<string>`COUNT(*)::text`.as('totalEvents'),
+      ])
+      .executeTakeFirst(),
+
+    baseTx
+      .select([
+        dateExpr.as('date'),
+        sql<string>`COALESCE(SUM(CASE WHEN kind = 'payment' AND direction = 'inflow' THEN amount ELSE 0 END), 0)::text`.as(
+          'revenue',
+        ),
+        sql<string>`COUNT(CASE WHEN kind = 'payment' THEN 1 END)::text`.as('transactions'),
+      ])
+      .groupBy(dateExpr)
+      .orderBy(dateExpr)
+      .execute(),
+  ])
+
+  const allDates = monthly ? generateMonthsBetween(start, now) : generateDaysBetween(start, now)
+  const chartMap = new Map(chartRows.map((r) => [r.date, r]))
+
+  const gross = Number(totals?.grossRevenue ?? 0)
+  const refunds = Number(totals?.totalRefunds ?? 0)
+  const fees = Number(totals?.totalFees ?? 0)
+
+  return c.json({
+    range,
+    start: start.toISOString(),
+    totals: {
+      grossRevenue: totals?.grossRevenue ?? '0',
+      netRevenue: String(gross - refunds - fees),
+      totalRefunds: totals?.totalRefunds ?? '0',
+      totalFees: totals?.totalFees ?? '0',
+      transactionCount: totals?.transactionCount ?? '0',
+      totalEvents: totals?.totalEvents ?? '0',
+    },
+    chart: allDates.map((date) => {
+      const row = chartMap.get(date)
+      return {
+        date,
+        revenue: row?.revenue ?? '0',
+        transactions: row?.transactions ?? '0',
+      }
+    }),
+  })
+})
+
 admin.get('/ops', requireAdmin, async (c) => {
   const { range, start } = getStart(c.req.query('range') || 'today')
   return c.json(await getAdminOpsOverview({ range, start }))
