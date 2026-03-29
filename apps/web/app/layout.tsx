@@ -59,22 +59,7 @@ export default function RootLayout({
         className={`antialiased ${plusJakarta.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable} ${outfit.variable}`}
       >
         <Providers>{children}</Providers>
-        <Toaster
-          position="bottom-right"
-          theme="system"
-          toastOptions={{
-            classNames: {
-              toast:
-                'font-[var(--font-jakarta)] !bg-white dark:!bg-[#222] !border-border !shadow-sm !rounded-lg',
-              title: '!text-foreground !text-sm !font-medium',
-              description: '!text-muted-foreground !text-xs',
-              actionButton: 'btn-brand !rounded-md !text-xs !font-medium !h-7 !px-3',
-              cancelButton: '!bg-muted !text-foreground !rounded-md !text-xs',
-              success: '!border-emerald-500/20',
-              error: '!border-destructive/20',
-            },
-          }}
-        />
+        <Toaster position="top-center" theme="system" gap={8} />
         <DubAnalytics
           publishableKey={process.env.NEXT_PUBLIC_DUB_PUBLISHABLE_KEY}
           domainsConfig={{
