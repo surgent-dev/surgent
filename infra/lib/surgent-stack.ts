@@ -296,20 +296,7 @@ export class SurgentStack extends cdk.Stack {
     httpsListener.addTargetGroups('AnalyticsPublicRule', {
       targetGroups: [analyticsTargetGroup],
       priority: 20,
-      conditions: [
-        elbv2.ListenerCondition.hostHeaders(['analytics.surgent.dev']),
-        elbv2.ListenerCondition.pathPatterns([
-          '/',
-          '/robots.txt',
-          '/script.js',
-          '/p/*',
-          '/q/*',
-          '/api/send',
-          '/api/heartbeat',
-          '/api/config',
-          '/api/batch',
-        ]),
-      ],
+      conditions: [elbv2.ListenerCondition.hostHeaders(['analytics.surgent.dev'])],
     })
 
     const analyticsScaling = analyticsService.autoScaleTaskCount({
