@@ -143,7 +143,7 @@ export default function SignupContent({ next, waitlistMode }: SignupContentProps
           <div className="mt-8 text-xs text-muted-foreground/40">
             Already have an account?{' '}
             <Link
-              href={`/login${next ? `?next=${next}` : ''}`}
+              href={`/login${next ? `?next=${encodeURIComponent(next)}` : ''}`}
               className="text-brand hover:text-brand/80 transition-colors"
             >
               Log in

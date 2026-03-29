@@ -134,7 +134,7 @@ export default function LoginContent({ next, waitlistMode }: LoginContentProps) 
           <div className="mt-8 text-xs text-muted-foreground/40">
             Don&apos;t have an account?{' '}
             <Link
-              href={`/signup${next ? `?next=${next}` : ''}`}
+              href={`/signup${next ? `?next=${encodeURIComponent(next)}` : ''}`}
               className="text-brand hover:text-brand/80 transition-colors"
             >
               Sign up

@@ -37,15 +37,22 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (!path.startsWith('/admin')) {
+  // Routes that require authentication
+  const isProtectedRoute =
+    path.startsWith('/admin') || path.startsWith('/dashboard') || path.startsWith('/project')
+
+  if (!isProtectedRoute) {
     return NextResponse.next()
   }
 
   const sessionCookie = getSessionCookie(request)
 
-  // Optimistic redirect based on cookie presence; validate in page/route
+  // Redirect unauthenticated users to login, preserving return URL
   if (!sessionCookie) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    const returnTo = request.nextUrl.pathname + request.nextUrl.search
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('next', returnTo)
+    return NextResponse.redirect(loginUrl)
   }
 
   return NextResponse.next()
