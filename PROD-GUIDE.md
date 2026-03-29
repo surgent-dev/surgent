@@ -40,16 +40,16 @@ Production databases are not provisioned from this repo.
 
 ## CI/CD
 
-Pushes to `main` trigger image builds and ECS rollouts:
+Pushes to `main` trigger image builds and ECS rollouts via a single unified workflow:
 
-- [`.github/workflows/docker-worker.yml`](/Users/benrov/Projects/surgent/.github/workflows/docker-worker.yml)
-- [`.github/workflows/docker-analytics.yml`](/Users/benrov/Projects/surgent/.github/workflows/docker-analytics.yml)
+- [`.github/workflows/docker.yml`](.github/workflows/docker.yml)
 
-Each workflow:
+The workflow:
 
-1. builds the service image with Docker Buildx
-2. pushes it to ECR
-3. forces a new ECS deployment for the matching service
+1. detects which services changed (using `dorny/paths-filter`)
+2. builds each changed service in parallel via dynamic matrix
+3. runs database migrations (if ECS service exists)
+4. forces a new ECS deployment for each service
 
 Auth uses GitHub OIDC with the `github-actions-ecr` IAM role.
 
