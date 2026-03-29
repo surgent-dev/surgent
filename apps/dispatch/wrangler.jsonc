@@ -8,6 +8,9 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
+  "vars": {
+    "ANALYTICS_UPSTREAM": "https://analytics.surgent.dev"
+  },
   "routes": [
     { "pattern": "*/*", "zone_name": "surgent.site" }
   ],
