@@ -153,8 +153,19 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
-      - name: Run database migrations
+      - name: Check ECS service exists
+        id: ecs-check
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          ACTIVE=$(aws ecs describe-services \
+            --cluster surgent-cluster \
+            --services ${{ matrix.ecs_service }} \
+            --query 'services[?status==`ACTIVE`] | length(@)' \
+            --output text)
+          echo "exists=$([[ "$ACTIVE" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Run database migrations
+        if: steps.ecs-check.outputs.exists == 'true'
         run: |
           SERVICE_JSON=$(aws ecs describe-services \
             --cluster surgent-cluster \
@@ -192,7 +203,7 @@ jobs:
           fi
 
       - name: Deploy to ECS
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: steps.ecs-check.outputs.exists == 'true'
         run: |
           aws ecs update-service \
             --cluster surgent-cluster \
