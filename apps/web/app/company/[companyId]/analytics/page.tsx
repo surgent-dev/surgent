@@ -25,7 +25,13 @@ import {
 import { cn } from '@/lib/utils'
 import { DATE_RANGE_PRESETS, type DateRangeValue, type MetricType } from '@/queries/analytics'
 import { parseDateRange, getOffsetDateRange, canGoForward } from '@/lib/analytics-date'
-import { ActiveBadge, Panel, activeTabClass, inactiveTabClass } from './_components/shared'
+import {
+  ActiveBadge,
+  FilterBar,
+  Panel,
+  activeTabClass,
+  inactiveTabClass,
+} from './_components/shared'
 import {
   MetricsBar,
   PageviewsChart,
@@ -58,6 +64,19 @@ export default function AnalyticsPage() {
   const [expandedType, setExpandedType] = useState<MetricType | null>(null)
   const [view, setView] = useState<View>('overview')
   const [compare, setCompare] = useState<'prev' | 'yoy' | undefined>(undefined)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+
+  function handleFilter(type: string, value: string) {
+    setFilters((prev) => {
+      const next = { ...prev }
+      if (next[type] === value) {
+        delete next[type]
+      } else {
+        next[type] = value
+      }
+      return next
+    })
+  }
 
   const baseRange = parseDateRange(rangeValue)
   const effectiveRange = (() => {
@@ -178,7 +197,26 @@ export default function AnalyticsPage() {
       {/* Overview */}
       {view === 'overview' && (
         <>
-          <MetricsBar projectId={projectId} rangeValue={rangeValue} compare={compare || 'prev'} />
+          {Object.keys(filters).length > 0 && (
+            <FilterBar
+              filters={filters}
+              onRemove={(key) =>
+                setFilters((prev) => {
+                  const next = { ...prev }
+                  delete next[key]
+                  return next
+                })
+              }
+              onClear={() => setFilters({})}
+            />
+          )}
+
+          <MetricsBar
+            projectId={projectId}
+            rangeValue={rangeValue}
+            compare={compare || 'prev'}
+            filters={filters}
+          />
 
           <Panel>
             <div className="flex items-center justify-between mb-3">
@@ -190,6 +228,7 @@ export default function AnalyticsPage() {
               rangeValue={rangeValue}
               unit={unit}
               compare={compare}
+              filters={filters}
             />
           </Panel>
 
@@ -205,6 +244,8 @@ export default function AnalyticsPage() {
               projectId={projectId}
               rangeValue={rangeValue}
               onExpand={setExpandedType}
+              filters={filters}
+              onFilter={handleFilter}
             />
             <MetricsPanel
               title="Sources"
@@ -216,6 +257,8 @@ export default function AnalyticsPage() {
               projectId={projectId}
               rangeValue={rangeValue}
               onExpand={setExpandedType}
+              filters={filters}
+              onFilter={handleFilter}
             />
             <MetricsPanel
               title="Environment"
@@ -228,6 +271,8 @@ export default function AnalyticsPage() {
               projectId={projectId}
               rangeValue={rangeValue}
               onExpand={setExpandedType}
+              filters={filters}
+              onFilter={handleFilter}
             />
             <MetricsPanel
               title="Location"
@@ -240,12 +285,14 @@ export default function AnalyticsPage() {
               projectId={projectId}
               rangeValue={rangeValue}
               onExpand={setExpandedType}
+              filters={filters}
+              onFilter={handleFilter}
             />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <WorldMap projectId={projectId} rangeValue={rangeValue} />
-            <WeeklyTraffic projectId={projectId} rangeValue={rangeValue} />
+            <WorldMap projectId={projectId} rangeValue={rangeValue} filters={filters} />
+            <WeeklyTraffic projectId={projectId} rangeValue={rangeValue} filters={filters} />
           </div>
 
           <ExpandedView
@@ -254,6 +301,8 @@ export default function AnalyticsPage() {
             rangeValue={rangeValue}
             open={expandedType !== null}
             onClose={() => setExpandedType(null)}
+            filters={filters}
+            onFilter={handleFilter}
           />
         </>
       )}

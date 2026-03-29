@@ -98,6 +98,16 @@ function dateRangeParams(range: DateRange): Record<string, string> {
   }
 }
 
+/** Convert filter map to Umami-style filter query params (e.g. browser=eq.Chrome) */
+function filterParams(filters?: Record<string, string>): Record<string, string> {
+  if (!filters) return {}
+  const p: Record<string, string> = {}
+  for (const [k, v] of Object.entries(filters)) {
+    if (v) p[k] = `eq.${v}`
+  }
+  return p
+}
+
 /** Get the parsed range object for a preset value */
 export function getDateRange(rangeValue: string): DateRange {
   return parseDateRange(rangeValue)
@@ -113,16 +123,18 @@ export function useWebsiteStats(
   projectId?: string,
   rangeValue = '7day',
   compare: 'prev' | 'yoy' | undefined = 'prev',
+  filters?: Record<string, string>,
 ) {
   const range = parseDateRange(rangeValue)
   return useQuery({
-    queryKey: ['analytics-stats', projectId, rangeValue, compare],
+    queryKey: ['analytics-stats', projectId, rangeValue, compare, filters],
     queryFn: () =>
       http
         .get(
           buildUrl(projectId!, 'stats', {
             ...dateRangeParams(range),
             ...(compare ? { compare } : {}),
+            ...filterParams(filters),
           }),
         )
         .json<WebsiteStatsResponse>(),
@@ -140,11 +152,12 @@ export function useWebsitePageviews(
   rangeValue = '7day',
   unitOverride?: string,
   compare?: 'prev' | 'yoy',
+  filters?: Record<string, string>,
 ) {
   const range = parseDateRange(rangeValue)
   const unit = unitOverride || range.unit
   return useQuery({
-    queryKey: ['analytics-pageviews', projectId, rangeValue, unit, compare],
+    queryKey: ['analytics-pageviews', projectId, rangeValue, unit, compare, filters],
     queryFn: () =>
       http
         .get(
@@ -152,6 +165,7 @@ export function useWebsitePageviews(
             ...dateRangeParams(range),
             unit,
             ...(compare ? { compare } : {}),
+            ...filterParams(filters),
           }),
         )
         .json<PageviewsResponse>(),
@@ -170,15 +184,17 @@ export function useWebsiteMetrics(
   rangeValue = '7day',
   limit = 10,
   search?: string,
+  filters?: Record<string, string>,
 ) {
   const range = parseDateRange(rangeValue)
   return useQuery({
-    queryKey: ['analytics-metrics', projectId, type, rangeValue, limit, search],
+    queryKey: ['analytics-metrics', projectId, type, rangeValue, limit, search, filters],
     queryFn: () => {
       const params: Record<string, string> = {
         ...dateRangeParams(range),
         type,
         limit: String(limit),
+        ...filterParams(filters),
       }
       if (search) params.search = search
       return http.get(buildUrl(projectId!, 'metrics', params)).json<MetricItem[]>()

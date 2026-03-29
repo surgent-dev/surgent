@@ -61,12 +61,14 @@ export function MetricsBar({
   projectId,
   rangeValue,
   compare,
+  filters,
 }: {
   projectId: string
   rangeValue: string
   compare?: 'prev' | 'yoy'
+  filters?: Record<string, string>
 }) {
-  const { data: stats } = useWebsiteStats(projectId, rangeValue, compare)
+  const { data: stats } = useWebsiteStats(projectId, rangeValue, compare, filters)
   const c = stats?.comparison
   return (
     <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
@@ -149,13 +151,15 @@ export function PageviewsChart({
   rangeValue,
   unit,
   compare,
+  filters,
 }: {
   projectId: string
   rangeValue: string
   unit: string
   compare?: 'prev' | 'yoy'
+  filters?: Record<string, string>
 }) {
-  const { data: pageviews } = useWebsitePageviews(projectId, rangeValue, unit, compare)
+  const { data: pageviews } = useWebsitePageviews(projectId, rangeValue, unit, compare, filters)
 
   if (!pageviews?.pageviews?.length) {
     return (
@@ -285,6 +289,8 @@ export function MetricsPanel({
   projectId,
   rangeValue,
   onExpand,
+  filters,
+  onFilter,
 }: {
   title: string
   icon: React.ElementType
@@ -292,6 +298,8 @@ export function MetricsPanel({
   projectId: string
   rangeValue: string
   onExpand: (type: MetricType) => void
+  filters?: Record<string, string>
+  onFilter?: (type: string, value: string) => void
 }) {
   const [active, setActive] = useState(tabs[0]!.type)
   return (
@@ -321,6 +329,8 @@ export function MetricsPanel({
         type={active}
         rangeValue={rangeValue}
         onViewMore={() => onExpand(active)}
+        filters={filters}
+        onFilter={onFilter}
       />
     </Panel>
   )
@@ -331,20 +341,47 @@ function PanelContent({
   type,
   rangeValue,
   onViewMore,
+  filters,
+  onFilter,
 }: {
   projectId: string
   type: MetricType
   rangeValue: string
   onViewMore: () => void
+  filters?: Record<string, string>
+  onFilter?: (type: string, value: string) => void
 }) {
-  const { data } = useWebsiteMetrics(projectId, type, rangeValue, 10)
-  return <MetricsTable items={data ?? []} onViewMore={onViewMore} type={type} />
+  const { data } = useWebsiteMetrics(projectId, type, rangeValue, 10, undefined, filters)
+  return (
+    <MetricsTable
+      items={data ?? []}
+      onViewMore={onViewMore}
+      type={type}
+      onFilter={onFilter}
+      filters={filters}
+    />
+  )
 }
 
 // ── World map ───────────────────────────────────────────────────
 
-export function WorldMap({ projectId, rangeValue }: { projectId: string; rangeValue: string }) {
-  const { data: countries } = useWebsiteMetrics(projectId, 'country', rangeValue, 200)
+export function WorldMap({
+  projectId,
+  rangeValue,
+  filters,
+}: {
+  projectId: string
+  rangeValue: string
+  filters?: Record<string, string>
+}) {
+  const { data: countries } = useWebsiteMetrics(
+    projectId,
+    'country',
+    rangeValue,
+    200,
+    undefined,
+    filters,
+  )
   const countryMap = useMemo(() => {
     const m = new Map<string, number>()
     countries?.forEach((c) => m.set(c.x, c.y))
@@ -409,11 +446,13 @@ export function WorldMap({ projectId, rangeValue }: { projectId: string; rangeVa
 export function WeeklyTraffic({
   projectId,
   rangeValue,
+  filters,
 }: {
   projectId: string
   rangeValue: string
+  filters?: Record<string, string>
 }) {
-  const { data: pageviews } = useWebsitePageviews(projectId, rangeValue, 'hour')
+  const { data: pageviews } = useWebsitePageviews(projectId, rangeValue, 'hour', undefined, filters)
   const timezone = getTimezone()
 
   const heatmap = useMemo(() => {
@@ -494,15 +533,18 @@ export function ExpandedView({
   rangeValue,
   open,
   onClose,
+  filters,
+  onFilter,
 }: {
   projectId: string
   type: MetricType | null
   rangeValue: string
   open: boolean
   onClose: () => void
+  filters?: Record<string, string>
+  onFilter?: (type: string, value: string) => void
 }) {
-  const { data } = useWebsiteMetrics(projectId, type || 'path', rangeValue, 100)
-  const max = data?.[0]?.y ?? 1
+  const { data } = useWebsiteMetrics(projectId, type || 'path', rangeValue, 100, undefined, filters)
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -515,23 +557,14 @@ export function ExpandedView({
             <span>Name</span>
             <span>Visitors</span>
           </div>
-          {data?.length ? (
-            <div className="space-y-1">
-              {data.map((item, i) => (
-                <BarRow
-                  key={`${item.x}-${i}`}
-                  label={item.x}
-                  value={item.y}
-                  pct={(item.y / max) * 100}
-                  size="md"
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="py-12 text-center text-xs text-muted-foreground/30">
-              No data for this period
-            </div>
-          )}
+          <MetricsTable
+            items={data ?? []}
+            type={type || 'path'}
+            onFilter={onFilter}
+            filters={filters}
+            size="md"
+            emptyText="No data for this period"
+          />
         </div>
       </DialogContent>
     </Dialog>

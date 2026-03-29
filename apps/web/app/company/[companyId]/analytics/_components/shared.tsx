@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowUp, ArrowDown, Pulse } from '@phosphor-icons/react'
+import { ArrowUp, ArrowDown, Pulse, X } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 import { useWebsiteActive, type MetricItem } from '@/queries/analytics'
 
@@ -140,19 +140,30 @@ export function BarRow({
   pct,
   size = 'sm',
   prefix,
+  onClick,
+  active,
 }: {
   label: string
   value: number
   pct: number
   size?: 'sm' | 'md'
   prefix?: React.ReactNode
+  onClick?: () => void
+  active?: boolean
 }) {
   const py = size === 'md' ? 'py-2' : 'py-1.5'
   const text = size === 'md' ? 'text-[13px]' : 'text-[12px]'
   return (
-    <div className="relative">
+    <div
+      className={cn(
+        'relative rounded-md',
+        onClick && 'cursor-pointer hover:bg-foreground/[0.02]',
+        active && 'ring-1 ring-brand/30',
+      )}
+      onClick={onClick}
+    >
       <div
-        className="absolute inset-y-0 left-0 rounded-md bg-brand/[0.05] dark:bg-brand/[0.08] transition-all"
+        className="absolute inset-y-0 left-0 rounded-md bg-brand/[0.05] dark:bg-brand/[0.08] transition-all pointer-events-none"
         style={{ width: `${pct}%` }}
       />
       <div className={cn('relative flex items-center justify-between px-2.5', py)}>
@@ -170,23 +181,59 @@ export function BarRow({
   )
 }
 
+// ── Filterable metric types (matches Umami FILTER_COLUMNS) ──────
+
+const FILTERABLE_TYPES = new Set([
+  'browser',
+  'os',
+  'device',
+  'country',
+  'region',
+  'city',
+  'referrer',
+  'path',
+])
+
+const FILTER_LABELS: Record<string, string> = {
+  browser: 'Browser',
+  os: 'OS',
+  device: 'Device',
+  country: 'Country',
+  region: 'Region',
+  city: 'City',
+  referrer: 'Referrer',
+  path: 'Page',
+}
+
 // ── Metrics table ───────────────────────────────────────────────
 
 export function MetricsTable({
   items,
   onViewMore,
   type,
+  onFilter,
+  filters,
+  size,
+  emptyText,
 }: {
   items: MetricItem[]
   onViewMore?: () => void
   type?: string
+  onFilter?: (type: string, value: string) => void
+  filters?: Record<string, string>
+  size?: 'sm' | 'md'
+  emptyText?: string
 }) {
   const max = Math.max(...items.map((i) => i.y), 1)
   const showFlag = type === 'country' || type === 'region' || type === 'city'
+  const filterable = type && FILTERABLE_TYPES.has(type)
+  const activeValue = type && filters ? filters[type] : undefined
   return (
     <>
       {items.length === 0 ? (
-        <div className="py-8 text-center text-xs text-muted-foreground/30">No data yet</div>
+        <div className="py-8 text-center text-xs text-muted-foreground/30">
+          {emptyText ?? 'No data yet'}
+        </div>
       ) : (
         <div className="space-y-1">
           {items.map((item, i) => (
@@ -195,11 +242,14 @@ export function MetricsTable({
               label={item.x}
               value={item.y}
               pct={(item.y / max) * 100}
+              size={size}
               prefix={
                 showFlag ? (
                   <span className="text-sm leading-none">{countryFlag(item.x)}</span>
                 ) : undefined
               }
+              onClick={filterable && onFilter ? () => onFilter(type, item.x) : undefined}
+              active={activeValue === item.x}
             />
           ))}
         </div>
@@ -213,6 +263,41 @@ export function MetricsTable({
         </button>
       )}
     </>
+  )
+}
+
+// ── Filter bar ─────────────────────────────────────────────────
+
+export function FilterBar({
+  filters,
+  onRemove,
+  onClear,
+}: {
+  filters: Record<string, string>
+  onRemove: (key: string) => void
+  onClear: () => void
+}) {
+  const entries = Object.entries(filters)
+  if (!entries.length) return null
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {entries.map(([key, value]) => (
+        <button
+          key={key}
+          onClick={() => onRemove(key)}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-brand/[0.08] text-brand hover:bg-brand/[0.15] transition-colors cursor-pointer"
+        >
+          {FILTER_LABELS[key] ?? key}: {value}
+          <X className="size-3" weight="bold" />
+        </button>
+      ))}
+      <button
+        onClick={onClear}
+        className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors cursor-pointer"
+      >
+        Clear all
+      </button>
+    </div>
   )
 }
 
