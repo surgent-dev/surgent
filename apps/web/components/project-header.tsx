@@ -399,10 +399,10 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
               </div>
               <DropdownMenuItem
                 className="gap-2 rounded-md px-2 py-2 text-[12px] cursor-pointer"
-                onClick={() => navigator.clipboard.writeText('ben@surgent.dev')}
+                onClick={() => navigator.clipboard.writeText('avron@surgent.dev')}
               >
                 <Envelope className="size-3.5 text-muted-foreground/70" weight="duotone" />
-                <span className="flex-1 truncate text-[12px]">ben@surgent.dev</span>
+                <span className="flex-1 truncate text-[12px]">avron@surgent.dev</span>
                 <Copy className="size-3 text-muted-foreground/40" weight="bold" />
               </DropdownMenuItem>
               <DropdownMenuItem

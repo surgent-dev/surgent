@@ -26,10 +26,10 @@ export default function SupportMenu() {
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem
           className="cursor-pointer gap-2 text-xs"
-          onClick={() => navigator.clipboard.writeText('ben@surgent.dev')}
+          onClick={() => navigator.clipboard.writeText('avron@surgent.dev')}
         >
           <Envelope className="size-3.5 text-muted-foreground/60" weight="duotone" />
-          ben@surgent.dev
+          avron@surgent.dev
           <Copy className="ml-auto size-3 text-muted-foreground/30" weight="bold" />
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="cursor-pointer gap-2 text-xs">
