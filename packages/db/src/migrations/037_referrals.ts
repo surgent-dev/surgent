@@ -30,9 +30,20 @@ export async function up(db: Kysely<any>): Promise<void> {
     .execute()
 
   await sql`
-    ALTER TABLE referral
-    ADD CONSTRAINT referral_no_self_referral_check
-    CHECK ("referrerUserId" <> "referredUserId")
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'referral_no_self_referral_check'
+          AND conrelid = 'referral'::regclass
+      ) THEN
+        ALTER TABLE referral
+        ADD CONSTRAINT referral_no_self_referral_check
+        CHECK ("referrerUserId" <> "referredUserId");
+      END IF;
+    END
+    $$;
   `.execute(db)
 }
 
