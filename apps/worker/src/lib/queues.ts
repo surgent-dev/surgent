@@ -3,6 +3,7 @@ import { getBoss, stopBoss as stopPgBoss } from '@/lib/boss'
 import { registerBillingWorkers } from '@/lib/billing-queue'
 import { registerPayWorkers } from '@/lib/pay/queue'
 import { registerProjectWorkers } from '@/lib/projects/queue'
+import { registerMarketplaceWorkers } from '@/lib/marketplace/queue'
 
 const log = createLogger('pg-boss')
 
@@ -21,6 +22,7 @@ export async function startBoss(): Promise<void> {
   await registerPayWorkers()
   await registerBillingWorkers()
   await registerProjectWorkers()
+  await registerMarketplaceWorkers()
   started = true
   log.info('started')
 }

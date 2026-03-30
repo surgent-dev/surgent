@@ -39,4 +39,9 @@ export type {
   SslProvisioningMeta,
   DomainWebhookEventTable,
   TrustMrrStartupTable,
+  FulfillmentMetadata,
+  MarketplaceSnapshotTable,
+  MarketplacePurchaseTable,
+  MarketplaceEnvRuleTable,
+  MarketplacePurchaseStatus,
 } from './src/types'

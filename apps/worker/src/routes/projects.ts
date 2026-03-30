@@ -52,6 +52,15 @@ import {
   enqueueProjectCreateJob,
   enqueueProjectDeployJob,
 } from '@/lib/projects/queue'
+import { enqueueSnapshotJob } from '@/lib/marketplace/queue'
+import {
+  getSnapshotByListingId,
+  getPurchaseById,
+  getPurchasesByBuyerId,
+  getEnvRulesByListingId,
+  upsertEnvRule,
+  deleteEnvRule,
+} from '@/services/projects'
 import { createLogger } from '@/lib/logger'
 
 const log = createLogger('projects')
@@ -395,6 +404,255 @@ projects.post('/marketplace/checkout', zValidator('json', marketplaceCheckoutBod
     status: 'open',
   })
 })
+
+// POST /projects/marketplace/claim - Buyer claims a free listing (triggers fulfillment)
+projects.post(
+  '/marketplace/claim',
+  requireAuth,
+  zValidator('json', z.object({ listingId: z.string().uuid() })),
+  async (c) => {
+    const user = c.get('user')!
+    const { listingId } = c.req.valid('json')
+
+    const listing = await db
+      .selectFrom('listing')
+      .innerJoin('project', 'project.id', 'listing.projectId')
+      .select([
+        'listing.id',
+        'listing.projectId',
+        'listing.status',
+        'listing.priceId',
+        'listing.priceAmount' as any,
+        'project.userId',
+      ])
+      .where('listing.id', '=', listingId)
+      .where('listing.status', '=', 'active')
+      .executeTakeFirst()
+
+    if (!listing) return c.json({ error: 'Listing not found' }, 404)
+
+    // Only free listings can be claimed without payment
+    if (listing.priceAmount && listing.priceAmount > 0) {
+      return c.json({ error: 'This listing requires payment' }, 400)
+    }
+
+    // Check if already purchased
+    const existing = await db
+      .selectFrom('marketplace_purchase')
+      .select(['id', 'status', 'projectId'])
+      .where('buyerId', '=', user.id)
+      .where('listingId', '=', listingId)
+      .executeTakeFirst()
+
+    if (existing) {
+      return c.json({
+        purchaseId: existing.id,
+        status: existing.status,
+        projectId: existing.projectId,
+        alreadyClaimed: true,
+      })
+    }
+
+    // Get snapshot
+    const snapshot = await getSnapshotByListingId(listingId)
+
+    // Create purchase (no checkout session for free listings)
+    const purchaseId = crypto.randomUUID()
+    await db
+      .insertInto('marketplace_purchase')
+      .values({
+        id: purchaseId,
+        buyerId: user.id,
+        listingId,
+        sourceProjectId: listing.projectId,
+        snapshotId: snapshot?.id || null,
+        status: 'pending' as any,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .execute()
+
+    // Enqueue fulfillment
+    const { enqueueFulfillmentJob } = await import('@/lib/marketplace/queue')
+    await enqueueFulfillmentJob({ purchaseId })
+
+    return c.json({
+      purchaseId,
+      status: 'pending',
+      projectId: null,
+      alreadyClaimed: false,
+    })
+  },
+)
+
+// POST /projects/marketplace/snapshot - Seller triggers a codebase snapshot for their listing
+projects.post(
+  '/marketplace/snapshot',
+  requireAuth,
+  zValidator('json', z.object({ listingId: z.string().uuid() })),
+  async (c) => {
+    const user = c.get('user')!
+    const { listingId } = c.req.valid('json')
+
+    const listing = await db
+      .selectFrom('listing')
+      .innerJoin('project', 'project.id', 'listing.projectId')
+      .select(['listing.id', 'listing.projectId', 'listing.status', 'project.userId'])
+      .where('listing.id', '=', listingId)
+      .executeTakeFirst()
+
+    if (!listing) return c.json({ error: 'Listing not found' }, 404)
+    if (listing.userId !== user.id) return c.json({ error: 'Not the listing owner' }, 403)
+    if (listing.status !== 'active') return c.json({ error: 'Listing is not active' }, 400)
+
+    await enqueueSnapshotJob({ listingId, projectId: listing.projectId })
+
+    const existing = await getSnapshotByListingId(listingId)
+    return c.json({ status: 'queued', snapshotId: existing?.id || null })
+  },
+)
+
+// GET /projects/marketplace/purchases - Buyer lists their purchases
+projects.get(
+  '/marketplace/purchases',
+  requireAuth,
+  zValidator('query', z.object({ limit: z.coerce.number().int().min(1).max(100).optional() })),
+  async (c) => {
+    const user = c.get('user')!
+    const { limit } = c.req.valid('query')
+
+    const purchases = await getPurchasesByBuyerId(user.id, limit ?? 20)
+    return c.json({
+      purchases: purchases.map((p) => ({
+        id: p.id,
+        listingId: p.listingId,
+        status: p.status,
+        projectId: p.projectId,
+        createdAt: p.createdAt?.toISOString?.() ?? null,
+        fulfilledAt: p.fulfilledAt?.toISOString?.() ?? null,
+      })),
+    })
+  },
+)
+
+// GET /projects/marketplace/purchases/:id - Buyer checks purchase status
+projects.get(
+  '/marketplace/purchases/:id',
+  requireAuth,
+  zValidator('param', z.object({ id: z.string().uuid() })),
+  async (c) => {
+    const user = c.get('user')!
+    const { id } = c.req.valid('param')
+
+    const purchase = await getPurchaseById(id)
+    if (!purchase) return c.json({ error: 'Purchase not found' }, 404)
+    if (purchase.buyerId !== user.id) return c.json({ error: 'Not the purchase owner' }, 403)
+
+    return c.json({
+      id: purchase.id,
+      listingId: purchase.listingId,
+      status: purchase.status,
+      projectId: purchase.projectId,
+      fulfillment: purchase.fulfillment,
+      error: purchase.error,
+      createdAt: purchase.createdAt?.toISOString?.() ?? null,
+      fulfilledAt: purchase.fulfilledAt?.toISOString?.() ?? null,
+    })
+  },
+)
+
+// GET /projects/marketplace/env-rules/:listingId - Get env var classification rules for a listing
+projects.get(
+  '/marketplace/env-rules/:listingId',
+  requireAuth,
+  zValidator('param', z.object({ listingId: z.string().uuid() })),
+  async (c) => {
+    const user = c.get('user')!
+    const { listingId } = c.req.valid('param')
+
+    const listing = await db
+      .selectFrom('listing')
+      .innerJoin('project', 'project.id', 'listing.projectId')
+      .select(['listing.id', 'project.userId'])
+      .where('listing.id', '=', listingId)
+      .executeTakeFirst()
+
+    if (!listing) return c.json({ error: 'Listing not found' }, 404)
+    if (listing.userId !== user.id) return c.json({ error: 'Not the listing owner' }, 403)
+
+    const rules = await getEnvRulesByListingId(listingId)
+    return c.json({
+      rules: rules.map((r) => ({
+        id: r.id,
+        key: r.key,
+        classification: r.classification,
+      })),
+    })
+  },
+)
+
+// PUT /projects/marketplace/env-rules/:listingId - Upsert env var classification rules
+projects.put(
+  '/marketplace/env-rules/:listingId',
+  requireAuth,
+  zValidator('param', z.object({ listingId: z.string().uuid() })),
+  zValidator(
+    'json',
+    z.object({
+      rules: z.array(
+        z.object({
+          key: z.string().min(1),
+          classification: z.enum(['re-provision', 're-generate', 'copy', 'skip']),
+        }),
+      ),
+    }),
+  ),
+  async (c) => {
+    const user = c.get('user')!
+    const { listingId } = c.req.valid('param')
+    const { rules } = c.req.valid('json')
+
+    const listing = await db
+      .selectFrom('listing')
+      .innerJoin('project', 'project.id', 'listing.projectId')
+      .select(['listing.id', 'project.userId'])
+      .where('listing.id', '=', listingId)
+      .executeTakeFirst()
+
+    if (!listing) return c.json({ error: 'Listing not found' }, 404)
+    if (listing.userId !== user.id) return c.json({ error: 'Not the listing owner' }, 403)
+
+    for (const rule of rules) {
+      await upsertEnvRule({ listingId, key: rule.key, classification: rule.classification })
+    }
+
+    return c.json({ status: 'ok', count: rules.length })
+  },
+)
+
+// DELETE /projects/marketplace/env-rules/:listingId/:key - Delete a specific env rule
+projects.delete(
+  '/marketplace/env-rules/:listingId/:key',
+  requireAuth,
+  zValidator('param', z.object({ listingId: z.string().uuid(), key: z.string().min(1) })),
+  async (c) => {
+    const user = c.get('user')!
+    const { listingId, key } = c.req.valid('param')
+
+    const listing = await db
+      .selectFrom('listing')
+      .innerJoin('project', 'project.id', 'listing.projectId')
+      .select(['listing.id', 'project.userId'])
+      .where('listing.id', '=', listingId)
+      .executeTakeFirst()
+
+    if (!listing) return c.json({ error: 'Listing not found' }, 404)
+    if (listing.userId !== user.id) return c.json({ error: 'Not the listing owner' }, 403)
+
+    await deleteEnvRule(listingId, key)
+    return c.json({ status: 'ok' })
+  },
+)
 
 // GET /projects/recent - Recently deployed public projects
 projects.get(

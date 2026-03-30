@@ -52,6 +52,9 @@ export interface Database {
   domain: DomainTable
   domain_webhook_event: DomainWebhookEventTable
   trustmrr_startup: TrustMrrStartupTable
+  marketplace_snapshot: MarketplaceSnapshotTable
+  marketplace_purchase: MarketplacePurchaseTable
+  marketplace_env_rule: MarketplaceEnvRuleTable
 }
 
 export interface UserTable {
@@ -856,6 +859,53 @@ export interface DomainWebhookEventTable {
   error: string | null
   createdAt: Generated<Date>
   processedAt: Date | null
+}
+
+export type MarketplacePurchaseStatus = 'pending' | 'provisioning' | 'fulfilled' | 'failed'
+
+export interface FulfillmentMetadata {
+  projectCreatedAt?: string
+  sandboxProvisionedAt?: string
+  codebaseRestoredAt?: string
+  integrationsProvisionedAt?: string
+  envVarsSetAt?: string
+  devServerStartedAt?: string
+  finalizedAt?: string
+  lastError?: string | null
+}
+
+export interface MarketplaceSnapshotTable {
+  id: Generated<string>
+  listingId: string
+  projectId: string
+  storageKey: string
+  sizeBytes: string | null
+  checksum: string | null
+  createdAt: Generated<Date>
+}
+
+export interface MarketplacePurchaseTable {
+  id: Generated<string>
+  buyerId: string
+  listingId: string
+  sourceProjectId: string
+  projectId: string | null
+  checkoutSessionId: string | null
+  snapshotId: string | null
+  status: MarketplacePurchaseStatus
+  fulfillment: FulfillmentMetadata | null
+  error: string | null
+  createdAt: Generated<Date>
+  updatedAt: Generated<Date>
+  fulfilledAt: Date | null
+}
+
+export interface MarketplaceEnvRuleTable {
+  id: Generated<string>
+  listingId: string
+  key: string
+  classification: string
+  createdAt: Generated<Date>
 }
 
 export interface TrustMrrStartupTable {

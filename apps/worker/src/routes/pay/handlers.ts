@@ -21,6 +21,7 @@ import { sql } from 'kysely'
 import type { Kysely, Transaction } from 'kysely'
 import type { Database } from '@repo/db'
 import { createLogger } from '@/lib/logger'
+import { triggerMarketplaceFulfillment } from '@/lib/marketplace/fulfill'
 
 const log = createLogger('webhook')
 
@@ -611,6 +612,22 @@ async function upsertPaymentFromWebhook(
         },
         trx,
       )
+    }
+  }
+
+  // Marketplace fulfillment: if checkout has listing_id, create purchase + enqueue fulfillment
+  if (eventType === 'payment.succeeded' && checkout?.id && ev.metadata?.listing_id) {
+    const listingId = String(ev.metadata.listing_id)
+    const buyerId = typeof ev.metadata.customer_id === 'string' ? ev.metadata.customer_id : null
+    const sourceProjectId =
+      typeof ev.metadata.project_id === 'string' ? ev.metadata.project_id : null
+    if (buyerId && sourceProjectId) {
+      await triggerMarketplaceFulfillment(trx, {
+        listingId,
+        buyerId,
+        sourceProjectId,
+        checkoutSessionId: checkout.id,
+      })
     }
   }
 

@@ -1,6 +1,8 @@
 import { db } from '@/lib/db'
 import type {
   EnvDestination,
+  FulfillmentMetadata,
+  MarketplacePurchaseStatus,
   ProjectMetadata,
   ProjectProvisioningMetadata,
   ProjectProvisioningStep,
@@ -68,7 +70,7 @@ export function getWorkerByProjectId(projectId: string) {
 export function getEnvVarsByProjectId(projectId: string, environment: string) {
   return db
     .selectFrom('env_var')
-    .select(['key', 'value', 'destination'])
+    .select(['key', 'value', 'destination', 'integrationId'])
     .where('projectId', '=', projectId)
     .where('environment', '=', environment)
     .execute()
@@ -463,4 +465,183 @@ export async function deleteEnvVar(projectId: string, environment: string, key: 
 
 export async function deleteEnvVarsByIntegration(integrationId: string) {
   await db.deleteFrom('env_var').where('integrationId', '=', integrationId).execute()
+}
+
+// ─── Marketplace ─────────────────────────────────────────────
+
+export async function getSnapshotByListingId(listingId: string) {
+  return db
+    .selectFrom('marketplace_snapshot')
+    .selectAll()
+    .where('listingId', '=', listingId)
+    .executeTakeFirst()
+}
+
+export async function getSnapshotById(snapshotId: string) {
+  return db
+    .selectFrom('marketplace_snapshot')
+    .selectAll()
+    .where('id', '=', snapshotId)
+    .executeTakeFirst()
+}
+
+export async function upsertSnapshot(args: {
+  listingId: string
+  projectId: string
+  storageKey: string
+  sizeBytes: string | null
+  checksum: string | null
+}) {
+  const now = new Date()
+  const row = await db
+    .insertInto('marketplace_snapshot')
+    .values({
+      listingId: args.listingId,
+      projectId: args.projectId,
+      storageKey: args.storageKey,
+      sizeBytes: args.sizeBytes,
+      checksum: args.checksum,
+      createdAt: now,
+    })
+    .onConflict((oc) =>
+      oc.column('listingId').doUpdateSet({
+        storageKey: args.storageKey,
+        sizeBytes: args.sizeBytes,
+        checksum: args.checksum,
+        createdAt: now,
+      }),
+    )
+    .returning(['id'])
+    .executeTakeFirstOrThrow()
+  return { id: row.id as string }
+}
+
+export async function deleteSnapshotById(snapshotId: string) {
+  await db.deleteFrom('marketplace_snapshot').where('id', '=', snapshotId).execute()
+}
+
+export async function createPurchase(args: {
+  buyerId: string
+  listingId: string
+  sourceProjectId: string
+  checkoutSessionId: string
+  snapshotId: string | null
+}) {
+  const now = new Date()
+  const row = await db
+    .insertInto('marketplace_purchase')
+    .values({
+      buyerId: args.buyerId,
+      listingId: args.listingId,
+      sourceProjectId: args.sourceProjectId,
+      checkoutSessionId: args.checkoutSessionId,
+      snapshotId: args.snapshotId,
+      status: 'pending' as MarketplacePurchaseStatus,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflict((oc) => oc.column('checkoutSessionId').doNothing())
+    .returning(['id'])
+    .executeTakeFirst()
+  return row ? { id: row.id as string } : null
+}
+
+export async function getPurchaseById(id: string) {
+  return db.selectFrom('marketplace_purchase').selectAll().where('id', '=', id).executeTakeFirst()
+}
+
+export async function getPurchaseByCheckoutSessionId(checkoutSessionId: string) {
+  return db
+    .selectFrom('marketplace_purchase')
+    .selectAll()
+    .where('checkoutSessionId', '=', checkoutSessionId)
+    .executeTakeFirst()
+}
+
+export async function getPurchasesByBuyerId(buyerId: string, limit = 20) {
+  return db
+    .selectFrom('marketplace_purchase')
+    .selectAll()
+    .where('buyerId', '=', buyerId)
+    .orderBy('createdAt', 'desc')
+    .limit(limit)
+    .execute()
+}
+
+export async function updatePurchaseStatus(
+  id: string,
+  status: MarketplacePurchaseStatus,
+  error?: string | null,
+) {
+  await db
+    .updateTable('marketplace_purchase')
+    .set({
+      status,
+      ...(error !== undefined ? { error } : {}),
+      ...(status === 'fulfilled' ? { fulfilledAt: new Date() } : {}),
+      updatedAt: new Date(),
+    })
+    .where('id', '=', id)
+    .execute()
+}
+
+export async function updatePurchaseProjectId(id: string, projectId: string) {
+  await db
+    .updateTable('marketplace_purchase')
+    .set({ projectId, updatedAt: new Date() })
+    .where('id', '=', id)
+    .execute()
+}
+
+export async function mergePurchaseFulfillment(id: string, data: Partial<FulfillmentMetadata>) {
+  const purchase = await getPurchaseById(id)
+  if (!purchase) throw new Error(`Purchase ${id} not found`)
+
+  const current = (purchase.fulfillment || {}) as FulfillmentMetadata
+  const merged = { ...current, ...data }
+
+  await db
+    .updateTable('marketplace_purchase')
+    .set({ fulfillment: merged as any, updatedAt: new Date() })
+    .where('id', '=', id)
+    .execute()
+
+  return merged
+}
+
+export async function getEnvRulesByListingId(listingId: string) {
+  return db
+    .selectFrom('marketplace_env_rule')
+    .selectAll()
+    .where('listingId', '=', listingId)
+    .execute()
+}
+
+export async function upsertEnvRule(args: {
+  listingId: string
+  key: string
+  classification: string
+}) {
+  await db
+    .insertInto('marketplace_env_rule')
+    .values({
+      listingId: args.listingId,
+      key: args.key,
+      classification: args.classification,
+      createdAt: new Date(),
+    })
+    .onConflict((oc) =>
+      oc.columns(['listingId', 'key']).doUpdateSet({
+        classification: args.classification,
+      }),
+    )
+    .execute()
+}
+
+export async function deleteEnvRule(listingId: string, key: string) {
+  await db
+    .deleteFrom('marketplace_env_rule')
+    .where('listingId', '=', listingId)
+    .where('key', '=', key)
+    .execute()
 }

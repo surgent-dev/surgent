@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Check, CreditCard, ExternalLink, Loader2 } from 'lucide-react'
+import { Check, CreditCard, Download, ExternalLink, Loader2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { authClient } from '@/lib/auth-client'
 import { BrandLogo } from '@/components/brand-logo'
@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatDateShort } from '@/lib/format'
 import { formatPrice } from '@/components/payments/utils'
 import { useMarketplaceListingQuery } from '@/queries/marketplace'
+import { useClaimListing } from '@/queries/purchases'
 import type { MarketplaceUser } from '../types'
 
 export default function ListingPage() {
@@ -21,7 +22,9 @@ export default function ListingPage() {
   const router = useRouter()
   const [user, setUser] = useState<MarketplaceUser | null>(null)
   const [buying, setBuying] = useState(false)
+  const [claiming, setClaiming] = useState(false)
   const { data: listing, isLoading, error } = useMarketplaceListingQuery(id)
+  const claimMutation = useClaimListing()
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => {
@@ -197,8 +200,34 @@ export default function ListingPage() {
                 : `Buy for ${formatPrice(listing.priceAmount, listing.priceCurrency || 'usd')}`}
             </Button>
           ) : (
-            <Button size="sm" className="h-9 text-xs">
-              Use Template
+            <Button
+              size="sm"
+              className="h-9 text-xs"
+              disabled={claiming}
+              onClick={async () => {
+                if (!listing?.id) return
+                if (!user) {
+                  router.push('/login')
+                  return
+                }
+                setClaiming(true)
+                try {
+                  const result = await claimMutation.mutateAsync(listing.id)
+                  router.push(`/marketplace/purchases/${result.purchaseId}`)
+                } catch (err) {
+                  const message = err instanceof Error ? err.message : 'Something went wrong'
+                  toast.error(message)
+                } finally {
+                  setClaiming(false)
+                }
+              }}
+            >
+              {claiming ? (
+                <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Download className="size-3.5 mr-1.5" />
+              )}
+              {claiming ? 'Setting up...' : 'Use Template'}
             </Button>
           )}
           {listing.liveUrl && (
