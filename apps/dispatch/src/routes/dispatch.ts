@@ -6,6 +6,7 @@ const dispatch = new Hono<AppContext>()
 const PLATFORM_SUFFIXES = ['.surgent.site', '.surgent.dev']
 const TRACKER_PATH = '/_s/t/s.js'
 const EVENT_PATH = '/_s/t/e'
+const EVENT_SUFFIX = '/e'
 const HOSTNAME_HEADER = 'x-surgent-hostname'
 
 function extractSubdomain(hostname: string): string | null {
@@ -74,7 +75,10 @@ async function proxyScript(request: Request, upstream: string): Promise<Response
   }
 
   const body = await res.text()
-  return new Response(body.replace(/\/api\/send/g, EVENT_PATH), {
+  // The upstream tracker builds its endpoint from the script directory.
+  // Rewriting "/api/send" to "/e" keeps the final URL at "/_s/t/e"
+  // instead of accidentally producing "/_s/t/_s/t/e".
+  return new Response(body.replace(/\/api\/send/g, EVENT_SUFFIX), {
     status: res.status,
     statusText: res.statusText,
     headers,
