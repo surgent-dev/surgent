@@ -100,6 +100,8 @@ export async function createProject(args: {
   name: string
   githubUrl?: string
   metadata?: ProjectMetadata
+  sourceProjectId?: string
+  purchaseId?: string
 }) {
   const now = new Date()
   const slug =
@@ -117,6 +119,8 @@ export async function createProject(args: {
       status: 'provisioning',
       github: args.githubUrl ? { url: args.githubUrl } : null,
       metadata: args.metadata ?? null,
+      sourceProjectId: args.sourceProjectId ?? null,
+      purchaseId: args.purchaseId ?? null,
       createdAt: now,
       updatedAt: now,
     })

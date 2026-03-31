@@ -24,6 +24,9 @@ const MarketplaceListingSchema = ListingSchema.extend({
   sellerImage: z.string().nullable(),
   liveUrl: z.string().nullable(),
   purchased: z.boolean().optional(),
+  purchaseId: z.string().optional(),
+  purchaseStatus: z.string().optional(),
+  buyerProjectId: z.string().optional(),
 })
 
 const MarketplaceListingsResponseSchema = z.object({
@@ -117,6 +120,79 @@ export function useUpsertProjectListing() {
     mutationFn: upsertProjectListing,
     onSuccess: (listing) => {
       queryClient.invalidateQueries({ queryKey: ['project-listing', listing.projectId] })
+      queryClient.invalidateQueries({ queryKey: ['marketplace-listings'] })
+    },
+  })
+}
+
+// ── Purchase status polling ──────────────────────────────────────────────
+
+const PurchaseStatusSchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  step: z.string().nullable(),
+  buyerProjectId: z.string().nullable(),
+  failReason: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export type PurchaseStatus = z.infer<typeof PurchaseStatusSchema>
+
+async function fetchPurchaseStatus(id: string): Promise<PurchaseStatus> {
+  const data = await http.get(`api/projects/marketplace/purchases/${id}`).json()
+  return PurchaseStatusSchema.parse(data)
+}
+
+export function usePurchaseStatusQuery(purchaseId?: string) {
+  return useQuery({
+    queryKey: ['purchase-status', purchaseId],
+    queryFn: () => fetchPurchaseStatus(purchaseId!),
+    enabled: Boolean(purchaseId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === 'ready' || status === 'failed' ? false : 2000
+    },
+  })
+}
+
+// ── Free template claim ──────────────────────────────────────────────────
+
+async function claimFreeTemplate(
+  listingId: string,
+): Promise<{ purchaseId: string; status: string }> {
+  const data = await http
+    .post('api/projects/marketplace/use-template', { json: { listingId } })
+    .json()
+  return data as { purchaseId: string; status: string }
+}
+
+export function useClaimFreeListing() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: claimFreeTemplate,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace-listing'] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+// ── Republish template ───────────────────────────────────────────────────
+
+async function republishTemplate(
+  projectId: string,
+): Promise<{ snapshotId: string; version: number }> {
+  const data = await http.post(`api/projects/${projectId}/republish`).json()
+  return data as { snapshotId: string; version: number }
+}
+
+export function useRepublishTemplate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: republishTemplate,
+    onSuccess: (_data, projectId) => {
+      queryClient.invalidateQueries({ queryKey: ['project-listing', projectId] })
       queryClient.invalidateQueries({ queryKey: ['marketplace-listings'] })
     },
   })

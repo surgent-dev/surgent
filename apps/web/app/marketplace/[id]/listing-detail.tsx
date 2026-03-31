@@ -13,7 +13,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { authClient } from '@/lib/auth-client'
 import { formatDateShort } from '@/lib/format'
 import { http } from '@/lib/http'
-import { type MarketplaceListing, useMarketplaceListingQuery } from '@/queries/marketplace'
+import {
+  type MarketplaceListing,
+  useMarketplaceListingQuery,
+  useClaimFreeListing,
+  usePurchaseStatusQuery,
+} from '@/queries/marketplace'
 import type { MarketplaceUser } from '../types'
 
 type ListingPageProps = {
@@ -29,6 +34,18 @@ export default function ListingPage({ id, initialListing }: ListingPageProps) {
   const listing = listingQuery.data ?? initialListing
   const isLoading = listingQuery.isLoading && !listingQuery.data && !initialListing
   const error = listingQuery.error
+  const claimFree = useClaimFreeListing()
+
+  // Track purchase ID for polling (from listing or from claim mutation)
+  const [activePurchaseId, setActivePurchaseId] = useState<string | undefined>()
+  const effectivePurchaseId = activePurchaseId || listing?.purchaseId
+  const { data: purchaseStatus } = usePurchaseStatusQuery(
+    effectivePurchaseId && listing?.purchaseStatus !== 'ready' ? effectivePurchaseId : undefined,
+  )
+
+  // Derive final status from poll or initial listing data
+  const finalPurchaseStatus = purchaseStatus?.status || listing?.purchaseStatus
+  const finalBuyerProjectId = purchaseStatus?.buyerProjectId || listing?.buyerProjectId
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => {
@@ -187,11 +204,26 @@ export default function ListingPage({ id, initialListing }: ListingPageProps) {
 
         {/* Actions */}
         <div className="mt-5 flex items-center gap-3">
-          {listing.purchased ? (
-            <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-emerald-500/10 text-emerald-600 text-xs font-medium">
-              <Check className="size-3.5" />
-              Purchased
-            </span>
+          {listing.purchased || activePurchaseId ? (
+            finalPurchaseStatus === 'ready' && finalBuyerProjectId ? (
+              <Button
+                size="sm"
+                className="h-9 text-xs bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => router.push(`/project/${finalBuyerProjectId}`)}
+              >
+                <Check className="size-3.5 mr-1.5" />
+                Open your project
+              </Button>
+            ) : finalPurchaseStatus === 'failed' ? (
+              <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-red-500/10 text-red-600 text-xs font-medium">
+                Setup failed. Please contact support.
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-blue-500/10 text-blue-600 text-xs font-medium">
+                <Loader2 className="size-3.5 animate-spin" />
+                Setting up your project...
+              </span>
+            )
           ) : listing.priceId && listing.priceAmount != null && listing.priceAmount > 0 ? (
             <Button size="sm" className="h-9 text-xs" onClick={handleBuy} disabled={buying}>
               {buying ? (
@@ -204,7 +236,26 @@ export default function ListingPage({ id, initialListing }: ListingPageProps) {
                 : `Buy for ${formatPrice(listing.priceAmount, listing.priceCurrency || 'usd')}`}
             </Button>
           ) : (
-            <Button size="sm" className="h-9 text-xs">
+            <Button
+              size="sm"
+              className="h-9 text-xs"
+              disabled={claimFree.isPending}
+              onClick={async () => {
+                if (!user) {
+                  router.push('/login')
+                  return
+                }
+                try {
+                  const result = await claimFree.mutateAsync(listing.id!)
+                  setActivePurchaseId(result.purchaseId)
+                  toast.success('Template claimed! Setting up your project...')
+                } catch (err) {
+                  const message = err instanceof Error ? err.message : 'Something went wrong'
+                  toast.error(message)
+                }
+              }}
+            >
+              {claimFree.isPending ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : null}
               Use Template
             </Button>
           )}

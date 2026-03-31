@@ -75,6 +75,13 @@ function ProjectItem({
         {project.name}
       </span>
 
+      {/* Purchased badge */}
+      {project.sourceProjectId && (
+        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 shrink-0">
+          Purchased
+        </span>
+      )}
+
       {/* Date */}
       <span className="text-[11px] text-muted-foreground/25 shrink-0 hidden sm:block">
         {formatRelativeDate(project.createdAt)}

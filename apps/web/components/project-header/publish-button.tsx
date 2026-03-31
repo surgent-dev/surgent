@@ -43,6 +43,7 @@ import {
   useLatestDeploymentQuery,
   useUpdateProjectVisibility,
 } from '@/queries/projects'
+import { useProjectListingQuery, useRepublishTemplate } from '@/queries/marketplace'
 
 const iconBtn = 'p-1 hover:bg-muted/40 rounded-md transition-all duration-100 cursor-pointer'
 
@@ -72,6 +73,8 @@ export default function PublishButton({ projectId, project }: PublishButtonProps
   const updateVisibility = useUpdateProjectVisibility()
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
   const { data: domainsData } = useProjectDomains(projectId)
+  const { data: existingListing } = useProjectListingQuery(projectId)
+  const republishTemplate = useRepublishTemplate()
 
   const worker = project?.worker
   const workerName = worker?.name
@@ -472,7 +475,7 @@ export default function PublishButton({ projectId, project }: PublishButtonProps
           </div>
 
           {/* Sell */}
-          <div className="border-t px-3 py-2.5">
+          <div className="border-t px-3 py-2.5 space-y-1.5">
             <button
               className="flex items-center gap-2 w-full h-8 px-2.5 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               onClick={() => {
@@ -487,6 +490,32 @@ export default function PublishButton({ projectId, project }: PublishButtonProps
               <Tag className="size-3.5 text-muted-foreground/70" weight="fill" />
               <span className="text-xs font-medium text-foreground/80">Sell on marketplace</span>
             </button>
+            {existingListing && (
+              <button
+                className="flex items-center gap-2 w-full h-8 px-2.5 rounded-lg border border-border hover:bg-muted/30 transition-colors"
+                disabled={republishTemplate.isPending}
+                onClick={() => {
+                  if (!projectId) return
+                  republishTemplate.mutate(projectId, {
+                    onSuccess: (data) => {
+                      toast.success(`Template republished (v${data.version})`)
+                    },
+                    onError: (err) => {
+                      toast.error(err instanceof Error ? err.message : 'Failed to republish')
+                    },
+                  })
+                }}
+              >
+                {republishTemplate.isPending ? (
+                  <CircleNotch className="size-3.5 animate-spin text-muted-foreground/70" />
+                ) : (
+                  <RocketLaunch className="size-3.5 text-muted-foreground/70" weight="fill" />
+                )}
+                <span className="text-xs font-medium text-foreground/80">
+                  {republishTemplate.isPending ? 'Republishing...' : 'Republish template'}
+                </span>
+              </button>
+            )}
           </div>
         </DropdownMenuContent>
       </DropdownMenu>

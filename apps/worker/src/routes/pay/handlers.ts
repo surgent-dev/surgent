@@ -21,6 +21,7 @@ import { sql } from 'kysely'
 import type { Kysely, Transaction } from 'kysely'
 import type { Database } from '@repo/db'
 import { createLogger } from '@/lib/logger'
+import { triggerMarketplaceFulfillment } from '@/lib/marketplace/fulfillment-trigger'
 
 const log = createLogger('webhook')
 
@@ -1233,4 +1234,25 @@ export async function processWebhookEvent(
 
     log.info({ eventId }, `${tag} ${eventType} processed`)
   })
+
+  // Post-transaction: trigger marketplace fulfillment for completed payments
+  if (eventType === 'payment.succeeded' && ev.sessionId) {
+    const checkout = await db
+      .selectFrom('pay_checkout_session')
+      .select(['id', 'status', 'metadata'])
+      .where('id', '=', ev.sessionId)
+      .executeTakeFirst()
+
+    if (checkout?.status === 'completed' && checkout.metadata) {
+      const meta = checkout.metadata as Record<string, unknown>
+      if (meta.snapshot_id && meta.listing_id) {
+        await triggerMarketplaceFulfillment(checkout.id!, meta).catch((err) =>
+          log.error(
+            { err, checkoutId: checkout.id, eventId },
+            'marketplace fulfillment trigger failed',
+          ),
+        )
+      }
+    }
+  }
 }

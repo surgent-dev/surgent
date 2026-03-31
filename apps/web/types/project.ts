@@ -46,6 +46,7 @@ export interface Project {
   settings: any | null
   metadata: ProjectMetadata | null
   isPublic: boolean
+  sourceProjectId?: string | null
   createdAt: string
   updatedAt: string
   sandbox: Sandbox | null

@@ -60,6 +60,8 @@ import {
 import { createLogger } from '@/lib/logger'
 import { ensureAnalytics, getAnalyticsWebsite, removeAnalytics } from '@/services/analytics'
 import type { ProjectMetadata } from '@repo/db'
+import { createProjectSnapshot } from '@/controllers/marketplace-snapshot'
+import * as MarketplaceService from '@/services/marketplace'
 
 const log = createLogger('projects')
 const projects = new Hono<AppContext>()
@@ -262,16 +264,28 @@ projects.get(
 
     // Check if the logged-in user has purchased this listing
     let purchased = false
+    let purchaseId: string | undefined
+    let purchaseStatus: string | undefined
+    let buyerProjectId: string | undefined
     const user = c.get('user')
     if (user) {
-      const completedCheckout = await db
-        .selectFrom('pay_checkout_session')
-        .select('id')
-        .where('userId', '=', user.id)
-        .where('projectId', '=', row.projectId)
-        .where('status', '=', 'completed')
-        .executeTakeFirst()
-      purchased = Boolean(completedCheckout)
+      const purchase = await MarketplaceService.getPurchaseByBuyerAndListing(user.id, row.id!)
+      if (purchase) {
+        purchased = true
+        purchaseId = purchase.id as string
+        purchaseStatus = purchase.status
+        buyerProjectId = purchase.buyerProjectId ?? undefined
+      } else {
+        // Fallback: check legacy checkout-only purchases (before fulfillment system)
+        const completedCheckout = await db
+          .selectFrom('pay_checkout_session')
+          .select('id')
+          .where('userId', '=', user.id)
+          .where('projectId', '=', row.projectId)
+          .where('status', '=', 'completed')
+          .executeTakeFirst()
+        purchased = Boolean(completedCheckout)
+      }
     }
 
     return c.json({
@@ -280,6 +294,9 @@ projects.get(
       sellerName: row.sellerName,
       sellerImage: row.sellerImage,
       purchased,
+      purchaseId,
+      purchaseStatus,
+      buyerProjectId,
       liveUrl:
         row.workerScriptName && row.workerStatus === 'active'
           ? `https://${row.workerScriptName}.surgent.site`
@@ -312,6 +329,7 @@ projects.post('/marketplace/checkout', zValidator('json', marketplaceCheckoutBod
       'listing.title',
       'listing.productId',
       'listing.priceId',
+      'listing.snapshotId',
       'product.name as productName',
       'product.env as productEnv',
       'product_price.priceAmount',
@@ -324,6 +342,8 @@ projects.post('/marketplace/checkout', zValidator('json', marketplaceCheckoutBod
 
   if (!listing) return c.json({ error: 'Listing not found or has no price' }, 404)
   if (!listing.priceId) return c.json({ error: 'Listing has no price configured' }, 400)
+  if (!listing.snapshotId)
+    return c.json({ error: 'Listing not published yet. Seller needs to republish.' }, 400)
 
   const env: PayEnv = (listing.productEnv as PayEnv) || 'live'
 
@@ -346,6 +366,7 @@ projects.post('/marketplace/checkout', zValidator('json', marketplaceCheckoutBod
     project_id: listing.projectId,
     product_id: listing.productId,
     listing_id: listing.id,
+    snapshot_id: listing.snapshotId,
     customer_id: user.id,
     customer_email: user.email,
     customer_name: user.name || undefined,
@@ -431,6 +452,103 @@ projects.post('/marketplace/checkout', zValidator('json', marketplaceCheckoutBod
   })
 })
 
+// POST /projects/marketplace/use-template - Claim a free listing
+const useTemplateBody = z.object({ listingId: z.string().uuid() })
+
+projects.post('/marketplace/use-template', zValidator('json', useTemplateBody), async (c) => {
+  const session = c.get('session')
+  const user = c.get('user')
+  if (!session || !user) return c.json({ error: 'Unauthorized' }, 401)
+
+  const { listingId } = c.req.valid('json')
+  const organizationId = session.activeOrganizationId
+  if (!organizationId) return c.json({ error: 'No active organization' }, 400)
+
+  const listing = await db
+    .selectFrom('listing')
+    .leftJoin('product_price', 'product_price.id', 'listing.priceId')
+    .select([
+      'listing.id',
+      'listing.projectId',
+      'listing.snapshotId',
+      'listing.priceId',
+      'product_price.priceAmount',
+    ])
+    .where('listing.id', '=', listingId)
+    .where('listing.status', '=', 'active')
+    .executeTakeFirst()
+
+  if (!listing) return c.json({ error: 'Listing not found' }, 404)
+  if (listing.priceId && listing.priceAmount && listing.priceAmount > 0) {
+    return c.json({ error: 'This is a paid listing. Use the checkout flow.' }, 400)
+  }
+  if (!listing.snapshotId) {
+    return c.json({ error: 'Listing not published yet. Seller needs to republish.' }, 400)
+  }
+
+  // Check if already claimed
+  const existing = await MarketplaceService.getPurchaseByBuyerAndListing(user.id, listing.id!)
+  if (existing) {
+    return c.json({ purchaseId: existing.id, status: existing.status })
+  }
+
+  // Billing check
+  const projectCount = await countProjectsByOrganizationId(organizationId)
+  const access = await checkBillingFeature({
+    organizationId,
+    featureId: 'projects',
+    currentProjects: projectCount,
+  })
+  if (!access.allowed) {
+    return c.json({ error: 'Project limit reached. Upgrade your plan to claim templates.' }, 402)
+  }
+
+  const { enqueueMarketplaceFulfillmentJob } = await import('@/lib/marketplace/queue')
+
+  const purchase = await MarketplaceService.createPurchase({
+    listingId: listing.id!,
+    snapshotId: listing.snapshotId,
+    buyerUserId: user.id,
+    buyerOrgId: organizationId,
+    sellerProjectId: listing.projectId,
+  })
+
+  await enqueueMarketplaceFulfillmentJob({
+    purchaseId: purchase.id,
+    snapshotId: listing.snapshotId,
+    buyerUserId: user.id,
+    buyerOrgId: organizationId,
+    sellerProjectId: listing.projectId,
+    listingId: listing.id!,
+  })
+
+  return c.json({ purchaseId: purchase.id, status: 'pending' })
+})
+
+// GET /projects/marketplace/purchases/:id - Get purchase fulfillment status
+projects.get(
+  '/marketplace/purchases/:id',
+  zValidator('param', z.object({ id: z.string().uuid() })),
+  async (c) => {
+    const user = c.get('user')
+    if (!user) return c.json({ error: 'Unauthorized' }, 401)
+
+    const purchase = await MarketplaceService.getPurchaseById(c.req.valid('param').id)
+    if (!purchase) return c.json({ error: 'Purchase not found' }, 404)
+    if (purchase.buyerUserId !== user.id) return c.json({ error: 'Forbidden' }, 403)
+
+    return c.json({
+      id: purchase.id,
+      status: purchase.status,
+      step: purchase.step,
+      buyerProjectId: purchase.buyerProjectId,
+      failReason: purchase.failReason,
+      createdAt: purchase.createdAt,
+      updatedAt: purchase.updatedAt,
+    })
+  },
+)
+
 // GET /projects/recent - Recently deployed public projects
 projects.get(
   '/recent',
@@ -514,6 +632,7 @@ projects.get('/', requireAuth, async (c) => {
       'project.settings',
       'project.metadata',
       'project.isPublic',
+      'project.sourceProjectId',
       'project.createdAt',
       'project.updatedAt',
       'sandbox.id as sandboxId',
@@ -541,6 +660,7 @@ projects.get('/', requireAuth, async (c) => {
       settings: r.settings,
       metadata: r.metadata,
       isPublic: r.isPublic,
+      sourceProjectId: r.sourceProjectId ?? null,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       sandbox: r.sandboxId
@@ -744,8 +864,9 @@ projects.post(
       .where('projectId', '=', id)
       .executeTakeFirst()
 
+    let listing
     if (existing) {
-      const updated = await db
+      listing = await db
         .updateTable('listing')
         .set({
           title: nextTitle,
@@ -759,27 +880,37 @@ projects.post(
         .where('projectId', '=', id)
         .returningAll()
         .executeTakeFirstOrThrow()
-
-      return c.json({ listing: serializeListing(updated) })
+    } else {
+      listing = await db
+        .insertInto('listing')
+        .values({
+          projectId: id,
+          title: nextTitle,
+          description,
+          imageUrl: imageUrl ?? null,
+          productId: productId ?? null,
+          priceId: priceId ?? null,
+          status: 'active',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow()
     }
 
-    const created = await db
-      .insertInto('listing')
-      .values({
-        projectId: id,
-        title: nextTitle,
-        description,
-        imageUrl: imageUrl ?? null,
-        productId: productId ?? null,
-        priceId: priceId ?? null,
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow()
+    // Auto-create snapshot on listing create/update
+    try {
+      const result = await createProjectSnapshot(id)
+      await MarketplaceService.updateListingSnapshotId(listing.id!, result.snapshotId)
+      log.info(
+        { projectId: id, snapshotId: result.snapshotId, version: result.version },
+        'auto-snapshot created on listing',
+      )
+    } catch (err) {
+      log.warn({ projectId: id, err }, 'auto-snapshot failed on listing (non-blocking)')
+    }
 
-    return c.json({ listing: serializeListing(created) })
+    return c.json({ listing: serializeListing(listing) })
   },
 )
 
@@ -795,6 +926,29 @@ projects.delete('/:id/listing', zValidator('param', idParam), async (c) => {
     .execute()
 
   return c.json({ unlisted: true })
+})
+
+// POST /projects/:id/republish - Create snapshot and update listing
+projects.post('/:id/republish', zValidator('param', idParam), async (c) => {
+  const { id } = c.req.valid('param')
+  await getProjectWithAuth(id, c.get('user')!)
+
+  const listing = await db
+    .selectFrom('listing')
+    .select(['id', 'status'])
+    .where('projectId', '=', id)
+    .where('status', '=', 'active')
+    .executeTakeFirst()
+  if (!listing) return c.json({ error: 'No active listing found' }, 400)
+
+  const result = await createProjectSnapshot(id)
+  await MarketplaceService.updateListingSnapshotId(listing.id!, result.snapshotId)
+
+  return c.json({
+    snapshotId: result.snapshotId,
+    version: result.version,
+    sizeBytes: result.sizeBytes,
+  })
 })
 
 // GET /projects/:id - Get single project

@@ -52,6 +52,8 @@ export interface Database {
   domain: DomainTable
   domain_webhook_event: DomainWebhookEventTable
   trustmrr_startup: TrustMrrStartupTable
+  marketplace_snapshot: MarketplaceSnapshotTable
+  marketplace_purchase: MarketplacePurchaseTable
 }
 
 export interface UserTable {
@@ -474,6 +476,8 @@ export interface ProjectTable {
   sandbox: any | null
   metadata: ProjectMetadata | null
   isPublic?: boolean
+  sourceProjectId: string | null
+  purchaseId: string | null
   createdAt?: Date
   updatedAt?: Date
   deletedAt?: Date | null
@@ -549,6 +553,7 @@ export interface ListingTable {
   imageUrl: string | null
   productId: string | null
   priceId: string | null
+  snapshotId: string | null
   status: string
   createdAt?: Date
   updatedAt?: Date
@@ -896,4 +901,32 @@ export interface TrustMrrStartupTable {
   syncedAt: Date
   createdAt?: Date
   updatedAt?: Date
+}
+
+export type MarketplacePurchaseStatus = 'pending' | 'provisioning' | 'ready' | 'failed'
+
+export interface MarketplaceSnapshotTable {
+  id: Generated<string>
+  projectId: string
+  storageKey: string
+  sizeBytes: string | number
+  version: number
+  createdAt: Generated<Date>
+}
+
+export interface MarketplacePurchaseTable {
+  id: Generated<string>
+  listingId: string
+  snapshotId: string
+  buyerUserId: string
+  buyerOrgId: string
+  sellerProjectId: string
+  buyerProjectId: string | null
+  checkoutId: string | null
+  status: MarketplacePurchaseStatus
+  step: string | null
+  failReason: string | null
+  metadata: Record<string, unknown> | null
+  createdAt: Generated<Date>
+  updatedAt: Generated<Date>
 }
