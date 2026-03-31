@@ -237,7 +237,6 @@ export function ProjectEventProvider({
   const closedRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
   const connectionIdRef = useRef(0)
-  const lastEventIdRef = useRef<string | null>(null)
   const subscribersRef = useRef(new Map<string, Set<Subscriber>>())
   const queueRef = useRef<StreamEvent[]>([])
   const rafRef = useRef<number | null>(null)
@@ -336,7 +335,9 @@ export function ProjectEventProvider({
         })
 
       const syncStatus = http
-        .get(`api/agent/${projectId}/session/status`)
+        .get(`api/agent/${projectId}/session/status`, {
+          retry: { limit: 3, statusCodes: [502, 503, 504], delay: () => 500 },
+        })
         .json<Record<string, unknown>>()
         .then((items) => {
           if (closedRef.current) return
@@ -400,7 +401,6 @@ export function ProjectEventProvider({
     attemptRef.current = 0
     connectedAtRef.current = 0
     lastHeartbeatRef.current = 0
-    lastEventIdRef.current = null
     markAllSessionsForResync()
 
     const url = backendBaseUrl
@@ -424,8 +424,6 @@ export function ProjectEventProvider({
         clearInterval(heartbeatCheckRef.current)
         heartbeatCheckRef.current = null
       }
-
-      markAllSessionsForResync()
 
       // Faster disconnect detection - 5s instead of 15s
       if (!disconnectTimerRef.current) {
@@ -486,14 +484,9 @@ export function ProjectEventProvider({
         heartbeatCheckRef.current = null
       }
 
-      const headers = new Headers({ accept: 'text/event-stream' })
-      if (lastEventIdRef.current) {
-        headers.set('Last-Event-ID', lastEventIdRef.current)
-      }
-
       fetch(url, {
         method: 'GET',
-        headers,
+        headers: { accept: 'text/event-stream' },
         credentials: 'include',
         cache: 'no-store',
         signal: abort.signal,
@@ -522,12 +515,11 @@ export function ProjectEventProvider({
           }, HEARTBEAT_CHECK_INTERVAL)
 
           for (const sessionId of subscribersRef.current.keys()) {
-            syncSession(sessionId)
+            syncSession(sessionId, true)
           }
 
-          await readSseStream(response.body, ({ id, data, retry }) => {
+          await readSseStream(response.body, ({ data, retry }) => {
             if (closedRef.current || connectionId !== connectionIdRef.current) return
-            if (id !== undefined) lastEventIdRef.current = id
             if (retry !== undefined) retryIntervalRef.current = retry
             if (!data) return
 

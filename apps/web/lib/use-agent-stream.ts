@@ -70,6 +70,53 @@ function upsertPart(list: Part[] | undefined, incoming: Part): Part[] {
   return [...list.slice(0, idx), merged, ...list.slice(idx + 1)]
 }
 
+function getPartText(part: Part): string | undefined {
+  const value = (part as Record<string, unknown>).text
+  return typeof value === 'string' ? value : undefined
+}
+
+function getPartEnd(part: Part): number | undefined {
+  const time = (part as { time?: { end?: number } }).time
+  return typeof time?.end === 'number' ? time.end : undefined
+}
+
+function mergeSnapshotPart(existing: Part | undefined, incoming: Part): Part {
+  if (!existing) return incoming
+
+  const merged = { ...existing, ...incoming } as Part
+  const existingText = getPartText(existing)
+  const incomingText = getPartText(incoming)
+
+  if (existingText === undefined || incomingText === undefined) return merged
+
+  const existingEnd = getPartEnd(existing)
+  const incomingEnd = getPartEnd(incoming)
+  if (existingEnd && !incomingEnd) return existing
+  if (incomingEnd || existingText.length <= incomingText.length) return merged
+
+  return { ...merged, text: existingText } as Part
+}
+
+function mergeParts(
+  existing: Part[] | undefined,
+  incoming: Part[] | undefined,
+): Part[] | undefined {
+  if (incoming === undefined) return existing
+  if (!existing) return incoming
+
+  let next = existing
+  for (const part of incoming) {
+    const idx = next.findIndex((item) => item.id === part.id)
+    if (idx === -1) {
+      next = upsertPart(next, part)
+      continue
+    }
+    const merged = mergeSnapshotPart(next[idx], part)
+    next = [...next.slice(0, idx), merged, ...next.slice(idx + 1)]
+  }
+  return next
+}
+
 function upsertPermission(list: Permission[] | undefined, incoming: Permission): Permission[] {
   if (!list) return [incoming]
   const idx = list.findIndex((p) => p.id === incoming.id)
@@ -124,8 +171,8 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
           (info as Message & SessionScope).sessionID || (info as SessionScope).sessionId
         if (sessionID !== currentSessionId) continue
         messages = upsertMessage(messages, info)
-        // Overwrite even if empty to avoid keeping stale parts after resync
-        if (msgParts !== undefined) parts[info.id] = msgParts
+        const merged = mergeParts(parts[info.id], msgParts)
+        if (merged !== undefined) parts[info.id] = merged
       }
       return { ...state, messages, parts, lastAt: now, loading: false, compacting: false }
     }
@@ -224,6 +271,32 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
         parts: {
           ...state.parts,
           [part.messageID]: upsertPart(state.parts[part.messageID], part),
+        },
+        lastAt: now,
+      }
+    }
+
+    case 'message.part.delta': {
+      const { messageID, partID, field, delta } = props as {
+        messageID: string
+        partID: string
+        field: string
+        delta: string
+      }
+      const sessionID = props.sessionID || props.sessionId
+      if (sessionID && sessionID !== currentSessionId) return state
+      const msgParts = state.parts[messageID]
+      if (!msgParts) return state
+      const idx = msgParts.findIndex((p) => p.id === partID)
+      if (idx === -1) return state
+      const part = msgParts[idx]
+      const existing = (part as Record<string, unknown>)[field] as string | undefined
+      const updated = { ...part, [field]: (existing ?? '') + delta } as Part
+      return {
+        ...state,
+        parts: {
+          ...state.parts,
+          [messageID]: [...msgParts.slice(0, idx), updated, ...msgParts.slice(idx + 1)],
         },
         lastAt: now,
       }
@@ -330,7 +403,7 @@ export default function useAgentStream({
   projectId?: string
   sessionId?: string
 }) {
-  const events = useProjectEvents()
+  const { subscribe: eventSubscribe, connected: eventConnected } = useProjectEvents()
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
 
@@ -341,14 +414,6 @@ export default function useAgentStream({
 
   const currentKeyRef = useRef(projectId && sessionId ? `${projectId}:${sessionId}` : '')
 
-  const syncSession = useCallback(
-    (sid: string, force = false) => {
-      if (!projectId || !sid) return
-      events.syncSession(sid, force)
-    },
-    [events, projectId],
-  )
-
   useEffect(() => {
     if (!projectId || !sessionId) {
       if (!currentKeyRef.current) return
@@ -358,34 +423,28 @@ export default function useAgentStream({
     }
 
     const key = `${projectId}:${sessionId}`
-    if (currentKeyRef.current !== key) {
-      dispatch({ type: 'session.deleted' } as any)
-      currentKeyRef.current = key
-      syncSession(sessionId, true)
-      return
-    }
-
-    syncSession(sessionId, false)
-  }, [projectId, sessionId, syncSession])
+    if (currentKeyRef.current === key) return
+    dispatch({ type: 'session.deleted' } as any)
+    currentKeyRef.current = key
+  }, [projectId, sessionId])
 
   useEffect(() => {
     if (!projectId || !sessionId) return
-    const unsubscribe = events.subscribe(sessionId, (event) => dispatch(event))
-    syncSession(sessionId, false)
+    const unsubscribe = eventSubscribe(sessionId, (event) => dispatch(event))
     return unsubscribe
-  }, [events, projectId, sessionId, syncSession])
+  }, [eventSubscribe, projectId, sessionId])
 
   useEffect(() => {
     if (!projectId) {
       dispatch({ type: 'connection.closed' } as any)
       return
     }
-    if (events.connected) {
+    if (eventConnected) {
       dispatch({ type: 'server.connected' } as any)
       return
     }
     dispatch({ type: 'connection.closed' } as any)
-  }, [events.connected, projectId])
+  }, [eventConnected, projectId])
 
   const dismissError = useCallback(() => dispatch({ type: 'error.clear' } as any), [])
 
