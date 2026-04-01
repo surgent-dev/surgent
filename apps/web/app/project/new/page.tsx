@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCreateProject } from '@/queries/projects'
 import { ProjectInitOverlay } from '@/components/project-init-overlay'
+import { track } from '@/lib/track'
 
 const projectConfigs: Record<string, { name: string; githubUrl: string; initConvex: boolean }> = {
   simple: {
@@ -38,6 +39,7 @@ function NewProjectContent() {
       initConvex: config.initConvex,
     })
       .then(({ id }) => {
+        track('project_created', { project_id: id })
         router.replace(`/project/${id}?initial=${encodeURIComponent(prompt)}`)
       })
       .catch((err) => {

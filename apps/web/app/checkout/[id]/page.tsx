@@ -1,9 +1,10 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, useCallback, useEffect, use } from 'react'
+import { useState, useCallback, useEffect, use, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTheme } from 'next-themes'
+import { track } from '@/lib/track'
 import { WhopCheckoutEmbed, useCheckoutEmbedControls } from '@whop/checkout/react'
 import type { WhopCheckoutState } from '@whop/checkout/util'
 import {
@@ -35,17 +36,29 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
   const [completed, setCompleted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // Handle return from external payment providers (e.g. PayPal)
-  const returnStatus = searchParams.get('status')
-  useEffect(() => {
-    if (returnStatus === 'success') setCompleted(true)
-  }, [returnStatus])
-
   const title = session?.title || 'Payment'
   const amount = session?.amount ?? null
   const currency = session?.currency || 'usd'
   const planType = session?.planType || 'one_time'
   const sessionId = session?.sessionId
+  const purchaseTrackedRef = useRef(false)
+
+  // Handle return from external payment providers (e.g. PayPal)
+  const returnStatus = searchParams.get('status')
+  useEffect(() => {
+    if (returnStatus === 'success') {
+      setCompleted(true)
+      if (!purchaseTrackedRef.current) {
+        purchaseTrackedRef.current = true
+        track('purchase', {
+          transaction_id: id,
+          value: amount ? amount / 100 : 0,
+          currency: currency.toUpperCase(),
+          items: [{ item_id: id, item_name: title }],
+        })
+      }
+    }
+  }, [returnStatus, id, amount, currency, title])
 
   const formattedPrice = amount !== null ? formatPrice(amount, currency) : null
 
@@ -63,7 +76,16 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
 
   const handleComplete = useCallback(() => {
     setCompleted(true)
-  }, [])
+    if (!purchaseTrackedRef.current) {
+      purchaseTrackedRef.current = true
+      track('purchase', {
+        transaction_id: id,
+        value: amount ? amount / 100 : 0,
+        currency: currency.toUpperCase(),
+        items: [{ item_id: id, item_name: title }],
+      })
+    }
+  }, [id, amount, currency, title])
 
   const handleStateChange = useCallback((s: WhopCheckoutState) => {
     setEmbedState(s)

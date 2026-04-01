@@ -17,6 +17,7 @@ import {
   CaretUp,
 } from '@phosphor-icons/react'
 import { useCredits } from '@/hooks/use-credits'
+import { track } from '@/lib/track'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -114,6 +115,10 @@ export function PublishModal({
       TERMINAL_DEPLOYMENT_STATUSES.includes(curr)
     ) {
       if (curr === 'deployed') {
+        track('deploy_completed', {
+          project_id: projectId,
+          domain: `${latestDeployment.scriptName}.surgent.site`,
+        })
         toast.success(`Deployed to ${latestDeployment.scriptName}.surgent.site`, {})
       } else {
         toast.error('Deployment failed')

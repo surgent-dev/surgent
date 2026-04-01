@@ -124,6 +124,14 @@ export const auth = betterAuth({
           } catch (err) {
             log.error({ err, userId: user.id }, '[AUTH] referral hook failed')
           }
+          // Signal the client to fire the GA4 sign_up event
+          const method = context?.request?.url?.includes('/callback/') ? 'google' : 'email'
+          context?.setCookie?.('signup_complete', method, {
+            httpOnly: false,
+            maxAge: 120,
+            path: '/',
+            sameSite: 'lax',
+          })
         },
       },
     },

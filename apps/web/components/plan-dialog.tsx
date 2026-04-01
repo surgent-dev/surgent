@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useBillingCheckout, useSubscription } from '@/hooks/use-subscription'
+import { track } from '@/lib/track'
 import {
   Lightning,
   Cube,
@@ -85,6 +86,12 @@ export default function PlanDialog({ open, onOpenChange }: PlanDialogProps) {
 
   const startCheckout = async () => {
     try {
+      const selected = billingOptions.find((o) => o.interval === interval)
+      track('begin_checkout', {
+        currency: 'USD',
+        value: selected?.priceUsd ?? 0,
+        items: [{ item_id: interval, item_name: `Pro ${interval}ly` }],
+      })
       const url = await checkout.mutateAsync({ interval })
       window.location.href = url
     } catch (error) {
