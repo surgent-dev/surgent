@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import {
   CreditCard,
   Loader2,
@@ -11,18 +10,19 @@ import {
   RefreshCw,
   Zap,
 } from 'lucide-react'
+import { useState } from 'react'
 import { toast } from 'sonner'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { payHttp } from '@/lib/http'
 import { cn } from '@/lib/utils'
-import { formatPrice, formatInterval } from './utils'
-import type { Product, ProductWithPrices, ProductPrice } from '@/queries/products'
+import type { Product, ProductPrice, ProductWithPrices } from '@/queries/products'
+import { formatInterval, formatPrice } from './utils'
 
 function PriceRow({ price }: { price: ProductPrice }) {
   const interval = formatInterval(price.recurringInterval)
@@ -86,7 +86,7 @@ function ProductCard({ item, projectId, onEdit, onAddPrice }: ProductCardProps) 
       window.open(response.purchaseUrl, '_blank', 'noopener')
     } catch (error) {
       toast.error(
-        'Failed to create checkout: ' + (error instanceof Error ? error.message : 'Unknown error'),
+        `Failed to create checkout: ${error instanceof Error ? error.message : 'Unknown error'}`,
       )
     } finally {
       setCreating(false)

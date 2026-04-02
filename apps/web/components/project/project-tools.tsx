@@ -1,56 +1,53 @@
 'use client'
 
+import type { FileDiff } from '@opencode-ai/sdk'
 import {
-  WebPreview,
-  WebPreviewNavButtons,
-  WebPreviewUrl,
-  WebPreviewBody,
-} from '@/components/agent/web-preview'
-import { useEffect, type ElementType } from 'react'
-import {
-  X,
+  ChevronDown,
+  CircleDollarSign,
   Database,
-  Monitor,
   GitCompare,
-  ScrollText,
-  Terminal,
+  Monitor,
   Plus,
   Power,
   RefreshCw,
-  CircleDollarSign,
-  ChevronDown,
+  ScrollText,
   Settings,
+  Terminal,
+  X,
 } from 'lucide-react'
-import type { FileDiff } from '@opencode-ai/sdk'
-
+import { type ElementType, useEffect } from 'react'
+import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
+import { PreviewErrorOverlay } from '@/components/agent/preview-error-overlay'
 import {
-  useConvexDashboardQuery,
-  useActivateProject,
-  useSandboxHealthQuery,
-  useSandboxLogsQuery,
-  type ConvexDashboardCredentials,
-} from '@/queries/projects'
-
-import { useSurpayAccounts } from '@/queries/surpay'
-import { useSessionDiff } from '@/queries/chats'
-import { useSandbox } from '@/hooks/use-sandbox'
-
+  WebPreview,
+  WebPreviewBody,
+  WebPreviewNavButtons,
+  WebPreviewUrl,
+} from '@/components/agent/web-preview'
 import DiffView from '@/components/diff/diff-view'
 import { PaymentsDashboard } from '@/components/payments/payments-dashboard'
 import { SettingsTab } from '@/components/project/settings-tab'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { DeviceFrameSelector } from '@/components/publish/device-frame-selector'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
 import { FunLoadingState } from '@/components/ui/fun-loading'
-import { PreviewErrorOverlay } from '@/components/agent/preview-error-overlay'
-import { DeviceFrameSelector } from '@/components/publish/device-frame-selector'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { useSandbox } from '@/hooks/use-sandbox'
+import { cn } from '@/lib/utils'
+import { useSessionDiff } from '@/queries/chats'
+import {
+  type ConvexDashboardCredentials,
+  useActivateProject,
+  useConvexDashboardQuery,
+  useSandboxHealthQuery,
+  useSandboxLogsQuery,
+} from '@/queries/projects'
+import { useSurpayAccounts } from '@/queries/surpay'
 
 export interface ProjectTab {
   id: string

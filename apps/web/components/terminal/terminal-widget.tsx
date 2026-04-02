@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
 import type { Terminal as XTermType } from '@xterm/xterm'
+import { useEffect, useRef, useState } from 'react'
 import '@xterm/xterm/css/xterm.css'
 import { cn } from '@/lib/utils'
 

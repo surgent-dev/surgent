@@ -1,22 +1,22 @@
 'use client'
 
-import { useState } from 'react'
-import { toast } from 'sonner'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { useBillingCheckout, useSubscription } from '@/hooks/use-subscription'
-import { track } from '@/lib/track'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import {
-  Lightning,
+  CircleNotch,
   Cube,
   EyeSlash,
+  Key,
+  Lightning,
   PaperPlaneTilt,
   Storefront,
-  Key,
-  CircleNotch,
 } from '@phosphor-icons/react'
-import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { useBillingCheckout, useSubscription } from '@/hooks/use-subscription'
+import { track } from '@/lib/track'
+import { cn } from '@/lib/utils'
 
 const FEATURES: ReadonlyArray<{
   icon: PhosphorIcon

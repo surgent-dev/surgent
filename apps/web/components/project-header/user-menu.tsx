@@ -1,30 +1,30 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useTheme } from 'next-themes'
 import {
-  SignOut,
   CreditCard,
   Lightning,
-  Plus,
-  Sun,
   Moon,
+  Plus,
+  SignOut,
   SquaresFour,
+  Sun,
   UserPlus,
 } from '@phosphor-icons/react'
-import { useCredits } from '@/hooks/use-credits'
-import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
+import { useTheme } from 'next-themes'
+import { useEffect, useState } from 'react'
+import ReferralDialog from '@/components/referral-dialog'
+import TopupDialog from '@/components/topup-dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useCredits } from '@/hooks/use-credits'
 import { authClient } from '@/lib/auth-client'
-import TopupDialog from '@/components/topup-dialog'
-import ReferralDialog from '@/components/referral-dialog'
 
 interface User {
   id: string

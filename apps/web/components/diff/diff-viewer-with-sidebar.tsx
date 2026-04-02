@@ -1,11 +1,11 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
 import type { FileDiff } from '@opencode-ai/sdk'
-import DiffView from '@/components/diff/diff-view'
-import { cn } from '@/lib/utils'
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
 import { File as FileIcon } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import DiffView from '@/components/diff/diff-view'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { cn } from '@/lib/utils'
 
 type Props = {
   diffs: FileDiff[]

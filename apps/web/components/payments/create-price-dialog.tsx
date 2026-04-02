@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useForm, Controller } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
-import { z } from 'zod'
 import { Check, Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
+import { z } from 'zod'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -13,11 +14,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useCreatePrice, type ProductPrice } from '@/queries/products'
 import { cn } from '@/lib/utils'
+import { type ProductPrice, useCreatePrice } from '@/queries/products'
 
 const schema = z.object({
   name: z.string().optional(),
@@ -25,7 +25,7 @@ const schema = z.object({
     .string()
     .min(1, 'Price is required')
     .refine(
-      (val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0,
+      (val) => !Number.isNaN(parseFloat(val)) && parseFloat(val) >= 0,
       'Must be a valid positive number',
     ),
   priceCurrency: z.enum(['usd', 'eur', 'gbp']),
@@ -81,7 +81,6 @@ export function CreatePriceDialog({
     handleSubmit,
     reset,
     control,
-    watch,
     setValue,
     formState: { errors },
   } = useForm<FormData>({
@@ -94,23 +93,25 @@ export function CreatePriceDialog({
     },
   })
 
-  const selectedCurrency = watch('priceCurrency')
+  const selectedCurrency =
+    useWatch({
+      control,
+      name: 'priceCurrency',
+    }) ?? 'usd'
 
-  useEffect(() => {
-    if (!open) {
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
       reset()
       setStep('form')
       setIsRecurring(pricingType !== 'one-time')
     }
-  }, [open, reset, pricingType])
+    onOpenChange(nextOpen)
+  }
 
-  useEffect(() => {
-    if (isRecurring) {
-      setValue('recurringInterval', 'month')
-    } else {
-      setValue('recurringInterval', undefined)
-    }
-  }, [isRecurring, setValue])
+  const handleRecurringChange = (nextRecurring: boolean) => {
+    setIsRecurring(nextRecurring)
+    setValue('recurringInterval', nextRecurring ? 'month' : undefined)
+  }
 
   const onSubmit = (data: FormData) => {
     const cents = Math.round(parseFloat(data.price) * 100)
@@ -140,7 +141,7 @@ export function CreatePriceDialog({
   const currencySymbol = currencies.find((c) => c.value === selectedCurrency)?.symbol || '$'
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md overflow-hidden">
         {step === 'success' ? (
           <div className="flex flex-col items-center justify-center py-8 animate-in fade-in zoom-in-95 duration-300">
@@ -165,7 +166,7 @@ export function CreatePriceDialog({
                 <div className="inline-flex items-center rounded-xl bg-black/[0.05] dark:bg-white/[0.06] p-1">
                   <button
                     type="button"
-                    onClick={() => setIsRecurring(false)}
+                    onClick={() => handleRecurringChange(false)}
                     className={cn(
                       'px-4 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                       !isRecurring
@@ -177,7 +178,7 @@ export function CreatePriceDialog({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsRecurring(true)}
+                    onClick={() => handleRecurringChange(true)}
                     className={cn(
                       'px-4 py-1 rounded-[10px] text-sm font-medium transition-all duration-200 ease-out',
                       isRecurring

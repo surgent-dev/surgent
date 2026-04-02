@@ -1,21 +1,26 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { useTheme } from 'next-themes'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import {
-  House,
-  PenNib,
   ChartLineUp,
-  SignOut,
-  Moon,
-  Sun,
   CreditCard,
+  House,
   Lightning,
+  Moon,
+  PenNib,
   Plus,
+  SignOut,
   SquaresFour,
+  Sun,
 } from '@phosphor-icons/react'
+import Image from 'next/image'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { useTheme } from 'next-themes'
+import { useEffect, useState } from 'react'
+import PlanDialog from '@/components/plan-dialog'
+import TopupDialog from '@/components/topup-dialog'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,13 +29,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { authClient } from '@/lib/auth-client'
 import { useCredits } from '@/hooks/use-credits'
-import PlanDialog from '@/components/plan-dialog'
-import TopupDialog from '@/components/topup-dialog'
-import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
+import { authClient } from '@/lib/auth-client'
+import { passthroughImageLoader } from '@/lib/image-loader'
+import { cn } from '@/lib/utils'
 
 const NAV: { icon: PhosphorIcon; label: string; href: string }[] = [
   { icon: House, label: 'Dashboard', href: '' },
@@ -118,7 +120,16 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger className="size-9 rounded-xl bg-muted/60 flex items-center justify-center text-xs font-medium overflow-hidden hover:bg-muted hover:rounded-lg transition-all duration-200 focus-visible:outline-none">
             {user?.image ? (
-              <img src={user.image} alt="" className="size-full object-cover" />
+              <span className="relative block size-full">
+                <Image
+                  loader={passthroughImageLoader}
+                  unoptimized
+                  src={user.image}
+                  alt=""
+                  fill
+                  className="size-full object-cover"
+                />
+              </span>
             ) : (
               initial
             )}

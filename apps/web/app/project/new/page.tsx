@@ -1,10 +1,10 @@
 'use client'
 
-import { Suspense, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCreateProject } from '@/queries/projects'
+import { Suspense, useEffect, useRef } from 'react'
 import { ProjectInitOverlay } from '@/components/project-init-overlay'
 import { track } from '@/lib/track'
+import { useCreateProject } from '@/queries/projects'
 
 const projectConfigs: Record<string, { name: string; githubUrl: string; initConvex: boolean }> = {
   simple: {

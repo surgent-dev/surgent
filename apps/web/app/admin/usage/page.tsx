@@ -1,9 +1,8 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
+import { serverBackendUrl } from '@/lib/server-backend'
 import { UsageDashboard, type UsageData } from './usage-dashboard'
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
 
 interface SearchParams {
   range?: string
@@ -19,7 +18,7 @@ async function fetchUsageData(
     .join('; ')
 
   const range = params.range || 'month'
-  const url = `${BACKEND_URL}/api/admin/usage?range=${range}`
+  const url = `${serverBackendUrl}/api/admin/usage?range=${range}`
 
   const res = await fetch(url, {
     headers: { Cookie: cookieHeader },

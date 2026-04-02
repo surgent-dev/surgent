@@ -16,6 +16,8 @@ export function SettingsView({
   onDisconnect,
   isDisconnecting,
 }: SettingsViewProps) {
+  const processorLabel = processor ? processor.slice(0, 1).toUpperCase() + processor.slice(1) : null
+
   return (
     <ScrollArea className="flex-1">
       <div className="mx-auto w-full max-w-[1080px] p-5">
@@ -33,7 +35,7 @@ export function SettingsView({
                   <h3 className="text-sm font-semibold">Payment Provider</h3>
                   <p className="text-sm text-muted-foreground mt-1">
                     {isConnected
-                      ? 'Connected and ready to process payments'
+                      ? `Connected${processorLabel ? ` to ${processorLabel}` : ''} and ready to process payments`
                       : 'Connect a payment provider to start accepting payments'}
                   </p>
                 </div>

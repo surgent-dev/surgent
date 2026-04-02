@@ -1,14 +1,21 @@
 'use client'
 
-import { cn } from '@/lib/utils'
-import { Copy, Check } from 'lucide-react'
-import { useCallback, useState } from 'react'
 import type { Element } from 'hast'
+import { Check, Copy } from 'lucide-react'
+import { useState } from 'react'
+import { cn } from '@/lib/utils'
 
 type Props = React.HTMLAttributes<HTMLElement> & { node?: Element }
 
 export function MarkdownCodeAttachment({ className, children, node, ...props }: Props) {
   const [copied, setCopied] = useState(false)
+  const code = typeof children === 'string' ? children : String(children ?? '')
+  const lang = className?.replace('language-', '') ?? ''
+  const copy = () => {
+    navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
 
   // Inline code: same line start/end
   const pos = node?.position
@@ -22,16 +29,6 @@ export function MarkdownCodeAttachment({ className, children, node, ...props }: 
       </code>
     )
   }
-
-  // Block code
-  const code = typeof children === 'string' ? children : String(children ?? '')
-  const lang = className?.replace('language-', '') ?? ''
-
-  const copy = useCallback(() => {
-    navigator.clipboard.writeText(code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }, [code])
 
   return (
     <div className="not-prose my-2 rounded-lg border bg-card overflow-hidden">

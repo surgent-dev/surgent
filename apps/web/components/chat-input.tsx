@@ -1,23 +1,25 @@
-import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
-import { X, Loader2, FileText } from 'lucide-react'
-import { Sliders, Paperclip, Plug, ArrowUp, Lightning } from '@phosphor-icons/react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import {
-  fileToDataUrl,
-  uploadFile,
-  attachmentsToParts,
-  type UploadingAttachment,
-  type FilePart,
-} from '@/lib/upload'
-import { useMcpStatusQuery } from '@/queries/mcp'
-import { MODELS, type ProviderModel } from '@/lib/models'
-import { useCredits } from '@/hooks/use-credits'
-import PlanDialog from '@/components/plan-dialog'
-import ModelSelectorDropdown from './model-selector-dropdown'
 import type { Agent } from '@opencode-ai/sdk'
+import { ArrowUp, Lightning, Paperclip, Plug, Sliders } from '@phosphor-icons/react'
+import { FileText, Loader2, X } from 'lucide-react'
+import Image from 'next/image'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import PlanDialog from '@/components/plan-dialog'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useCredits } from '@/hooks/use-credits'
+import { passthroughImageLoader } from '@/lib/image-loader'
+import { MODELS, type ProviderModel } from '@/lib/models'
+import {
+  attachmentsToParts,
+  type FilePart,
+  fileToDataUrl,
+  type UploadingAttachment,
+  uploadFile,
+} from '@/lib/upload'
+import { cn } from '@/lib/utils'
+import { useMcpStatusQuery } from '@/queries/mcp'
+import ModelSelectorDropdown from './model-selector-dropdown'
 
 export type { FilePart }
 
@@ -135,8 +137,7 @@ export default function ChatInput({
   const [isDragging, setIsDragging] = useState(false)
   const [selectedSubagent, setSelectedSubagent] = useState<string | undefined>()
   const [maxMode, setMaxMode] = useState(false)
-  const [showSubagentDropdown, setShowSubagentDropdown] = useState(false)
-  const [subagentFilter, setSubagentFilter] = useState('')
+  const [dismissedMention, setDismissedMention] = useState<string | null>(null)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -153,32 +154,26 @@ export default function ChatInput({
   }, [models, selectedModel])
 
   const handleModelSelect = (modelId: string, providerId: string) => {
+    const nextModel = models.find((m) => m.id === modelId && m.providerId === providerId)
+    if (!nextModel?.maxVariant) setMaxMode(false)
     onModelChange?.(modelId, providerId)
   }
-
-  useEffect(() => {
-    if (currentModel?.maxVariant) return
-    setMaxMode(false)
-  }, [currentModel])
+  const supportsMaxMode = Boolean(currentModel?.maxVariant)
+  const effectiveMaxMode = supportsMaxMode && maxMode
 
   // Filter subagents based on @ mention
+  const mentionMatch = useMemo(() => value.match(/(?:^|\s)@(\w*)$/), [value])
+  const mentionFilter = mentionMatch?.[1] ?? ''
+  const mentionToken = mentionMatch?.[0]?.trim() ?? null
+  const showSubagentDropdown =
+    Boolean(mentionMatch) && subagents.length > 0 && dismissedMention !== mentionToken
   const filteredSubagents = useMemo(() => {
-    return subagents.filter((a) => a.name.toLowerCase().includes(subagentFilter.toLowerCase()))
-  }, [subagents, subagentFilter])
-
-  // Detect @ mention in input
-  const atMatch = useMemo(() => value.match(/(?:^|\s)@(\w*)$/), [value])
-
-  useEffect(() => {
-    if (atMatch && subagents.length > 0) {
-      setSubagentFilter(atMatch[1] || '')
-      setShowSubagentDropdown(true)
-      setHighlightedIndex(0)
-    } else if (showSubagentDropdown) {
-      setShowSubagentDropdown(false)
-      setSubagentFilter('')
-    }
-  }, [atMatch, subagents.length, showSubagentDropdown])
+    return subagents.filter((a) => a.name.toLowerCase().includes(mentionFilter.toLowerCase()))
+  }, [subagents, mentionFilter])
+  const activeHighlightedIndex = Math.min(
+    highlightedIndex,
+    Math.max(filteredSubagents.length - 1, 0),
+  )
 
   // Auto-resize textarea
   const resizeTextarea = useCallback(() => {
@@ -198,12 +193,19 @@ export default function ChatInput({
       const newValue = value.replace(/(?:^|\s)@\w*$/, '').trim()
       setValue(newValue)
       setSelectedSubagent(agent.name)
-      setShowSubagentDropdown(false)
-      setSubagentFilter('')
+      setDismissedMention(null)
+      setHighlightedIndex(0)
       textareaRef.current?.focus()
     },
     [value, setValue],
   )
+
+  const handleInputChange = (nextValue: string) => {
+    const nextMentionToken = nextValue.match(/(?:^|\s)@(\w*)$/)?.[0]?.trim() ?? null
+    if (nextMentionToken !== mentionToken) setHighlightedIndex(0)
+    if (!nextMentionToken || nextMentionToken !== dismissedMention) setDismissedMention(null)
+    setValue(nextValue)
+  }
 
   const addFiles = async (files: File[]) => {
     const valid = files
@@ -293,7 +295,7 @@ export default function ChatInput({
       fileParts.length ? fileParts : undefined,
       model.id,
       model.providerId,
-      maxMode ? model.maxVariant : undefined,
+      effectiveMaxMode ? model.maxVariant : undefined,
     )
   }
 
@@ -318,15 +320,15 @@ export default function ChatInput({
           return
         case 'Tab':
         case 'Enter':
-          if (filteredSubagents[highlightedIndex]) {
+          if (filteredSubagents[activeHighlightedIndex]) {
             e.preventDefault()
-            handleSubagentSelect(filteredSubagents[highlightedIndex])
+            handleSubagentSelect(filteredSubagents[activeHighlightedIndex])
             return
           }
           break
         case 'Escape':
           e.preventDefault()
-          setShowSubagentDropdown(false)
+          setDismissedMention(mentionToken)
           return
       }
     }
@@ -381,39 +383,45 @@ export default function ChatInput({
         {/* File previews */}
         {attachments.length > 0 && (
           <div className="flex gap-2 p-3 pb-1 flex-wrap">
-            {attachments.map((a) => (
-              <div key={a.id} className="relative group">
-                <div className="size-12 sm:size-14 rounded-xl overflow-hidden bg-muted border border-border">
-                  {a.url || a.preview ? (
-                    <img
-                      src={a.url || a.preview}
-                      alt={a.file.name}
-                      className="size-full object-cover"
-                    />
-                  ) : (
-                    <div className="size-full flex items-center justify-center">
-                      <FileText className="size-5 text-muted-foreground" />
-                    </div>
-                  )}
-                  {a.status === 'uploading' && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <Loader2 className="size-5 text-white animate-spin" />
-                    </div>
-                  )}
-                  {a.status === 'error' && (
-                    <div className="absolute inset-0 bg-destructive/60 flex items-center justify-center">
-                      <X className="size-5 text-white" />
-                    </div>
-                  )}
+            {attachments.map((a) => {
+              const previewSrc = a.url ?? a.preview
+              return (
+                <div key={a.id} className="relative group">
+                  <div className="relative size-12 sm:size-14 rounded-xl overflow-hidden bg-muted border border-border">
+                    {previewSrc ? (
+                      <Image
+                        loader={passthroughImageLoader}
+                        unoptimized
+                        src={previewSrc}
+                        alt={a.file.name}
+                        fill
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      <div className="size-full flex items-center justify-center">
+                        <FileText className="size-5 text-muted-foreground" />
+                      </div>
+                    )}
+                    {a.status === 'uploading' && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <Loader2 className="size-5 text-white animate-spin" />
+                      </div>
+                    )}
+                    {a.status === 'error' && (
+                      <div className="absolute inset-0 bg-destructive/60 flex items-center justify-center">
+                        <X className="size-5 text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => removeAttachment(a.id)}
+                    className="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-800 flex items-center justify-center shadow-md border border-background"
+                  >
+                    <X className="size-3" strokeWidth={2.5} />
+                  </button>
                 </div>
-                <button
-                  onClick={() => removeAttachment(a.id)}
-                  className="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-800 flex items-center justify-center shadow-md border border-background"
-                >
-                  <X className="size-3" strokeWidth={2.5} />
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
@@ -427,7 +435,7 @@ export default function ChatInput({
                 onClick={() => handleSubagentSelect(agent)}
                 className={cn(
                   'w-full px-2 py-1 text-left text-xs',
-                  index === highlightedIndex ? 'bg-accent' : '',
+                  index === activeHighlightedIndex ? 'bg-accent' : '',
                 )}
               >
                 <span className="text-foreground font-medium">@{agent.name}</span>
@@ -459,7 +467,7 @@ export default function ChatInput({
             ref={textareaRef}
             className="w-full resize-none outline-none text-sm min-h-[20px] max-h-48 bg-transparent placeholder:text-muted-foreground/50"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => handleInputChange(e.target.value)}
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
@@ -525,7 +533,7 @@ export default function ChatInput({
                     onClick={() => setMaxMode((value) => !value)}
                     className={cn(
                       'h-8 px-3 rounded-lg text-xs transition-all border cursor-pointer',
-                      maxMode
+                      effectiveMaxMode
                         ? 'border-foreground/20 bg-foreground/8 text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
                         : 'border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/60',
                     )}

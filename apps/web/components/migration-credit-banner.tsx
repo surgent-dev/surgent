@@ -1,12 +1,12 @@
 'use client'
 
+import { CopySimple, Ticket } from '@phosphor-icons/react'
+import { ArrowRight, Gift, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Gift, X, ArrowRight } from 'lucide-react'
-import { Ticket, CopySimple } from '@phosphor-icons/react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useSubscription } from '@/hooks/use-subscription'
-import { toast } from 'sonner'
 
 const COUPON_CODE = 'POIUYTR50'
 const DISMISS_KEY = 'migration-banner-dismissed'
@@ -35,7 +35,8 @@ export default function MigrationCreditBanner({
     if (typeof window !== 'undefined' && localStorage.getItem(DIALOG_SHOWN_KEY) === '1') return
     dialogTriggered.current = true
     localStorage.setItem(DIALOG_SHOWN_KEY, '1')
-    setDialogOpen(true)
+    const id = window.setTimeout(() => setDialogOpen(true), 0)
+    return () => window.clearTimeout(id)
   }, [showDialog, visible])
 
   const handleDismiss = useCallback(() => {

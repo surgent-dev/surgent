@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useReducer, useRef, useCallback } from 'react'
-import type { Session, Message, Part, Permission, AssistantMessage } from '@opencode-ai/sdk'
+import type { AssistantMessage, Message, Part, Permission, Session } from '@opencode-ai/sdk'
+import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { useProjectEvents } from '@/context/project-events'
 import type { QuestionRequest } from './question'
 
@@ -328,7 +328,11 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
       const permission = props as Permission & SessionScope
       const sessionID = permission.sessionID || permission.sessionId
       if (sessionID !== currentSessionId) return state
-      return { ...state, permissions: upsertPermission(state.permissions, permission), lastAt: now }
+      return {
+        ...state,
+        permissions: upsertPermission(state.permissions, permission),
+        lastAt: now,
+      }
     }
 
     case 'permission.replied': {
@@ -404,11 +408,9 @@ export default function useAgentStream({
   sessionId?: string
 }) {
   const { subscribe: eventSubscribe, connected: eventConnected } = useProjectEvents()
-  const sessionIdRef = useRef(sessionId)
-  sessionIdRef.current = sessionId
 
   const [state, dispatch] = useReducer(
-    (state: State, event: StreamEvent) => reducer(state, event, sessionIdRef.current),
+    (state: State, event: StreamEvent) => reducer(state, event, sessionId),
     initialState,
   )
 
@@ -480,6 +482,6 @@ export default function useAgentStream({
   }
 }
 
+export type { QuestionAnswer, QuestionInfo, QuestionOption, QuestionRequest } from './question'
 // Export types for use in components
-export type { SessionStatus, SessionStatusRetry, AgentError }
-export type { QuestionRequest, QuestionInfo, QuestionOption, QuestionAnswer } from './question'
+export type { AgentError, SessionStatus, SessionStatusRetry }

@@ -1,20 +1,20 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import Image from 'next/image'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Loader2,
-  ExternalLink,
-  Key,
+  AlertCircle,
   ChevronLeft,
   ChevronRight,
-  AlertCircle,
-  X,
+  ExternalLink,
   Info,
+  Key,
+  Loader2,
+  X,
 } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import Image from 'next/image'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { http } from '@/lib/http'
 import {
@@ -228,7 +228,10 @@ export default function ProviderDialog({ open, onOpenChange }: Props) {
             ) : (
               ALLOWED_PROVIDERS.map((providerId) => {
                 const isConnected = connected.includes(providerId)
-                const { label, icon } = PROVIDER_META[providerId] || { label: providerId, icon: '' }
+                const { label, icon } = PROVIDER_META[providerId] || {
+                  label: providerId,
+                  icon: '',
+                }
                 return (
                   <button
                     key={providerId}

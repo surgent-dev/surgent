@@ -1,8 +1,8 @@
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
+import { serverBackendUrl } from '@/lib/server-backend'
 
 export async function GET(req: Request) {
   const url = new URL(req.url)
-  const backendUrl = new URL('/api/admin/ops/jobs', BACKEND_URL)
+  const backendUrl = new URL('/api/admin/ops/jobs', `${serverBackendUrl}/`)
   backendUrl.search = url.searchParams.toString()
 
   const headers = new Headers()

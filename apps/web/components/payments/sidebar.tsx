@@ -1,17 +1,17 @@
 'use client'
 
-import Image from 'next/image'
 import {
   ArrowUpRight,
   FileText,
   LayoutDashboard,
   Package,
-  Repeat,
-  Users,
   Receipt,
+  Repeat,
   Settings,
+  Users,
   Wallet,
 } from 'lucide-react'
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { usePayEnv } from '@/stores/pay-env'
 

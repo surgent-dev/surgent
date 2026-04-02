@@ -1,9 +1,8 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { serverBackendUrl } from '@/lib/server-backend'
 import { OpsDashboard } from './ops-dashboard'
 import type { AdminOpsData } from './types'
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
 
 interface AdminOpsFetchError {
   error: string
@@ -24,7 +23,7 @@ async function fetchAdminOps(
     .join('; ')
 
   const qp = new URLSearchParams({ range: params.range || 'today' })
-  const res = await fetch(`${BACKEND_URL}/api/admin/ops?${qp.toString()}`, {
+  const res = await fetch(`${serverBackendUrl}/api/admin/ops?${qp.toString()}`, {
     headers: { Cookie: cookieHeader },
     cache: 'no-store',
   })

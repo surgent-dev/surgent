@@ -1,25 +1,25 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import Image from 'next/image'
-import { Loader2, ExternalLink, Check, ClipboardCheck } from 'lucide-react'
-import { toast } from 'sonner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  useProvidersQuery,
-  useDeleteProvider,
-  useChatgptAuthorize,
-  type ChatgptAuthorizeResponse,
-} from '@/queries/providers'
+import { Check, ClipboardCheck, ExternalLink, Loader2 } from 'lucide-react'
+import Image from 'next/image'
+import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { http } from '@/lib/http'
 import {
   getErrorMessage,
   invalidateProviderQueries,
   openProviderOAuthPopup,
 } from '@/lib/provider-oauth'
-import { http } from '@/lib/http'
+import {
+  type ChatgptAuthorizeResponse,
+  useChatgptAuthorize,
+  useDeleteProvider,
+  useProvidersQuery,
+} from '@/queries/providers'
 
 const DEVICE_AUTH_TIMEOUT_MS = 330_000
 

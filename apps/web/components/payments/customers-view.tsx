@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
 import { ChevronRight, Loader2, Search, Users, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Customer } from '@/queries/customers'
 import { CustomerDetailSheet } from './customer-detail-sheet'

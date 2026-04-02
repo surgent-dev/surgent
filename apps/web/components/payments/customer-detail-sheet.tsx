@@ -2,11 +2,11 @@
 
 import { format } from 'date-fns'
 import { ArrowDownRight, ArrowUpRight, Loader2, Receipt, Repeat } from 'lucide-react'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
+import { type Customer, useCustomerDetail } from '@/queries/customers'
 import { formatPrice } from './utils'
-import { useCustomerDetail, type Customer } from '@/queries/customers'
 
 const getStatusColor = (status: string) => {
   switch (status) {

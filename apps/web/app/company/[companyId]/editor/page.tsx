@@ -1,15 +1,15 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
+import { useEffect, useRef } from 'react'
+import Conversation from '@/components/conversation'
 import EditorHeader from '@/components/editor/editor-header'
 import EditorTabs from '@/components/editor/editor-tabs'
-import Conversation from '@/components/conversation'
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { ProjectEventProvider } from '@/context/project-events'
 import { useSandbox } from '@/hooks/use-sandbox'
 import { useSandboxReady } from '@/hooks/use-sandbox-ready'
 import { useActivateProject } from '@/queries/projects'
-import { ProjectEventProvider } from '@/context/project-events'
 
 export default function EditorPage() {
   const { companyId: projectId } = useParams<{ companyId: string }>()

@@ -1,16 +1,16 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
-import { Tag, UploadSimple, X, CircleNotch, Image as ImageIcon } from '@phosphor-icons/react'
-import { toast } from 'sonner'
+import { CircleNotch, Image as ImageIcon, Tag, UploadSimple, X } from '@phosphor-icons/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { payHttpLive } from '@/lib/http'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { authClient } from '@/lib/auth-client'
+import { payHttpLive } from '@/lib/http'
+import { fileToDataUrl, uploadFile } from '@/lib/upload'
+import { cn } from '@/lib/utils'
 import { useUpsertProjectListing } from '@/queries/marketplace'
-import { uploadFile, fileToDataUrl } from '@/lib/upload'
 
 interface SellDialogProps {
   open: boolean
@@ -67,7 +67,7 @@ export default function SellDialog({
   sellerImage,
   screenshotUrl,
 }: SellDialogProps) {
-  const [name, setName] = useState('')
+  const [name, setName] = useState(projectName ?? '')
   const [description, setDescription] = useState('')
   const [listingType, setListingType] = useState<'free' | 'paid'>('free')
   const [price, setPrice] = useState('')
@@ -132,7 +132,7 @@ export default function SellDialog({
   }, [open, screenshotUrl, imagePreview, imageUrl, imageCleared])
 
   const resetForm = () => {
-    setName('')
+    setName(projectName ?? '')
     setDescription('')
     setListingType('free')
     setPrice('')
@@ -370,7 +370,7 @@ export default function SellDialog({
               {/* Pricing */}
               <div className="space-y-3 pt-2">
                 <label className="text-[13px] font-semibold text-foreground/80 ml-1">Pricing</label>
-                <div className={toggleTrack + ' w-full'}>
+                <div className={`${toggleTrack} w-full`}>
                   <button
                     type="button"
                     onClick={() => {

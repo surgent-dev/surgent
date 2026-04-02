@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
 import { GithubLogo } from '@phosphor-icons/react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { useState } from 'react'
 import GitHubDialog from '@/components/github-dialog'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface GitHubButtonProps {
   projectId?: string

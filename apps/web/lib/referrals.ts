@@ -13,4 +13,4 @@ function getReferralCookieDomain(hostname: string) {
   return undefined
 }
 
-export { REFERRAL_COOKIE_NAME, REFERRAL_COOKIE_MAX_AGE, getReferralCookieDomain, isUuid }
+export { getReferralCookieDomain, isUuid, REFERRAL_COOKIE_MAX_AGE, REFERRAL_COOKIE_NAME }

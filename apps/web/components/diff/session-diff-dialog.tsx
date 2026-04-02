@@ -1,9 +1,8 @@
 'use client'
 
-import React from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { FileDiff } from '@opencode-ai/sdk'
 import DiffViewerWithSidebar from '@/components/diff/diff-viewer-with-sidebar'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 type Props = {
   open: boolean

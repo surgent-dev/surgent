@@ -1,47 +1,47 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import {
-  Sparkle,
-  MagicWand,
-  Rocket,
-  Lightning,
-  Atom,
   Alien,
-  Ghost,
-  Flame,
-  Planet,
-  Compass,
+  Atom,
+  Balloon,
+  Bird,
   Brain,
-  Lightbulb,
-  Cube,
-  Rainbow,
-  Coffee,
-  Heart,
-  Star,
-  Moon,
-  Sun,
-  Cloud,
-  Fire,
   Butterfly,
   Cat,
-  Dog,
-  Bird,
-  Fish,
-  Tree,
-  Flower,
-  Diamond,
-  Crown,
-  Gift,
-  Balloon,
+  Cloud,
+  Coffee,
+  Compass,
   Confetti,
-  MusicNote,
-  Headphones,
-  GameController,
-  Pizza,
-  IceCream,
   Cookie,
+  Crown,
+  Cube,
+  Diamond,
+  Dog,
+  Fire,
+  Fish,
+  Flame,
+  Flower,
+  GameController,
+  Ghost,
+  Gift,
+  Headphones,
+  Heart,
+  IceCream,
+  Lightbulb,
+  Lightning,
+  MagicWand,
+  Moon,
+  MusicNote,
+  Pizza,
+  Planet,
+  Rainbow,
+  Rocket,
+  Sparkle,
+  Star,
+  Sun,
+  Tree,
 } from '@phosphor-icons/react'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ShimmeringText } from './shimmer-text'
 
@@ -292,7 +292,6 @@ export function useFunMessage(interval = 2000) {
   const [message, setMessage] = useState(getRandomMessage)
 
   useEffect(() => {
-    setMessage(getRandomMessage())
     const id = setInterval(() => setMessage(getRandomMessage()), interval)
     return () => clearInterval(id)
   }, [interval])
@@ -305,7 +304,6 @@ export function useFunVibe(interval = 2500) {
   const [vibe, setVibe] = useState(getRandomVibe)
 
   useEffect(() => {
-    setVibe(getRandomVibe())
     const id = setInterval(() => setVibe(getRandomVibe()), interval)
     return () => clearInterval(id)
   }, [interval])

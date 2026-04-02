@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import type { QuestionAnswer, QuestionRequest } from '@/lib/question'
 import { cn } from '@/lib/utils'
-import type { QuestionRequest, QuestionAnswer } from '@/lib/question'
 
 type Props = {
   request: QuestionRequest

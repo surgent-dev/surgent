@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -10,11 +11,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { authClient } from '@/lib/auth-client'
 import { useWhopConnect } from '@/queries/surpay'
 import { parseConnectError } from './utils'
-import { authClient } from '@/lib/auth-client'
 
 interface WhopConnectDialogProps {
   open: boolean

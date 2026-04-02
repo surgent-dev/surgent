@@ -1,10 +1,10 @@
 'use client'
 
-import { toast } from 'react-hot-toast'
-import { Copy, Users, CurrencyDollar, CheckCircle } from '@phosphor-icons/react'
+import { CheckCircle, Copy, CurrencyDollar, Users } from '@phosphor-icons/react'
 import { X } from 'lucide-react'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { toast } from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useReferralStats } from '@/hooks/use-referrals'
 
 interface ReferralDialogProps {

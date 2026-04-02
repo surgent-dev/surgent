@@ -1,25 +1,25 @@
 'use client'
 
-import { useState } from 'react'
-import { toast } from 'sonner'
 import {
-  GitCommit,
-  GitBranch,
-  ArrowUp,
+  AlertCircle,
   ArrowDown,
-  Loader2,
-  RefreshCw,
+  ArrowUp,
   Check,
   Circle,
-  AlertCircle,
+  GitBranch,
+  GitCommit,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useGitLog, useGitPush, useGitPull } from '@/queries/git'
-import { useGitHubStatus } from '@/queries/github'
 import { timeAgoCompact } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { useGitLog, useGitPull, useGitPush } from '@/queries/git'
+import { useGitHubStatus } from '@/queries/github'
 
 interface Props {
   projectId?: string

@@ -98,4 +98,4 @@ const MessageAction = ({
   )
 }
 
-export { Message, MessageAvatar, MessageContent, MessageActions, MessageAction }
+export { Message, MessageAction, MessageActions, MessageAvatar, MessageContent }

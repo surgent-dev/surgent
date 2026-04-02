@@ -1,10 +1,10 @@
 'use client'
 
-import { useSandbox, type IframeError } from '@/hooks/use-sandbox'
-import { AlertTriangle, Copy, Check, X, Bug, AlertCircle, RefreshCw } from 'lucide-react'
-import { useState, useCallback, useEffect, useRef } from 'react'
-import { Button } from '@/components/ui/button'
+import { AlertCircle, AlertTriangle, Bug, Check, Copy, RefreshCw, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useOptionalWebPreview } from '@/components/agent/web-preview'
+import { Button } from '@/components/ui/button'
+import { type IframeError, useSandbox } from '@/hooks/use-sandbox'
 
 const SOURCE_LABELS: Record<string, string> = {
   global: 'Runtime Error',

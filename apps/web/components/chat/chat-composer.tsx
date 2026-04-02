@@ -1,15 +1,15 @@
 'use client'
 
-import { useState } from 'react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
 import { ArrowUp } from 'lucide-react'
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
 import {
   PromptInput,
   PromptInputAction,
   PromptInputActions,
   PromptInputTextarea,
 } from '@/components/ui/prompt-input'
+import { cn } from '@/lib/utils'
 
 type ChatComposerProps = {
   onSend: (text: string, files?: FileList, projectType?: string) => void

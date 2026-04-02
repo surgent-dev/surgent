@@ -1,8 +1,23 @@
 'use client'
 
+import {
+  Activity,
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  DollarSign,
+  Hash,
+  TrendingUp,
+  Users,
+} from 'lucide-react'
 import Link from 'next/link'
+import { useState } from 'react'
+import { Area, AreaChart, Tooltip, XAxis, YAxis } from 'recharts'
+import { AdminRangeSelect } from '@/components/admin/admin-range-select'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart'
 import {
   Table,
   TableBody,
@@ -11,22 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { AdminRangeSelect } from '@/components/admin/admin-range-select'
-import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts'
-import {
-  DollarSign,
-  TrendingUp,
-  Users,
-  Activity,
-  Hash,
-  ArrowLeft,
-  ChevronDown,
-  ChevronRight,
-} from 'lucide-react'
-import { useState } from 'react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const MONEY_SCALE = 100_000_000
 

@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Check, ExternalLink, Github, Loader2, Plus, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Github, ExternalLink, Loader2, Check, Plus, X } from 'lucide-react'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -15,15 +15,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import {
-  useGitHubStatus,
-  useGitHubInstallUrl,
-  useGitHubDisconnect,
-  useGitHubCreateRepo,
-} from '@/queries/github'
 import { timeAgoCompact } from '@/lib/format'
-import { useGitLog, useGitPush, useGitPull, useGitStatus, useGitCommit } from '@/queries/git'
 import { cn } from '@/lib/utils'
+import { useGitCommit, useGitLog, useGitPull, useGitPush, useGitStatus } from '@/queries/git'
+import {
+  useGitHubCreateRepo,
+  useGitHubDisconnect,
+  useGitHubInstallUrl,
+  useGitHubStatus,
+} from '@/queries/github'
 
 interface Props {
   open: boolean
@@ -65,7 +65,7 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
   const commit = useGitCommit()
 
   // Derived state
-  const installations = status?.installations ?? []
+  const installations = useMemo(() => status?.installations ?? [], [status?.installations])
   const connected = status?.connected
   const installed = status?.installed
   const hasToken = status?.hasToken ?? false
@@ -79,23 +79,18 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
   const changeCount = staged + unstaged + untracked
   const hasChanges = changeCount > 0
 
-  // Reset on close
-  useEffect(() => {
-    if (!open) {
+  const selectedInstallationId = installationId ?? installations[0]?.id ?? null
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
       setRepoName('')
       setDescription('')
       setIsPrivate(false)
       setInstallationId(null)
       setCommitMessage('')
     }
-  }, [open])
-
-  // Default installation
-  useEffect(() => {
-    if (open && installations[0]?.id && !installationId) {
-      setInstallationId(installations[0].id)
-    }
-  }, [open, installations, installationId])
+    onOpenChange(nextOpen)
+  }
 
   // Handlers
   const goToInstall = async () => {
@@ -111,7 +106,7 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
         name: repoName,
         description,
         private: isPrivate,
-        installationId: installationId ?? installations[0]?.id,
+        installationId: selectedInstallationId ?? undefined,
       })
       if (res.success) {
         toast.success('Repository created!')
@@ -184,7 +179,7 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false} className="sm:max-w-md p-0 gap-0 overflow-hidden">
         {/* Header */}
         <div className="h-11 px-4 flex items-center justify-between border-b bg-muted/30">
@@ -222,7 +217,7 @@ export default function GitHubDialog({ open, onOpenChange, projectId }: Props) {
               <div className="space-y-1.5">
                 <Label className="text-xs">Account</Label>
                 <Select
-                  value={installationId ? String(installationId) : ''}
+                  value={selectedInstallationId ? String(selectedInstallationId) : ''}
                   onValueChange={(v) => setInstallationId(Number(v))}
                 >
                   <SelectTrigger>

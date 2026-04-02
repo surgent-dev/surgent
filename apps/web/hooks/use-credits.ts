@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useBillingPortal, useSubscription } from './use-subscription'
 
@@ -28,6 +28,14 @@ export function useCredits() {
   const remaining = total > 0 ? Math.max((balance / total) * 100, 0) : 0
 
   const nextResetAt = snapshot?.nextResetAt ? Date.parse(snapshot.nextResetAt) : null
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!nextResetAt) return
+    const id = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(id)
+  }, [nextResetAt])
+
   const resetAtLabel = nextResetAt
     ? new Intl.DateTimeFormat('en-US', {
         month: 'short',
@@ -39,7 +47,7 @@ export function useCredits() {
     : null
   const renewLabel = snapshot?.interval ? (INTERVAL_LABELS[snapshot.interval] ?? null) : null
   const hoursUntilRenew = nextResetAt
-    ? Math.max(0, Math.round((nextResetAt - Date.now()) / 3_600_000))
+    ? Math.max(0, Math.round((nextResetAt - now) / 3_600_000))
     : null
 
   const gate = () => {

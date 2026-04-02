@@ -2,11 +2,11 @@ export async function register() {
   // PostHog server-side initialization
 }
 
-export const onRequestError = async (err: any, request: any, context: any) => {
+export const onRequestError = async (err: any, request: any, _context: any) => {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { getPostHogServer } = await import('./lib/posthog-server')
     const posthog = getPostHogServer()
-    let distinctId: string | undefined = undefined
+    let distinctId: string | undefined
 
     if (request.headers.cookie) {
       const cookieString = Array.isArray(request.headers.cookie)
@@ -15,7 +15,7 @@ export const onRequestError = async (err: any, request: any, context: any) => {
 
       const postHogCookieMatch = cookieString?.match(/ph_phc_.*?_posthog=([^;]+)/)
 
-      if (postHogCookieMatch && postHogCookieMatch[1]) {
+      if (postHogCookieMatch?.[1]) {
         try {
           const decodedCookie = decodeURIComponent(postHogCookieMatch[1])
           const postHogData = JSON.parse(decodedCookie)

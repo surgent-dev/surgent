@@ -1,8 +1,8 @@
 'use client'
 
-import { useRef, useCallback } from 'react'
-import { QRCodeSVG } from 'qrcode.react'
 import { DownloadSimple } from '@phosphor-icons/react'
+import { QRCodeSVG } from 'qrcode.react'
+import { useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 
 interface QrCodeCardProps {
@@ -35,7 +35,7 @@ export function QrCodeCard({ url, size = 120 }: QrCodeCardProps) {
       link.href = canvas.toDataURL('image/png')
       link.click()
     }
-    img.src = 'data:image/svg+xml;base64,' + btoa(svgData)
+    img.src = `data:image/svg+xml;base64,${btoa(svgData)}`
   }, [size])
 
   return (

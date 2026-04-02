@@ -1,8 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { http } from '@/lib/http'
-import { ProjectsSchema, CreateProjectResponseSchema, ProjectSchema } from '@/lib/schemas/project'
-import { TERMINAL_DEPLOYMENT_STATUSES } from '@/lib/deployment'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
+import { TERMINAL_DEPLOYMENT_STATUSES } from '@/lib/deployment'
+import { http } from '@/lib/http'
+import { CreateProjectResponseSchema, ProjectSchema, ProjectsSchema } from '@/lib/schemas/project'
 
 const PROJECT_POLL_INTERVAL_MS = 1000
 

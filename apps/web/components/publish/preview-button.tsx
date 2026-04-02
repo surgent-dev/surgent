@@ -2,11 +2,11 @@
 
 import { Eye } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { DeviceFrameSelector, type DeviceFrame } from './device-frame-selector'
-import { useSandbox } from '@/hooks/use-sandbox'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useSandbox } from '@/hooks/use-sandbox'
+import { DeviceFrameSelector } from './device-frame-selector'
 
 export function PreviewButton() {
   const isMobile = useIsMobile()

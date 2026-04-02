@@ -1,20 +1,15 @@
 'use client'
 
-import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { BadgeDollarSign, ChevronRight, Plus, Receipt, Repeat, Users } from 'lucide-react'
+import { useMemo } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import {
-  formatPrice,
-  formatTransactionType,
-  getTransactionIcon,
-  getTransactionColor,
-} from './utils'
-import { getPaymentSummary } from './summary'
 import type { ProductWithPrices } from '@/queries/products'
-import type { Transaction } from '@/queries/transactions'
 import type { Subscription } from '@/queries/subscriptions'
+import type { Transaction, TransactionType } from '@/queries/transactions'
+import { getPaymentSummary } from './summary'
+import { formatPrice, formatTransactionType, getTransactionColor } from './utils'
 
 function StatCard({
   title,
@@ -44,14 +39,13 @@ function StatCard({
 }
 
 function RecentActivityItem({ transaction }: { transaction: Transaction }) {
-  const Icon = getTransactionIcon(transaction.type)
   const colorClass = getTransactionColor(transaction.type)
   const isPositive = transaction.type === 'payment'
 
   return (
     <div className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-muted/30 transition-colors">
       <div className="size-8 rounded-lg bg-muted/50 grid place-items-center">
-        <Icon className={cn('size-3.5', colorClass)} />
+        <TransactionIcon type={transaction.type} className={cn('size-3.5', colorClass)} />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{formatTransactionType(transaction.type)}</p>
@@ -65,6 +59,18 @@ function RecentActivityItem({ transaction }: { transaction: Transaction }) {
       </p>
     </div>
   )
+}
+
+function TransactionIcon({ type, className }: { type: TransactionType; className?: string }) {
+  switch (type) {
+    case 'payment':
+      return <ChevronRight className={className} />
+    case 'refund':
+    case 'payout':
+      return <Repeat className={className} />
+    default:
+      return <Receipt className={className} />
+  }
 }
 
 interface DashboardViewProps {

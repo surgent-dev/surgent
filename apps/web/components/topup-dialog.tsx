@@ -1,11 +1,11 @@
 'use client'
 
-import { useRef, useState } from 'react'
 import { Check, CircleNotch } from '@phosphor-icons/react'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { useSubscription, useTopupPaymentIntent } from '@/hooks/use-subscription'
 import { cn } from '@/lib/utils'
-import { useTopupPaymentIntent, useSubscription } from '@/hooks/use-subscription'
 
 const PRESETS = [10, 20, 50, 100]
 
@@ -59,7 +59,7 @@ export default function TopupDialog({ open, onOpenChange }: TopupDialogProps) {
         return
       }
       if (next.error) setError(next.error)
-      window.location.href = next.url
+      window.location.assign(next.url)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to start payment')
     }

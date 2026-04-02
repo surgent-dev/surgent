@@ -1,8 +1,5 @@
 'use client'
 
-import Link from 'next/link'
-import { useEffect, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -14,11 +11,13 @@ import {
   RefreshCw,
   Sun,
 } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState, useTransition } from 'react'
 import { AdminRangeSelect } from '@/components/admin/admin-range-select'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import {
   Select,
   SelectContent,
@@ -26,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 import {
   Sheet,
   SheetContent,
@@ -42,8 +42,8 @@ import type {
   AdminOpsDeploymentActiveItem,
   AdminOpsDeploymentFailureItem,
   AdminOpsJobItem,
-  AdminOpsJobsResponse,
   AdminOpsJobState,
+  AdminOpsJobsResponse,
   AdminOpsProjectItem,
   AdminOpsQueueItem,
 } from './types'
@@ -969,6 +969,7 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [light, setLight] = useState(false)
+  const initialJobQueue = data.queues.items[0] ?? null
 
   useEffect(() => {
     const html = document.documentElement
@@ -988,15 +989,22 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
     }
   }, [light])
 
-  const [jobQueue, setJobQueue] = useState<AdminOpsQueueItem | null>(null)
+  const [jobQueue, setJobQueue] = useState<AdminOpsQueueItem | null>(initialJobQueue)
   const [jobSheetOpen, setJobSheetOpen] = useState(false)
-  const [jobState, setJobState] = useState<AdminOpsJobState>('active')
+  const [jobState, setJobState] = useState<AdminOpsJobState>(() =>
+    initialJobQueue ? getDefaultJobState(initialJobQueue) : 'active',
+  )
   const [jobPage, setJobPage] = useState(1)
   const [jobTotal, setJobTotal] = useState(0)
   const [jobs, setJobs] = useState<AdminOpsJobItem[]>([])
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
-  const [jobsLoading, setJobsLoading] = useState(false)
+  const [jobsLoading, setJobsLoading] = useState(Boolean(initialJobQueue))
   const [jobsError, setJobsError] = useState<string | null>(null)
+
+  function beginJobsRequest() {
+    setJobsLoading(true)
+    setJobsError(null)
+  }
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1016,7 +1024,7 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
     setJobTotal(0)
     setJobs([])
     setSelectedJobId(jobId || null)
-    setJobsError(null)
+    beginJobsRequest()
     setJobSheetOpen(true)
   }
 
@@ -1024,8 +1032,6 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
     if (!jobQueue) return
 
     let cancelled = false
-    setJobsLoading(true)
-    setJobsError(null)
 
     fetch(
       `/api/admin/ops/jobs?queue=${encodeURIComponent(jobQueue.name)}&state=${jobState}&page=${jobPage}&perPage=${JOBS_PER_PAGE}`,
@@ -1068,18 +1074,9 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
     return () => {
       cancelled = true
     }
-  }, [JOBS_PER_PAGE, jobPage, jobQueue, jobState])
+  }, [jobPage, jobQueue, jobState])
 
   const { projects, deployments, queues } = data
-
-  useEffect(() => {
-    if (jobQueue || !queues.items.length) return
-    const first = queues.items[0]
-    if (!first) return
-    setJobQueue(first)
-    setJobState(getDefaultJobState(first))
-    setJobPage(1)
-  }, [jobQueue, queues.items])
 
   const hasIssues = data.alerts.length > 0
   const projectQueueCount = queues.items.filter((queue) => queue.category === 'project').length
@@ -1246,7 +1243,7 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
             setJobTotal(0)
             setJobs([])
             setSelectedJobId(null)
-            setJobsError(null)
+            beginJobsRequest()
           }}
           onStateChange={(state) => {
             setJobState(state)
@@ -1254,12 +1251,16 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
             setJobTotal(0)
             setJobs([])
             setSelectedJobId(null)
-            setJobsError(null)
+            beginJobsRequest()
           }}
-          onPageChange={setJobPage}
+          onPageChange={(page) => {
+            setJobPage(page)
+            beginJobsRequest()
+          }}
           onInspect={(queue, jobId) => {
             setJobQueue(queue)
             setSelectedJobId(jobId)
+            beginJobsRequest()
             setJobSheetOpen(true)
           }}
         />
@@ -1286,8 +1287,12 @@ export function OpsDashboard({ data }: { data: AdminOpsData }) {
           setJobTotal(0)
           setJobs([])
           setSelectedJobId(null)
+          beginJobsRequest()
         }}
-        onPageChange={setJobPage}
+        onPageChange={(page) => {
+          setJobPage(page)
+          beginJobsRequest()
+        }}
         onSelectJob={setSelectedJobId}
       />
     </div>

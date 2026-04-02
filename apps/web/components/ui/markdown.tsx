@@ -1,9 +1,9 @@
 'use client'
 
-import { cn } from '@/lib/utils'
-import { Streamdown } from 'streamdown'
 import { memo } from 'react'
 import type { BundledTheme } from 'shiki'
+import { Streamdown } from 'streamdown'
+import { cn } from '@/lib/utils'
 
 const shikiTheme: [BundledTheme, BundledTheme] = ['github-light', 'github-dark']
 

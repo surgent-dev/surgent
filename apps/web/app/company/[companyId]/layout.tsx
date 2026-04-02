@@ -1,8 +1,8 @@
 'use client'
 
-import { useParams, usePathname } from 'next/navigation'
-import Link from 'next/link'
 import { Bell } from '@phosphor-icons/react'
+import Link from 'next/link'
+import { useParams, usePathname } from 'next/navigation'
 import WorkspaceSidebar from '@/components/workspace/sidebar'
 
 const SECTIONS: Record<string, string> = {

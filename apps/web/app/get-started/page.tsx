@@ -1,18 +1,17 @@
 'use client'
 
-import { Suspense, useState, useCallback, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import {
-  Browser,
-  ShoppingCart,
-  Megaphone,
-  CalendarCheck,
-  Briefcase,
-  User,
-  Article,
   AppWindow,
+  Article,
+  Briefcase,
+  Browser,
+  CalendarCheck,
+  Megaphone,
+  ShoppingCart,
+  User,
 } from '@phosphor-icons/react'
+import { useRouter } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 const siteTypes = [
   { label: 'Web App', desc: 'SaaS, dashboard, or tool', icon: AppWindow, color: '#14b8a6' },
@@ -76,20 +75,8 @@ type Data = {
 }
 
 function FadeIn({ children, step }: { children: React.ReactNode; step: number }) {
-  const [visible, setVisible] = useState(false)
-  useEffect(() => {
-    setVisible(false)
-    const t = requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)))
-    return () => cancelAnimationFrame(t)
-  }, [step])
   return (
-    <div
-      className="transition-all duration-500 ease-out"
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(12px)',
-      }}
-    >
+    <div key={step} className="animate-in fade-in slide-in-from-bottom-3 duration-500 ease-out">
       {children}
     </div>
   )

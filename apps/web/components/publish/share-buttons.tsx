@@ -1,7 +1,7 @@
 'use client'
 
+import { Check, Copy, LinkedinLogo, XLogo } from '@phosphor-icons/react'
 import { useState } from 'react'
-import { Copy, Check, XLogo, LinkedinLogo } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 
 interface ShareButtonsProps {

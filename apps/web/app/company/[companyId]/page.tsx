@@ -1,29 +1,31 @@
 'use client'
 
-import { useState } from 'react'
+import {
+  ArrowSquareOut,
+  CaretDown,
+  CaretRight,
+  Eye,
+  Globe,
+  RocketLaunch,
+  Sparkle,
+} from '@phosphor-icons/react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import {
-  RocketLaunch,
-  Eye,
-  CaretRight,
-  Sparkle,
-  CaretDown,
-  Globe,
-  ArrowSquareOut,
-} from '@phosphor-icons/react'
+import { useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { passthroughImageLoader } from '@/lib/image-loader'
 import { cn } from '@/lib/utils'
+import type { DateRangeValue } from '@/queries/analytics'
+import { useLatestDeploymentQuery, useProjectQuery } from '@/queries/projects'
 import { AnalyticsCard } from './_components/analytics-card'
 import { DashboardCard } from './_components/dashboard-card'
 import { PaymentsCard } from './_components/payments-card'
-import { useProjectQuery, useLatestDeploymentQuery } from '@/queries/projects'
-import { type DateRangeValue } from '@/queries/analytics'
 
 function StepRow({
   step,
@@ -142,11 +144,14 @@ export default function DashboardPage() {
                     <ArrowSquareOut className="size-3" />
                   </button>
                 </div>
-                <div className="h-[340px] overflow-hidden bg-muted/30 dark:bg-black/10">
+                <div className="relative h-[340px] overflow-hidden bg-muted/30 dark:bg-black/10">
                   {latestDeployment!.screenshotUrl ? (
-                    <img
+                    <Image
+                      loader={passthroughImageLoader}
+                      unoptimized
                       src={`${latestDeployment!.screenshotUrl}?v=${latestDeployment!.id}`}
                       alt="Site preview"
+                      fill
                       className="w-full h-full object-contain object-top"
                     />
                   ) : (

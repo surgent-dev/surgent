@@ -1,5 +1,5 @@
-export { PublishModal } from './publish-modal'
+export { type DeviceFrame, DeviceFrameSelector } from './device-frame-selector'
 export { PreviewButton } from './preview-button'
-export { DeviceFrameSelector, type DeviceFrame } from './device-frame-selector'
+export { PublishModal } from './publish-modal'
 export { QrCodeCard } from './qr-code-card'
 export { ShareButtons } from './share-buttons'

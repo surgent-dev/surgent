@@ -1,9 +1,9 @@
 'use client'
 
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 
 type PromptInputContextType = {
   isLoading: boolean
@@ -111,7 +111,7 @@ function PromptInputTextarea({
       typeof maxHeight === 'number'
         ? `${Math.min(textareaRef.current.scrollHeight, maxHeight)}px`
         : `min(${textareaRef.current.scrollHeight}px, ${maxHeight})`
-  }, [value, maxHeight, disableAutosize])
+  }, [value, maxHeight, disableAutosize, textareaRef])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -176,4 +176,4 @@ function PromptInputAction({
   )
 }
 
-export { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction }
+export { PromptInput, PromptInputAction, PromptInputActions, PromptInputTextarea }

@@ -1,18 +1,18 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
 import type { FileDiff } from '@opencode-ai/sdk'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ProjectEventProvider } from '@/context/project-events'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { useSandbox } from '@/hooks/use-sandbox'
+import { useSandboxReady } from '@/hooks/use-sandbox-ready'
+import { useActivateProject } from '@/queries/projects'
 import Conversation from './conversation'
 import ProjectTools, { type ProjectTab } from './project/project-tools'
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { useActivateProject } from '@/queries/projects'
-import { useSandbox } from '@/hooks/use-sandbox'
-import { useIsMobile } from '@/hooks/use-mobile'
-import { useSandboxReady } from '@/hooks/use-sandbox-ready'
 import ProjectHeader from './project-header'
 import { ProjectInitOverlay } from './project-init-overlay'
-import { ProjectEventProvider } from '@/context/project-events'
 
 interface ProjectViewProps {
   projectId?: string
@@ -74,25 +74,34 @@ export default function ProjectView({ projectId, onPreviewUrl, initialPrompt }: 
   ]
   const currentActiveTabId = activeTabId === 'convex' && !hasConvex ? 'preview' : activeTabId
 
-  const handleConvexEnvChange = useCallback((env: ConvexEnv) => {
-    setConvexEnv(env)
-  }, [])
+  const handleConvexEnvChange = useCallback(
+    (env: ConvexEnv) => {
+      setConvexEnv(env)
+    },
+    [setConvexEnv],
+  )
 
-  const handleCloseTab = useCallback((tabId: string) => {
-    setTabs((t) => t.filter((tab) => tab.id !== tabId))
-    setActiveTabId((prev) => (prev === tabId ? 'preview' : prev))
-  }, [])
+  const handleCloseTab = useCallback(
+    (tabId: string) => {
+      setTabs((t) => t.filter((tab) => tab.id !== tabId))
+      setActiveTabId((prev) => (prev === tabId ? 'preview' : prev))
+    },
+    [setActiveTabId, setTabs],
+  )
 
-  const handleAddTab = useCallback((type: ProjectTab['type']) => {
-    setTabs((prev) => {
-      if (type !== 'logs' && type !== 'payments') return prev
-      if (prev.some((tab) => tab.type === type)) return prev
-      tabCounter.current += 1
-      const title = type === 'logs' ? 'Server Logs' : 'Payments'
-      const id = `${type}-${tabCounter.current}`
-      return [...prev, { id, type, title }]
-    })
-  }, [])
+  const handleAddTab = useCallback(
+    (type: ProjectTab['type']) => {
+      setTabs((prev) => {
+        if (type !== 'logs' && type !== 'payments') return prev
+        if (prev.some((tab) => tab.type === type)) return prev
+        tabCounter.current += 1
+        const title = type === 'logs' ? 'Server Logs' : 'Payments'
+        const id = `${type}-${tabCounter.current}`
+        return [...prev, { id, type, title }]
+      })
+    },
+    [setTabs],
+  )
 
   const handleOpenChangesTab = useCallback(
     (messageId?: string, sessionId?: string, diffs?: FileDiff[]) => {
@@ -115,7 +124,7 @@ export default function ProjectView({ projectId, onPreviewUrl, initialPrompt }: 
       })
       setActiveTabId(id)
     },
-    [activeSessionId],
+    [activeSessionId, setActiveTabId, setTabs],
   )
 
   const setOpenChangesTab = useSandbox((s) => s.setOpenChangesTab)

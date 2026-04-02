@@ -1,28 +1,19 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  Copy,
   Check,
   ChevronRight,
+  Copy,
   Eye,
   EyeOff,
+  Loader2,
   Plus,
   Trash2,
   Variable,
-  Loader2,
 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-
-import {
-  useEnvVarsQuery,
-  useUpsertEnvVar,
-  useDeleteEnvVar,
-  type EnvVarItem,
-} from '@/queries/projects'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Dialog,
   DialogContent,
@@ -31,7 +22,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
+import {
+  type EnvVarItem,
+  useDeleteEnvVar,
+  useEnvVarsQuery,
+  useUpsertEnvVar,
+} from '@/queries/projects'
 
 type Environment = 'development' | 'production'
 

@@ -4,13 +4,13 @@ import { ChartLineUp } from '@phosphor-icons/react'
 import { Sparkline } from '@/components/ui/sparkline'
 import { parseDateRange } from '@/lib/analytics-date'
 import { getSparklineSeries } from '@/lib/analytics-series'
-import { DashboardCard } from './dashboard-card'
 import {
+  type DateRangeValue,
   useWebsiteActive,
   useWebsitePageviews,
   useWebsiteStats,
-  type DateRangeValue,
 } from '@/queries/analytics'
+import { DashboardCard } from './dashboard-card'
 
 function fmtNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`

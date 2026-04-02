@@ -1,10 +1,10 @@
 'use client'
 
+import { CircleNotch, DownloadSimple } from '@phosphor-icons/react'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { DownloadSimple, CircleNotch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useCredits } from '@/hooks/use-credits'
 import { http } from '@/lib/http'
 

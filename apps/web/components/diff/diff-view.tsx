@@ -1,13 +1,13 @@
 'use client'
 
-import React, { useEffect, useMemo, useRef } from 'react'
-import { EditorState, Extension } from '@codemirror/state'
-import { EditorView } from '@codemirror/view'
-import { unifiedMergeView, presentableDiff } from '@codemirror/merge'
 import { javascript } from '@codemirror/lang-javascript'
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
+import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { presentableDiff, unifiedMergeView } from '@codemirror/merge'
+import { EditorState, type Extension } from '@codemirror/state'
 import { oneDark } from '@codemirror/theme-one-dark'
+import { EditorView } from '@codemirror/view'
 import { useTheme } from 'next-themes'
+import { useEffect, useMemo, useRef } from 'react'
 
 type Props = {
   before: string

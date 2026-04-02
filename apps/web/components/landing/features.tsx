@@ -1,25 +1,22 @@
 'use client'
 
 import {
-  RocketLaunch,
-  CurrencyDollar,
-  ChatCircleText,
-  Database,
-  Robot,
-  CreditCard,
-  CheckCircle,
-  Lock,
-  Code,
-  Lightning,
   ArrowUpRight,
-  TerminalWindow,
-  Globe,
-  Cpu,
-  ShieldCheck,
+  ChatCircleText,
+  CheckCircle,
+  Code,
+  CreditCard,
+  CurrencyDollar,
+  Database,
   GitBranch,
+  Globe,
+  Lightning,
+  Robot,
+  RocketLaunch,
+  ShieldCheck,
 } from '@phosphor-icons/react'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { useState, useEffect } from 'react'
 
 /* ─── UI Components ─── */
 
@@ -246,7 +243,7 @@ function AIModelsCard() {
           { name: 'Claude 3.5 Sonnet', active: true, provider: 'Anthropic' },
           { name: 'GPT-4o', active: false, provider: 'OpenAI' },
           { name: 'Llama 3 70B', active: false, provider: 'Meta' },
-        ].map((model, i) => (
+        ].map((model, _i) => (
           <div
             key={model.name}
             className={cn(
@@ -402,7 +399,7 @@ export function LandingFeatures() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[340px]">
-          {features.map((feature, i) => (
+          {features.map((feature, _i) => (
             <div
               key={feature.title}
               className={cn(

@@ -1,12 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { TooltipProvider } from '@/components/ui/tooltip'
 import DownloadButton from '@/components/project-header/download-button'
 import GitHubButton from '@/components/project-header/github-button'
-import SupportMenu from '@/components/project-header/support-menu'
-import PublishButton from '@/components/project-header/publish-button'
 import PayDialogs from '@/components/project-header/pay-dialogs'
+import PublishButton from '@/components/project-header/publish-button'
+import SupportMenu from '@/components/project-header/support-menu'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 interface EditorHeaderProps {
   projectId: string

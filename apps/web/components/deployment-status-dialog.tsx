@@ -1,25 +1,25 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
 import {
-  Copy,
-  PencilSimple,
   ArrowSquareOut,
-  X,
-  RocketLaunch,
+  Copy,
   Eye,
   EyeSlash,
+  PencilSimple,
+  RocketLaunch,
+  X,
 } from '@phosphor-icons/react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { toast } from 'sonner'
-import { useDeploymentHistoryQuery, useRedeployVersion, useDeployProject } from '@/queries/projects'
-import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
-import { useProjectDomains } from '@/queries/domains'
 import { DEPLOYMENT_STATUS_LABELS, TERMINAL_DEPLOYMENT_STATUSES } from '@/lib/deployment'
 import { timeAgoDetailed } from '@/lib/format'
+import { useProjectDomains } from '@/queries/domains'
+import { useDeploymentHistoryQuery, useDeployProject, useRedeployVersion } from '@/queries/projects'
 
 interface Props {
   open: boolean

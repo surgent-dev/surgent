@@ -1,20 +1,23 @@
 'use client'
 
+import {
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  DollarSign,
+  FolderKanban,
+  Layers,
+  Receipt,
+  UserPlus,
+  Users,
+} from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { AdminRangeSelect } from '@/components/admin/admin-range-select'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { AdminRangeSelect } from '@/components/admin/admin-range-select'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart'
 import {
   Select,
@@ -23,18 +26,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import {
-  Users,
-  FolderKanban,
-  UserPlus,
-  Layers,
-  ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
-  DollarSign,
-  Receipt,
-} from 'lucide-react'
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatDateShort } from '@/lib/format'
 import type { AdminOverview, AdminTransactions } from './types'
 

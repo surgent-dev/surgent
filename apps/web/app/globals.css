@@ -1,6 +1,6 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 @plugin "@tailwindcss/typography";
-@import 'tw-animate-css';
+@import "tw-animate-css";
 @source "../node_modules/streamdown/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
@@ -76,7 +76,7 @@
   --primary: #333333; /* Muted black — like durable's black/80 */
   --primary-hover: #1c1c1c;
   --primary-foreground: #ffffff;
-  --brand: #7C5CFC; /* Warm violet — smart, approachable, AI-native */
+  --brand: #7c5cfc; /* Warm violet — smart, approachable, AI-native */
   --brand-foreground: #ffffff;
   --secondary: #ffffff;
   --secondary-foreground: #333333;
@@ -87,7 +87,7 @@
   --destructive: #e11d48;
   --border: #e5e5e5; /* Soft neutral border */
   --input: #e5e5e5;
-  --ring: #7C5CFC;
+  --ring: #7c5cfc;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -124,18 +124,18 @@
 
 .dark {
   /* Pure neutral dark theme */
-  --background: #191919;             /* p3 0.098 */
+  --background: #191919; /* p3 0.098 */
   --foreground: #f5f5f5;
-  --card: #111111;                   /* p3 0.067 */
+  --card: #111111; /* p3 0.067 */
   --card-foreground: #f5f5f5;
   --popover: #191919;
   --popover-foreground: #f5f5f5;
   --primary: #f5f5f5;
   --primary-hover: #e5e5e5;
   --primary-foreground: #111111;
-  --brand: #9B85FD; /* Warm violet — lighter for dark mode contrast */
+  --brand: #9b85fd; /* Warm violet — lighter for dark mode contrast */
   --brand-foreground: #ffffff;
-  --secondary: #222222;              /* p3 0.135 */
+  --secondary: #222222; /* p3 0.135 */
   --secondary-foreground: #f5f5f5;
   --muted: #222222;
   --muted-foreground: #999999;
@@ -143,8 +143,8 @@
   --accent-foreground: #f5f5f5;
   --destructive: hsl(0 72% 51%);
   --destructive-foreground: #fff;
-  --border: #2e2e2e;                 /* between p3 0.163–0.228 */
-  --input: #292929;                  /* p3 0.163 */
+  --border: #2e2e2e; /* between p3 0.163–0.228 */
+  --input: #292929; /* p3 0.163 */
   --ring: #999999;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -161,10 +161,39 @@
   --sidebar-ring: #999999;
 
   /* Surface shadow system — reference UI inspired */
-  --shadow-surface-xs: 0 0 0 0.5px #000000e0, 0 1px 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 0 rgba(255,255,255,0.05), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.04);
-  --shadow-surface-sm: 0 0 0 0.5px #000000e0, 0 2px 4px -1px rgba(0,0,0,0.25), 0 4px 6px -2px rgba(0,0,0,0.2), inset 0 1px 0 0 rgba(255,255,255,0.05), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.04);
-  --shadow-surface-md: 0 0 0 0.5px #000000e0, 0 4px 6px -4px rgba(0,0,0,0.3), 0 10px 15px -3px rgba(0,0,0,0.2), inset 0 1px 0 0 rgba(255,255,255,0.06), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.04);
-  --shadow-surface-lg: 0 0 0 0.5px #000000e0, 0 4px 6px -4px rgba(0,0,0,0.3), 0 10px 15px -3px rgba(0,0,0,0.2), 0 20px 25px -5px rgba(0,0,0,0.25), inset 0 1px 0 0 rgba(255,255,255,0.06), inset 0 -1px 0 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-surface-xs:
+    0 0 0 0.5px #000000e0, 0 1px 2px 0 rgba(0, 0, 0, 0.2), inset 0 1px 0 0 rgba(255, 255, 255, 0.05), inset 0 -1px 0 0 rgba(
+      255,
+      255,
+      255,
+      0.02
+    ), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-surface-sm:
+    0 0 0 0.5px #000000e0, 0 2px 4px -1px rgba(0, 0, 0, 0.25), 0 4px 6px -2px rgba(0, 0, 0, 0.2), inset 0 1px 0 0 rgba(
+      255,
+      255,
+      255,
+      0.05
+    ), inset 0 -1px 0 0 rgba(255, 255, 255, 0.02), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-surface-md:
+    0 0 0 0.5px #000000e0, 0 4px 6px -4px rgba(0, 0, 0, 0.3), 0 10px 15px -3px rgba(0, 0, 0, 0.2), inset 0 1px 0 0 rgba(
+      255,
+      255,
+      255,
+      0.06
+    ), inset 0 -1px 0 0 rgba(255, 255, 255, 0.02), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-surface-lg:
+    0 0 0 0.5px #000000e0, 0 4px 6px -4px rgba(0, 0, 0, 0.3), 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 20px 25px -5px rgba(
+      0,
+      0,
+      0,
+      0.25
+    ), inset 0 1px 0 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 0 rgba(255, 255, 255, 0.02), inset 0 0 0 1px rgba(
+      255,
+      255,
+      255,
+      0.04
+    );
 
   /* Status + misc semantic colors */
   --success: hsl(142 69% 58%);
@@ -222,10 +251,14 @@ body {
   box-shadow: var(--shadow-surface-md);
 }
 .surface-inset {
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04), inset 0 1px 2px rgba(0,0,0,0.06);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.04),
+    inset 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 .dark .surface-inset {
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 /*
@@ -233,13 +266,13 @@ body {
  * which expands to fit wide content (code/tables), breaking inner overflow-x.
  * Force it back to block so children can scroll within themselves.
  */
-[data-slot='scroll-area-viewport'] > div {
+[data-slot="scroll-area-viewport"] > div {
   display: block !important;
   min-width: 0 !important;
 }
 
 /* Streamdown code block styling */
-[data-streamdown='code-block'] {
+[data-streamdown="code-block"] {
   font-size: clamp(10px, 2vw, 13px);
   line-height: 1.5;
   border-radius: 0.5rem;
@@ -247,18 +280,18 @@ body {
   max-width: 100%;
 }
 
-[data-streamdown='code-block-header'] {
+[data-streamdown="code-block-header"] {
   padding: 0.4rem 0.75rem;
   font-size: 0.7rem;
 }
 
-[data-streamdown='code-block'] pre {
+[data-streamdown="code-block"] pre {
   margin: 0;
   padding: 0.625rem 0.75rem;
   overflow-x: auto;
 }
 
-[data-streamdown='inline-code'] {
+[data-streamdown="inline-code"] {
   font-size: 0.8em;
   padding: 0.1rem 0.25rem;
   border-radius: 0.25rem;
@@ -352,46 +385,41 @@ body {
 }
 
 /* Streamdown tables – scroll instead of overflow */
-[data-streamdown='table-wrapper'] {
+[data-streamdown="table-wrapper"] {
   max-width: 100%;
 }
 
-[data-streamdown='table-wrapper'] > div {
+[data-streamdown="table-wrapper"] > div {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-[data-streamdown='table'] {
+[data-streamdown="table"] {
   width: max-content;
   max-width: none;
 }
 
-[data-streamdown='table-header-cell'] {
+[data-streamdown="table-header-cell"] {
   padding: 0.35rem 0.625rem;
   font-size: 0.7rem;
   max-width: 40ch;
   overflow-wrap: anywhere;
 }
 
-[data-streamdown='table-cell'] {
+[data-streamdown="table-cell"] {
   padding: 0.35rem 0.625rem;
   max-width: 40ch;
   overflow-wrap: anywhere;
 }
 
-
 /* ─── Layered shadow system ─── */
 
 :root {
   --shadow-color: 220 3% 15%;
-  --shadow-sm:
-    0 1px 1px hsl(var(--shadow-color) / 0.04),
-    0 2px 4px hsl(var(--shadow-color) / 0.04);
+  --shadow-sm: 0 1px 1px hsl(var(--shadow-color) / 0.04), 0 2px 4px hsl(var(--shadow-color) / 0.04);
   --shadow-md:
-    0 1px 1px hsl(var(--shadow-color) / 0.03),
-    0 2px 2px hsl(var(--shadow-color) / 0.03),
-    0 4px 8px hsl(var(--shadow-color) / 0.03),
-    0 8px 16px hsl(var(--shadow-color) / 0.03);
+    0 1px 1px hsl(var(--shadow-color) / 0.03), 0 2px 2px hsl(var(--shadow-color) / 0.03),
+    0 4px 8px hsl(var(--shadow-color) / 0.03), 0 8px 16px hsl(var(--shadow-color) / 0.03);
   --shadow-lg:
     0 1px 1px hsl(var(--shadow-color) / 0.02),
     0 2px 4px hsl(var(--shadow-color) / 0.02),
@@ -440,17 +468,19 @@ body {
   background-color: #1a1a1a;
   background-image: linear-gradient(rgba(255, 255, 255, 0.08), transparent 57%);
   border: 1px solid #111111;
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
-              0 1px 3px 0 rgba(0, 0, 0, 0.12);
-  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              background-image 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+    0 1px 3px 0 rgba(0, 0, 0, 0.12);
+  transition:
+    background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    background-image 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .btn-brand::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: -40%;
@@ -459,7 +489,9 @@ body {
   background-color: transparent;
   filter: blur(12px);
   rotate: -45deg;
-  transition: left 0s, background-color 0s;
+  transition:
+    left 0s,
+    background-color 0s;
   pointer-events: none;
 }
 .btn-brand:hover {
@@ -471,8 +503,9 @@ body {
 .btn-brand:hover::before {
   background-color: rgba(255, 255, 255, 0.25);
   left: 120%;
-  transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
-              background-color 0s;
+  transition:
+    left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0s;
 }
 .btn-brand:active {
   background-color: #0a0a0a;
@@ -486,8 +519,9 @@ body {
   background-color: #f0f0f0;
   background-image: linear-gradient(rgba(255, 255, 255, 0.5), transparent 57%);
   border-color: #e0e0e0;
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
-              0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+    0 1px 3px 0 rgba(0, 0, 0, 0.1);
 }
 .dark .btn-brand:hover {
   color: #000000;
@@ -497,8 +531,9 @@ body {
 .dark .btn-brand:hover::before {
   background-color: rgba(255, 255, 255, 0.3);
   left: 120%;
-  transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
-              background-color 0s;
+  transition:
+    left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0s;
 }
 .dark .btn-brand:active {
   background-color: #e5e5e5;
@@ -516,14 +551,15 @@ body {
   background-image: linear-gradient(hsl(220 6% 97%), hsl(220 6% 91%) 57%);
   border: 1px solid hsl(220 6% 78%);
   box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
-  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              background-image 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    background-image 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .btn-brand-secondary::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: -40%;
@@ -532,7 +568,9 @@ body {
   background-color: transparent;
   filter: blur(12px);
   rotate: -45deg;
-  transition: left 0s, background-color 0s;
+  transition:
+    left 0s,
+    background-color 0s;
   pointer-events: none;
 }
 .btn-brand-secondary:hover {
@@ -543,8 +581,9 @@ body {
 .btn-brand-secondary:hover::before {
   background-color: rgba(255, 255, 255, 0.6);
   left: 120%;
-  transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
-              background-color 0s;
+  transition:
+    left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0s;
 }
 .btn-brand-secondary:active {
   background-color: hsl(220 6% 86%);
@@ -568,8 +607,9 @@ body {
 .dark .btn-brand-secondary:hover::before {
   background-color: rgba(255, 255, 255, 0.15);
   left: 120%;
-  transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
-              background-color 0s;
+  transition:
+    left 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0s;
 }
 .dark .btn-brand-secondary:active {
   background-color: hsl(220 6% 15%);
@@ -614,14 +654,179 @@ body {
     linear-gradient(to right, rgba(0, 0, 0, 0.06) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
   background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, transparent 8%, rgba(0,0,0,0.4) 30%, black 55%, transparent 85%);
-  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, transparent 8%, rgba(0,0,0,0.4) 30%, black 55%, transparent 85%);
+  mask-image: radial-gradient(
+    ellipse 80% 70% at 50% 45%,
+    transparent 8%,
+    rgba(0, 0, 0, 0.4) 30%,
+    black 55%,
+    transparent 85%
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 80% 70% at 50% 45%,
+    transparent 8%,
+    rgba(0, 0, 0, 0.4) 30%,
+    black 55%,
+    transparent 85%
+  );
 }
 
 .dark .landing-grid {
   background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+}
+
+/* ─── Marquee scroll for testimonials ─── */
+
+@keyframes marquee-left {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes marquee-right {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.marquee-left {
+  animation: marquee-left 40s linear infinite;
+}
+
+.marquee-right {
+  animation: marquee-right 40s linear infinite;
+}
+
+.marquee-left:hover,
+.marquee-right:hover {
+  animation-play-state: paused;
+}
+
+/* ─── Pill marquee (business types, flags) ─── */
+
+@keyframes pill-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.pill-scroll {
+  animation: pill-scroll 25s linear infinite;
+}
+
+.pill-scroll:hover {
+  animation-play-state: paused;
+}
+
+/* ─── Typing cursor blink ─── */
+
+@keyframes blink-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.typing-cursor {
+  animation: blink-caret 0.75s step-end infinite;
+}
+
+/* ─── Floating pill animation ─── */
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(2deg);
+  }
+}
+
+@keyframes float-medium {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(-1.5deg);
+  }
+}
+
+@keyframes float-fast {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(1deg);
+  }
+}
+
+.float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+.float-medium {
+  animation: float-medium 4.5s ease-in-out infinite;
+}
+.float-fast {
+  animation: float-fast 3.5s ease-in-out infinite;
+}
+
+/* ─── Horizontal showcase scroll ─── */
+
+@keyframes showcase-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.showcase-scroll {
+  animation: showcase-scroll 30s linear infinite;
+}
+
+.showcase-scroll:hover {
+  animation-play-state: paused;
+}
+
+/* ─── Hero gradient bg ─── */
+
+.hero-gradient {
+  background: linear-gradient(
+    180deg,
+    #ece5ff 0%,
+    #f0ebff 15%,
+    #f5f2ff 30%,
+    #faf8ff 50%,
+    #ffffff 75%
+  );
+}
+
+.dark .hero-gradient {
+  background: linear-gradient(180deg, #1e1a2e 0%, #191919 40%, #191919 100%);
+}
+
+/* ─── Halftone dot pattern ─── */
+
+.hero-dots {
+  background-image: radial-gradient(circle, rgba(124, 92, 252, 0.06) 1px, transparent 1px);
+  background-size: 16px 16px;
 }
 
 @keyframes fadeSlideUp {
@@ -760,31 +965,59 @@ body {
 }
 
 @keyframes aurora-drift-1 {
-  from { transform: translate(0, 0) rotate(0deg) scale(1); }
-  to { transform: translate(80px, 40px) rotate(8deg) scale(1.1); }
+  from {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  to {
+    transform: translate(80px, 40px) rotate(8deg) scale(1.1);
+  }
 }
 
 @keyframes aurora-drift-2 {
-  from { transform: translate(0, 0) rotate(0deg) scale(1); }
-  to { transform: translate(-60px, 50px) rotate(-6deg) scale(1.15); }
+  from {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  to {
+    transform: translate(-60px, 50px) rotate(-6deg) scale(1.15);
+  }
 }
 
 @keyframes aurora-drift-3 {
-  from { transform: translate(0, 0) rotate(0deg) scale(1); }
-  to { transform: translate(40px, -30px) rotate(5deg) scale(0.95); }
+  from {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  to {
+    transform: translate(40px, -30px) rotate(5deg) scale(0.95);
+  }
 }
 
 @keyframes aurora-drift-4 {
-  from { transform: translate(0, 0) rotate(0deg) scale(1); }
-  to { transform: translate(-50px, 30px) rotate(-10deg) scale(1.2); }
+  from {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  to {
+    transform: translate(-50px, 30px) rotate(-10deg) scale(1.2);
+  }
 }
 
 /* ─── Aurora shader mesh ─── */
 
 @keyframes aurora-mesh {
-  0% { background-position: 0% 50%, 50% 50%; }
-  50% { background-position: 100% 50%, 0% 50%; }
-  100% { background-position: 0% 50%, 50% 50%; }
+  0% {
+    background-position:
+      0% 50%,
+      50% 50%;
+  }
+  50% {
+    background-position:
+      100% 50%,
+      0% 50%;
+  }
+  100% {
+    background-position:
+      0% 50%,
+      50% 50%;
+  }
 }
 
 .aurora-shader {
@@ -814,33 +1047,52 @@ body {
 /* Entri modal – ensure iframe is clickable above all app layers */
 #entri-modal,
 #entri-lightbox,
-[id^='entri'] iframe,
-iframe[src*='goentri.com'] {
+[id^="entri"] iframe,
+iframe[src*="goentri.com"] {
   z-index: 2147483647 !important;
   pointer-events: auto !important;
 }
 
 /* Preview refresh glow — Siri-style multicolor edge glow */
 @keyframes preview-glow-border {
-  0% { opacity: 0; }
-  15% { opacity: 1; }
-  55% { opacity: 0.6; }
-  100% { opacity: 0; }
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 @keyframes preview-glow-edge {
-  0% { opacity: 0; transform: scale(0.99); }
-  15% { opacity: 1; transform: scale(1); }
-  55% { opacity: 0.4; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.005); }
+  0% {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  55% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.005);
+  }
 }
 
 .preview-glow-border {
   animation: preview-glow-border 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   border-radius: inherit;
   border: 1.5px solid transparent;
-  background:
-    conic-gradient(
+  background: conic-gradient(
       from 180deg,
       rgba(255, 45, 85, 0.5),
       rgba(175, 82, 222, 0.5),
@@ -849,7 +1101,8 @@ iframe[src*='goentri.com'] {
       rgba(48, 209, 88, 0.5),
       rgba(255, 149, 0, 0.45),
       rgba(255, 45, 85, 0.5)
-    ) border-box;
+    )
+    border-box;
   -webkit-mask:
     linear-gradient(#fff 0 0) padding-box,
     linear-gradient(#fff 0 0);
@@ -867,8 +1120,8 @@ iframe[src*='goentri.com'] {
 .preview-glow-edge {
   animation: preview-glow-edge 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   border-radius: inherit;
+  /* Top — pink to purple */
   background:
-    /* Top — pink to purple */
     radial-gradient(ellipse 40% 12% at 30% 0%, rgba(255, 45, 85, 0.25), transparent 70%),
     radial-gradient(ellipse 35% 12% at 65% 0%, rgba(175, 82, 222, 0.2), transparent 70%),
     /* Right — blue to teal */
@@ -901,7 +1154,9 @@ iframe[src*='goentri.com'] {
   background: var(--normal-bg) !important;
   border: 1px solid var(--normal-border) !important;
   border-radius: 0.75rem !important;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.03) !important;
+  box-shadow:
+    0 1px 3px 0 rgba(0, 0, 0, 0.04),
+    0 1px 2px -1px rgba(0, 0, 0, 0.03) !important;
   padding: 12px 14px !important;
   gap: 10px !important;
   align-items: center !important;
@@ -998,7 +1253,9 @@ iframe[src*='goentri.com'] {
 .dark [data-sonner-toast] {
   --normal-bg: #1c1c1c;
   --normal-border: var(--border);
-  box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(255, 255, 255, 0.06) inset !important;
+  box-shadow:
+    0 1px 4px 0 rgba(0, 0, 0, 0.2),
+    0 0 0 0.5px rgba(255, 255, 255, 0.06) inset !important;
 }
 .dark [data-sonner-toast][data-type="success"] {
   --normal-border: #064e3b;
@@ -1016,4 +1273,3 @@ iframe[src*='goentri.com'] {
   border-color: var(--border) !important;
   background: var(--card) !important;
 }
-

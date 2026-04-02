@@ -1,49 +1,49 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { toast } from 'sonner'
 import {
-  RocketLaunch,
-  PencilSimple,
-  X,
-  Copy,
   ArrowSquareOut,
-  Globe,
-  CircleNotch,
-  CheckCircle,
-  XCircle,
-  Clock,
   CaretDown,
   CaretUp,
+  CheckCircle,
+  CircleNotch,
+  Clock,
+  Copy,
+  Globe,
+  PencilSimple,
+  RocketLaunch,
+  X,
+  XCircle,
 } from '@phosphor-icons/react'
-import { useCredits } from '@/hooks/use-credits'
-import { track } from '@/lib/track'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from '@/components/ui/dialog'
-import {
-  useDeployProject,
-  useUpdateProjectVisibility,
-  useLatestDeploymentQuery,
-  useHostnameAvailability,
-  useGenerateHostname,
-} from '@/queries/projects'
-import { useProjectDomains } from '@/queries/domains'
-import { DomainSearchPanel } from '@/components/domains/domain-search-panel'
-import { QrCodeCard } from './qr-code-card'
-import { ShareButtons } from './share-buttons'
+import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useCredits } from '@/hooks/use-credits'
 import {
   DEPLOYMENT_STATUS_LABELS,
-  TERMINAL_DEPLOYMENT_STATUSES,
   sanitizeDeploymentHostname,
+  TERMINAL_DEPLOYMENT_STATUSES,
 } from '@/lib/deployment'
+import { track } from '@/lib/track'
+import { useProjectDomains } from '@/queries/domains'
+import {
+  useDeployProject,
+  useGenerateHostname,
+  useHostnameAvailability,
+  useLatestDeploymentQuery,
+  useUpdateProjectVisibility,
+} from '@/queries/projects'
+import { QrCodeCard } from './qr-code-card'
+import { ShareButtons } from './share-buttons'
 
 interface PublishModalProps {
   open: boolean
@@ -70,8 +70,7 @@ export function PublishModal({
   const canToggleVisibility = credits.snapshot?.features.privateProjects ?? false
 
   const [isEditingHostname, setIsEditingHostname] = useState(false)
-  const [hostnameInput, setHostnameInput] = useState('')
-  const [pendingHostname, setPendingHostname] = useState('')
+  const [hostnameInput, setHostnameInput] = useState<string | null>(null)
   const [isDeploying, setIsDeploying] = useState(false)
   const [shareExpanded, setShareExpanded] = useState(false)
 
@@ -87,7 +86,8 @@ export function PublishModal({
   const isDeploymentInProgress =
     latestDeployment && !TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status)
 
-  const sanitizedHostname = sanitizeDeploymentHostname(hostnameInput)
+  const hostnameValue = hostnameInput ?? workerName ?? generatedHostname?.name ?? ''
+  const sanitizedHostname = sanitizeDeploymentHostname(hostnameValue)
   const isNewHostname = !workerName || sanitizedHostname !== workerName
   const { data: availability, isLoading: checkingHostname } = useHostnameAvailability(
     sanitizedHostname,
@@ -125,29 +125,7 @@ export function PublishModal({
       }
     }
     prevStatusRef.current = curr
-  }, [latestDeployment])
-
-  // Sync pending hostname
-  useEffect(() => {
-    if (!pendingHostname || !workerName || pendingHostname !== workerName) return
-    setPendingHostname('')
-    setIsEditingHostname(false)
-  }, [pendingHostname, workerName])
-
-  // Pre-fill hostname when modal opens
-  useEffect(() => {
-    if (open) {
-      setHostnameInput(workerName || generatedHostname?.name || '')
-      setIsEditingHostname(false)
-    }
-  }, [open, workerName, generatedHostname])
-
-  // Pre-fill with backend-generated hostname when it arrives (first deploy)
-  useEffect(() => {
-    if (!workerName && generatedHostname?.name && !hostnameInput) {
-      setHostnameInput(generatedHostname.name)
-    }
-  }, [generatedHostname, workerName, hostnameInput])
+  }, [latestDeployment, projectId])
 
   const handleDeploy = useCallback(
     (name: string) => {
@@ -174,9 +152,14 @@ export function PublishModal({
 
   const submitHostname = () => {
     if (isDeploymentInProgress) return
-    const name = !workerName || isEditingHostname ? hostnameInput.trim() : workerName
-    if (name) setPendingHostname(name)
+    const name = !workerName || isEditingHostname ? hostnameValue.trim() : workerName
     handleDeploy(name || '')
+  }
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setHostnameInput(null)
+    setIsEditingHostname(false)
+    onOpenChange(nextOpen)
   }
 
   const copyUrl = () => {
@@ -186,7 +169,7 @@ export function PublishModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden">
         {/* Header */}
         <DialogHeader className="px-5 pt-5 pb-0">
@@ -268,10 +251,10 @@ export function PublishModal({
                 }`}
               >
                 <input
-                  value={hostnameInput}
+                  value={hostnameValue}
                   onChange={(e) => setHostnameInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && hostnameInput.trim() && !hostnameTaken)
+                    if (e.key === 'Enter' && hostnameValue.trim() && !hostnameTaken)
                       submitHostname()
                     if (e.key === 'Escape' && workerName) setIsEditingHostname(false)
                   }}
@@ -308,7 +291,7 @@ export function PublishModal({
             )}
             {!workerName
               ? 'Publish'
-              : isEditingHostname && hostnameInput.trim() !== workerName
+              : isEditingHostname && hostnameValue.trim() !== workerName
                 ? 'Save & Deploy'
                 : 'Republish'}
           </Button>

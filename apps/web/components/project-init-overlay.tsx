@@ -1,12 +1,11 @@
 'use client'
 
-import { motion, AnimatePresence } from 'motion/react'
-import { cn } from '@/lib/utils'
-import { useFunVibe, keyframeStyles } from '@/components/ui/fun-loading'
+import { AnimatePresence, motion } from 'motion/react'
 import Link from 'next/link'
-import { getProvisioningStepLabel, type ProjectProvisioningStep } from '@/lib/project-provisioning'
-
+import { keyframeStyles, useFunVibe } from '@/components/ui/fun-loading'
 import type { SandboxStage } from '@/hooks/use-sandbox-ready'
+import { getProvisioningStepLabel, type ProjectProvisioningStep } from '@/lib/project-provisioning'
+import { cn } from '@/lib/utils'
 
 interface ProjectInitOverlayProps {
   show: boolean
@@ -50,7 +49,7 @@ export function ProjectInitOverlay({ show, stage, provisioningStep }: ProjectIni
             </motion.div>
             <div className="flex flex-col items-center gap-1">
               <motion.p
-                key={vibe.message + '-text'}
+                key={`${vibe.message}-text`}
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2 }}

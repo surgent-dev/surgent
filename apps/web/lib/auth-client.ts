@@ -1,6 +1,7 @@
-import { createAuthClient } from 'better-auth/react'
-import { nextCookies } from 'better-auth/next-js'
 import { adminClient, organizationClient } from 'better-auth/client/plugins'
+import { nextCookies } from 'better-auth/next-js'
+import { createAuthClient } from 'better-auth/react'
+
 // import { oauthProviderClient } from '@better-auth/oauth-provider/client'
 
 // Create the auth client - explicit type to satisfy TypeScript

@@ -1,8 +1,8 @@
 'use client'
 
-import { ArrowUp, ArrowDown, Pulse, X } from '@phosphor-icons/react'
+import { ArrowDown, ArrowUp, Pulse, X } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
-import { useWebsiteActive, type MetricItem } from '@/queries/analytics'
+import { type MetricItem, useWebsiteActive } from '@/queries/analytics'
 
 // ── Formatting helpers ──────────────────────────────────────────
 

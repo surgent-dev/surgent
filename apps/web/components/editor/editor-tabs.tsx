@@ -1,7 +1,9 @@
 'use client'
 
+import { CircleDollarSign, Database, Monitor, ScrollText, Settings } from 'lucide-react'
 import { useState } from 'react'
-import { Monitor, ScrollText, CircleDollarSign, Settings, Database } from 'lucide-react'
+import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
+import { PreviewErrorOverlay } from '@/components/agent/preview-error-overlay'
 import {
   WebPreview,
   WebPreviewBody,
@@ -9,19 +11,17 @@ import {
   WebPreviewNavigation,
   WebPreviewUrl,
 } from '@/components/agent/web-preview'
-import { PreviewErrorOverlay } from '@/components/agent/preview-error-overlay'
-import { DeviceFrameSelector } from '@/components/publish/device-frame-selector'
 import { PaymentsDashboard } from '@/components/payments/payments-dashboard'
 import { SettingsTab } from '@/components/project/settings-tab'
-import { useSandbox } from '@/hooks/use-sandbox'
-import {
-  useSandboxHealthQuery,
-  useSandboxLogsQuery,
-  useConvexDashboardQuery,
-} from '@/queries/projects'
-import { EmbeddedDashboard } from '@/components/agent/convex-dashboard'
+import { DeviceFrameSelector } from '@/components/publish/device-frame-selector'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useSandbox } from '@/hooks/use-sandbox'
+import {
+  useConvexDashboardQuery,
+  useSandboxHealthQuery,
+  useSandboxLogsQuery,
+} from '@/queries/projects'
 
 type Tab = 'preview' | 'database' | 'payments' | 'settings' | 'logs'
 

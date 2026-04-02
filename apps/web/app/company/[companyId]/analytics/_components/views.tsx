@@ -1,16 +1,16 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Lightning, CaretLeft, CaretRight } from '@phosphor-icons/react'
+import { CaretLeft, CaretRight, Lightning } from '@phosphor-icons/react'
+import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import {
+  type MetricItem,
   useWebsiteActive,
+  useWebsiteMetrics,
   useWebsiteRealtime,
   useWebsiteSessions,
-  useWebsiteMetrics,
-  type MetricItem,
 } from '@/queries/analytics'
-import { Panel, MetricsTable, BarRow, fmt, timeAgo } from './shared'
+import { fmt, MetricsTable, Panel, timeAgo } from './shared'
 
 // ── Real-time view ──────────────────────────────────────────────
 

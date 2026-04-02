@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
 import { ArrowRight, TrendingUp } from 'lucide-react'
+import Image from 'next/image'
+import Link from 'next/link'
+import { useState } from 'react'
+import { passthroughImageLoader } from '@/lib/image-loader'
 import { formatRevenueCompact } from '@/lib/inspirations'
 import { useStartupsQuery } from '@/queries/startups'
 
@@ -45,11 +47,14 @@ function ScreenshotImage({ website, name }: { website: string; name: string }) {
   }
 
   return (
-    <img
+    <Image
+      loader={passthroughImageLoader}
+      unoptimized
       src={screenshotUrl(website)}
       alt={`${name} screenshot`}
+      fill
       className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-[1.03]"
-      loading="lazy"
+      sizes="(max-width: 640px) 50vw, 33vw"
       onError={() => setFailed(true)}
     />
   )
@@ -101,7 +106,15 @@ export function LandingEarningProjects() {
               {/* Info */}
               <div className="p-3.5 sm:p-4 flex flex-col gap-2">
                 <div className="flex items-start gap-2.5">
-                  <img src={s.icon!} alt="" className="h-8 w-8 rounded-lg object-cover shrink-0" />
+                  <Image
+                    loader={passthroughImageLoader}
+                    unoptimized
+                    src={s.icon!}
+                    alt=""
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 rounded-lg object-cover shrink-0"
+                  />
                   <div className="min-w-0 flex-1">
                     <h3
                       className="font-(--font-geist) text-[13.5px] sm:text-[14px] text-foreground truncate"

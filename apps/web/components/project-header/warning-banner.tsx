@@ -1,7 +1,7 @@
 'use client'
 
+import { CircleNotch, DownloadSimple, Warning, X } from '@phosphor-icons/react'
 import { useState } from 'react'
-import { Warning, DownloadSimple, X, CircleNotch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 
 interface WarningBannerProps {

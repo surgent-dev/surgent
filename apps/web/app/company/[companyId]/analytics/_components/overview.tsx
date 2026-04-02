@@ -1,50 +1,47 @@
 'use client'
 
-import { useState, useMemo } from 'react'
 import {
-  Users,
-  Eye,
-  Clock,
   ArrowsLeftRight,
-  Globe,
-  Desktop,
-  ShareNetwork,
-  ChartLineUp,
   CalendarBlank,
+  ChartLineUp,
+  Clock,
+  Eye,
+  Globe,
+  Users,
 } from '@phosphor-icons/react'
+import { useMemo, useState } from 'react'
+// @ts-expect-error -- no types for react-simple-maps
+import { ComposableMap, Geographies, Geography, ZoomableGroup } from 'react-simple-maps'
 import {
-  AreaChart,
   Area,
-  XAxis,
-  YAxis,
+  AreaChart,
   CartesianGrid,
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
+  XAxis,
+  YAxis,
 } from 'recharts'
-// @ts-expect-error -- no types for react-simple-maps
-import { ComposableMap, Geographies, Geography, ZoomableGroup } from 'react-simple-maps'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
-import {
-  useWebsiteStats,
-  useWebsitePageviews,
-  useWebsiteMetrics,
-  type MetricType,
-} from '@/queries/analytics'
 import { getTimezone, parseDateRange } from '@/lib/analytics-date'
 import { getSeriesDayHour, mergeTimeSeries } from '@/lib/analytics-series'
+import { cn } from '@/lib/utils'
 import {
-  Panel,
-  MetricCard,
-  MetricsTable,
-  BarRow,
-  fmt,
-  pctChange,
-  formatDuration,
+  type MetricType,
+  useWebsiteMetrics,
+  useWebsitePageviews,
+  useWebsiteStats,
+} from '@/queries/analytics'
+import {
+  activeTabClass,
   bounceRate,
   bounceRateNum,
-  activeTabClass,
+  fmt,
+  formatDuration,
   inactiveTabClass,
+  MetricCard,
+  MetricsTable,
+  Panel,
+  pctChange,
 } from './shared'
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
@@ -384,7 +381,9 @@ export function WorldMap({
   )
   const countryMap = useMemo(() => {
     const m = new Map<string, number>()
-    countries?.forEach((c) => m.set(c.x, c.y))
+    countries?.forEach((c) => {
+      m.set(c.x, c.y)
+    })
     return m
   }, [countries])
   const maxVal = useMemo(() => Math.max(...(countries?.map((c) => c.y) ?? []), 1), [countries])

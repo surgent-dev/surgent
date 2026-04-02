@@ -1,6 +1,7 @@
 'use client'
 
-import { Check, ChevronDown, Bot, Sparkles } from 'lucide-react'
+import type { Agent } from '@opencode-ai/sdk'
+import { Bot, Check, ChevronDown, Sparkles } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +9,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import type { Agent } from '@opencode-ai/sdk'
 
 type Props = {
   agents: Agent[]

@@ -18,18 +18,15 @@ interface ChartContainerProps extends React.ComponentProps<'div'> {
 }
 
 function ChartContainer({ config, className, children, ...props }: ChartContainerProps) {
+  const styleVars = Object.fromEntries(
+    Object.entries(config).map(([key, value]) => [`--color-${key}`, value.color]),
+  ) as React.CSSProperties
+
   return (
     <ChartContext.Provider value={{ config }}>
       <div
         className={cn('flex aspect-video justify-center text-xs', className)}
-        style={
-          {
-            ...Object.entries(config).reduce(
-              (acc, [key, value]) => ({ ...acc, [`--color-${key}`]: value.color }),
-              {},
-            ),
-          } as React.CSSProperties
-        }
+        style={styleVars}
         {...props}
       >
         {children}
@@ -97,5 +94,5 @@ function ChartTooltipContent({
   )
 }
 
-export { ChartContainer, ChartTooltipContent, useChart }
 export type { ChartConfig }
+export { ChartContainer, ChartTooltipContent, useChart }

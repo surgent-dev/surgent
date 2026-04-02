@@ -1,26 +1,26 @@
 'use client'
 
-import Image from 'next/image'
-import { useState, useCallback, useEffect, use, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { useTheme } from 'next-themes'
-import { track } from '@/lib/track'
-import { WhopCheckoutEmbed, useCheckoutEmbedControls } from '@whop/checkout/react'
+import { useCheckoutEmbedControls, WhopCheckoutEmbed } from '@whop/checkout/react'
 import type { WhopCheckoutState } from '@whop/checkout/util'
 import {
+  AlertCircle,
   ArrowLeft,
   Check,
-  Loader2,
-  AlertCircle,
-  Lock,
   Clock,
-  ShieldCheck,
   CreditCard,
+  Loader2,
+  Lock,
+  ShieldCheck,
 } from 'lucide-react'
+import Image from 'next/image'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useTheme } from 'next-themes'
+import { use, useCallback, useEffect, useRef, useState } from 'react'
+import { formatPrice } from '@/components/payments/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { track } from '@/lib/track'
 import { useCheckoutSession } from '@/queries/checkout'
-import { formatPrice } from '@/components/payments/utils'
 
 export default function CheckoutPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)

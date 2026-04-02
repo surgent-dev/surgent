@@ -1,8 +1,8 @@
 'use client'
 
-import { cn } from '@/lib/utils'
-import React from 'react'
+import type React from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { cn } from '@/lib/utils'
 
 export type CodeBlockProps = {
   children?: React.ReactNode

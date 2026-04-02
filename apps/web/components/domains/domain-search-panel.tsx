@@ -1,30 +1,30 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { Loader2 } from 'lucide-react'
 import {
-  Globe,
-  ArrowSquareOut,
-  ShoppingCart,
   ArrowClockwise,
-  Link,
+  ArrowSquareOut,
   CheckCircle,
   Copy,
   Gift,
+  Globe,
+  Link,
+  ShoppingCart,
   XCircle,
 } from '@phosphor-icons/react'
-import { Button } from '@/components/ui/button'
-import { showEntri, purchaseDomain, type EntriConfig } from 'entrijs'
+import { type EntriConfig, purchaseDomain, showEntri } from 'entrijs'
+import { Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 import {
-  useInitDomainPurchase,
-  useInitDomainConnect,
   useBindEntriFlow,
-  useRetryDomainConnect,
-  useProjectDomains,
-  useOnDomainPurchased,
-  useRemoveDomain,
   useDomainConfig,
+  useInitDomainConnect,
+  useInitDomainPurchase,
+  useOnDomainPurchased,
+  useProjectDomains,
+  useRemoveDomain,
+  useRetryDomainConnect,
 } from '@/queries/domains'
 
 // ─── Helpers ────────────────────────────────────────────────────

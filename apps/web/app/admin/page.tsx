@@ -1,10 +1,9 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
+import { serverBackendUrl } from '@/lib/server-backend'
 import { AdminDashboard } from './admin-dashboard'
 import type { AdminOverview, AdminTransactions } from './types'
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
 
 interface AdminFetchError {
   error: string
@@ -36,8 +35,8 @@ async function fetchAdminData(params: SearchParams): Promise<{
   const sort = params.sort || 'desc'
   const qp = new URLSearchParams({ range, page, perPage, sort })
   if (params.deployed) qp.set('deployed', params.deployed)
-  const overviewUrl = `${BACKEND_URL}/api/admin/overview?${qp.toString()}`
-  const txUrl = `${BACKEND_URL}/api/admin/transactions?range=${range}`
+  const overviewUrl = `${serverBackendUrl}/api/admin/overview?${qp.toString()}`
+  const txUrl = `${serverBackendUrl}/api/admin/transactions?range=${range}`
 
   const [res, txRes] = await Promise.all([
     fetch(overviewUrl, { headers: { Cookie: cookieHeader }, cache: 'no-store' }),

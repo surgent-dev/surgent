@@ -1,14 +1,8 @@
-import {
-  Experimental_Agent as Agent,
-  stepCountIs,
-  tool,
-  wrapLanguageModel,
-  defaultSettingsMiddleware,
-} from 'ai'
-import { z } from 'zod'
 import { readFile, writeFile } from 'node:fs/promises'
-import { gateway } from '@ai-sdk/gateway'
 import { join } from 'node:path'
+import { gateway } from '@ai-sdk/gateway'
+import { Experimental_Agent as Agent, stepCountIs, tool } from 'ai'
+import { z } from 'zod'
 
 // PLAN.md lives on the server as the source of truth
 const PLAN_PATH = join(process.cwd(), 'PLAN.md')
@@ -29,7 +23,7 @@ async function writePlanFile(content: string): Promise<void> {
 
 // Helper: Ensure trailing newline
 function ensureNewline(s: string): string {
-  return s.endsWith('\n') ? s : s + '\n'
+  return s.endsWith('\n') ? s : `${s}\n`
 }
 
 export const codingAgent = new Agent({
@@ -102,7 +96,7 @@ Keep things simple. Avoid overengineering.`,
 
         if (startIdx === -1) {
           // Section doesn't exist, create it
-          const updated = ensureNewline(current) + `\n## ${sectionTitle}\n\n${content}\n`
+          const updated = `${ensureNewline(current)}\n## ${sectionTitle}\n\n${content}\n`
           await writePlanFile(updated)
           return {
             success: true,

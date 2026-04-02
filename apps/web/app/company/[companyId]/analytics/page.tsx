@@ -1,47 +1,47 @@
 'use client'
 
-import { useState } from 'react'
-import { useParams } from 'next/navigation'
 import {
-  ChartLineUp,
-  WaveSquare,
-  UserList,
-  Lightning,
+  ArrowCounterClockwise,
   CaretDown,
   CaretLeft,
   CaretRight,
-  ArrowCounterClockwise,
+  ChartLineUp,
+  Desktop,
   Eye,
   Globe,
-  Desktop,
+  Lightning,
   ShareNetwork,
+  UserList,
+  WaveSquare,
 } from '@phosphor-icons/react'
+import { useParams } from 'next/navigation'
+import { useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { canGoForward, getOffsetDateRange, parseDateRange } from '@/lib/analytics-date'
 import { cn } from '@/lib/utils'
 import { DATE_RANGE_PRESETS, type DateRangeValue, type MetricType } from '@/queries/analytics'
-import { parseDateRange, getOffsetDateRange, canGoForward } from '@/lib/analytics-date'
 import {
-  ActiveBadge,
-  FilterBar,
-  Panel,
-  activeTabClass,
-  inactiveTabClass,
-} from './_components/shared'
-import {
+  ExpandedView,
   MetricsBar,
+  MetricsPanel,
   PageviewsChart,
   UnitFilter,
-  MetricsPanel,
-  WorldMap,
   WeeklyTraffic,
-  ExpandedView,
+  WorldMap,
 } from './_components/overview'
-import { RealtimeView, SessionsView, EventsView } from './_components/views'
+import {
+  ActiveBadge,
+  activeTabClass,
+  FilterBar,
+  inactiveTabClass,
+  Panel,
+} from './_components/shared'
+import { EventsView, RealtimeView, SessionsView } from './_components/views'
 
 // ── View navigation ─────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { Monitor, DeviceMobile, DeviceTablet, CaretDown } from '@phosphor-icons/react'
+import { CaretDown, DeviceMobile, DeviceTablet, Monitor } from '@phosphor-icons/react'
 import {
   DropdownMenu,
   DropdownMenuContent,

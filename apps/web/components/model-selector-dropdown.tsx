@@ -1,15 +1,15 @@
 'use client'
 
-import Image from 'next/image'
 import { Check, ChevronDown } from 'lucide-react'
+import Image from 'next/image'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
 import { getModel, type ProviderModel } from '@/lib/models'
+import { cn } from '@/lib/utils'
 
 type Props = {
   models: ProviderModel[]

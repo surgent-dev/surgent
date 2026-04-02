@@ -1,48 +1,48 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
 import {
-  RocketLaunch,
-  CaretDown,
-  Copy,
-  Clock,
   ArrowSquareOut,
-  PencilSimple,
-  X,
-  Globe,
-  Tag,
-  CircleNotch,
+  CaretDown,
   CheckCircle,
-  XCircle,
+  CircleNotch,
+  Clock,
+  Copy,
+  Globe,
+  PencilSimple,
+  RocketLaunch,
   Stop,
+  Tag,
+  X,
+  XCircle,
 } from '@phosphor-icons/react'
-import { useCredits } from '@/hooks/use-credits'
+import { useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import DeploymentStatusDialog from '@/components/deployment-status-dialog'
+import SellDialog from '@/components/project-header/sell-dialog'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import DeploymentStatusDialog from '@/components/deployment-status-dialog'
-import SellDialog from '@/components/project-header/sell-dialog'
-import {
-  useDeployProject,
-  useCancelDeployment,
-  useLatestDeploymentQuery,
-  useHostnameAvailability,
-  useGenerateHostname,
-  useUpdateProjectVisibility,
-} from '@/queries/projects'
-import { useProjectDomains } from '@/queries/domains'
+import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useCredits } from '@/hooks/use-credits'
 import {
   DEPLOYMENT_STATUS_LABELS,
-  TERMINAL_DEPLOYMENT_STATUSES,
   sanitizeDeploymentHostname,
+  TERMINAL_DEPLOYMENT_STATUSES,
 } from '@/lib/deployment'
+import { useProjectDomains } from '@/queries/domains'
+import {
+  useCancelDeployment,
+  useDeployProject,
+  useGenerateHostname,
+  useHostnameAvailability,
+  useLatestDeploymentQuery,
+  useUpdateProjectVisibility,
+} from '@/queries/projects'
 
 const iconBtn = 'p-1 hover:bg-muted/40 rounded-md transition-all duration-100 cursor-pointer'
 
@@ -65,8 +65,7 @@ export default function PublishButton({ projectId, project }: PublishButtonProps
   const [isSellOpen, setIsSellOpen] = useState(false)
   const [isDeploying, setIsDeploying] = useState(false)
   const [isEditingHostname, setIsEditingHostname] = useState(false)
-  const [hostnameInput, setHostnameInput] = useState('')
-  const [pendingHostname, setPendingHostname] = useState('')
+  const [hostnameInput, setHostnameInput] = useState<string | null>(null)
 
   const deployProject = useDeployProject()
   const cancelDeployment = useCancelDeployment()
@@ -83,7 +82,8 @@ export default function PublishButton({ projectId, project }: PublishButtonProps
     latestDeployment && !TERMINAL_DEPLOYMENT_STATUSES.includes(latestDeployment.status)
 
   const { data: generatedHostname } = useGenerateHostname(isPublishOpen && !workerName)
-  const sanitizedHostname = sanitizeDeploymentHostname(hostnameInput)
+  const hostnameValue = hostnameInput ?? workerName ?? generatedHostname?.name ?? ''
+  const sanitizedHostname = sanitizeDeploymentHostname(hostnameValue)
   const isNewHostname = !workerName || sanitizedHostname !== workerName
   const { data: availability, isLoading: checkingHostname } = useHostnameAvailability(
     sanitizedHostname,
@@ -122,19 +122,6 @@ export default function PublishButton({ projectId, project }: PublishButtonProps
     prevStatusRef.current = curr
   }, [latestDeployment, queryClient, projectId])
 
-  useEffect(() => {
-    if (pendingHostname && workerName && pendingHostname === workerName) {
-      setPendingHostname('')
-      setIsEditingHostname(false)
-    }
-  }, [pendingHostname, workerName])
-
-  useEffect(() => {
-    if (!workerName && generatedHostname?.name && !hostnameInput) {
-      setHostnameInput(generatedHostname.name)
-    }
-  }, [generatedHostname, workerName, hostnameInput])
-
   const handleDeploy = useCallback(
     (name: string) => {
       if (!projectId || isDeploying) return
@@ -157,8 +144,7 @@ export default function PublishButton({ projectId, project }: PublishButtonProps
 
   const submitHostname = () => {
     if (isDeploymentInProgress) return
-    const name = !workerName || isEditingHostname ? hostnameInput.trim() : workerName
-    if (name) setPendingHostname(name)
+    const name = !workerName || isEditingHostname ? hostnameValue.trim() : workerName
     handleDeploy(name || '')
   }
 
@@ -178,10 +164,8 @@ export default function PublishButton({ projectId, project }: PublishButtonProps
 
   const handlePublishOpenChange = (open: boolean) => {
     setIsPublishOpen(open)
-    if (open) {
-      setHostnameInput(workerName || generatedHostname?.name || '')
-      setIsEditingHostname(false)
-    }
+    setHostnameInput(null)
+    setIsEditingHostname(false)
   }
 
   const copyUrl = () => {
@@ -279,10 +263,10 @@ export default function PublishButton({ projectId, project }: PublishButtonProps
                 className={`flex items-center h-8 px-3 rounded-md border bg-muted/20 font-mono text-[13px] transition-all duration-100 ${hostnameTaken ? 'border-destructive/40' : 'border-border/50 focus-within:border-foreground/15'}`}
               >
                 <input
-                  value={hostnameInput}
+                  value={hostnameValue}
                   onChange={(e) => setHostnameInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && hostnameInput.trim() && !hostnameTaken)
+                    if (e.key === 'Enter' && hostnameValue.trim() && !hostnameTaken)
                       submitHostname()
                     if (e.key === 'Escape' && workerName) setIsEditingHostname(false)
                   }}
@@ -320,7 +304,7 @@ export default function PublishButton({ projectId, project }: PublishButtonProps
                 )}
                 {!workerName
                   ? 'Deploy'
-                  : isEditingHostname && hostnameInput.trim() !== workerName
+                  : isEditingHostname && hostnameValue.trim() !== workerName
                     ? 'Save & Deploy'
                     : 'Republish'}
               </Button>

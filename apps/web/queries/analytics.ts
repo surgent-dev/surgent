@@ -5,8 +5,8 @@
  *   GET /api/projects/:id/analytics/<path>?startAt&endAt&unit&timezone&compare&type&limit
  */
 import { useQuery } from '@tanstack/react-query'
+import { type DateRange, getTimezone, parseDateRange } from '@/lib/analytics-date'
 import { http } from '@/lib/http'
-import { parseDateRange, getTimezone, getMinimumUnit, type DateRange } from '@/lib/analytics-date'
 
 // ── Types (match Umami response shapes exactly) ─────────────────
 

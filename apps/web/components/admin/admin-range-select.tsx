@@ -1,8 +1,8 @@
 'use client'
 
+import { Loader2 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTransition } from 'react'
-import { Loader2 } from 'lucide-react'
 import {
   Select,
   SelectContent,

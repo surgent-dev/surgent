@@ -1,9 +1,5 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { useSandbox, type IframeError } from '@/hooks/use-sandbox'
 import {
   ArrowClockwise,
   ArrowSquareOut,
@@ -12,7 +8,11 @@ import {
   CircleNotch,
 } from '@phosphor-icons/react'
 import type { ComponentProps } from 'react'
-import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { type IframeError, useSandbox } from '@/hooks/use-sandbox'
+import { cn } from '@/lib/utils'
 
 export type WebPreviewContextValue = {
   url: string
@@ -408,7 +408,7 @@ export const WebPreviewUrl = ({ className, ...props }: WebPreviewUrlProps) => {
   const handleNavigate = () => {
     try {
       const newUrl = new URL(url)
-      newUrl.pathname = path.startsWith('/') ? path : '/' + path
+      newUrl.pathname = path.startsWith('/') ? path : `/${path}`
       setUrl(newUrl.toString())
     } catch {
       // ignore invalid url
@@ -454,7 +454,7 @@ const IFRAME_ALLOW =
   'autoplay; camera; clipboard-read; clipboard-write; geolocation; display-capture; encrypted-media; fullscreen; gamepad; gyroscope; magnetometer; microphone; midi; payment; usb; bluetooth; hid; serial; xr-spatial-tracking; screen-wake-lock; idle-detection; publickey-credentials-get; local-fonts; window-management'
 
 export const WebPreviewBody = ({ className, src, onLoad, ...props }: WebPreviewBodyProps) => {
-  const { url, iframeRef, reloadTick, refresh } = useWebPreview()
+  const { url, iframeRef, reloadTick } = useWebPreview()
   const setIframeError = useSandbox((s) => s.setIframeError)
   const previewRefreshTick = useSandbox((s) => s.previewRefreshTick)
   const deviceFrame = useSandbox((s) => s.deviceFrame)
@@ -500,7 +500,7 @@ export const WebPreviewBody = ({ className, src, onLoad, ...props }: WebPreviewB
   }, [clearTimers])
 
   const startWatchdog = useCallback(
-    (nextUrl: string) => {
+    function startWatchdog(nextUrl: string) {
       clearTimers()
       watchdogRef.current = setTimeout(() => {
         if (retryRef.current === 0) {

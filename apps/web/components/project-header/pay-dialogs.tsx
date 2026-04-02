@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { toast } from 'sonner'
 import { CircleNotch } from '@phosphor-icons/react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -29,18 +29,17 @@ export default function PayDialogs({ projectId }: PayDialogsProps) {
 
   const [isSuccessOpen, setIsSuccessOpen] = useState(false)
   const [isConflictOpen, setIsConflictOpen] = useState(false)
-  const [, setConflictAccountId] = useState<string | null>(null)
 
   // Pay success handling
   useEffect(() => {
     if (searchParams.get('pay_connected') === 'true') {
-      setIsSuccessOpen(true)
+      const timer = window.setTimeout(() => setIsSuccessOpen(true), 0)
       const params = new URLSearchParams(searchParams.toString())
       params.delete('pay_connected')
       const query = params.toString()
       router.replace(query ? `${pathname}?${query}` : pathname)
+      return () => window.clearTimeout(timer)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, pathname, router])
 
   // Pay conflict handling
@@ -48,14 +47,14 @@ export default function PayDialogs({ projectId }: PayDialogsProps) {
     if (searchParams.get('pay_conflict') === 'true') {
       const accountId = searchParams.get('conflict_account_id')
       if (accountId) {
-        setConflictAccountId(accountId)
-        setIsConflictOpen(true)
+        const timer = window.setTimeout(() => setIsConflictOpen(true), 0)
+        const params = new URLSearchParams(searchParams.toString())
+        params.delete('pay_conflict')
+        params.delete('conflict_account_id')
+        const query = params.toString()
+        router.replace(query ? `${pathname}?${query}` : pathname)
+        return () => window.clearTimeout(timer)
       }
-      const params = new URLSearchParams(searchParams.toString())
-      params.delete('pay_conflict')
-      params.delete('conflict_account_id')
-      const query = params.toString()
-      router.replace(query ? `${pathname}?${query}` : pathname)
     }
   }, [searchParams, pathname, router])
 
@@ -118,7 +117,6 @@ export default function PayDialogs({ projectId }: PayDialogsProps) {
                   surpayConnect.mutate(projectId, {
                     onSuccess: (data) => {
                       setIsConflictOpen(false)
-                      setConflictAccountId(null)
                       window.location.href = data.oauthUrl
                     },
                     onError: () => toast.error('Failed to start payment connection', {}),
@@ -133,7 +131,6 @@ export default function PayDialogs({ projectId }: PayDialogsProps) {
                 variant="outline"
                 onClick={() => {
                   setIsConflictOpen(false)
-                  setConflictAccountId(null)
                 }}
               >
                 Cancel

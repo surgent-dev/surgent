@@ -1,12 +1,26 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
 import type { Message, Part, ToolPart } from '@opencode-ai/sdk'
+import { ArrowElbowDownRight, Chat } from '@phosphor-icons/react'
+import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Skeleton } from '@/components/ui/skeleton'
+import {
+  AlertCircle,
+  ArrowDown,
+  GitCompare,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Redo2,
+  RefreshCw,
+  X,
+} from 'lucide-react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AgentThread } from '@/components/agent/agent-thread'
+import QuestionPrompt from '@/components/agent/question-prompt'
+import PlanDialog from '@/components/plan-dialog'
+import ProviderDialog from '@/components/provider-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,44 +28,29 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
-import { http } from '@/lib/http'
-import {
-  Loader2,
-  Plus,
-  AlertCircle,
-  X,
-  RefreshCw,
-  Redo2,
-  GitCompare,
-  ArrowDown,
-  MoreHorizontal,
-} from 'lucide-react'
-import { Chat, ArrowElbowDownRight } from '@phosphor-icons/react'
-import { MODELS, type ProviderModel } from '@/lib/models'
-import { useCredits } from '@/hooks/use-credits'
-import ChatInput, { type FilePart } from './chat-input'
-import { useSandbox } from '@/hooks/use-sandbox'
-import useAgentStream, { type SessionStatusRetry } from '@/lib/use-agent-stream'
-import { computeWorkingFromParts } from '@/lib/agent-working'
-import { AgentThread } from '@/components/agent/agent-thread'
-import QuestionPrompt from '@/components/agent/question-prompt'
-import PlanDialog from '@/components/plan-dialog'
-import {
-  useSessionsQuery,
-  useCreateSession,
-  useSendMessage,
-  useAbortSession,
-  useRevertSession,
-  useUnrevertSession,
-  useReplyQuestion,
-  useRejectQuestion,
-  useSubagents,
-  type SendPartInput,
-  type AgentModelOverride,
-} from '@/queries/chats'
-import ProviderDialog from '@/components/provider-dialog'
 import { useFunMessage } from '@/components/ui/fun-loading'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useCredits } from '@/hooks/use-credits'
+import { useSandbox } from '@/hooks/use-sandbox'
+import { computeWorkingFromParts } from '@/lib/agent-working'
+import { http } from '@/lib/http'
+import { MODELS } from '@/lib/models'
+import useAgentStream, { type SessionStatusRetry } from '@/lib/use-agent-stream'
+import { cn } from '@/lib/utils'
+import {
+  type SendPartInput,
+  useAbortSession,
+  useCreateSession,
+  useRejectQuestion,
+  useReplyQuestion,
+  useRevertSession,
+  useSendMessage,
+  useSessionsQuery,
+  useSubagents,
+  useUnrevertSession,
+} from '@/queries/chats'
+import ChatInput, { type FilePart } from './chat-input'
 
 export interface ConversationProps {
   projectId?: string
@@ -218,7 +217,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const openChangesTab = useSandbox((s) => s.openChangesTab)
 
   const sessionsQuery = useSessionsQuery(projectId)
-  const sessions = sessionsQuery.data ?? []
+  const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data])
   const { data: subagents = [] } = useSubagents(projectId)
   const create = useCreateSession(projectId)
   const send = useSendMessage(projectId)
@@ -478,7 +477,9 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   )
 
   const handleCreate = () =>
-    create.mutateAsync().then((s) => s?.id && projectId && setActiveSession(projectId, s.id))
+    create
+      .mutateAsync(undefined)
+      .then((s) => s?.id && projectId && setActiveSession(projectId, s.id))
 
   const activeSession = sessions.find((s) => s.id === activeId)
   const sessionName = formatTitle(session?.title || activeSession?.title || 'Untitled')

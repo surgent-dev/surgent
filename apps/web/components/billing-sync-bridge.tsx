@@ -1,10 +1,10 @@
 'use client'
 
-import { Suspense, useEffect, useRef } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { fireConfetti } from '@/lib/confetti'
 import { useBillingSync } from '@/hooks/use-subscription'
+import { fireConfetti } from '@/lib/confetti'
 
 function getToastMessage(kind: 'subscription' | 'topup' | null, billing: string) {
   if (billing === 'return') return 'Billing synced'

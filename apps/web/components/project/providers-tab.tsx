@@ -1,19 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { Key, Link2, Loader2, Plus, Trash2 } from 'lucide-react'
 import Image from 'next/image'
-import { Loader2, Trash2, Key, Link2, Plus } from 'lucide-react'
+import { useState } from 'react'
 import { toast } from 'sonner'
-
-import {
-  useProvidersQuery,
-  useUpsertProvider,
-  useDeleteProvider,
-  type ProviderRow,
-} from '@/queries/providers'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Dialog,
   DialogContent,
@@ -22,7 +13,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { getErrorMessage } from '@/lib/provider-oauth'
+import {
+  type ProviderRow,
+  useDeleteProvider,
+  useProvidersQuery,
+  useUpsertProvider,
+} from '@/queries/providers'
 
 type ConnectMode = 'idle' | 'api-key'
 

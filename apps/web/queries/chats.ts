@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { Session, FileDiff, Agent } from '@opencode-ai/sdk'
+import type { Agent, FileDiff, Session } from '@opencode-ai/sdk'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import type { QuestionAnswer } from '@/lib/question'
 
@@ -86,13 +86,13 @@ async function sendMessage(
 ): Promise<void> {
   const body: Record<string, unknown> = { agent, parts }
 
-  if (messageId && messageId.trim()) {
+  if (messageId?.trim()) {
     body.messageID = messageId
   }
-  if (model && model.trim() && providerID && providerID.trim()) {
+  if (model?.trim() && providerID?.trim()) {
     body.model = { providerID, modelID: model }
   }
-  if (variant && variant.trim()) {
+  if (variant?.trim()) {
     body.variant = variant
   }
   if (agentOverrides && Object.keys(agentOverrides).length > 0) {
@@ -125,13 +125,13 @@ export function useSessionsQuery(projectId?: string) {
     enabled: Boolean(projectId),
     staleTime: 10000,
     retry: 8,
-    retryDelay: (attempt) => Math.min(500 * Math.pow(2, attempt), 5000),
+    retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 5000),
   })
 }
 
 export function useCreateSession(projectId?: string) {
   const queryClient = useQueryClient()
-  return useMutation<Session, unknown, CreateSessionOptions | void>({
+  return useMutation<Session, unknown, CreateSessionOptions | undefined>({
     mutationFn: (options) => createSession(projectId as string, options ?? undefined),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions', projectId] }),
   })

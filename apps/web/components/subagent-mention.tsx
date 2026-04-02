@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { Bot, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import type { Agent } from '@opencode-ai/sdk'
+import { Bot, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { cn } from '@/lib/utils'
 
 type Props = {
   subagents: Agent[]
@@ -22,28 +22,19 @@ export default function SubagentMention({
   onSubagentSelect,
   inputRef,
 }: Props) {
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [filter, setFilter] = useState('')
+  const [dismissedMention, setDismissedMention] = useState<string | null>(null)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const mentionMatch = useMemo(() => value.match(/(?:^|\s)@(\w*)$/), [value])
+  const filter = mentionMatch?.[1] || ''
+  const mentionToken = mentionMatch?.[0]?.trim() ?? null
+  const showDropdown = Boolean(mentionMatch) && dismissedMention !== mentionToken
 
   // Filter subagents based on input after @
   const filteredSubagents = subagents.filter((a) =>
     a.name.toLowerCase().includes(filter.toLowerCase()),
   )
-
-  // Detect @ at start of input or after space
-  useEffect(() => {
-    const atMatch = value.match(/(?:^|\s)@(\w*)$/)
-    if (atMatch) {
-      setFilter(atMatch[1] || '')
-      setShowDropdown(true)
-      setHighlightedIndex(0)
-    } else if (!value.startsWith('@')) {
-      setShowDropdown(false)
-      setFilter('')
-    }
-  }, [value])
+  const activeIndex = Math.min(highlightedIndex, Math.max(filteredSubagents.length - 1, 0))
 
   const handleSelect = useCallback(
     (agent: Agent) => {
@@ -51,8 +42,8 @@ export default function SubagentMention({
       const newValue = value.replace(/(?:^|\s)@\w*$/, '').trim()
       onValueChange(newValue)
       onSubagentSelect(agent.name)
-      setShowDropdown(false)
-      setFilter('')
+      setDismissedMention(null)
+      setHighlightedIndex(0)
       inputRef?.current?.focus()
     },
     [value, onValueChange, onSubagentSelect, inputRef],
@@ -79,18 +70,18 @@ export default function SubagentMention({
           break
         case 'Enter':
         case 'Tab':
-          if (filteredSubagents[highlightedIndex]) {
+          if (filteredSubagents[activeIndex]) {
             e.preventDefault()
-            handleSelect(filteredSubagents[highlightedIndex])
+            handleSelect(filteredSubagents[activeIndex])
           }
           break
         case 'Escape':
           e.preventDefault()
-          setShowDropdown(false)
+          setDismissedMention(mentionToken)
           break
       }
     },
-    [showDropdown, filteredSubagents, highlightedIndex, handleSelect],
+    [showDropdown, filteredSubagents, activeIndex, handleSelect, mentionToken],
   )
 
   // Expose keyboard handler
@@ -110,12 +101,12 @@ export default function SubagentMention({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowDropdown(false)
+        setDismissedMention(mentionToken)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [mentionToken])
 
   return (
     <>
@@ -151,7 +142,7 @@ export default function SubagentMention({
                 onClick={() => handleSelect(agent)}
                 className={cn(
                   'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors',
-                  index === highlightedIndex ? 'bg-muted' : 'hover:bg-muted/50',
+                  index === activeIndex ? 'bg-muted' : 'hover:bg-muted/50',
                 )}
               >
                 <Bot className="size-4 shrink-0" style={{ color: agent.color || undefined }} />

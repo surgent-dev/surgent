@@ -1,14 +1,14 @@
 'use client'
 
-import { Headset, Envelope, DiscordLogo, TelegramLogo, Copy } from '@phosphor-icons/react'
+import { Copy, DiscordLogo, Envelope, Headset, TelegramLogo } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 export default function SupportMenu() {
   return (

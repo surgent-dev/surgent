@@ -1,7 +1,7 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { Message, Part } from '@opencode-ai/sdk'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { backendBaseUrl, http } from '@/lib/http'
 
 type StreamEvent = { type: string; properties?: Record<string, unknown> }
@@ -256,14 +256,18 @@ export function ProjectEventProvider({
 
   const emitAll = useCallback((event: StreamEvent) => {
     for (const callbacks of subscribersRef.current.values()) {
-      callbacks.forEach((callback) => callback(event))
+      callbacks.forEach((callback) => {
+        callback(event)
+      })
     }
   }, [])
 
   const emitSession = useCallback((sessionId: string, event: StreamEvent) => {
     const callbacks = subscribersRef.current.get(sessionId)
     if (!callbacks) return
-    callbacks.forEach((callback) => callback(event))
+    callbacks.forEach((callback) => {
+      callback(event)
+    })
   }, [])
 
   const emitRouted = useCallback(
@@ -300,69 +304,73 @@ export function ProjectEventProvider({
 
   const syncSession = useCallback(
     (sessionId: string, force = false) => {
-      if (!projectId || !sessionId || closedRef.current) return
-      if (!force && !needsResyncRef.current.has(sessionId)) return
+      const runSync = (nextSessionId: string, nextForce = false) => {
+        if (!projectId || !nextSessionId || closedRef.current) return
+        if (!nextForce && !needsResyncRef.current.has(nextSessionId)) return
 
-      const key = `${projectId}:${sessionId}`
+        const key = `${projectId}:${nextSessionId}`
 
-      // Inflight deduplication - avoid duplicate requests
-      const pending = inflightRef.current.get(key)
-      if (pending) {
-        needsResyncRef.current.add(sessionId)
-        return
+        // Inflight deduplication - avoid duplicate requests
+        const pending = inflightRef.current.get(key)
+        if (pending) {
+          needsResyncRef.current.add(nextSessionId)
+          return
+        }
+
+        needsResyncRef.current.delete(nextSessionId)
+
+        const syncMessages = http
+          .get(`api/agent/${projectId}/session/${nextSessionId}/message`, {
+            retry: { limit: 3, statusCodes: [502, 503, 504], delay: () => 500 },
+          })
+          .json<Array<{ info: Message; parts: Part[] }>>()
+          .then((items) => {
+            if (closedRef.current) return
+            emitSession(nextSessionId, {
+              type: 'batch.load',
+              properties: { messages: items ?? [] },
+            })
+          })
+          .catch(() => {
+            if (closedRef.current) return
+            emitSession(nextSessionId, {
+              type: 'batch.load.error',
+              properties: { sessionID: nextSessionId },
+            })
+          })
+
+        const syncStatus = http
+          .get(`api/agent/${projectId}/session/status`, {
+            retry: { limit: 3, statusCodes: [502, 503, 504], delay: () => 500 },
+          })
+          .json<Record<string, unknown>>()
+          .then((items) => {
+            if (closedRef.current) return
+            const status = items?.[nextSessionId]
+            if (status) {
+              emitSession(nextSessionId, {
+                type: 'session.status',
+                properties: { sessionID: nextSessionId, status },
+              })
+              return
+            }
+            emitSession(nextSessionId, {
+              type: 'session.idle',
+              properties: { sessionID: nextSessionId },
+            })
+          })
+          .catch(() => {})
+
+        const promise = Promise.allSettled([syncMessages, syncStatus]).then(() => {
+          inflightRef.current.delete(key)
+          if (!needsResyncRef.current.has(nextSessionId) || closedRef.current) return
+          runSync(nextSessionId, true)
+        })
+
+        inflightRef.current.set(key, promise)
       }
 
-      needsResyncRef.current.delete(sessionId)
-
-      const syncMessages = http
-        .get(`api/agent/${projectId}/session/${sessionId}/message`, {
-          retry: { limit: 3, statusCodes: [502, 503, 504], delay: () => 500 },
-        })
-        .json<Array<{ info: Message; parts: Part[] }>>()
-        .then((items) => {
-          if (closedRef.current) return
-          emitSession(sessionId, {
-            type: 'batch.load',
-            properties: { messages: items ?? [] },
-          })
-        })
-        .catch(() => {
-          if (closedRef.current) return
-          emitSession(sessionId, {
-            type: 'batch.load.error',
-            properties: { sessionID: sessionId },
-          })
-        })
-
-      const syncStatus = http
-        .get(`api/agent/${projectId}/session/status`, {
-          retry: { limit: 3, statusCodes: [502, 503, 504], delay: () => 500 },
-        })
-        .json<Record<string, unknown>>()
-        .then((items) => {
-          if (closedRef.current) return
-          const status = items?.[sessionId]
-          if (status) {
-            emitSession(sessionId, {
-              type: 'session.status',
-              properties: { sessionID: sessionId, status },
-            })
-            return
-          }
-          emitSession(sessionId, {
-            type: 'session.idle',
-            properties: { sessionID: sessionId },
-          })
-        })
-        .catch(() => {})
-
-      const promise = Promise.allSettled([syncMessages, syncStatus]).then(() => {
-        inflightRef.current.delete(key)
-        if (!needsResyncRef.current.has(sessionId) || closedRef.current) return
-        syncSession(sessionId, true)
-      })
-
-      inflightRef.current.set(key, promise)
+      runSync(sessionId, force)
     },
     [emitSession, projectId],
   )
@@ -413,7 +421,9 @@ export function ProjectEventProvider({
         const events = queueRef.current
         queueRef.current = []
         rafRef.current = null
-        events.forEach((event) => emitRouted(event))
+        events.forEach((event) => {
+          emitRouted(event)
+        })
       })
     }
 
@@ -444,7 +454,7 @@ export function ProjectEventProvider({
       // Use server-specified retry interval if available, otherwise exponential backoff
       const serverRetry = retryIntervalRef.current
       const baseDelay =
-        serverRetry ?? (attempt === 0 ? 300 : Math.min(1000 * Math.pow(2, attempt - 1), 30000))
+        serverRetry ?? (attempt === 0 ? 300 : Math.min(1000 * 2 ** (attempt - 1), 30000))
       const jitter = 0.9 + Math.random() * 0.2
       const delay = Math.round(baseDelay * jitter)
       attemptRef.current = Math.min(attempt + 1, 10)
@@ -558,6 +568,8 @@ export function ProjectEventProvider({
 
     connect()
 
+    const inflight = inflightRef.current
+
     return () => {
       closedRef.current = true
       clearDisconnectTimer()
@@ -580,7 +592,7 @@ export function ProjectEventProvider({
         rafRef.current = null
       }
       queueRef.current = []
-      inflightRef.current.clear()
+      inflight.clear()
 
       setConnectedState(false)
       emitAll({ type: 'connection.closed' })

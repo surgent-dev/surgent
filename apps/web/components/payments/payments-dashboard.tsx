@@ -1,44 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { ArrowUpFromLine, CircleDollarSign, Loader2, Plus, ArrowRight } from 'lucide-react'
 import { CircleNotch } from '@phosphor-icons/react'
+import { ArrowRight, ArrowUpFromLine, Loader2, Plus } from 'lucide-react'
 import Image from 'next/image'
+import { useState } from 'react'
 import { toast } from 'sonner'
-import {
-  useProducts,
-  useSyncProducts,
-  type Product,
-  type ProductWithPrices,
-  type ProductPrice,
-} from '@/queries/products'
-import { useTransactions } from '@/queries/transactions'
-import { useCustomers } from '@/queries/customers'
-import { useSubscriptions } from '@/queries/subscriptions'
-import {
-  useSurpayAccounts,
-  useSurpayDisconnect,
-  useWhopConnect,
-  type SurpayAccount,
-} from '@/queries/surpay'
-import { usePayEnv } from '@/stores/pay-env'
 import { parseConnectError } from '@/components/payments/utils'
-import { CreateProductSheet } from './create-product-sheet'
-import { CreatePriceDialog } from './create-price-dialog'
-import { EditProductDialog } from './edit-product-dialog'
-import { Sidebar, type ViewType, type AccountData } from './sidebar'
-import { DashboardView } from './dashboard-view'
-import { ProductsView } from './products-view'
-import { TransactionsView } from './transactions-view'
-import { CustomersView } from './customers-view'
-import { SubscriptionsView } from './subscriptions-view'
-import { DocumentationView } from './documentation-view'
-import { SettingsView } from './settings-view'
-import { payHttp } from '@/lib/http'
-import { cn } from '@/lib/utils'
-import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -48,6 +16,37 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { FunLoadingState } from '@/components/ui/fun-loading'
+import { authClient } from '@/lib/auth-client'
+import { payHttp } from '@/lib/http'
+import { cn } from '@/lib/utils'
+import { useCustomers } from '@/queries/customers'
+import {
+  type Product,
+  type ProductPrice,
+  type ProductWithPrices,
+  useProducts,
+  useSyncProducts,
+} from '@/queries/products'
+import { useSubscriptions } from '@/queries/subscriptions'
+import {
+  type SurpayAccount,
+  useSurpayAccounts,
+  useSurpayDisconnect,
+  useWhopConnect,
+} from '@/queries/surpay'
+import { useTransactions } from '@/queries/transactions'
+import { usePayEnv } from '@/stores/pay-env'
+import { CreatePriceDialog } from './create-price-dialog'
+import { CreateProductSheet } from './create-product-sheet'
+import { CustomersView } from './customers-view'
+import { DashboardView } from './dashboard-view'
+import { DocumentationView } from './documentation-view'
+import { EditProductDialog } from './edit-product-dialog'
+import { ProductsView } from './products-view'
+import { SettingsView } from './settings-view'
+import { type AccountData, Sidebar, type ViewType } from './sidebar'
+import { SubscriptionsView } from './subscriptions-view'
+import { TransactionsView } from './transactions-view'
 
 function ConnectPaymentsView({ disconnectedAccount }: { disconnectedAccount?: SurpayAccount }) {
   const [companyName, setCompanyName] = useState('')

@@ -1,9 +1,9 @@
 'use client'
 
 import { CreditCard } from '@phosphor-icons/react'
-import { Sparkline } from '@/components/ui/sparkline'
 import { getPaymentSummary } from '@/components/payments/summary'
 import { formatPrice } from '@/components/payments/utils'
+import { Sparkline } from '@/components/ui/sparkline'
 import { useSurpayAccounts } from '@/queries/surpay'
 import { useTransactions } from '@/queries/transactions'
 import { DashboardCard } from './dashboard-card'

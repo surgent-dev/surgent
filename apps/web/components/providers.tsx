@@ -1,10 +1,10 @@
 'use client'
 
-import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useState, useEffect } from 'react'
 import { ThemeProvider } from 'next-themes'
 import posthog from 'posthog-js'
+import type { ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { authClient } from '@/lib/auth-client'
 import { track } from '@/lib/track'
 
@@ -25,6 +25,7 @@ export default function Providers({ children }: ProvidersProps) {
       if (match?.[1] && !localStorage.getItem('signup_tracked')) {
         track('sign_up', { method: decodeURIComponent(match[1]) })
         localStorage.setItem('signup_tracked', String(data.user.id))
+        // biome-ignore lint/suspicious/noDocumentCookie: We only need to clear one short-lived client cookie after consuming it.
         document.cookie = 'signup_complete=; max-age=0; path=/; SameSite=Lax'
       }
     })

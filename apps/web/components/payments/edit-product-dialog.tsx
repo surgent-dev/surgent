@@ -1,11 +1,12 @@
 'use client'
 
+import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
+import { AlertTriangle, Archive, Check, Loader2, Settings } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
-import { z } from 'zod'
-import { AlertTriangle, Archive, Check, Loader2, Settings } from 'lucide-react'
 import { toast } from 'sonner'
+import { z } from 'zod'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -13,12 +14,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useUpdateProduct, useArchiveProduct, type Product } from '@/queries/products'
 import { cn } from '@/lib/utils'
+import { type Product, useArchiveProduct, useUpdateProduct } from '@/queries/products'
 
 const schema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
@@ -64,11 +64,10 @@ export function EditProductDialog({
     })
   }, [product, reset])
 
-  useEffect(() => {
-    if (!open) {
-      setView('edit')
-    }
-  }, [open])
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) setView('edit')
+    onOpenChange(nextOpen)
+  }
 
   const onSubmit = (data: FormData) => {
     updateProduct.mutate(
@@ -107,7 +106,7 @@ export function EditProductDialog({
 
   if (view === 'success') {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-md">
           <div className="flex flex-col items-center justify-center py-8 animate-in fade-in zoom-in-95 duration-300">
             <div className="rounded-full bg-success/10 p-4 mb-4">
@@ -123,13 +122,13 @@ export function EditProductDialog({
 
   if (view === 'archive-confirm') {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-md">
           <div className="flex flex-col items-center text-center py-4">
             <div className="rounded-full bg-destructive/10 p-4 mb-4">
               <AlertTriangle className="size-8 text-destructive" strokeWidth={2} />
             </div>
-            <h3 className="font-semibold text-lg mb-2">Archive "{product.name}"?</h3>
+            <h3 className="font-semibold text-lg mb-2">Archive &quot;{product.name}&quot;?</h3>
             <p className="text-sm text-muted-foreground mb-6 max-w-xs">
               This will hide the product from your catalog. Existing subscriptions won&apos;t be
               affected.
@@ -169,7 +168,7 @@ export function EditProductDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader className="pb-2">
           <div className="flex items-center gap-3 mb-1">

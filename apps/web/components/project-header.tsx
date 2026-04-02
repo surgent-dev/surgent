@@ -1,67 +1,66 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { useRouter } from 'next/navigation'
-import { toast } from 'sonner'
-import Image from 'next/image'
 import {
   ArrowLeft,
-  RocketLaunch,
-  PencilSimple,
-  DownloadSimple,
-  X,
-  GithubLogo,
-  CaretDown,
-  Copy,
-  Clock,
   ArrowSquareOut,
-  DiscordLogo,
-  Envelope,
-  TelegramLogo,
-  Headset,
-  Globe,
-  Tag,
-  CircleNotch,
+  CaretDown,
   CheckCircle,
-  XCircle,
-  Trash,
+  CircleNotch,
+  Clock,
+  Copy,
+  DiscordLogo,
+  DownloadSimple,
+  Envelope,
+  GithubLogo,
+  Globe,
+  Headset,
+  PencilSimple,
+  RocketLaunch,
   Stop,
+  Tag,
+  TelegramLogo,
+  X,
+  XCircle,
 } from '@phosphor-icons/react'
-import { useCredits } from '@/hooks/use-credits'
+import { useQueryClient } from '@tanstack/react-query'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import DeploymentStatusDialog from '@/components/deployment-status-dialog'
+import GitHubDialog from '@/components/github-dialog'
+import MigrationCreditBanner from '@/components/migration-credit-banner'
+import PlanDialog from '@/components/plan-dialog'
+import PayDialogs from '@/components/project-header/pay-dialogs'
+import SellDialog from '@/components/project-header/sell-dialog'
+import UserMenu from '@/components/project-header/user-menu'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import PlanDialog from '@/components/plan-dialog'
-import MigrationCreditBanner from '@/components/migration-credit-banner'
-import {
-  useDeployProject,
-  useCancelDeployment,
-  useRenameProject,
-  useUpdateProjectVisibility,
-  useLatestDeploymentQuery,
-  useHostnameAvailability,
-  useGenerateHostname,
-} from '@/queries/projects'
-import { useProjectDomains, useRemoveDomain } from '@/queries/domains'
-import { http } from '@/lib/http'
+import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useCredits } from '@/hooks/use-credits'
 import {
   DEPLOYMENT_STATUS_LABELS,
-  TERMINAL_DEPLOYMENT_STATUSES,
   sanitizeDeploymentHostname,
+  TERMINAL_DEPLOYMENT_STATUSES,
 } from '@/lib/deployment'
-import GitHubDialog from '@/components/github-dialog'
-import DeploymentStatusDialog from '@/components/deployment-status-dialog'
+import { http } from '@/lib/http'
+import { useProjectDomains, useRemoveDomain } from '@/queries/domains'
 import { useGitHubStatus } from '@/queries/github'
-import UserMenu from '@/components/project-header/user-menu'
-import PayDialogs from '@/components/project-header/pay-dialogs'
-import SellDialog from '@/components/project-header/sell-dialog'
+import {
+  useCancelDeployment,
+  useDeployProject,
+  useGenerateHostname,
+  useHostnameAvailability,
+  useLatestDeploymentQuery,
+  useRenameProject,
+  useUpdateProjectVisibility,
+} from '@/queries/projects'
 
 // Types
 interface ProjectHeaderProps {
@@ -108,7 +107,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
   const updateVisibility = useUpdateProjectVisibility()
   const { data: domainsData } = useProjectDomains(projectId)
-  const removeDomain = useRemoveDomain()
+  const _removeDomain = useRemoveDomain()
 
   // Domain states
   const activeDomains = domainsData?.domains?.filter((d) => d.status === 'active') ?? []

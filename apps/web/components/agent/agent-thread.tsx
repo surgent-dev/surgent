@@ -1,17 +1,20 @@
 'use client'
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import type {
+  FileDiff,
+  FilePart,
   Message,
   Part,
+  PatchPart,
   Permission,
+  ReasoningPart,
   TextPart,
   ToolPart,
-  ReasoningPart,
-  FilePart,
-  PatchPart,
-  FileDiff,
 } from '@opencode-ai/sdk'
+import Image from 'next/image'
+import type React from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { passthroughImageLoader } from '@/lib/image-loader'
 
 // Type guards
 function isToolPart(p: Part): p is ToolPart {
@@ -47,6 +50,8 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   }
   return undefined
 }
+
+import { CheckCircle, Code, MagicWand, Rocket, Terminal as TerminalPh } from '@phosphor-icons/react'
 import {
   AlertCircle,
   ArrowDown,
@@ -58,20 +63,18 @@ import {
   Globe,
   ListTodo,
   Loader2,
-  Play,
   Search,
   Terminal,
   Trash2,
   Undo2,
 } from 'lucide-react'
-import { MagicWand, Code, Rocket, Terminal as TerminalPh, CheckCircle } from '@phosphor-icons/react'
-import { ShimmeringText } from '@/components/ui/shimmer-text'
 import { FunWorkingText } from '@/components/ui/fun-loading'
 import { Markdown } from '@/components/ui/markdown'
-import { useRespondPermission } from '@/queries/chats'
-import useAgentStream from '@/lib/use-agent-stream'
-import { computeWorkingFromParts } from '@/lib/agent-working'
+import { ShimmeringText } from '@/components/ui/shimmer-text'
 import { useSandbox } from '@/hooks/use-sandbox'
+import { computeWorkingFromParts } from '@/lib/agent-working'
+import useAgentStream from '@/lib/use-agent-stream'
+import { useRespondPermission } from '@/queries/chats'
 import MessageDiffBadge from './message-diff-badge'
 
 type PermissionResponse = 'once' | 'always' | 'reject'
@@ -405,38 +408,22 @@ function Tool({
     part.tool === 'task'
       ? getSessionId(meta) || getSessionId(part.metadata) || getSessionId(input)
       : undefined
-  const [subSessionId, setSubSessionId] = useState(nextSubSessionId)
+  const [subagentState, setSubagentState] = useState<{
+    sessionId?: string
+    working?: boolean
+    diffCount?: number
+  }>({ sessionId: nextSubSessionId })
+  const subSessionId = nextSubSessionId
   const isSubagentTask = part.tool === 'task'
-  const [subWorking, setSubWorking] = useState<boolean | undefined>(undefined)
-  const [subDiffCount, setSubDiffCount] = useState<number | undefined>(undefined)
+  const subWorking = subagentState.sessionId === subSessionId ? subagentState.working : undefined
+  const subDiffCount =
+    subagentState.sessionId === subSessionId ? subagentState.diffCount : undefined
   const openChangesTab = useSandbox((s) => s.openChangesTab)
   const running = isSubagentTask ? (subWorking ?? taskRunning) : taskRunning
   const compactMode = compact === true
 
-  // Track expanded state - open while running, close when done
-  const [expanded, setExpanded] = useState(isSubagentTask ? running : (defaultExpanded ?? true))
-  const [wasRunning, setWasRunning] = useState(running)
-  const isExpanded = compactMode ? false : expanded
-
-  // Subagent tasks: auto-expand when running, auto-collapse when done
-  useEffect(() => {
-    if (isSubagentTask) {
-      const isRunning = subWorking ?? taskRunning
-      if (!wasRunning && isRunning) setExpanded(true)
-      if (wasRunning && !isRunning) setExpanded(false)
-      setWasRunning(isRunning)
-      return
-    }
-    if (wasRunning && !running) setExpanded(false)
-    setWasRunning(running)
-  }, [isSubagentTask, running, subWorking, taskRunning, wasRunning])
-
-  useEffect(() => {
-    if (!nextSubSessionId || nextSubSessionId === subSessionId) return
-    setSubSessionId(nextSubSessionId)
-    setSubWorking(undefined)
-    setSubDiffCount(undefined)
-  }, [nextSubSessionId, subSessionId])
+  const [expanded, setExpanded] = useState(isSubagentTask ? false : (defaultExpanded ?? true))
+  const isExpanded = compactMode ? false : isSubagentTask ? running || expanded : expanded
 
   useEffect(() => {
     if (!isSubagentTask || !onSubagentRunningChange) return
@@ -508,10 +495,27 @@ function Tool({
         {subSessionId && (expanded || running || taskRunning) && (
           <div className={expanded ? 'block' : 'hidden'}>
             <SubagentStream
+              key={subSessionId}
               projectId={projectId}
               sessionId={subSessionId}
-              onWorkingChange={setSubWorking}
-              onDiffCountChange={setSubDiffCount}
+              onWorkingChange={(working) => {
+                setSubagentState((current) => ({
+                  sessionId: subSessionId,
+                  working,
+                  diffCount: working
+                    ? undefined
+                    : current.sessionId === subSessionId
+                      ? current.diffCount
+                      : undefined,
+                }))
+              }}
+              onDiffCountChange={(count) => {
+                setSubagentState((current) => ({
+                  sessionId: subSessionId,
+                  working: current.sessionId === subSessionId ? current.working : undefined,
+                  diffCount: count,
+                }))
+              }}
             />
           </div>
         )}
@@ -662,12 +666,14 @@ function SubagentStream({
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const stickRef = useRef(true)
   const [showJump, setShowJump] = useState(false)
-  const [diffCount, setDiffCount] = useState<number | undefined>(undefined)
+  const timeline = useMemo(() => messages.flatMap((m) => parts[m.id] || []), [messages, parts])
   const working = useMemo(() => {
-    if (status?.type) return status.type !== 'idle'
-    const timeline = messages.flatMap((m) => parts[m.id] || [])
-    return computeWorkingFromParts(timeline)
-  }, [status, messages, parts])
+    return status?.type ? status.type !== 'idle' : computeWorkingFromParts(timeline)
+  }, [status, timeline])
+  const diffCount = useMemo(() => {
+    if (working || messages.length === 0) return undefined
+    return countFileModifications(timeline)
+  }, [working, messages.length, timeline])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -688,7 +694,6 @@ function SubagentStream({
     if (!el) return
     if (!stickRef.current) return
     el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
-    setShowJump((value) => (value ? false : value))
   }, [lastAt])
 
   useEffect(() => {
@@ -696,17 +701,9 @@ function SubagentStream({
   }, [onWorkingChange, working])
 
   useEffect(() => {
-    if (working) {
-      if (diffCount !== undefined) setDiffCount(undefined)
-      return
-    }
-    if (messages.length === 0) return
-    const timeline = messages.flatMap((m) => parts[m.id] || [])
-    const next = countFileModifications(timeline)
-    if (next === diffCount) return
-    setDiffCount(next)
-    onDiffCountChange?.(next)
-  }, [working, messages, parts, diffCount, onDiffCountChange])
+    if (diffCount === undefined) return
+    onDiffCountChange?.(diffCount)
+  }, [diffCount, onDiffCountChange])
 
   if (messages.length === 0) {
     return (
@@ -760,7 +757,7 @@ function SubagentStream({
 
 function Todos({ part }: { part: ToolPart }) {
   const loading = part.state.status === 'running' || part.state.status === 'pending'
-  const todos = useMemo(() => getTodosFromToolPart(part), [part.state])
+  const todos = getTodosFromToolPart(part)
 
   const done = todos.filter((t) => t.status === 'completed').length
 
@@ -867,7 +864,15 @@ function FileThumb({ file }: { file: FilePart }) {
       className="block size-8 sm:size-10 rounded-lg overflow-hidden bg-muted hover:opacity-80 transition-opacity shrink-0"
     >
       {isImage ? (
-        <img src={file.url} alt={file.filename || 'file'} className="size-full object-cover" />
+        <Image
+          loader={passthroughImageLoader}
+          unoptimized
+          src={file.url}
+          alt={file.filename || 'file'}
+          width={40}
+          height={40}
+          className="size-full object-cover"
+        />
       ) : (
         <div className="size-full flex items-center justify-center">
           <FileText className="size-3 sm:size-4 text-muted-foreground" />

@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useMemo } from 'react'
 import { format } from 'date-fns'
 import { ChevronDown, Filter, Loader2, Receipt, Search, X } from 'lucide-react'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { useMemo, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,17 +10,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import {
-  formatPrice,
-  formatTransactionType,
-  getTransactionIcon,
-  getTransactionColor,
-} from './utils'
 import type { Transaction, TransactionType } from '@/queries/transactions'
+import { formatPrice, formatTransactionType, getTransactionColor } from './utils'
 
 function TransactionRow({ transaction }: { transaction: Transaction }) {
-  const Icon = getTransactionIcon(transaction.type)
   const colorClass = getTransactionColor(transaction.type)
   const isPositive = transaction.type === 'payment'
   const date = new Date(transaction.createdAt)
@@ -29,7 +23,7 @@ function TransactionRow({ transaction }: { transaction: Transaction }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
       <div className="size-8 rounded-lg bg-muted/50 grid place-items-center">
-        <Icon className={cn('size-3.5', colorClass)} />
+        <TransactionIcon type={transaction.type} className={cn('size-3.5', colorClass)} />
       </div>
       <div className="flex-1 min-w-0 grid grid-cols-3 gap-4 items-center">
         <div className="min-w-0">
@@ -49,6 +43,18 @@ function TransactionRow({ transaction }: { transaction: Transaction }) {
       </div>
     </div>
   )
+}
+
+function TransactionIcon({ type, className }: { type: TransactionType; className?: string }) {
+  switch (type) {
+    case 'payment':
+      return <ChevronDown className={className} />
+    case 'refund':
+    case 'payout':
+      return <X className={className} />
+    default:
+      return <Receipt className={className} />
+  }
 }
 
 interface TransactionsViewProps {

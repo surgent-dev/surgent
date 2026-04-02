@@ -1,11 +1,15 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useForm, Controller } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
-import { z } from 'zod'
 import { Check, Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
+import { z } from 'zod'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Sheet,
   SheetContent,
@@ -13,13 +17,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useCreateProduct, useCreatePrice } from '@/queries/products'
 import { cn } from '@/lib/utils'
+import { useCreatePrice, useCreateProduct } from '@/queries/products'
 
 const currencies = [
   { value: 'usd', label: 'USD', symbol: '$' },
@@ -45,7 +45,7 @@ const schema = z.object({
     .string()
     .min(1, 'Price is required')
     .refine(
-      (val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0,
+      (val) => !Number.isNaN(parseFloat(val)) && parseFloat(val) >= 0,
       'Must be a valid positive number',
     ),
   priceCurrency: z.enum(['usd', 'eur', 'gbp']),
