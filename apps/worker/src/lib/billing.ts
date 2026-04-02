@@ -3,6 +3,7 @@ import { sql } from 'kysely'
 import { getAllowanceWindow, sameAllowanceWindowStart } from '@repo/db'
 import { db } from './db'
 import { config } from './config'
+import { trackDubSale } from './dub'
 import { stripe } from './stripe'
 
 export type BillingTier = 'free' | 'pro'
@@ -1184,6 +1185,7 @@ export async function createBillingCheckout(args: {
       line_items: [{ price: plan.priceId, quantity: 1 }],
       subscription_data: {
         metadata: {
+          dubCustomerExternalId: args.userId,
           organizationId: args.organizationId,
           userId: args.userId,
           tier: 'pro',
@@ -1250,6 +1252,7 @@ export async function createTopupPaymentIntent(args: {
           error_on_requires_action: true,
           description: 'Surgent usage balance top-up',
           metadata: {
+            dubCustomerExternalId: args.userId,
             organizationId: args.organizationId,
             userId: args.userId,
             amountUsd: amountUsd.toFixed(2),
@@ -1350,6 +1353,19 @@ export async function applyTopupPaymentIntent(args: {
   }
 
   await import('@/lib/referrals').then((m) => m.grantReferralConversionReward(args.organizationId))
+  await trackDubSale({
+    customerExternalId:
+      paymentIntent.metadata?.dubCustomerExternalId ?? paymentIntent.metadata?.userId ?? '',
+    amount: paymentIntent.amount_received || paymentIntent.amount,
+    currency: paymentIntent.currency ?? 'usd',
+    eventName: 'Balance Top-up',
+    invoiceId: paymentIntent.id,
+    metadata: {
+      kind: 'topup',
+      organizationId: args.organizationId,
+      stripePaymentIntentId: paymentIntent.id,
+    },
+  })
 
   return true
 }
@@ -1423,6 +1439,43 @@ export async function applyTopupCheckout(args: {
     await import('@/lib/referrals').then((m) =>
       m.grantReferralConversionReward(args.organizationId),
     )
+    await trackDubSale({
+      customerExternalId:
+        args.session.metadata?.dubCustomerExternalId ?? args.session.metadata?.userId ?? '',
+      amount: args.session.amount_total ?? 0,
+      currency: args.session.currency ?? 'usd',
+      eventName: 'Balance Top-up',
+      invoiceId:
+        (typeof args.session.invoice === 'string'
+          ? args.session.invoice
+          : args.session.invoice?.id) ??
+        paymentIntentId ??
+        args.session.id,
+      metadata: {
+        kind: 'topup',
+        organizationId: args.organizationId,
+        stripeCheckoutSessionId: args.session.id,
+        stripePaymentIntentId: paymentIntentId ?? null,
+      },
+    })
+  }
+}
+
+async function resolveDubCustomerExternalIdForInvoice(invoice: Stripe.Invoice) {
+  if (invoice.metadata?.dubCustomerExternalId) return invoice.metadata.dubCustomerExternalId
+  if (invoice.metadata?.userId) return invoice.metadata.userId
+
+  const subscriptionId =
+    typeof invoice.parent?.subscription_details?.subscription === 'string'
+      ? invoice.parent.subscription_details.subscription
+      : invoice.parent?.subscription_details?.subscription?.id
+  if (!subscriptionId) return null
+
+  try {
+    const subscription = await requireStripe().subscriptions.retrieve(subscriptionId)
+    return subscription.metadata.dubCustomerExternalId || subscription.metadata.userId || null
+  } catch {
+    return null
   }
 }
 
@@ -1435,7 +1488,10 @@ export async function syncBillingPaymentFromInvoice(args: {
   const invoice = await client.invoices.retrieve(args.invoiceId, {
     expand: ['discounts', 'discounts.coupon', 'discounts.promotion_code', 'payments'],
   })
-  const subscriptionId = invoice.parent?.subscription_details?.subscription
+  const subscriptionId =
+    typeof invoice.parent?.subscription_details?.subscription === 'string'
+      ? invoice.parent.subscription_details.subscription
+      : invoice.parent?.subscription_details?.subscription?.id
   if (!subscriptionId) return
 
   const paymentIntent = invoice.payments?.data[0]?.payment.payment_intent
@@ -1445,6 +1501,7 @@ export async function syncBillingPaymentFromInvoice(args: {
     args.status === 'paid' ? invoice.amount_paid : invoice.amount_due,
   )
   const discount = getDiscountIds(invoice.discounts)
+  const dubCustomerExternalId = await resolveDubCustomerExternalIdForInvoice(invoice)
 
   await db
     .insertInto('billing_payment')
@@ -1494,6 +1551,19 @@ export async function syncBillingPaymentFromInvoice(args: {
     await import('@/lib/referrals').then((m) =>
       m.grantReferralConversionReward(args.organizationId),
     )
+    await trackDubSale({
+      customerExternalId: dubCustomerExternalId ?? '',
+      amount: invoice.amount_paid,
+      currency: invoice.currency ?? 'usd',
+      eventName: 'Subscription Payment',
+      invoiceId: invoice.id,
+      metadata: {
+        kind: 'subscription',
+        organizationId: args.organizationId,
+        stripeInvoiceId: invoice.id,
+        stripeSubscriptionId: subscriptionId,
+      },
+    })
   }
 }
 

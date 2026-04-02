@@ -11,6 +11,7 @@ import {
 import { Toaster } from 'sonner'
 import Providers from '@/components/providers'
 import { serializeJsonLd } from '@/lib/json-ld'
+import { getReferralCookieDomain } from '@/lib/referrals'
 import { organizationStructuredData, siteConfig, websiteStructuredData } from '@/lib/seo'
 
 export const metadata: Metadata = {
@@ -96,6 +97,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  let dubCookieDomain: string | undefined
+  try {
+    dubCookieDomain = getReferralCookieDomain(
+      new URL(process.env.NEXT_PUBLIC_APP_URL ?? '').hostname,
+    )
+  } catch {}
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -115,6 +123,7 @@ export default function RootLayout({
           domainsConfig={{
             refer: 'go.surgent.dev',
           }}
+          cookieOptions={dubCookieDomain ? { domain: dubCookieDomain } : undefined}
         />
       </body>
       <GoogleAnalytics gaId="G-ZXHRJ2KM14" />

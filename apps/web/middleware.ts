@@ -8,16 +8,36 @@ import {
   isUuid,
 } from './lib/referrals'
 
+const DUB_COOKIE_NAME = 'dub_id'
+const DUB_COOKIE_MAX_AGE = 60 * 60 * 24 * 90
+
+function setDubCookie(response: NextResponse, dubId: string, request: NextRequest) {
+  const cookieDomain = getReferralCookieDomain(request.nextUrl.hostname)
+  response.cookies.set({
+    name: DUB_COOKIE_NAME,
+    value: dubId,
+    path: '/',
+    httpOnly: false,
+    sameSite: 'lax',
+    secure: request.nextUrl.protocol === 'https:',
+    maxAge: DUB_COOKIE_MAX_AGE,
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
+  })
+}
+
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
   const ref = request.nextUrl.searchParams.get('ref')?.trim()
+  const dubId = request.nextUrl.searchParams.get(DUB_COOKIE_NAME)?.trim()
+
+  let response = NextResponse.next()
 
   if (ref && isUuid(ref)) {
     const url = request.nextUrl.clone()
     const domain = getReferralCookieDomain(request.nextUrl.hostname)
     url.searchParams.delete('ref')
 
-    const response = NextResponse.redirect(url)
+    response = NextResponse.redirect(url)
     response.cookies.set({
       name: REFERRAL_COOKIE_NAME,
       value: ref,
@@ -28,6 +48,11 @@ export async function middleware(request: NextRequest) {
       maxAge: REFERRAL_COOKIE_MAX_AGE,
       ...(domain ? { domain } : {}),
     })
+  }
+
+  if (dubId) setDubCookie(response, dubId, request)
+
+  if (ref && isUuid(ref)) {
     return response
   }
 
@@ -42,7 +67,7 @@ export async function middleware(request: NextRequest) {
     path.startsWith('/admin') || path.startsWith('/dashboard') || path.startsWith('/project')
 
   if (!isProtectedRoute) {
-    return NextResponse.next()
+    return response
   }
 
   const sessionCookie = getSessionCookie(request)
@@ -52,10 +77,12 @@ export async function middleware(request: NextRequest) {
     const returnTo = request.nextUrl.pathname + request.nextUrl.search
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', returnTo)
-    return NextResponse.redirect(loginUrl)
+    const loginResponse = NextResponse.redirect(loginUrl)
+    if (dubId) setDubCookie(loginResponse, dubId, request)
+    return loginResponse
   }
 
-  return NextResponse.next()
+  return response
 }
 
 export const config = {

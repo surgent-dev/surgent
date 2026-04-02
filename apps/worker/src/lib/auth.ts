@@ -2,16 +2,14 @@ import { betterAuth } from 'better-auth'
 import { admin, apiKey, jwt, organization } from 'better-auth/plugins'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import { createAccessControl } from 'better-auth/plugins/access'
-import { dubAnalytics } from '@dub/better-auth'
-import { Dub } from 'dub'
 import { dialect } from '@/lib/db'
 import { config } from './config'
+import { trackDubLead } from './dub'
 import { ensureBillingState } from './billing'
 import { ensureActiveOrganization } from './organizations'
 import { consumeReferralAttribution } from './referrals'
 import { createLogger } from './logger'
 
-const dub = new Dub()
 const log = createLogger('auth')
 
 const ac = createAccessControl({
@@ -27,7 +25,6 @@ export const auth = betterAuth({
   trustedOrigins: config.server.trustedOrigins,
 
   plugins: [
-    dubAnalytics({ dubClient: dub }),
     organization({
       ac,
       teams: { enabled: true },
@@ -119,6 +116,31 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (user, context) => {
+          const dubClickId = context?.getCookie?.('dub_id')?.trim()
+          if (dubClickId) {
+            const tracked = await trackDubLead({
+              clickId: dubClickId,
+              eventName: 'Sign Up',
+              customerExternalId: user.id,
+              customerName: user.name,
+              customerEmail: user.email,
+              customerAvatar: user.image,
+            })
+
+            if (tracked) {
+              context?.setCookie?.('dub_id', '', {
+                expires: new Date(0),
+                maxAge: 0,
+                path: '/',
+                sameSite: 'lax',
+                secure: config.env.NODE_ENV === 'production',
+                ...(config.env.NODE_ENV === 'production' ? { domain: '.surgent.dev' } : {}),
+              })
+            }
+          } else {
+            log.info({ userId: user.id }, '[AUTH] missing dub_id, skipping Dub signup lead')
+          }
+
           try {
             await consumeReferralAttribution(user.id, context)
           } catch (err) {
