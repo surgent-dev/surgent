@@ -54,6 +54,7 @@ import {
 } from '@/lib/projects/queue'
 import { createLogger } from '@/lib/logger'
 import { ensureAnalytics, getAnalyticsWebsite, removeAnalytics } from '@/services/analytics'
+import type { ProjectMetadata } from '@repo/db'
 
 const log = createLogger('projects')
 const projects = new Hono<AppContext>()
@@ -882,12 +883,28 @@ projects.post(
       githubUrl: z.string(),
       name: z.string().optional(),
       initConvex: z.boolean().optional(),
+      metadata: z
+        .object({
+          onboarding: z
+            .object({
+              siteType: z.string(),
+              services: z.string(),
+              businessName: z.string(),
+              goals: z.array(z.string()),
+              customGoal: z.string(),
+              features: z.array(z.string()),
+              aboutYou: z.string(),
+              prompt: z.string().trim().min(1).max(20000),
+            })
+            .optional(),
+        })
+        .optional(),
     }),
   ),
   async (c) => {
     let projectId: string | undefined
     try {
-      const { githubUrl, name } = c.req.valid('json')
+      const { githubUrl, name, metadata } = c.req.valid('json')
       const userId = c.get('user')!.id
       const organizationId = c.get('session')?.activeOrganizationId
       if (!organizationId) return c.json({ error: 'No active organization' }, 400)
@@ -923,6 +940,7 @@ projects.post(
         organizationId,
         name: projectName,
         githubUrl,
+        metadata: metadata as ProjectMetadata | undefined,
       })
       projectId = created.id
 

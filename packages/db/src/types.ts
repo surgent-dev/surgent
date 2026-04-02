@@ -438,7 +438,19 @@ export interface ProjectProvisioningMetadata {
   lastError?: string | null
 }
 
+export interface ProjectOnboardingMetadata {
+  siteType: string
+  services: string
+  businessName: string
+  goals: string[]
+  customGoal: string
+  features: string[]
+  aboutYou: string
+  prompt: string
+}
+
 export interface ProjectMetadata {
+  onboarding?: ProjectOnboardingMetadata
   workingDirectory?: string
   processName?: string
   startCommand?: string

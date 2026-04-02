@@ -36,6 +36,19 @@ const ProjectProvisioningMetadataSchema = z
   })
   .optional()
 
+const ProjectOnboardingMetadataSchema = z
+  .object({
+    siteType: z.string(),
+    services: z.string(),
+    businessName: z.string(),
+    goals: z.array(z.string()),
+    customGoal: z.string(),
+    features: z.array(z.string()),
+    aboutYou: z.string(),
+    prompt: z.string(),
+  })
+  .optional()
+
 export const ProjectSchema = z.object({
   id: z.string(),
   userId: z.string(),
@@ -47,6 +60,7 @@ export const ProjectSchema = z.object({
   settings: z.any().nullable(),
   metadata: z
     .object({
+      onboarding: ProjectOnboardingMetadataSchema,
       workingDirectory: z.string().optional(),
       processName: z.string().optional(),
       startCommand: z.string().optional(),

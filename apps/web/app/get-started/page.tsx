@@ -173,9 +173,12 @@ function OnboardingContent() {
     } else if (step < totalSteps - 1) {
       setStep((s) => s + 1)
     } else {
+      try {
+        sessionStorage.setItem('surgent:onboarding', JSON.stringify(data))
+      } catch {}
       router.push(`/project/new?prompt=${encodeURIComponent(data.prompt)}`)
     }
-  }, [step, data.prompt, buildPrompt, router])
+  }, [step, data, buildPrompt, router])
 
   const back = () => (step > 0 ? setStep((s) => s - 1) : router.push('/'))
   const toggle = (arr: string[], item: string) =>

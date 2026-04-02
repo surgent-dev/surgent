@@ -99,6 +99,7 @@ export async function createProject(args: {
   organizationId: string
   name: string
   githubUrl?: string
+  metadata?: ProjectMetadata
 }) {
   const now = new Date()
   const slug =
@@ -115,6 +116,7 @@ export async function createProject(args: {
       slug,
       status: 'provisioning',
       github: args.githubUrl ? { url: args.githubUrl } : null,
+      metadata: args.metadata ?? null,
       createdAt: now,
       updatedAt: now,
     })

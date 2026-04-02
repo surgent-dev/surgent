@@ -14,6 +14,26 @@ const projectConfigs: Record<string, { name: string; githubUrl: string; initConv
   },
 }
 
+function readOnboarding() {
+  try {
+    const raw = sessionStorage.getItem('surgent:onboarding')
+    if (!raw) return undefined
+    sessionStorage.removeItem('surgent:onboarding')
+    return JSON.parse(raw) as {
+      siteType: string
+      services: string
+      businessName: string
+      goals: string[]
+      customGoal: string
+      features: string[]
+      aboutYou: string
+      prompt: string
+    }
+  } catch {
+    return undefined
+  }
+}
+
 function NewProjectContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -32,11 +52,13 @@ function NewProjectContent() {
 
     startedRef.current = true
     const config = projectConfigs[projectType] || projectConfigs.simple!
+    const onboarding = readOnboarding()
 
     mutateAsync({
       name: `${config.name} Project ${new Date().toLocaleDateString()}`,
       githubUrl: config.githubUrl,
       initConvex: config.initConvex,
+      metadata: onboarding ? { onboarding } : undefined,
     })
       .then(({ id }) => {
         track('project_created', { project_id: id })

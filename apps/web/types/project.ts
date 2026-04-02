@@ -18,6 +18,16 @@ export interface Worker {
 export type ProjectStatus = 'provisioning' | 'ready' | 'failed'
 
 export interface ProjectMetadata {
+  onboarding?: {
+    siteType: string
+    services: string
+    businessName: string
+    goals: string[]
+    customGoal: string
+    features: string[]
+    aboutYou: string
+    prompt: string
+  }
   workingDirectory?: string
   processName?: string
   startCommand?: string
