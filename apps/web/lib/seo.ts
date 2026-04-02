@@ -5,7 +5,7 @@ export const siteConfig = {
   description:
     'AI-powered business builder. Describe your business and Surgent creates your website, deploys an AI sales agent, and grows your revenue on autopilot.',
   url: 'https://surgent.dev',
-  ogImage: '/opengraph-image',
+  ogImage: '/opengraph-image.png',
   organizationName: 'Benrov, Inc.',
 } as const
 
@@ -56,7 +56,7 @@ export function createPageMetadata({
     title,
     description,
     alternates: {
-      canonical: path,
+      canonical: url,
     },
     openGraph: {
       title,
