@@ -1,62 +1,68 @@
 'use client'
 
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Geist, Geist_Mono } from 'next/font/google'
-import { BrandLogo } from '@/components/brand-logo'
-import { formatRevenueCompact, getDomainFromUrl } from '@/lib/inspirations'
-import UserMenu from '@/components/project-header/user-menu'
 import {
+  ArrowUpRight,
+  Briefcase,
+  Building2,
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
-  Users,
-  ArrowUpRight,
-  Layers,
-  Wrench,
-  Share2,
-  Briefcase,
-  Headphones,
-  Store,
-  MessageCircle,
-  DollarSign,
-  Building2,
-  Gamepad2,
-  Lock,
-  Plane,
-  Newspaper,
   Coins,
   Cpu,
-  Scale,
+  DollarSign,
+  Gamepad2,
+  Headphones,
+  Layers,
   Leaf,
+  Lock,
+  MessageCircle,
+  Newspaper,
+  Plane,
+  Scale,
+  Share2,
+  Store,
+  TrendingUp,
+  Users,
+  Wrench,
 } from 'lucide-react'
+import { Geist, Geist_Mono } from 'next/font/google'
+import Image from 'next/image'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { BrandLogo } from '@/components/brand-logo'
 import {
-  AllIcon,
   AiIcon,
-  SaasIcon,
-  DevIcon,
-  ProductivityIcon,
-  MarketingIcon,
-  ContentIcon,
-  EducationIcon,
-  MobileIcon,
-  HealthIcon,
-  FintechIcon,
+  AllIcon,
   AnalyticsIcon,
+  ContentIcon,
   DesignIcon,
+  DevIcon,
   EcommerceIcon,
+  EducationIcon,
+  FintechIcon,
+  HealthIcon,
+  MarketingIcon,
+  MobileIcon,
+  ProductivityIcon,
+  SaasIcon,
 } from '@/components/icons/category-icons'
+import UserMenu from '@/components/project-header/user-menu'
+import { passthroughImageLoader } from '@/lib/image-loader'
+import { formatRevenueCompact, getDomainFromUrl } from '@/lib/inspirations'
 import {
-  useStartupsQuery,
-  useStartupCategoriesQuery,
-  type StartupsQueryParams,
+  buildInspirationsQueryParams,
+  INSPIRATIONS_REVENUE_FILTERS,
+  type InspirationsSearchParams,
+} from '@/lib/inspirations-search'
+import {
   type Startup,
+  type StartupsResponse,
+  useStartupCategoriesQuery,
+  useStartupsQuery,
 } from '@/queries/startups'
 
-type SearchParams = {
-  category?: string
-  page?: string
-  rev?: string
+type StartupCategory = {
+  category: string | null
+  count: number
 }
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
@@ -147,11 +153,6 @@ function getCatColor(cat: string | null) {
   return CAT_COLORS[cat] || DEFAULT_CAT_COLOR
 }
 
-const REVENUE_FILTERS = [
-  { label: 'Top Companies', value: 'top', min: undefined, max: undefined },
-  { label: '$1k – $30k', value: '1k-30k', min: 1_000, max: 30_000 },
-]
-
 const BENTO_CLASSES = [
   'col-span-1 sm:col-span-1 lg:col-span-1',
   'col-span-1 sm:col-span-2 lg:col-span-2',
@@ -181,9 +182,13 @@ function StartupCard({ startup, index }: { startup: Startup; index: number }) {
       }}
     >
       <div className="flex items-center gap-4 flex-1 min-w-0">
-        <img
+        <Image
+          loader={passthroughImageLoader}
+          unoptimized
           src={startup.icon!}
           alt=""
+          width={48}
+          height={48}
           className="h-12 w-12 rounded-xl object-cover shrink-0 transition-transform duration-500 group-hover:scale-[1.02]"
           style={{ boxShadow: 'var(--shadow-surface-xs)' }}
         />
@@ -263,24 +268,30 @@ function StartupCard({ startup, index }: { startup: Startup; index: number }) {
   )
 }
 
-export default function InspirationsContent({ searchParams }: { searchParams: SearchParams }) {
+type InspirationsContentProps = {
+  searchParams: InspirationsSearchParams
+  initialData?: StartupsResponse | null
+  initialCategories?: StartupCategory[] | null
+}
+
+export default function InspirationsContent({
+  searchParams,
+  initialData = null,
+  initialCategories = null,
+}: InspirationsContentProps) {
   const router = useRouter()
 
   const revenueFilter = searchParams.rev || 'top'
   const activeRevFilter =
-    REVENUE_FILTERS.find((f) => f.value === revenueFilter) ?? REVENUE_FILTERS[0]!
+    INSPIRATIONS_REVENUE_FILTERS.find((f) => f.value === revenueFilter) ??
+    INSPIRATIONS_REVENUE_FILTERS[0]!
+  const params = buildInspirationsQueryParams(searchParams)
 
-  const params: StartupsQueryParams = {
-    page: Number(searchParams.page) || 1,
-    perPage: 100,
-    sort: 'revenue-desc',
-    category: searchParams.category || undefined,
-    minRevenue: activeRevFilter?.min,
-    maxRevenue: activeRevFilter?.max,
-  }
-
-  const { data, isLoading } = useStartupsQuery(params)
-  const { data: categories } = useStartupCategoriesQuery()
+  const startupsQuery = useStartupsQuery(params)
+  const categoriesQuery = useStartupCategoriesQuery()
+  const data = startupsQuery.data ?? initialData ?? undefined
+  const categories = categoriesQuery.data ?? initialCategories ?? undefined
+  const isLoading = startupsQuery.isLoading && initialData == null && !startupsQuery.data
 
   function updateParams(updates: Record<string, string | undefined>) {
     const qp = new URLSearchParams()
@@ -300,7 +311,7 @@ export default function InspirationsContent({ searchParams }: { searchParams: Se
   const pagination = data?.pagination
   const startups = data?.startups ?? []
   const activeCategory = searchParams.category || null
-  const pageOffset = ((params.page ?? 1) - 1) * (params.perPage ?? 100)
+  const _pageOffset = ((params.page ?? 1) - 1) * (params.perPage ?? 100)
 
   return (
     <div
@@ -547,7 +558,7 @@ export default function InspirationsContent({ searchParams }: { searchParams: Se
 
         <div className="flex items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {REVENUE_FILTERS.map((filter) => {
+            {INSPIRATIONS_REVENUE_FILTERS.map((filter) => {
               const isActive = activeRevFilter.value === filter.value
               return (
                 <button

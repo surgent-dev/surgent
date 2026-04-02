@@ -1,5 +1,13 @@
-import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { createPageMetadata } from '@/lib/seo'
+
+export const metadata: Metadata = createPageMetadata({
+  title: 'Privacy Policy',
+  description: 'Surgent privacy policy. Learn how we collect, use, and protect your personal data.',
+  path: '/privacy',
+})
 
 export default function PrivacyPage() {
   return (

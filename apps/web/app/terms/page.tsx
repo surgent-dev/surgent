@@ -1,5 +1,14 @@
-import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { createPageMetadata } from '@/lib/seo'
+
+export const metadata: Metadata = createPageMetadata({
+  title: 'Terms of Service',
+  description:
+    'Surgent terms of service. Read the terms governing your use of the Surgent platform and services.',
+  path: '/terms',
+})
 
 export default function TermsPage() {
   return (
