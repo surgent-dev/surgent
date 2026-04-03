@@ -96,7 +96,7 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
-    autoSignIn: true,
+    autoSignIn: false,
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
       void sendEmail(user.email, 'Reset your Surgent password', resetPasswordHtml(url))

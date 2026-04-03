@@ -190,10 +190,32 @@ export function fetchMarketplaceListingServer(id: string) {
   )
 }
 
-export function fetchMarketplaceListingsServer(limit = 200) {
+export type MarketplaceListingsResponse = {
+  listings: MarketplaceListingRecord[]
+  pagination: Pagination
+}
+
+const MarketplaceListingsResponseSchema = z.object({
+  listings: z.array(MarketplaceListingRecordSchema),
+  pagination: z.object({
+    page: z.number(),
+    perPage: z.number(),
+    total: z.number(),
+    totalPages: z.number(),
+  }),
+})
+
+export function fetchMarketplaceListingsServer(limit = 48, page = 1) {
   const safeLimit = Math.min(limit, 100)
-  return serverFetch<MarketplaceListingRecord[]>(
-    `api/projects/marketplace/listings?limit=${safeLimit}`,
-    (value) => z.array(MarketplaceListingRecordSchema).parse(value),
+  const safePage = Math.max(page, 1)
+  const query = new URLSearchParams({ limit: String(safeLimit) })
+
+  if (safePage > 1) {
+    query.set('page', String(safePage))
+  }
+
+  return serverFetch<MarketplaceListingsResponse>(
+    `api/projects/marketplace/listings?${query.toString()}`,
+    (value) => MarketplaceListingsResponseSchema.parse(value),
   )
 }

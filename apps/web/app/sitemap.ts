@@ -3,6 +3,40 @@ import { fetchMarketplaceListingsServer, fetchStartupsServer } from '@/lib/api-s
 
 export const revalidate = 300
 
+async function fetchAllMarketplaceListings(pageSize = 100, maxPages = 50) {
+  const listings = []
+  const seenListingKeys = new Set<string>()
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const batch = await fetchMarketplaceListingsServer(pageSize, page)
+
+    if (!batch?.listings?.length) {
+      break
+    }
+
+    const newListings = batch.listings.filter((listing) => {
+      const key = listing.id ?? listing.projectId
+      if (seenListingKeys.has(key)) {
+        return false
+      }
+      seenListingKeys.add(key)
+      return true
+    })
+
+    if (!newListings.length) {
+      break
+    }
+
+    listings.push(...newListings)
+
+    if (batch.pagination.page >= batch.pagination.totalPages || batch.listings.length < pageSize) {
+      break
+    }
+  }
+
+  return listings
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://surgent.dev'
 
@@ -53,7 +87,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }))
 
   // Dynamic: marketplace listings
-  const listings = await fetchMarketplaceListingsServer(500)
+  const listings = await fetchAllMarketplaceListings()
   const listingRoutes: MetadataRoute.Sitemap = (listings ?? [])
     .filter((l) => l.id && l.status === 'active')
     .map((l) => ({

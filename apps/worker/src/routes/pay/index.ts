@@ -511,14 +511,19 @@ pay.post(
     const { projectId, auth } = await resolveProjectScope(c, c.req.valid('query').projectId)
     const body = c.req.valid('json')
 
-    // Resolve customer by pay_customer.id or Whop externalId
+    // Resolve customer by pay_customer.id (uuid) or externalId (string)
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      body.customerId,
+    )
     const customer = await db
       .selectFrom('pay_customer')
       .select('id')
       .where('projectId', '=', projectId)
       .where('env', '=', auth.env)
       .where((eb) =>
-        eb.or([eb('id', '=', body.customerId), eb('externalId', '=', body.customerId)]),
+        isUuid
+          ? eb.or([eb('id', '=', body.customerId), eb('externalId', '=', body.customerId)])
+          : eb('externalId', '=', body.customerId),
       )
       .executeTakeFirst()
 
@@ -545,11 +550,11 @@ pay.post(
       .where('projectId', '=', projectId)
       .where('env', '=', auth.env)
       .where('status', '=', 'succeeded')
-      .where(
-        sql<boolean>`
-          ("metadata" @> jsonb_build_object('product_id', ${body.productId}))
-          OR ("metadata" @> jsonb_build_object('productId', ${body.productId}))
-        `,
+      .where((eb) =>
+        eb.or([
+          sql<boolean>`"metadata" ->> 'product_id' = ${body.productId}`,
+          sql<boolean>`"metadata" ->> 'productId' = ${body.productId}`,
+        ]),
       )
       .executeTakeFirst()
 

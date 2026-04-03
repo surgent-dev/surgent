@@ -155,7 +155,7 @@ export const config = {
   },
   resend: {
     apiKey: env.RESEND_API_KEY,
-    fromEmail: env.RESEND_FROM_EMAIL || 'Surgent <no-reply@surgent.dev>',
+    fromEmail: env.RESEND_FROM_EMAIL || 'Surgent <no-reply@updates.surgent.dev>',
   },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',

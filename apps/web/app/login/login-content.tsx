@@ -37,9 +37,8 @@ export default function LoginContent({ next }: LoginContentProps) {
   const [error, setError] = useState('')
 
   const redirectPath = next || '/'
-  const callbackURL = process.env.NEXT_PUBLIC_APP_URL
-    ? new URL(redirectPath, process.env.NEXT_PUBLIC_APP_URL).toString()
-    : undefined
+  const callbackURL =
+    typeof window !== 'undefined' ? `${window.location.origin}${redirectPath}` : redirectPath
 
   const handleGoogle = async () => {
     setIsLoading(true)
@@ -60,7 +59,7 @@ export default function LoginContent({ next }: LoginContentProps) {
       const { error: authError } = await authClient.signIn.email({
         email: email.trim(),
         password,
-        callbackURL: redirectPath,
+        callbackURL,
       })
       if (authError) {
         if (authError.status === 403) {

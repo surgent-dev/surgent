@@ -26,7 +26,7 @@ Production runs on **ECR + ECS only**.
 
 **Secrets**:
 
-- Worker secrets: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY`, etc.
+- Worker secrets: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY`, `RESEND_API_KEY`, etc.
 - Analytics secrets: `/surgent/prod/analytics/DATABASE_URL`
 
 ## External Data Services

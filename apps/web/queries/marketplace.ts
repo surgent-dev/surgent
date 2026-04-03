@@ -26,16 +26,30 @@ const MarketplaceListingSchema = ListingSchema.extend({
   purchased: z.boolean().optional(),
 })
 
-const MarketplaceListingsSchema = z.array(MarketplaceListingSchema)
+const MarketplaceListingsResponseSchema = z.object({
+  listings: z.array(MarketplaceListingSchema),
+  pagination: z.object({
+    page: z.number(),
+    perPage: z.number(),
+    total: z.number(),
+    totalPages: z.number(),
+  }),
+})
 const ProjectListingResponseSchema = z.object({ listing: ListingSchema.nullable() })
 const UpsertListingResponseSchema = z.object({ listing: ListingSchema })
 
 export type MarketplaceListing = z.infer<typeof MarketplaceListingSchema>
+export type MarketplaceListingsResponse = z.infer<typeof MarketplaceListingsResponseSchema>
 export type ProjectListing = z.infer<typeof ListingSchema>
 
-async function fetchMarketplaceListings(limit = 48): Promise<MarketplaceListing[]> {
-  const data = await http.get(`api/projects/marketplace/listings?limit=${limit}`).json()
-  return MarketplaceListingsSchema.parse(data)
+async function fetchMarketplaceListings(
+  limit = 48,
+  page = 1,
+): Promise<MarketplaceListingsResponse> {
+  const query = new URLSearchParams({ limit: String(limit) })
+  if (page > 1) query.set('page', String(page))
+  const data = await http.get(`api/projects/marketplace/listings?${query.toString()}`).json()
+  return MarketplaceListingsResponseSchema.parse(data)
 }
 
 async function fetchProjectListing(projectId: string): Promise<ProjectListing | null> {
@@ -79,10 +93,10 @@ export function useMarketplaceListingQuery(id?: string) {
   })
 }
 
-export function useMarketplaceListingsQuery(limit = 48) {
+export function useMarketplaceListingsQuery(limit = 48, page = 1) {
   return useQuery({
-    queryKey: ['marketplace-listings', limit],
-    queryFn: () => fetchMarketplaceListings(limit),
+    queryKey: ['marketplace-listings', limit, page],
+    queryFn: () => fetchMarketplaceListings(limit, page),
     staleTime: 30_000,
   })
 }

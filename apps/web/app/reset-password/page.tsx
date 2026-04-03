@@ -1,12 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { SurgentLogo } from '@/components/surgent-logo'
 import { authClient } from '@/lib/auth-client'
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const searchParams = useSearchParams()
   const token = searchParams.get('token') || ''
 
@@ -126,5 +126,27 @@ export default function ResetPasswordPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+function ResetPasswordFallback() {
+  return (
+    <div className="min-h-dvh flex flex-col bg-white dark:bg-background text-foreground">
+      <main className="flex-1 flex flex-col items-center px-6 pt-[22vh]">
+        <div className="w-full max-w-xs">
+          <div className="mb-10">
+            <SurgentLogo className="text-lg" />
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetPasswordFallback />}>
+      <ResetPasswordContent />
+    </Suspense>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SurgentLogo } from '@/components/surgent-logo'
 import { authClient } from '@/lib/auth-client'
 
@@ -37,11 +37,11 @@ export default function SignupContent({ next }: SignupContentProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [verifyEmail, setVerifyEmail] = useState(false)
+  const [cooldown, setCooldown] = useState(0)
 
   const redirectPath = next || '/'
-  const callbackURL = process.env.NEXT_PUBLIC_APP_URL
-    ? new URL(redirectPath, process.env.NEXT_PUBLIC_APP_URL).toString()
-    : undefined
+  const callbackURL =
+    typeof window !== 'undefined' ? `${window.location.origin}${redirectPath}` : redirectPath
 
   const handleGoogle = async () => {
     setIsLoading(true)
@@ -63,12 +63,13 @@ export default function SignupContent({ next }: SignupContentProps) {
         name: name.trim(),
         email: email.trim(),
         password,
-        callbackURL: redirectPath,
+        callbackURL,
       })
       if (authError && authError.status !== 403) {
         setError(authError.message || 'Something went wrong')
       } else {
         setVerifyEmail(true)
+        setCooldown(60)
       }
     } catch {
       setError('Something went wrong')
@@ -76,9 +77,21 @@ export default function SignupContent({ next }: SignupContentProps) {
     setIsLoading(false)
   }
 
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = setTimeout(() => setCooldown(cooldown - 1), 1000)
+    return () => clearTimeout(t)
+  }, [cooldown])
+
   const handleResend = async () => {
+    if (cooldown > 0) return
     setIsLoading(true)
-    await authClient.sendVerificationEmail({ email: email.trim(), callbackURL: redirectPath })
+    try {
+      await authClient.sendVerificationEmail({ email: email.trim(), callbackURL })
+      setCooldown(60)
+    } catch {
+      setError('Failed to resend verification email')
+    }
     setIsLoading(false)
   }
 
@@ -95,12 +108,17 @@ export default function SignupContent({ next }: SignupContentProps) {
               We sent a verification link to <span className="text-foreground">{email}</span>. Click
               the link to verify your account.
             </p>
+            {error && <p className="text-xs text-destructive mb-4">{error}</p>}
             <button
               onClick={handleResend}
-              disabled={isLoading}
+              disabled={isLoading || cooldown > 0}
               className="btn-brand-secondary w-full h-10 rounded-[0.5rem] text-sm font-medium cursor-pointer disabled:opacity-50"
             >
-              {isLoading ? 'Sending...' : 'Resend verification email'}
+              {isLoading
+                ? 'Sending...'
+                : cooldown > 0
+                  ? `Resend in ${cooldown}s`
+                  : 'Resend verification email'}
             </button>
             <button
               onClick={() => {
