@@ -49,11 +49,6 @@ async function fetchMarketplaceListings(
   const query = new URLSearchParams({ limit: String(limit) })
   if (page > 1) query.set('page', String(page))
   const data = await http.get(`api/projects/marketplace/listings?${query.toString()}`).json()
-  // Handle both paginated { listings, pagination } and legacy flat array responses
-  if (Array.isArray(data)) {
-    const listings = z.array(MarketplaceListingSchema).parse(data)
-    return { listings, pagination: { page, perPage: limit, total: listings.length, totalPages: 1 } }
-  }
   return MarketplaceListingsResponseSchema.parse(data)
 }
 

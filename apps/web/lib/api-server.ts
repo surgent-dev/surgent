@@ -216,16 +216,6 @@ export function fetchMarketplaceListingsServer(limit = 48, page = 1) {
 
   return serverFetch<MarketplaceListingsResponse>(
     `api/projects/marketplace/listings?${query.toString()}`,
-    (value) => {
-      // Handle both paginated { listings, pagination } and legacy flat array responses
-      if (Array.isArray(value)) {
-        const listings = z.array(MarketplaceListingRecordSchema).parse(value)
-        return {
-          listings,
-          pagination: { page: safePage, perPage: safeLimit, total: listings.length, totalPages: 1 },
-        }
-      }
-      return MarketplaceListingsResponseSchema.parse(value)
-    },
+    (value) => MarketplaceListingsResponseSchema.parse(value),
   )
 }
