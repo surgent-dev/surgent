@@ -113,9 +113,7 @@ export default function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`antialiased ${plusJakarta.variable} ${outfit.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable}`}
-      >
+      <head>
         <script
           type="application/ld+json"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: Next.js recommends JSON-LD scripts via dangerouslySetInnerHTML, and the payload is serialized to escape "<".
@@ -123,6 +121,10 @@ export default function RootLayout({
             __html: serializeJsonLd([organizationStructuredData, websiteStructuredData]),
           }}
         />
+      </head>
+      <body
+        className={`antialiased ${plusJakarta.variable} ${outfit.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable}`}
+      >
         <Providers>{children}</Providers>
         <Toaster position="top-center" theme="system" gap={8} />
         <DubAnalytics

@@ -11,6 +11,7 @@ import {
   Plus,
   SignOut,
   SquaresFour,
+  Storefront,
   Sun,
 } from '@phosphor-icons/react'
 import Image from 'next/image'
@@ -38,6 +39,7 @@ const NAV: { icon: PhosphorIcon; label: string; href: string; absolute?: boolean
   { icon: House, label: 'Dashboard', href: '' },
   { icon: MagicWand, label: 'Studio', href: '/editor' },
   { icon: ChartLineUp, label: 'Analytics', href: '/analytics' },
+  { icon: Storefront, label: 'Marketplace', href: '/marketplace', absolute: true },
 ]
 
 export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
