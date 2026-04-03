@@ -15,7 +15,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { BrandLogo } from '@/components/brand-logo'
+import { SurgentLogo } from '@/components/surgent-logo'
 import { Button } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
 import { formatMonthYear } from '@/lib/format'
@@ -25,6 +25,9 @@ import { type Startup, useStartupQuery } from '@/queries/startups'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
+
+const NAV_LINK =
+  'font-display text-[0.9rem] font-medium text-[#1d1c22] dark:text-foreground transition-all px-4 py-2 rounded-full hover:bg-[#1d1c220d]'
 
 function fmtFull(dollars: number): string {
   return `$${dollars.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
@@ -95,9 +98,15 @@ export default function StartupDetailPage({ slug, initialStartup }: StartupDetai
   const isLoading = startupQuery.isLoading && !startupQuery.data && !initialStartup
   const error = startupQuery.error
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
+  const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => setLoggedIn(!!data?.user))
+  }, [])
+  useEffect(() => {
+    const fn = () => setScrolled(window.scrollY > 40)
+    window.addEventListener('scroll', fn, { passive: true })
+    return () => window.removeEventListener('scroll', fn)
   }, [])
 
   function buildPrompt() {
@@ -113,7 +122,7 @@ export default function StartupDetailPage({ slug, initialStartup }: StartupDetai
     return lines.filter(Boolean).join('\n')
   }
 
-  const pageClass = `min-h-screen bg-background text-foreground ${geist.variable} ${geistMono.variable}`
+  const pageClass = `min-h-screen bg-[#f5f5f7] dark:bg-background text-foreground ${geist.variable} ${geistMono.variable}`
   const pageStyle: React.CSSProperties & Record<`--${string}`, string> = {
     fontFamily: 'var(--font-geist), system-ui, sans-serif',
     '--page-header': 'color-mix(in srgb, var(--background) 84%, transparent)',
@@ -127,14 +136,11 @@ export default function StartupDetailPage({ slug, initialStartup }: StartupDetai
   if (isLoading) {
     return (
       <div className={pageClass} style={pageStyle}>
-        <header
-          className="w-full px-6 h-14 flex items-center sticky top-0 z-40 bg-[var(--page-header)] backdrop-blur-sm border-b border-[var(--page-line)]"
-          style={{
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-          }}
-        >
-          <div className="max-w-6xl mx-auto w-full">
+        <header className="sticky top-0 z-50 px-4 sm:px-8 pt-4 pb-2 transition-all duration-300">
+          <div className="flex items-center justify-between w-full mx-auto max-w-5xl px-3 py-2.5">
+            <Link href="/" className="pl-3">
+              <SurgentLogo className="text-[1.5rem]" />
+            </Link>
             <div className="h-5 w-24 rounded bg-[var(--page-panel)] animate-pulse" />
           </div>
         </header>
@@ -184,43 +190,49 @@ export default function StartupDetailPage({ slug, initialStartup }: StartupDetai
   return (
     <div className={pageClass} style={pageStyle}>
       {/* Header */}
-      <header
-        className="w-full px-6 h-14 flex items-center sticky top-0 z-40 bg-[var(--page-header)] backdrop-blur-sm border-b border-[var(--page-line)]"
-        style={{
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        }}
-      >
-        <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <Link href="/">
-              <BrandLogo />
+      <header className="sticky top-0 z-50 px-4 sm:px-8 pt-4 pb-2 transition-all duration-300">
+        <div
+          className={`flex items-center justify-between w-full mx-auto transition-all duration-300 ease-out ${scrolled ? 'max-w-3xl border border-[#1d1c220d] dark:border-border/20 bg-[#f5f5f7]/85 dark:bg-card/85 backdrop-blur-2xl rounded-full px-3 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)]' : 'max-w-5xl px-3 py-2.5'}`}
+        >
+          <Link href="/" className="pl-3">
+            <SurgentLogo className="text-[1.5rem]" />
+          </Link>
+          <nav className="hidden sm:flex items-center gap-0">
+            <Link href="/" className={NAV_LINK}>
+              Home
             </Link>
-            <span className="text-muted-foreground/40">/</span>
-            <Link
-              href="/inspirations"
-              className="text-[13px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              style={{ fontWeight: 500 }}
-            >
+            <Link href="/inspirations" className={NAV_LINK}>
               Inspirations
             </Link>
-            <span className="text-muted-foreground/40">/</span>
-            <span
-              className="text-[13px] text-muted-foreground truncate"
-              style={{ fontWeight: 500 }}
-            >
-              {startup.name}
-            </span>
-          </div>
-          {loggedIn !== null && (
-            <Link
-              href={loggedIn ? '/dashboard' : '/login'}
-              className="text-[13px] text-muted-foreground hover:text-foreground transition-colors shrink-0 ml-4"
-              style={{ fontWeight: 500 }}
-            >
-              {loggedIn ? 'Dashboard' : 'Sign up'}
+            <Link href="/marketplace" className={NAV_LINK}>
+              Marketplace
             </Link>
-          )}
+          </nav>
+          <div className="flex items-center gap-2">
+            {loggedIn ? (
+              <Link
+                href="/dashboard"
+                className="btn-brand inline-flex items-center h-9 px-5 rounded-full font-display text-[0.9rem] font-medium cursor-pointer"
+              >
+                Dashboard
+              </Link>
+            ) : loggedIn === false ? (
+              <>
+                <Link
+                  href="/login"
+                  className="btn-brand-secondary inline-flex items-center h-9 px-4 rounded-full font-display text-[0.9rem] font-medium"
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/signup"
+                  className="btn-brand inline-flex items-center h-9 px-5 rounded-full font-display text-[0.9rem] font-medium cursor-pointer"
+                >
+                  Sign up
+                </Link>
+              </>
+            ) : null}
+          </div>
         </div>
       </header>
 
