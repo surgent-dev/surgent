@@ -5,6 +5,7 @@ import type { Metadata, Viewport } from 'next'
 import {
   Instrument_Serif,
   JetBrains_Mono,
+  Outfit,
   Plus_Jakarta_Sans,
   Space_Grotesk,
 } from 'next/font/google'
@@ -76,6 +77,12 @@ const plusJakarta = Plus_Jakarta_Sans({
 const instrumentSerif = Instrument_Serif({
   subsets: ['latin'],
   weight: '400',
+  variable: '--font-display-serif',
+  display: 'swap',
+})
+
+const outfit = Outfit({
+  subsets: ['latin'],
   variable: '--font-display',
   display: 'swap',
 })
@@ -107,7 +114,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`antialiased ${plusJakarta.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable}`}
+        className={`antialiased ${plusJakarta.variable} ${outfit.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable}`}
       >
         <script
           type="application/ld+json"

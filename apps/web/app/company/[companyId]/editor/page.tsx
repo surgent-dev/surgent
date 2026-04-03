@@ -1,10 +1,11 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useRef } from 'react'
 import Conversation from '@/components/conversation'
 import EditorHeader from '@/components/editor/editor-header'
 import EditorTabs from '@/components/editor/editor-tabs'
+import { ProjectInitOverlay } from '@/components/project-init-overlay'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ProjectEventProvider } from '@/context/project-events'
 import { useSandbox } from '@/hooks/use-sandbox'
@@ -13,7 +14,9 @@ import { useActivateProject } from '@/queries/projects'
 
 export default function EditorPage() {
   const { companyId: projectId } = useParams<{ companyId: string }>()
-  const { project } = useSandboxReady(projectId)
+  const searchParams = useSearchParams()
+  const initialPrompt = searchParams.get('initial') || undefined
+  const { isReady, stage, project } = useSandboxReady(projectId)
   const { mutate: activateProject } = useActivateProject()
   const setSandboxId = useSandbox((s) => s.setSandboxId)
   const activated = useRef(false)
@@ -34,6 +37,11 @@ export default function EditorPage() {
 
   return (
     <ProjectEventProvider key={projectId} projectId={projectId}>
+      <ProjectInitOverlay
+        show={!isReady}
+        stage={stage}
+        provisioningStep={project?.metadata?.provisioningStep}
+      />
       <div className="flex h-full flex-col gap-1.5">
         <EditorHeader projectId={projectId} project={project} />
 
@@ -48,7 +56,7 @@ export default function EditorPage() {
 
           <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
             <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
-              <Conversation projectId={projectId} />
+              <Conversation projectId={projectId} initialPrompt={initialPrompt} />
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>

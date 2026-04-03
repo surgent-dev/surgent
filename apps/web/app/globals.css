@@ -7,7 +7,7 @@
 
 @theme inline {
   --font-sans: var(--font-jakarta), system-ui, sans-serif;
-  --font-display: var(--font-display), ui-serif, Georgia, serif;
+  --font-display: var(--font-display), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -464,13 +464,13 @@ body {
 .btn-brand {
   position: relative;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.9);
-  background-color: #1a1a1a;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.08), transparent 57%);
-  border: 1px solid #111111;
+  color: #fff;
+  background-color: #262626;
+  background-image: linear-gradient(to bottom, #444, #2a2a2a);
+  border: 1px solid #333;
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
-    0 1px 3px 0 rgba(0, 0, 0, 0.12);
+    inset 0 1.5px 0 0 rgba(255, 255, 255, 0.24),
+    0 1px 3px 0 rgba(0, 0, 0, 0.18);
   transition:
     background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     background-image 0.25s cubic-bezier(0.4, 0, 0.2, 1),
@@ -496,9 +496,12 @@ body {
 }
 .btn-brand:hover {
   color: #ffffff;
-  background-color: #111111;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.1), transparent 57%);
-  border-color: #000000;
+  background-color: #2e2e2e;
+  background-image: linear-gradient(to bottom, #4e4e4e, #333);
+  border-color: #3a3a3a;
+  box-shadow:
+    inset 0 1.5px 0 0 rgba(255, 255, 255, 0.3),
+    0 2px 4px 0 rgba(0, 0, 0, 0.2);
 }
 .btn-brand:hover::before {
   background-color: rgba(255, 255, 255, 0.25);
@@ -803,6 +806,99 @@ body {
 
 .showcase-scroll:hover {
   animation-play-state: paused;
+}
+
+/* ─── Hero bg zoom on load ─── */
+
+.hero-bg-zoom {
+  animation: hero-bg-zoom 1.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes hero-bg-zoom {
+  from {
+    transform: scale(1.15);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-bg-zoom {
+    animation: none;
+  }
+}
+
+/* ─── Hero word flip ─── */
+
+.hero-word-flip {
+  animation: hero-flip-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: center top;
+  perspective: 600px;
+}
+
+@keyframes hero-flip-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-word-flip {
+    animation: none;
+  }
+}
+
+/* ─── Hero word gradient slides ─── */
+
+.hero-shimmer {
+  background: linear-gradient(90deg, #7c5cfc, #c084fc, #f472b6, #7c5cfc);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: hero-gradient-slide 8s ease-in-out infinite;
+}
+
+.hero-word-flip.hero-shimmer {
+  animation:
+    hero-flip-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both,
+    hero-gradient-slide 8s ease-in-out infinite;
+}
+
+.hero-gradient-warm {
+  background: linear-gradient(90deg, #f59e0b, #ef4444, #f472b6, #f59e0b);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: hero-gradient-slide 8s ease-in-out infinite;
+  animation-direction: reverse;
+}
+
+@keyframes hero-gradient-slide {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-shimmer {
+    animation: none;
+    background-position: 50% 50%;
+  }
 }
 
 /* ─── Hero gradient bg ─── */
