@@ -132,46 +132,68 @@ async function supersedeOlderDeployments(projectId: string, deploymentId: string
 // GET /projects/marketplace/listings - List all active marketplace listings
 projects.get(
   '/marketplace/listings',
-  zValidator('query', z.object({ limit: z.coerce.number().int().min(1).max(100).optional() })),
+  zValidator(
+    'query',
+    z.object({
+      limit: z.coerce.number().int().min(1).max(100).optional(),
+      page: z.coerce.number().int().min(1).optional(),
+    }),
+  ),
   async (c) => {
-    const { limit } = c.req.valid('query')
+    const { limit, page } = c.req.valid('query')
+    const pageSize = limit ?? 48
+    const pageNumber = page ?? 1
 
-    const rows = await db
-      .selectFrom('listing')
-      .innerJoin('project', 'project.id', 'listing.projectId')
-      .innerJoin('user', 'user.id', 'project.userId')
-      .leftJoin('worker', 'worker.projectId', 'project.id')
-      .leftJoin('product', 'product.id', 'listing.productId')
-      .leftJoin('product_price', 'product_price.id', 'listing.priceId')
-      .select([
-        'listing.id',
-        'listing.projectId',
-        'listing.title',
-        'listing.description',
-        'listing.imageUrl',
-        'listing.productId',
-        'listing.priceId',
-        'listing.status',
-        'listing.createdAt',
-        'listing.updatedAt',
-        'project.name as projectName',
-        'user.name as sellerName',
-        'user.image as sellerImage',
-        'worker.scriptName as workerScriptName',
-        'worker.status as workerStatus',
-        'product_price.priceAmount',
-        'product_price.priceCurrency',
-        'product_price.recurringInterval',
-      ])
-      .where('listing.status', '=', 'active')
-      .where('project.deletedAt', 'is', null)
-      .where((eb) => eb.or([eb('listing.productId', 'is', null), eb('product.env', '=', 'live')]))
-      .orderBy('listing.updatedAt', 'desc')
-      .limit(limit ?? 48)
-      .execute()
+    const [rows, countResult] = await Promise.all([
+      db
+        .selectFrom('listing')
+        .innerJoin('project', 'project.id', 'listing.projectId')
+        .innerJoin('user', 'user.id', 'project.userId')
+        .leftJoin('worker', 'worker.projectId', 'project.id')
+        .leftJoin('product', 'product.id', 'listing.productId')
+        .leftJoin('product_price', 'product_price.id', 'listing.priceId')
+        .select([
+          'listing.id',
+          'listing.projectId',
+          'listing.title',
+          'listing.description',
+          'listing.imageUrl',
+          'listing.productId',
+          'listing.priceId',
+          'listing.status',
+          'listing.createdAt',
+          'listing.updatedAt',
+          'project.name as projectName',
+          'user.name as sellerName',
+          'user.image as sellerImage',
+          'worker.scriptName as workerScriptName',
+          'worker.status as workerStatus',
+          'product_price.priceAmount',
+          'product_price.priceCurrency',
+          'product_price.recurringInterval',
+        ])
+        .where('listing.status', '=', 'active')
+        .where('project.deletedAt', 'is', null)
+        .where((eb) => eb.or([eb('listing.productId', 'is', null), eb('product.env', '=', 'live')]))
+        .orderBy('listing.updatedAt', 'desc')
+        .limit(pageSize)
+        .offset((pageNumber - 1) * pageSize)
+        .execute(),
+      db
+        .selectFrom('listing')
+        .innerJoin('project', 'project.id', 'listing.projectId')
+        .leftJoin('product', 'product.id', 'listing.productId')
+        .select(sql<number>`count(*)`.as('count'))
+        .where('listing.status', '=', 'active')
+        .where('project.deletedAt', 'is', null)
+        .where((eb) => eb.or([eb('listing.productId', 'is', null), eb('product.env', '=', 'live')]))
+        .executeTakeFirstOrThrow(),
+    ])
 
-    return c.json(
-      rows.map((row) => ({
+    const total = Number(countResult.count)
+
+    return c.json({
+      listings: rows.map((row) => ({
         ...serializeListing(row),
         projectName: row.projectName,
         sellerName: row.sellerName,
@@ -181,7 +203,13 @@ projects.get(
             ? `https://${row.workerScriptName}.surgent.site`
             : null,
       })),
-    )
+      pagination: {
+        page: pageNumber,
+        perPage: pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    })
   },
 )
 

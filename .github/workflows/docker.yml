@@ -8,6 +8,7 @@ on:
     paths:
       - apps/worker/**
       - apps/analytics/**
+      - packages/gateway/**
       - packages/db/**
       - packages/typescript-config/**
       - package.json
@@ -32,6 +33,7 @@ jobs:
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
       has_changes: ${{ steps.build-matrix.outputs.has_changes }}
+      gateway_changed: ${{ steps.build-matrix.outputs.gateway_changed }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,6 +54,13 @@ jobs:
               - package.json
               - bun.lock
               - bunfig.toml
+            gateway:
+              - packages/gateway/**
+              - packages/db/**
+              - packages/typescript-config/**
+              - package.json
+              - bun.lock
+              - bunfig.toml
 
       - name: Build service matrix
         id: build-matrix
@@ -62,9 +71,11 @@ jobs:
           if [ "${{ github.ref_type }}" = "tag" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             WORKER=true
             ANALYTICS=true
+            GATEWAY=true
           else
             WORKER=${{ steps.filter.outputs.worker }}
             ANALYTICS=${{ steps.filter.outputs.analytics }}
+            GATEWAY=${{ steps.filter.outputs.gateway }}
           fi
 
           if [ "$WORKER" = "true" ]; then
@@ -95,6 +106,7 @@ jobs:
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
+          echo "gateway_changed=$GATEWAY" >> "$GITHUB_OUTPUT"
           echo "matrix={\"include\":$SERVICES}" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
@@ -209,3 +221,26 @@ jobs:
             --cluster surgent-cluster \
             --service ${{ matrix.ecs_service }} \
             --force-new-deployment
+
+  deploy-gateway:
+    needs: changes
+    if: needs.changes.outputs.gateway_changed == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Deploy gateway to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CONFIRM_PROD: "1"
+        run: bun --filter gateway deploy:prod
