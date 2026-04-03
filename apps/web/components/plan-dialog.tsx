@@ -116,7 +116,7 @@ export default function PlanDialog({ open, onOpenChange }: PlanDialogProps) {
         <DialogTitle className="sr-only">Upgrade to Pro</DialogTitle>
 
         {/* ── Header ── */}
-        <div className="px-8 pt-8 text-center">
+        <div className="px-5 pt-6 sm:px-8 sm:pt-8 text-center">
           <h2 className="text-[22px] font-bold tracking-tight">Upgrade to Pro</h2>
           <p className="mt-1 text-[13px] text-muted-foreground">
             Everything you need to ship faster
