@@ -3,10 +3,10 @@ import { config } from './config'
 import { createLogger } from './logger'
 
 const log = createLogger('email')
-const resend = new Resend(config.resend.apiKey)
+const resend = config.resend.apiKey ? new Resend(config.resend.apiKey) : null
 
 export async function sendEmail(to: string, subject: string, html: string) {
-  if (!config.resend.apiKey) {
+  if (!resend) {
     log.warn({ to, subject }, 'RESEND_API_KEY not set, skipping')
     return
   }
