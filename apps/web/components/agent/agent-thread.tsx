@@ -696,14 +696,19 @@ function SubagentStream({
     el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
   }, [lastAt])
 
+  const onWorkingChangeRef = useRef(onWorkingChange)
+  onWorkingChangeRef.current = onWorkingChange
+  const onDiffCountChangeRef = useRef(onDiffCountChange)
+  onDiffCountChangeRef.current = onDiffCountChange
+
   useEffect(() => {
-    onWorkingChange?.(working)
-  }, [onWorkingChange, working])
+    onWorkingChangeRef.current?.(working)
+  }, [working])
 
   useEffect(() => {
     if (diffCount === undefined) return
-    onDiffCountChange?.(diffCount)
-  }, [diffCount, onDiffCountChange])
+    onDiffCountChangeRef.current?.(diffCount)
+  }, [diffCount])
 
   if (messages.length === 0) {
     return (

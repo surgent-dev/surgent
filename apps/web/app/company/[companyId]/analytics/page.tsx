@@ -95,7 +95,7 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-4 pb-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div>
             <h2 className="text-base font-semibold">Analytics</h2>
@@ -178,20 +178,22 @@ export default function AnalyticsPage() {
       </div>
 
       {/* View switcher */}
-      <div className="flex items-center gap-0.5">
-        {VIEWS.map((v) => (
-          <button
-            key={v.key}
-            onClick={() => setView(v.key)}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer',
-              v.key === view ? activeTabClass : inactiveTabClass,
-            )}
-          >
-            <v.icon className="size-3.5" weight={v.key === view ? 'fill' : 'regular'} />
-            {v.label}
-          </button>
-        ))}
+      <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-0.5 w-max sm:w-auto">
+          {VIEWS.map((v) => (
+            <button
+              key={v.key}
+              onClick={() => setView(v.key)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer whitespace-nowrap',
+                v.key === view ? activeTabClass : inactiveTabClass,
+              )}
+            >
+              <v.icon className="size-3.5" weight={v.key === view ? 'fill' : 'regular'} />
+              {v.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Overview */}

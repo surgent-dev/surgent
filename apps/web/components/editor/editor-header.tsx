@@ -20,8 +20,8 @@ interface EditorHeaderProps {
 export default function EditorHeader({ projectId, project }: EditorHeaderProps) {
   return (
     <>
-      <header className="flex shrink-0 items-center gap-3 rounded-lg bg-white px-3 py-1.5 dark:bg-card">
-        <div className="flex items-center gap-1.5 text-[13px]">
+      <header className="flex shrink-0 items-center gap-2 sm:gap-3 rounded-lg bg-white px-2 sm:px-3 py-1.5 dark:bg-card">
+        <div className="hidden sm:flex items-center gap-1.5 text-[13px]">
           <Link
             href={`/company/${projectId}`}
             className="text-muted-foreground/35 hover:text-foreground transition-colors"
@@ -31,6 +31,12 @@ export default function EditorHeader({ projectId, project }: EditorHeaderProps) 
           <span className="text-muted-foreground/15">/</span>
           <span className="font-medium text-foreground">Editor</span>
         </div>
+        <Link
+          href={`/company/${projectId}`}
+          className="sm:hidden text-[13px] text-muted-foreground/35 hover:text-foreground transition-colors"
+        >
+          &larr;
+        </Link>
 
         <div className="flex-1" />
 

@@ -125,7 +125,7 @@ export default function PlanDialog({ open, onOpenChange }: PlanDialogProps) {
 
         {/* ── Plan cards ── */}
         <div className="px-6 pt-6">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 pt-3">
             {[
               {
                 key: 'month' as const,

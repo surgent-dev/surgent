@@ -23,9 +23,13 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
     return (
       <>
         <BillingSyncBridge />
-        <div className="h-dvh flex bg-muted dark:bg-background">
-          <WorkspaceSidebar companyId={companyId} />
-          <div className="flex-1 min-w-0 min-h-0 md:py-1.5 md:pr-1.5">{children}</div>
+        <div className="h-dvh flex flex-col md:flex-row bg-muted dark:bg-background">
+          <div className="flex-1 min-w-0 min-h-0 md:py-1.5 md:pr-1.5 order-1 md:order-2">
+            {children}
+          </div>
+          <div className="order-2 md:order-1 md:h-full">
+            <WorkspaceSidebar companyId={companyId} />
+          </div>
         </div>
       </>
     )
@@ -34,12 +38,10 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
   return (
     <>
       <BillingSyncBridge />
-      <div className="h-dvh flex bg-muted dark:bg-background">
-        <WorkspaceSidebar companyId={companyId} />
-
-        <div className="flex-1 flex flex-col min-w-0 min-h-0 md:py-1.5 md:pr-1.5">
+      <div className="h-dvh flex flex-col md:flex-row bg-muted dark:bg-background">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 md:py-1.5 md:pr-1.5 order-1 md:order-2">
           <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-card md:rounded-lg overflow-hidden">
-            <header className="flex shrink-0 items-center px-8 lg:px-12 pt-5 pb-3">
+            <header className="flex shrink-0 items-center px-4 sm:px-8 lg:px-12 pt-5 pb-3">
               <div className="flex items-center gap-1.5 text-[13px] max-w-5xl w-full mx-auto">
                 <Link
                   href={base}
@@ -62,10 +64,14 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
               </div>
             </header>
 
-            <main className="flex-1 overflow-auto px-8 py-5 lg:px-12">
+            <main className="flex-1 overflow-auto px-4 py-4 sm:px-8 sm:py-5 lg:px-12">
               <div className="max-w-5xl mx-auto h-full">{children}</div>
             </main>
           </div>
+        </div>
+
+        <div className="order-2 md:order-1 md:h-full">
+          <WorkspaceSidebar companyId={companyId} />
         </div>
       </div>
     </>

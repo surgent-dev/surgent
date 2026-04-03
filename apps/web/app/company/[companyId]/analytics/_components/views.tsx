@@ -32,7 +32,7 @@ export function RealtimeView({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         {[
           { value: active?.visitors ?? 0, label: 'Active Now', highlight: true },
           { value: rt?.totals?.views ?? 0, label: 'Views (30m)' },
@@ -104,44 +104,48 @@ export function SessionsView({ projectId, rangeValue }: { projectId: string; ran
   return (
     <div className="space-y-3">
       <Panel className="overflow-hidden !p-0">
-        <div
-          className={cn(
-            'grid gap-2 px-4 py-2.5 text-[11px] font-medium text-muted-foreground/40 uppercase tracking-wider border-b border-foreground/[0.04]',
-            SESSION_COLS,
-          )}
-        >
-          <span>Visitor</span>
-          <span>Browser</span>
-          <span>OS</span>
-          <span>Views</span>
-          <span>Visits</span>
-          <span>Last seen</span>
-        </div>
-        {sessions.length === 0 ? (
-          <div className="py-12 text-center text-xs text-muted-foreground/30">
-            No sessions found
-          </div>
-        ) : (
-          sessions.map((s) => (
+        <div className="overflow-x-auto">
+          <div className="min-w-[560px]">
             <div
-              key={s.id}
               className={cn(
-                'grid gap-2 px-4 py-2.5 text-[12px] border-b border-foreground/[0.02] last:border-0 hover:bg-foreground/[0.01] transition-colors',
+                'grid gap-2 px-4 py-2.5 text-[11px] font-medium text-muted-foreground/40 uppercase tracking-wider border-b border-foreground/[0.04]',
                 SESSION_COLS,
               )}
             >
-              <div className="flex items-center gap-2 truncate">
-                <span className="text-foreground/60">{s.country || '—'}</span>
-                {s.city && <span className="text-muted-foreground/40">{s.city}</span>}
-              </div>
-              <span className="text-foreground/50 truncate">{s.browser || '—'}</span>
-              <span className="text-foreground/50 truncate">{s.os || '—'}</span>
-              <span className="font-mono tabular-nums text-foreground/60">{s.views}</span>
-              <span className="font-mono tabular-nums text-foreground/60">{s.visits}</span>
-              <span className="text-muted-foreground/40">{timeAgo(s.lastAt)}</span>
+              <span>Visitor</span>
+              <span>Browser</span>
+              <span>OS</span>
+              <span>Views</span>
+              <span>Visits</span>
+              <span>Last seen</span>
             </div>
-          ))
-        )}
+            {sessions.length === 0 ? (
+              <div className="py-12 text-center text-xs text-muted-foreground/30">
+                No sessions found
+              </div>
+            ) : (
+              sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className={cn(
+                    'grid gap-2 px-4 py-2.5 text-[12px] border-b border-foreground/[0.02] last:border-0 hover:bg-foreground/[0.01] transition-colors',
+                    SESSION_COLS,
+                  )}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="text-foreground/60">{s.country || '—'}</span>
+                    {s.city && <span className="text-muted-foreground/40">{s.city}</span>}
+                  </div>
+                  <span className="text-foreground/50 truncate">{s.browser || '—'}</span>
+                  <span className="text-foreground/50 truncate">{s.os || '—'}</span>
+                  <span className="font-mono tabular-nums text-foreground/60">{s.views}</span>
+                  <span className="font-mono tabular-nums text-foreground/60">{s.visits}</span>
+                  <span className="text-muted-foreground/40">{timeAgo(s.lastAt)}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </Panel>
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">

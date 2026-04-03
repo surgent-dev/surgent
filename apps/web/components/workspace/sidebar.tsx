@@ -34,7 +34,7 @@ import { authClient } from '@/lib/auth-client'
 import { passthroughImageLoader } from '@/lib/image-loader'
 import { cn } from '@/lib/utils'
 
-const NAV: { icon: PhosphorIcon; label: string; href: string }[] = [
+const NAV: { icon: PhosphorIcon; label: string; href: string; absolute?: boolean }[] = [
   { icon: House, label: 'Dashboard', href: '' },
   { icon: MagicWand, label: 'Studio', href: '/editor' },
   { icon: ChartLineUp, label: 'Analytics', href: '/analytics' },
@@ -62,15 +62,19 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
     })
   }, [])
 
-  const on = (href: string) =>
-    href === '' ? pathname === base || pathname === `${base}/` : pathname.startsWith(base + href)
+  const on = (href: string, absolute?: boolean) =>
+    absolute
+      ? pathname.startsWith(href)
+      : href === ''
+        ? pathname === base || pathname === `${base}/`
+        : pathname.startsWith(base + href)
 
   const initial = (user?.name || user?.email || 'U').charAt(0).toUpperCase()
 
   return (
     <TooltipProvider delayDuration={0}>
       {/* Desktop rail */}
-      <aside className="hidden md:flex w-14 shrink-0 flex-col items-center py-2 gap-1">
+      <aside className="hidden md:flex w-14 shrink-0 flex-col items-center py-2 gap-1 h-full">
         {/* Logo */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -90,12 +94,12 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
 
         {/* Nav icons */}
         {NAV.map((n) => {
-          const active = on(n.href)
+          const active = on(n.href, n.absolute)
           return (
             <Tooltip key={n.label}>
               <TooltipTrigger asChild>
                 <Link
-                  href={base + n.href}
+                  href={n.absolute ? n.href : base + n.href}
                   className={cn(
                     'size-9 rounded-xl flex items-center justify-center transition-all duration-200',
                     active
@@ -234,11 +238,11 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {NAV.map((n) => {
-          const active = on(n.href)
+          const active = on(n.href, n.absolute)
           return (
             <Link
               key={n.label}
-              href={base + n.href}
+              href={n.absolute ? n.href : base + n.href}
               className={cn(
                 'flex flex-col items-center gap-0.5 px-3 py-1',
                 active ? 'text-foreground' : 'text-muted-foreground',
@@ -249,6 +253,60 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
             </Link>
           )
         })}
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex flex-col items-center gap-0.5 px-3 py-1 text-muted-foreground focus-visible:outline-none">
+            <div className="size-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-medium overflow-hidden">
+              {user?.image ? (
+                <span className="relative block size-full">
+                  <Image
+                    loader={passthroughImageLoader}
+                    unoptimized
+                    src={user.image}
+                    alt=""
+                    fill
+                    className="size-full object-cover"
+                  />
+                </span>
+              ) : (
+                initial
+              )}
+            </div>
+            <span className="text-[10px]">Me</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="end" sideOffset={8} className="w-56">
+            <div className="px-3 py-2">
+              <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{user?.email}</p>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}>
+              {resolvedTheme === 'dark' ? (
+                <Sun className="size-3.5" />
+              ) : (
+                <Moon className="size-3.5" />
+              )}
+              {resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => router.push('/dashboard')}>
+              <SquaresFour className="size-3.5" weight="duotone" />
+              All projects
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => credits.openBillingPortal()}>
+              <CreditCard className="size-3.5" weight="duotone" />
+              Billing
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={async () => {
+                await authClient.signOut()
+                router.push('/login')
+              }}
+            >
+              <SignOut className="size-3.5" /> Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </nav>
 
       {/* Dialogs */}

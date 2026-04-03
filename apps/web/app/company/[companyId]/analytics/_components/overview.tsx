@@ -68,7 +68,7 @@ export function MetricsBar({
   const { data: stats } = useWebsiteStats(projectId, rangeValue, compare, filters)
   const c = stats?.comparison
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
       <MetricCard
         icon={Users}
         label="Visitors"
@@ -160,7 +160,7 @@ export function PageviewsChart({
 
   if (!pageviews?.pageviews?.length) {
     return (
-      <div className="h-56 flex flex-col items-center justify-center gap-2">
+      <div className="h-40 sm:h-56 flex flex-col items-center justify-center gap-2">
         <div className="size-10 rounded-xl bg-foreground/[0.03] dark:bg-white/[0.04] flex items-center justify-center">
           <ChartLineUp className="size-5 text-muted-foreground/20" />
         </div>
@@ -179,7 +179,7 @@ export function PageviewsChart({
 
   return (
     <>
-      <div className="h-56">
+      <div className="h-40 sm:h-56">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
             <defs>
@@ -301,7 +301,7 @@ export function MetricsPanel({
   const [active, setActive] = useState(tabs[0]!.type)
   return (
     <Panel>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
         <div className="flex items-center gap-2">
           <Icon className="size-3.5 text-muted-foreground/30" weight="duotone" />
           <p className="text-sm font-medium">{title}</p>
@@ -547,7 +547,7 @@ export function ExpandedView({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col w-[calc(100%-2rem)] sm:w-full">
         <DialogHeader>
           <DialogTitle className="text-base">{EXPANDED_TITLES[type || 'path'] ?? type}</DialogTitle>
         </DialogHeader>

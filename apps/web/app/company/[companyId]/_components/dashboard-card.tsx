@@ -25,7 +25,7 @@ export function DashboardCard({
   return (
     <div
       className={cn(
-        'flex flex-col rounded-2xl bg-foreground/[0.03] dark:bg-white/[0.04] min-h-[280px]',
+        'flex flex-col rounded-2xl bg-foreground/[0.03] dark:bg-white/[0.04] min-h-[220px] sm:min-h-[280px]',
         className,
       )}
     >

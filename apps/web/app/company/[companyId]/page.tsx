@@ -144,7 +144,7 @@ export default function DashboardPage() {
                     <ArrowSquareOut className="size-3" />
                   </button>
                 </div>
-                <div className="relative h-[340px] overflow-hidden bg-muted/30 dark:bg-black/10">
+                <div className="relative h-[200px] sm:h-[340px] overflow-hidden bg-muted/30 dark:bg-black/10">
                   {latestDeployment!.screenshotUrl ? (
                     <Image
                       loader={passthroughImageLoader}
@@ -182,7 +182,7 @@ export default function DashboardPage() {
                   <span className="size-[7px] rounded-full bg-foreground/[0.07]" />
                 </div>
                 {/* Empty state */}
-                <div className="h-[340px] flex flex-col items-center justify-center gap-2 bg-muted/30 dark:bg-black/10">
+                <div className="h-[200px] sm:h-[340px] flex flex-col items-center justify-center gap-2 bg-muted/30 dark:bg-black/10">
                   <Globe className="size-6 text-muted-foreground/15" />
                   <p className="text-[12px] text-muted-foreground/30">Not published</p>
                 </div>

@@ -48,35 +48,39 @@ export default function EditorTabs({ projectId, project }: EditorTabsProps) {
       onValueChange={(v) => setActive(v as Tab)}
       className="flex h-full flex-col gap-0"
     >
-      <div className="flex shrink-0 items-center px-3 py-2">
-        <TabsList>
-          <TabsTrigger value="preview">
-            <Monitor className="size-3.5" />
-            Preview
-          </TabsTrigger>
-          <TabsTrigger value="database">
-            <Database className="size-3.5" />
-            Database
-          </TabsTrigger>
-          <TabsTrigger value="payments">
-            <CircleDollarSign className="size-3.5" />
-            Payments
-          </TabsTrigger>
-          <TabsTrigger value="settings">
-            <Settings className="size-3.5" />
-            Settings
-          </TabsTrigger>
-          <TabsTrigger value="logs">
-            <ScrollText className="size-3.5" />
-            Logs
-          </TabsTrigger>
-        </TabsList>
+      <div className="flex shrink-0 items-center px-2 sm:px-3 py-2 gap-2">
+        <div className="overflow-x-auto scrollbar-none">
+          <TabsList className="w-max">
+            <TabsTrigger value="preview">
+              <Monitor className="size-3.5" />
+              <span className="hidden sm:inline">Preview</span>
+            </TabsTrigger>
+            <TabsTrigger value="database">
+              <Database className="size-3.5" />
+              <span className="hidden sm:inline">Database</span>
+            </TabsTrigger>
+            <TabsTrigger value="payments">
+              <CircleDollarSign className="size-3.5" />
+              <span className="hidden sm:inline">Payments</span>
+            </TabsTrigger>
+            <TabsTrigger value="settings">
+              <Settings className="size-3.5" />
+              <span className="hidden sm:inline">Settings</span>
+            </TabsTrigger>
+            <TabsTrigger value="logs">
+              <ScrollText className="size-3.5" />
+              <span className="hidden sm:inline">Logs</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
         <div className="flex-1" />
         {active === 'preview' && ready && (
-          <DeviceFrameSelector
-            value={(deviceFrame as 'mobile' | 'tablet' | 'desktop') ?? 'desktop'}
-            onChange={(f) => setDeviceFrame(f === 'desktop' ? null : f)}
-          />
+          <div className="hidden sm:block">
+            <DeviceFrameSelector
+              value={(deviceFrame as 'mobile' | 'tablet' | 'desktop') ?? 'desktop'}
+              onChange={(f) => setDeviceFrame(f === 'desktop' ? null : f)}
+            />
+          </div>
         )}
       </div>
 
