@@ -428,7 +428,7 @@ export default function StartupDetailPage({ slug, initialStartup }: StartupDetai
             className="w-full h-12 rounded-xl text-[15px] gap-2.5"
             asChild
           >
-            <Link href={`/?initial=${encodeURIComponent(buildPrompt())}`}>
+            <Link href={`/project/new?prompt=${encodeURIComponent(buildPrompt())}`}>
               <Lightning className="h-[18px] w-[18px]" weight="fill" />
               Build This App
             </Link>
