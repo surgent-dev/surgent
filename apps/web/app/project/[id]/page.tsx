@@ -1,5 +1,4 @@
-import BillingSyncBridge from '@/components/billing-sync-bridge'
-import ProjectView from '@/components/project-view'
+import { redirect } from 'next/navigation'
 
 export default async function ProjectPage({
   params,
@@ -8,11 +7,6 @@ export default async function ProjectPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ initial?: string }>
 }) {
-  const [{ id }, query] = await Promise.all([params, searchParams])
-  return (
-    <>
-      <BillingSyncBridge />
-      <ProjectView projectId={id} initialPrompt={query.initial} />
-    </>
-  )
+  const [{ id }, { initial }] = await Promise.all([params, searchParams])
+  redirect(`/company/${id}/editor${initial ? `?initial=${encodeURIComponent(initial)}` : ''}`)
 }

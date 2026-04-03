@@ -251,7 +251,7 @@ export default function DashboardPage() {
                   <ProjectItem
                     key={project.id}
                     project={project}
-                    onClick={() => router.push(`/project/${project.id}`)}
+                    onClick={() => router.push(`/company/${project.id}/editor`)}
                     onRename={() => {
                       setNewName(project.name)
                       setProjectToRename(project)

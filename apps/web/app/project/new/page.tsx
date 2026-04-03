@@ -62,7 +62,7 @@ function NewProjectContent() {
     })
       .then(({ id }) => {
         track('project_created', { project_id: id })
-        router.replace(`/project/${id}?initial=${encodeURIComponent(prompt)}`)
+        router.replace(`/company/${id}/editor?initial=${encodeURIComponent(prompt)}`)
       })
       .catch((err) => {
         console.error('Project creation failed:', err)

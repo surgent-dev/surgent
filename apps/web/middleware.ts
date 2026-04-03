@@ -1,11 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { getSessionCookie } from 'better-auth/cookies'
-import { isWaitlistMode } from './lib/waitlist'
+import { type NextRequest, NextResponse } from 'next/server'
 import {
-  REFERRAL_COOKIE_MAX_AGE,
-  REFERRAL_COOKIE_NAME,
   getReferralCookieDomain,
   isUuid,
+  REFERRAL_COOKIE_MAX_AGE,
+  REFERRAL_COOKIE_NAME,
 } from './lib/referrals'
 
 const DUB_COOKIE_NAME = 'dub_id'
@@ -34,10 +33,10 @@ export async function middleware(request: NextRequest) {
 
   if (ref && isUuid(ref)) {
     const url = request.nextUrl.clone()
-    const domain = getReferralCookieDomain(request.nextUrl.hostname)
     url.searchParams.delete('ref')
 
     response = NextResponse.redirect(url)
+    const cookieDomain = getReferralCookieDomain(request.nextUrl.hostname)
     response.cookies.set({
       name: REFERRAL_COOKIE_NAME,
       value: ref,
@@ -46,29 +45,22 @@ export async function middleware(request: NextRequest) {
       sameSite: 'lax',
       secure: request.nextUrl.protocol === 'https:',
       maxAge: REFERRAL_COOKIE_MAX_AGE,
-      ...(domain ? { domain } : {}),
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
     })
   }
 
   if (dubId) setDubCookie(response, dubId, request)
 
-  if (ref && isUuid(ref)) {
-    return response
-  }
-
-  if (isWaitlistMode()) {
-    if (path.startsWith('/dashboard') || path.startsWith('/project')) {
-      return NextResponse.redirect(new URL('/waitlist', request.url))
-    }
-  }
+  if (ref && isUuid(ref)) return response
 
   // Routes that require authentication
   const isProtectedRoute =
-    path.startsWith('/admin') || path.startsWith('/dashboard') || path.startsWith('/project')
+    path.startsWith('/admin') ||
+    path.startsWith('/dashboard') ||
+    path.startsWith('/project') ||
+    path.startsWith('/company')
 
-  if (!isProtectedRoute) {
-    return response
-  }
+  if (!isProtectedRoute) return response
 
   const sessionCookie = getSessionCookie(request)
 

@@ -7,7 +7,7 @@ import {
   House,
   Lightning,
   Moon,
-  PenNib,
+  MagicWand,
   Plus,
   SignOut,
   SquaresFour,
@@ -36,7 +36,7 @@ import { cn } from '@/lib/utils'
 
 const NAV: { icon: PhosphorIcon; label: string; href: string }[] = [
   { icon: House, label: 'Dashboard', href: '' },
-  { icon: PenNib, label: 'Studio', href: '/editor' },
+  { icon: MagicWand, label: 'Studio', href: '/editor' },
   { icon: ChartLineUp, label: 'Analytics', href: '/analytics' },
 ]
 
