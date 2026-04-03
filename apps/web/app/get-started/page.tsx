@@ -219,7 +219,7 @@ function OnboardingContent() {
                   value={data.siteType}
                   onChange={(e) => setData((d) => ({ ...d, siteType: e.target.value }))}
                   placeholder="Or describe it in your own words"
-                  className="w-full h-11 px-4 rounded-lg border border-border bg-muted/70 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors"
+                  className="w-full h-11 px-4 rounded-lg border border-border bg-muted/70 text-base sm:text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors"
                 />
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {siteTypes.map((type) => {
@@ -264,7 +264,7 @@ function OnboardingContent() {
                   onChange={(e) => setData((d) => ({ ...d, services: e.target.value }))}
                   placeholder="e.g. 1-on-1 coaching, group classes, meal plans, online programs..."
                   rows={3}
-                  className="w-full px-4 py-3 rounded-lg border border-border bg-muted/70 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors resize-none"
+                  className="w-full px-4 py-3 rounded-lg border border-border bg-muted/70 text-base sm:text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors resize-none"
                 />
                 <p className="text-[11px] text-muted-foreground/50 mt-2">
                   This helps us write better content for your site.
@@ -280,7 +280,7 @@ function OnboardingContent() {
                 value={data.businessName}
                 onChange={(e) => setData((d) => ({ ...d, businessName: e.target.value }))}
                 placeholder="Your business name"
-                className="w-full h-11 px-4 rounded-lg border border-border bg-muted/70 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors"
+                className="w-full h-11 px-4 rounded-lg border border-border bg-muted/70 text-base sm:text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors"
               />
             )}
 
@@ -293,7 +293,7 @@ function OnboardingContent() {
                   value={data.customGoal}
                   onChange={(e) => setData((d) => ({ ...d, customGoal: e.target.value }))}
                   placeholder="Type your own goal..."
-                  className="w-full h-11 px-4 rounded-lg border border-border bg-muted/70 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors"
+                  className="w-full h-11 px-4 rounded-lg border border-border bg-muted/70 text-base sm:text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   {goalOptions.map((goal) => {
@@ -366,7 +366,7 @@ function OnboardingContent() {
                   onChange={(e) => setData((d) => ({ ...d, aboutYou: e.target.value }))}
                   placeholder="e.g. I'm a fitness coach based in NYC, 5 years of experience, looking to take my business online..."
                   rows={3}
-                  className="w-full px-4 py-3 rounded-lg border border-border bg-muted/70 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors resize-none"
+                  className="w-full px-4 py-3 rounded-lg border border-border bg-muted/70 text-base sm:text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors resize-none"
                 />
                 <p className="text-[11px] text-muted-foreground/50 mt-2">
                   Your background helps us tailor everything to you.
@@ -446,7 +446,7 @@ function OnboardingContent() {
                         value={data.prompt}
                         onChange={(e) => setData((d) => ({ ...d, prompt: e.target.value }))}
                         rows={4}
-                        className="w-full px-4 py-3 rounded-lg border border-border bg-muted/70 text-sm text-foreground leading-relaxed outline-none focus:border-foreground/20 transition-colors resize-y"
+                        className="w-full px-4 py-3 rounded-lg border border-border bg-muted/70 text-base sm:text-sm text-foreground leading-relaxed outline-none focus:border-foreground/20 transition-colors resize-y"
                       />
                     </div>
                   </div>
