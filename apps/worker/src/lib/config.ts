@@ -153,6 +153,10 @@ export const config = {
   analytics: {
     url: env.ANALYTICS_URL || (env.NODE_ENV === 'production' ? undefined : 'http://127.0.0.1:3007'),
   },
+  resend: {
+    apiKey: env.RESEND_API_KEY,
+    fromEmail: env.RESEND_FROM_EMAIL || 'Surgent <no-reply@surgent.dev>',
+  },
   opencode: {
     url: env.OPENCODE_URL || 'http://127.0.0.1:4096',
     baseUrl: env.OPENCODE_BASE_URL,

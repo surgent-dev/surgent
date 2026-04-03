@@ -1,13 +1,12 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
-import { authClient } from '@/lib/auth-client'
+import { useState } from 'react'
 import { SurgentLogo } from '@/components/surgent-logo'
+import { authClient } from '@/lib/auth-client'
 
 type SignupContentProps = {
   next?: string
-  waitlistMode: boolean
 }
 
 const GoogleIcon = () => (
@@ -31,14 +30,15 @@ const GoogleIcon = () => (
   </svg>
 )
 
-export default function SignupContent({ next, waitlistMode }: SignupContentProps) {
+export default function SignupContent({ next }: SignupContentProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [verifyEmail, setVerifyEmail] = useState(false)
 
-  const redirectPath = waitlistMode ? '/waitlist' : next || '/'
+  const redirectPath = next || '/'
   const callbackURL = process.env.NEXT_PUBLIC_APP_URL
     ? new URL(redirectPath, process.env.NEXT_PUBLIC_APP_URL).toString()
     : undefined
@@ -65,14 +65,56 @@ export default function SignupContent({ next, waitlistMode }: SignupContentProps
         password,
         callbackURL: redirectPath,
       })
-      if (authError) {
+      if (authError && authError.status !== 403) {
         setError(authError.message || 'Something went wrong')
-        setIsLoading(false)
+      } else {
+        setVerifyEmail(true)
       }
     } catch {
       setError('Something went wrong')
-      setIsLoading(false)
     }
+    setIsLoading(false)
+  }
+
+  const handleResend = async () => {
+    setIsLoading(true)
+    await authClient.sendVerificationEmail({ email: email.trim(), callbackURL: redirectPath })
+    setIsLoading(false)
+  }
+
+  if (verifyEmail) {
+    return (
+      <div className="min-h-dvh flex flex-col bg-white dark:bg-background text-foreground">
+        <main className="flex-1 flex flex-col items-center px-6 pt-[22vh]">
+          <div className="w-full max-w-xs">
+            <div className="mb-10">
+              <SurgentLogo className="text-lg" />
+            </div>
+            <h1 className="font-display text-xl text-foreground mb-1.5">Check your email</h1>
+            <p className="text-xs text-muted-foreground/50 mb-6">
+              We sent a verification link to <span className="text-foreground">{email}</span>. Click
+              the link to verify your account.
+            </p>
+            <button
+              onClick={handleResend}
+              disabled={isLoading}
+              className="btn-brand-secondary w-full h-10 rounded-[0.5rem] text-sm font-medium cursor-pointer disabled:opacity-50"
+            >
+              {isLoading ? 'Sending...' : 'Resend verification email'}
+            </button>
+            <button
+              onClick={() => {
+                setVerifyEmail(false)
+                setError('')
+              }}
+              className="mt-3 text-xs text-muted-foreground/40 hover:text-muted-foreground/60 transition-colors"
+            >
+              Use a different email
+            </button>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -83,9 +125,7 @@ export default function SignupContent({ next, waitlistMode }: SignupContentProps
             <SurgentLogo className="text-lg" />
           </div>
 
-          <h1 className="font-display text-xl text-foreground mb-1.5">
-            {waitlistMode ? 'Join the waitlist' : 'Create your account'}
-          </h1>
+          <h1 className="font-display text-xl text-foreground mb-1.5">Create your account</h1>
           <p className="text-xs text-muted-foreground/50 mb-6">
             Start building your website, sales agent, and more — in seconds.
           </p>

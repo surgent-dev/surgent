@@ -4,6 +4,7 @@ import { oauthProvider } from '@better-auth/oauth-provider'
 import { createAccessControl } from 'better-auth/plugins/access'
 import { dialect } from '@/lib/db'
 import { config } from './config'
+import { sendEmail, verifyEmailHtml, resetPasswordHtml, welcomeHtml } from './email'
 import { trackDubLead } from './dub'
 import { ensureBillingState } from './billing'
 import { ensureActiveOrganization } from './organizations'
@@ -96,6 +97,23 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
+    requireEmailVerification: true,
+    sendResetPassword: async ({ user, url }) => {
+      void sendEmail(user.email, 'Reset your Surgent password', resetPasswordHtml(url))
+    },
+  },
+
+  emailVerification: {
+    sendOnSignUp: true,
+    sendOnSignIn: true,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      void sendEmail(user.email, 'Verify your Surgent email', verifyEmailHtml(url))
+    },
+    afterEmailVerification: async (user) => {
+      const url = new URL('/dashboard', config.server.clientOrigin).toString()
+      void sendEmail(user.email, `Welcome to Surgent, ${user.name}!`, welcomeHtml(user.name, url))
+    },
   },
 
   socialProviders: {
@@ -146,6 +164,16 @@ export const auth = betterAuth({
           } catch (err) {
             log.error({ err, userId: user.id }, '[AUTH] referral hook failed')
           }
+          // Welcome email for OAuth signups (email signups get it after verification)
+          if (context?.request?.url?.includes('/callback/')) {
+            const url = new URL('/dashboard', config.server.clientOrigin).toString()
+            void sendEmail(
+              user.email,
+              `Welcome to Surgent, ${user.name}!`,
+              welcomeHtml(user.name, url),
+            )
+          }
+
           // Signal the client to fire the GA4 sign_up event
           const method = context?.request?.url?.includes('/callback/') ? 'google' : 'email'
           context?.setCookie?.('signup_complete', method, {

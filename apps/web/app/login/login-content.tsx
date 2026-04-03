@@ -1,13 +1,12 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
-import { authClient } from '@/lib/auth-client'
+import { useState } from 'react'
 import { SurgentLogo } from '@/components/surgent-logo'
+import { authClient } from '@/lib/auth-client'
 
 type LoginContentProps = {
   next?: string
-  waitlistMode: boolean
 }
 
 const GoogleIcon = () => (
@@ -31,13 +30,13 @@ const GoogleIcon = () => (
   </svg>
 )
 
-export default function LoginContent({ next, waitlistMode }: LoginContentProps) {
+export default function LoginContent({ next }: LoginContentProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const redirectPath = waitlistMode ? '/waitlist' : next || '/'
+  const redirectPath = next || '/'
   const callbackURL = process.env.NEXT_PUBLIC_APP_URL
     ? new URL(redirectPath, process.env.NEXT_PUBLIC_APP_URL).toString()
     : undefined
@@ -64,7 +63,11 @@ export default function LoginContent({ next, waitlistMode }: LoginContentProps) 
         callbackURL: redirectPath,
       })
       if (authError) {
-        setError(authError.message || 'Invalid email or password')
+        if (authError.status === 403) {
+          setError('Please verify your email address. Check your inbox for a verification link.')
+        } else {
+          setError(authError.message || 'Invalid email or password')
+        }
         setIsLoading(false)
       }
     } catch {
@@ -81,9 +84,7 @@ export default function LoginContent({ next, waitlistMode }: LoginContentProps) 
             <SurgentLogo className="text-lg" />
           </div>
 
-          <h1 className="font-display text-xl text-foreground mb-1.5">
-            {waitlistMode ? 'Join the waitlist' : 'Welcome back'}
-          </h1>
+          <h1 className="font-display text-xl text-foreground mb-1.5">Welcome back</h1>
           <p className="text-xs text-muted-foreground/50 mb-6">
             Log in to manage your projects and grow your business.
           </p>
@@ -131,7 +132,16 @@ export default function LoginContent({ next, waitlistMode }: LoginContentProps) 
             </button>
           </div>
 
-          <div className="mt-8 text-xs text-muted-foreground/40">
+          <div className="mt-6 text-right">
+            <Link
+              href="/forgot-password"
+              className="text-xs text-muted-foreground/40 hover:text-muted-foreground/60 transition-colors"
+            >
+              Forgot password?
+            </Link>
+          </div>
+
+          <div className="mt-4 text-xs text-muted-foreground/40">
             Don&apos;t have an account?{' '}
             <Link
               href={`/signup${next ? `?next=${encodeURIComponent(next)}` : ''}`}
