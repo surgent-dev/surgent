@@ -130,7 +130,7 @@ export const config = {
       },
       year: {
         priceId: env.STRIPE_PRO_YEARLY_PRICE_ID,
-        priceUsd: float(env.STRIPE_PRO_YEARLY_PRICE_USD, 180),
+        priceUsd: float(env.STRIPE_PRO_YEARLY_PRICE_USD, 200),
         allowanceUsd: float(env.STRIPE_PRO_YEARLY_ALLOWANCE_USD, 25),
       },
     },
