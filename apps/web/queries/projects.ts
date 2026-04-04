@@ -40,13 +40,13 @@ type CreateProjectArgs = {
   initConvex: boolean
   metadata?: {
     onboarding?: {
-      siteType: string
-      services: string
-      businessName: string
-      goals: string[]
-      customGoal: string
-      features: string[]
-      aboutYou: string
+      identity?: string
+      goal?: string
+      industry?: string
+      businessName?: string
+      location?: string
+      stage?: string
+      audience?: string
       prompt: string
     }
   }

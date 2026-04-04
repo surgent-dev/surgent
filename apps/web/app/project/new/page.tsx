@@ -20,13 +20,13 @@ function readOnboarding() {
     if (!raw) return undefined
     sessionStorage.removeItem('surgent:onboarding')
     return JSON.parse(raw) as {
-      siteType: string
-      services: string
+      identity: string
+      goal: string
+      industry: string
       businessName: string
-      goals: string[]
-      customGoal: string
-      features: string[]
-      aboutYou: string
+      location: string
+      stage: string
+      audience: string
       prompt: string
     }
   } catch {

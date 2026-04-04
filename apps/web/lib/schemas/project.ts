@@ -38,13 +38,13 @@ const ProjectProvisioningMetadataSchema = z
 
 const ProjectOnboardingMetadataSchema = z
   .object({
-    siteType: z.string(),
-    services: z.string(),
-    businessName: z.string(),
-    goals: z.array(z.string()),
-    customGoal: z.string(),
-    features: z.array(z.string()),
-    aboutYou: z.string(),
+    identity: z.string().optional(),
+    goal: z.string().optional(),
+    industry: z.string().optional(),
+    businessName: z.string().optional(),
+    location: z.string().optional(),
+    stage: z.string().optional(),
+    audience: z.string().optional(),
     prompt: z.string(),
   })
   .optional()
