@@ -66,83 +66,83 @@ function ListingCard({ listing }: { listing: MarketplaceListing }) {
   return (
     <Link
       href={`/marketplace/${listing.id ?? listing.projectId}`}
-      className="group flex items-center gap-4 rounded-xl p-3.5 transition-all duration-200 border border-transparent hover:bg-[#1d1c220d] dark:hover:bg-white/[0.04]"
+      className="group flex flex-col rounded-2xl overflow-hidden border border-[#1d1c220d] dark:border-border/20 bg-white dark:bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] hover:shadow-[0_2px_8px_rgba(0,0,0,0.08),0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-300 hover:-translate-y-0.5"
     >
-      <div className="flex items-center gap-4 flex-1 min-w-0">
-        {/* Thumbnail */}
-        <div className="h-12 w-12 rounded-xl shrink-0 overflow-hidden bg-[#f0f0f0] dark:bg-muted/40 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
-          {listing.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={listing.imageUrl} alt="" className="h-full w-full object-cover object-top" />
-          ) : (
-            <div className="h-full w-full flex items-center justify-center text-[10px] text-[#b0b1b3] font-medium">
+      {/* Image */}
+      <div className="relative aspect-[16/10] w-full overflow-hidden bg-[#f0f0f0] dark:bg-muted/40">
+        {listing.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={listing.imageUrl}
+            alt=""
+            className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]"
+          />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center">
+            <span className="text-4xl font-semibold text-[#d0d1d3] dark:text-muted-foreground/40">
               {listing.title.charAt(0)}
-            </div>
+            </span>
+          </div>
+        )}
+        {/* Price badge */}
+        <div className="absolute top-3 right-3">
+          {listing.priceAmount != null && listing.priceAmount > 0 ? (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[13px] font-semibold bg-white/90 dark:bg-card/90 backdrop-blur-sm text-[#1d1c22] dark:text-foreground shadow-sm">
+              {formatPrice(listing.priceAmount, listing.priceCurrency || 'usd')}
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[13px] font-semibold bg-emerald-500/90 backdrop-blur-sm text-white shadow-sm">
+              Free
+            </span>
           )}
         </div>
+        {/* Demo badge */}
+        {listing.liveUrl && (
+          <div className="absolute top-3 left-3">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/90 dark:bg-card/90 backdrop-blur-sm text-[#475467] dark:text-muted-foreground shadow-sm uppercase tracking-wider">
+              <ExternalLink className="h-3 w-3" />
+              Demo
+            </span>
+          </div>
+        )}
+      </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
+      {/* Info */}
+      <div className="flex flex-col gap-3 p-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 mb-1">
             <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-[#1d1c22] dark:text-foreground truncate">
               {listing.title}
             </h3>
             <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#b0b1b3] group-hover:text-[#475467] dark:group-hover:text-muted-foreground transition-colors" />
           </div>
           {listing.description && (
-            <p className="text-[13px] text-[#475467] dark:text-muted-foreground truncate">
+            <p className="text-[13px] text-[#475467] dark:text-muted-foreground line-clamp-2 leading-relaxed">
               {listing.description}
             </p>
           )}
         </div>
-      </div>
 
-      <div className="flex items-center gap-6 sm:gap-10 shrink-0 pr-2">
-        {/* Price */}
-        <div className="flex flex-col items-end min-w-[70px]">
-          <p className="text-[10px] text-[#b0b1b3] uppercase tracking-wider font-semibold mb-0.5">
-            Price
-          </p>
-          {listing.priceAmount != null && listing.priceAmount > 0 ? (
-            <span className="text-[14px] font-semibold text-[#1d1c22] dark:text-foreground">
-              {formatPrice(listing.priceAmount, listing.priceCurrency || 'usd')}
-            </span>
-          ) : (
-            <span className="text-[14px] font-semibold text-emerald-500">Free</span>
-          )}
-        </div>
-
-        {/* Seller */}
-        <div className="hidden sm:flex flex-col items-end min-w-[90px]">
-          <p className="text-[10px] text-[#b0b1b3] uppercase tracking-wider font-semibold mb-0.5">
-            Seller
-          </p>
-          <div className="flex items-center gap-1.5">
+        {/* Seller + date */}
+        <div className="flex items-center justify-between pt-3 border-t border-[#1d1c220d] dark:border-border/15">
+          <div className="flex items-center gap-2 min-w-0">
             {listing.sellerImage ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={listing.sellerImage} alt="" className="h-4 w-4 rounded-full object-cover" />
-            ) : null}
-            <span className="text-[13px] text-[#475467] dark:text-muted-foreground truncate max-w-[80px]">
+              <img
+                src={listing.sellerImage}
+                alt=""
+                className="h-5 w-5 rounded-full object-cover shrink-0"
+              />
+            ) : (
+              <div className="h-5 w-5 rounded-full bg-[#f0f0f0] dark:bg-muted/40 shrink-0 flex items-center justify-center text-[9px] font-medium text-[#b0b1b3]">
+                {listing.sellerName?.charAt(0)}
+              </div>
+            )}
+            <span className="text-[13px] text-[#475467] dark:text-muted-foreground truncate">
               {listing.sellerName}
             </span>
           </div>
-        </div>
-
-        {/* Live */}
-        {listing.liveUrl && (
-          <div className="hidden lg:flex flex-col items-end min-w-[40px]">
-            <p className="text-[10px] text-[#b0b1b3] uppercase tracking-wider font-semibold mb-0.5">
-              Demo
-            </p>
-            <ExternalLink className="h-3.5 w-3.5 text-[#475467] dark:text-muted-foreground" />
-          </div>
-        )}
-
-        {/* Date */}
-        <div className="hidden md:flex flex-col items-end min-w-[70px]">
-          <p className="text-[10px] text-[#b0b1b3] uppercase tracking-wider font-semibold mb-0.5">
-            Listed
-          </p>
-          <span className="text-[13px] text-[#475467] dark:text-muted-foreground">
+          <span className="text-[12px] text-[#b0b1b3] shrink-0">
             {formatMarketplaceDate(listing.updatedAt)}
           </span>
         </div>
@@ -264,22 +264,24 @@ export default function MarketplaceContent({
           </div>
         </div>
 
-        {/* ─── List ─── */}
+        {/* ─── Grid ─── */}
         {isLoading ? (
-          <div className="space-y-2 pb-14">
-            {Array.from({ length: 10 }).map((_, i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pb-14">
+            {Array.from({ length: 9 }).map((_, i) => (
               <div
                 key={i}
-                className="rounded-xl border border-[#1d1c220d] dark:border-border/20 bg-white dark:bg-card p-3.5 animate-pulse"
+                className="rounded-2xl border border-[#1d1c220d] dark:border-border/20 bg-white dark:bg-card overflow-hidden animate-pulse"
               >
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-xl bg-[#f0f0f0] dark:bg-muted/40" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 w-48 rounded bg-[#f0f0f0] dark:bg-muted/40" />
-                    <div className="h-3 w-72 rounded bg-[#f0f0f0] dark:bg-muted/30" />
+                <div className="aspect-[16/10] bg-[#f0f0f0] dark:bg-muted/40" />
+                <div className="p-4 space-y-3">
+                  <div className="space-y-2">
+                    <div className="h-4 w-3/4 rounded bg-[#f0f0f0] dark:bg-muted/40" />
+                    <div className="h-3 w-full rounded bg-[#f0f0f0] dark:bg-muted/30" />
                   </div>
-                  <div className="hidden sm:block h-8 w-16 rounded bg-[#f0f0f0] dark:bg-muted/30" />
-                  <div className="h-8 w-16 rounded bg-[#f0f0f0] dark:bg-muted/30" />
+                  <div className="pt-3 border-t border-[#1d1c220d] dark:border-border/15 flex items-center gap-2">
+                    <div className="h-5 w-5 rounded-full bg-[#f0f0f0] dark:bg-muted/40" />
+                    <div className="h-3 w-20 rounded bg-[#f0f0f0] dark:bg-muted/30" />
+                  </div>
                 </div>
               </div>
             ))}
@@ -313,7 +315,7 @@ export default function MarketplaceContent({
           </div>
         ) : (
           <div className="pb-14">
-            <div className="space-y-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {listings.map((l) => (
                 <ListingCard key={l.id || l.projectId} listing={l} />
               ))}
