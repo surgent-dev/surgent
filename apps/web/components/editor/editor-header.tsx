@@ -1,15 +1,18 @@
 'use client'
 
-import { Gift } from '@phosphor-icons/react'
+import { Gift, Lightning } from '@phosphor-icons/react'
 import Link from 'next/link'
 import { useState } from 'react'
+import PlanDialog from '@/components/plan-dialog'
 import DownloadButton from '@/components/project-header/download-button'
 import GitHubButton from '@/components/project-header/github-button'
 import PayDialogs from '@/components/project-header/pay-dialogs'
 import PublishButton from '@/components/project-header/publish-button'
 import SupportMenu from '@/components/project-header/support-menu'
 import ReferralDialog from '@/components/referral-dialog'
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useCredits } from '@/hooks/use-credits'
 
 interface EditorHeaderProps {
   projectId: string
@@ -22,6 +25,8 @@ interface EditorHeaderProps {
 
 export default function EditorHeader({ projectId, project }: EditorHeaderProps) {
   const [referralOpen, setReferralOpen] = useState(false)
+  const credits = useCredits()
+  const isFree = credits.snapshot?.tier !== 'pro'
 
   return (
     <>
@@ -63,13 +68,30 @@ export default function EditorHeader({ projectId, project }: EditorHeaderProps) 
             <GitHubButton projectId={projectId} />
             <SupportMenu />
           </div>
-        </TooltipProvider>
 
-        <PublishButton projectId={projectId} project={project} />
+          {isFree && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="brand-violet"
+                  size="sm"
+                  onClick={() => credits.setPlanDialogOpen(true)}
+                >
+                  <Lightning className="size-3.5" weight="fill" />
+                  <span className="hidden sm:inline">Upgrade</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Upgrade to Pro</TooltipContent>
+            </Tooltip>
+          )}
+
+          <PublishButton projectId={projectId} project={project} />
+        </TooltipProvider>
       </header>
 
       <PayDialogs projectId={projectId} />
       <ReferralDialog open={referralOpen} onOpenChange={setReferralOpen} />
+      <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
     </>
   )
 }
