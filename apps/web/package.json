@@ -67,7 +67,7 @@
     "ai": "^5.0.108",
     "ai-elements": "^1.6.3",
     "apify-client": "^2.20.0",
-    "better-auth": "^1.4.18",
+    "better-auth": "1.4.18",
     "canvas-confetti": "1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
