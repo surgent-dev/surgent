@@ -40,84 +40,96 @@ export default function EditorPage() {
     activateProject({ id: projectId })
   }, [activateProject, project, projectId])
 
-  const editorContent = <EditorTabs projectId={projectId} project={project} />
-  const chatContent = <Conversation projectId={projectId} initialPrompt={initialPrompt} />
+  const editorContent = isReady ? <EditorTabs projectId={projectId} project={project} /> : null
+  const chatContent = isReady ? (
+    <Conversation projectId={projectId} initialPrompt={initialPrompt} />
+  ) : null
+
+  const editorBody = (
+    <div className="flex h-full flex-col gap-1 md:gap-1.5">
+      <EditorHeader projectId={projectId} project={project} />
+
+      {isMobile ? (
+        <>
+          {/* Mobile panel toggle */}
+          <div className="flex shrink-0 gap-1 px-1">
+            <button
+              onClick={() => setMobilePanel('editor')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors',
+                mobilePanel === 'editor'
+                  ? 'bg-foreground text-background'
+                  : 'bg-white dark:bg-card text-muted-foreground',
+              )}
+            >
+              <Monitor
+                className="size-3.5"
+                weight={mobilePanel === 'editor' ? 'fill' : 'regular'}
+              />
+              Preview
+            </button>
+            <button
+              onClick={() => setMobilePanel('chat')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors',
+                mobilePanel === 'chat'
+                  ? 'bg-foreground text-background'
+                  : 'bg-white dark:bg-card text-muted-foreground',
+              )}
+            >
+              <Chat className="size-3.5" weight={mobilePanel === 'chat' ? 'fill' : 'regular'} />
+              Chat
+            </button>
+          </div>
+
+          {/* Mobile: single panel at a time */}
+          <div className="min-h-0 flex-1">
+            {mobilePanel === 'editor' ? (
+              <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
+                {editorContent}
+              </div>
+            ) : (
+              <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
+                {chatContent}
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        /* Desktop: resizable side-by-side */
+        <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
+          <ResizablePanel defaultSize={65} minSize={35}>
+            <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
+              {editorContent}
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle className="mx-0.5 w-px bg-transparent after:w-2 hover:bg-border/50 transition-colors" />
+
+          <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
+            <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
+              {chatContent}
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      )}
+    </div>
+  )
 
   return (
-    <ProjectEventProvider key={projectId} projectId={projectId}>
+    <>
       <ProjectInitOverlay
         show={!isReady}
         stage={stage}
         provisioningStep={project?.metadata?.provisioningStep}
       />
-      <div className="flex h-full flex-col gap-1 md:gap-1.5">
-        <EditorHeader projectId={projectId} project={project} />
-
-        {isMobile ? (
-          <>
-            {/* Mobile panel toggle */}
-            <div className="flex shrink-0 gap-1 px-1">
-              <button
-                onClick={() => setMobilePanel('editor')}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors',
-                  mobilePanel === 'editor'
-                    ? 'bg-foreground text-background'
-                    : 'bg-white dark:bg-card text-muted-foreground',
-                )}
-              >
-                <Monitor
-                  className="size-3.5"
-                  weight={mobilePanel === 'editor' ? 'fill' : 'regular'}
-                />
-                Preview
-              </button>
-              <button
-                onClick={() => setMobilePanel('chat')}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors',
-                  mobilePanel === 'chat'
-                    ? 'bg-foreground text-background'
-                    : 'bg-white dark:bg-card text-muted-foreground',
-                )}
-              >
-                <Chat className="size-3.5" weight={mobilePanel === 'chat' ? 'fill' : 'regular'} />
-                Chat
-              </button>
-            </div>
-
-            {/* Mobile: single panel at a time */}
-            <div className="min-h-0 flex-1">
-              {mobilePanel === 'editor' ? (
-                <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
-                  {editorContent}
-                </div>
-              ) : (
-                <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
-                  {chatContent}
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          /* Desktop: resizable side-by-side */
-          <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
-            <ResizablePanel defaultSize={65} minSize={35}>
-              <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
-                {editorContent}
-              </div>
-            </ResizablePanel>
-
-            <ResizableHandle className="mx-0.5 w-px bg-transparent after:w-2 hover:bg-border/50 transition-colors" />
-
-            <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
-              <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
-                {chatContent}
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        )}
-      </div>
-    </ProjectEventProvider>
+      {isReady ? (
+        <ProjectEventProvider key={projectId} projectId={projectId}>
+          {editorBody}
+        </ProjectEventProvider>
+      ) : (
+        editorBody
+      )}
+    </>
   )
 }

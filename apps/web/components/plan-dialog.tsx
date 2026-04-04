@@ -1,15 +1,6 @@
 'use client'
 
-import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
-import {
-  CircleNotch,
-  Cube,
-  EyeSlash,
-  Key,
-  Lightning,
-  PaperPlaneTilt,
-  Storefront,
-} from '@phosphor-icons/react'
+import { Check, CircleNotch } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -18,55 +9,16 @@ import { useBillingCheckout, useSubscription } from '@/hooks/use-subscription'
 import { track } from '@/lib/track'
 import { cn } from '@/lib/utils'
 
-const FEATURES: ReadonlyArray<{
-  icon: PhosphorIcon
-  title: string
-  desc: string
-  bg: string
-  text: string
-}> = [
-  {
-    icon: Lightning,
-    title: '$20/mo AI credits',
-    desc: 'Use AI to build, edit, and iterate on your apps',
-    bg: 'bg-amber-500/10 dark:bg-amber-400/10',
-    text: 'text-amber-600 dark:text-amber-400',
-  },
-  {
-    icon: Cube,
-    title: 'Unlimited projects',
-    desc: 'Create as many projects as you need, no caps',
-    bg: 'bg-violet-500/10 dark:bg-violet-400/10',
-    text: 'text-violet-600 dark:text-violet-400',
-  },
-  {
-    icon: EyeSlash,
-    title: 'Private projects',
-    desc: "Keep your work hidden until you're ready to share",
-    bg: 'bg-indigo-500/10 dark:bg-indigo-400/10',
-    text: 'text-indigo-600 dark:text-indigo-400',
-  },
-  {
-    icon: PaperPlaneTilt,
-    title: 'One-click deploy',
-    desc: 'Ship to production instantly with your own domain',
-    bg: 'bg-blue-500/10 dark:bg-blue-400/10',
-    text: 'text-blue-600 dark:text-blue-400',
-  },
-  {
-    icon: Storefront,
-    title: 'Sell on marketplace',
-    desc: 'List your apps and earn revenue from other users',
-    bg: 'bg-emerald-500/10 dark:bg-emerald-400/10',
-    text: 'text-emerald-600 dark:text-emerald-400',
-  },
-  {
-    icon: Key,
-    title: 'Bring your own keys',
-    desc: 'Use your existing OpenAI, Anthropic, or Google API keys',
-    bg: 'bg-orange-500/10 dark:bg-orange-400/10',
-    text: 'text-orange-600 dark:text-orange-400',
-  },
+const FREE_FEATURES = ['1 project', 'Community support', 'Basic AI usage', 'Public projects only']
+
+const PRO_FEATURES = [
+  '$20/mo AI credits included',
+  'Unlimited projects',
+  'Private projects',
+  'One-click deploy with custom domain',
+  'Sell on marketplace',
+  'Bring your own API keys',
+  'Priority support',
 ]
 
 interface PlanDialogProps {
@@ -82,7 +34,24 @@ export default function PlanDialog({ open, onOpenChange }: PlanDialogProps) {
   const billingOptions = data?.billingOptions ?? []
   const currentTier = data?.tier ?? 'free'
   const currentInterval = data?.interval ?? null
-  const isActive = currentTier === 'pro' && currentInterval === interval
+  const isProActive = currentTier === 'pro' && currentInterval === interval
+
+  const monthlyOption = billingOptions.find((o) => o.interval === 'month')
+  const yearlyOption = billingOptions.find((o) => o.interval === 'year')
+  const yearlySavings =
+    monthlyOption && yearlyOption
+      ? Math.round(
+          ((monthlyOption.priceUsd * 12 - yearlyOption.priceUsd) / (monthlyOption.priceUsd * 12)) *
+            100,
+        )
+      : 0
+
+  const displayPrice =
+    interval === 'year'
+      ? yearlyOption
+        ? Math.round(yearlyOption.priceUsd / 12)
+        : null
+      : (monthlyOption?.priceUsd ?? null)
 
   const startCheckout = async () => {
     try {
@@ -100,139 +69,154 @@ export default function PlanDialog({ open, onOpenChange }: PlanDialogProps) {
     }
   }
 
-  const monthlyOption = billingOptions.find((o) => o.interval === 'month')
-  const yearlyOption = billingOptions.find((o) => o.interval === 'year')
-  const yearlySavings =
-    monthlyOption && yearlyOption
-      ? Math.round(
-          ((monthlyOption.priceUsd * 12 - yearlyOption.priceUsd) / (monthlyOption.priceUsd * 12)) *
-            100,
-        )
-      : 0
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[460px] gap-0 p-0 overflow-hidden border-border/50">
-        <DialogTitle className="sr-only">Upgrade to Pro</DialogTitle>
+      <DialogContent className="sm:max-w-[680px] gap-0 p-0 overflow-hidden border-border/50">
+        <DialogTitle className="sr-only">Choose your plan</DialogTitle>
 
-        {/* ── Header ── */}
-        <div className="px-5 pt-6 sm:px-8 sm:pt-8 text-center">
-          <h2 className="text-[22px] font-bold tracking-tight">Upgrade to Pro</h2>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Everything you need to ship faster
+        {/* Header */}
+        <div className="px-6 pt-7 sm:px-8 sm:pt-8 text-center">
+          <h2 className="font-display text-2xl text-foreground">Choose your plan</h2>
+          <p className="text-sm text-muted-foreground/60 mt-1.5">
+            Start free, upgrade when you&apos;re ready
           </p>
-        </div>
 
-        {/* ── Plan cards ── */}
-        <div className="px-6 pt-6">
-          <div className="grid grid-cols-2 gap-3 pt-3">
-            {[
-              {
-                key: 'month' as const,
-                label: 'Monthly',
-                price: monthlyOption?.priceUsd ?? null,
-                note: null,
-              },
-              {
-                key: 'year' as const,
-                label: 'Yearly',
-                price: yearlyOption ? Math.round(yearlyOption.priceUsd / 12) : null,
-                note: yearlyOption ? `$${yearlyOption.priceUsd}/yr` : null,
-              },
-            ].map(({ key, label, price, note }) => {
-              const selected = interval === key
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setInterval(key)}
-                  className={cn(
-                    'relative rounded-2xl px-4 py-5 text-center transition-all duration-200',
-                    selected
-                      ? 'ring-[1.5px] ring-brand bg-brand/5'
-                      : 'border border-border/50 hover:border-border',
-                  )}
-                >
-                  {key === 'year' && (
-                    <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-brand px-2 py-0.5 text-[9px] font-bold text-brand-foreground uppercase tracking-wider">
-                      Best value
-                    </span>
-                  )}
-                  <div className="flex items-center justify-center gap-1.5">
-                    <span
-                      className={cn(
-                        'text-[12px] font-medium',
-                        selected ? 'text-foreground' : 'text-muted-foreground',
-                      )}
-                    >
-                      {label}
-                    </span>
-                    {key === 'year' && yearlySavings > 0 && (
-                      <span className="rounded-full bg-brand/10 px-1.5 py-px text-[10px] font-bold text-brand">
-                        -{yearlySavings}%
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-3 flex items-baseline justify-center gap-0.5">
-                    <span className="text-[32px] font-bold tabular-nums leading-none tracking-tight">
-                      ${price ?? '–'}
-                    </span>
-                    <span className="text-[13px] font-medium text-muted-foreground">/mo</span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-muted-foreground/60">
-                    {note ?? 'Billed monthly'}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* ── Divider ── */}
-        <div className="mx-6 mt-6 border-t border-border/40" />
-
-        {/* ── Features ── */}
-        <div className="px-6 pt-5">
-          <div className="space-y-3">
-            {FEATURES.map(({ icon: Icon, title, desc, bg, text }) => (
-              <div key={title} className="flex items-start gap-3">
-                <span
-                  className={cn(
-                    'flex size-8 shrink-0 items-center justify-center rounded-lg mt-0.5',
-                    bg,
-                  )}
-                >
-                  <Icon weight="duotone" className={cn('size-4', text)} />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[13px] font-medium leading-tight">{title}</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{desc}</p>
-                </div>
-              </div>
+          {/* Billing toggle */}
+          <div className="mt-5 inline-flex items-center h-9 rounded-lg bg-muted dark:bg-background p-1 border border-border/50 shadow-inner">
+            {(['month', 'year'] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setInterval(key)}
+                className={cn(
+                  'inline-flex items-center justify-center h-7 px-4 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer',
+                  interval === key
+                    ? 'bg-background dark:bg-muted text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {key === 'month' ? 'Monthly' : 'Yearly'}
+                {key === 'year' && yearlySavings > 0 && (
+                  <span className="ml-1.5 text-[10px] font-bold tabular-nums text-brand bg-brand/10 rounded-full px-1.5 py-0.5">
+                    -{yearlySavings}%
+                  </span>
+                )}
+              </button>
             ))}
           </div>
         </div>
 
-        {/* ── CTA ── */}
-        <div className="px-6 pt-6 pb-6">
-          <Button
-            className="w-full h-11 rounded-xl text-[14px] font-semibold shadow-[0_0_24px_rgba(124,58,237,0.2)] hover:shadow-[0_0_32px_rgba(124,58,237,0.3)] transition-shadow duration-300"
-            variant="brand"
-            disabled={isActive || checkout.isPending}
-            onClick={startCheckout}
-          >
-            {checkout.isPending ? (
-              <CircleNotch weight="bold" className="size-4 animate-spin" />
-            ) : isActive ? (
-              'Current plan'
-            ) : (
-              'Upgrade to Pro'
-            )}
-          </Button>
-          <p className="mt-2.5 text-center text-[11px] text-muted-foreground/50">
-            {interval === 'year'
-              ? `Billed $${yearlyOption?.priceUsd ?? '–'}/yr · Cancel anytime`
-              : 'Renews monthly · Cancel anytime'}
+        {/* Plans side by side */}
+        <div className="px-6 pt-6 pb-7 sm:px-8 sm:pb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Free Plan */}
+            <div
+              className={cn(
+                'rounded-2xl border px-5 py-6 flex flex-col',
+                currentTier === 'free' ? 'border-foreground/20 bg-muted/20' : 'border-border/50',
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Free</h3>
+                {currentTier === 'free' && (
+                  <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-[10px] font-medium">
+                    Current
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-4 flex items-baseline gap-0.5">
+                <span className="text-[36px] font-bold tabular-nums leading-none tracking-tight">
+                  $0
+                </span>
+                <span className="text-sm font-medium text-muted-foreground">/mo</span>
+              </div>
+
+              <p className="mt-2 text-xs text-muted-foreground">Get started and explore for free</p>
+
+              <div className="mt-6 flex-1 space-y-3">
+                {FREE_FEATURES.map((feature) => (
+                  <div key={feature} className="flex items-center gap-2.5">
+                    <Check weight="bold" className="size-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-xs text-muted-foreground">{feature}</span>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                variant="outline"
+                className="mt-6 w-full h-10 rounded-xl text-xs font-medium cursor-pointer"
+                disabled
+              >
+                {currentTier === 'free' ? 'Current plan' : 'Downgrade'}
+              </Button>
+            </div>
+
+            {/* Pro Plan */}
+            <div
+              className={cn(
+                'rounded-2xl border px-5 py-6 flex flex-col relative',
+                currentTier === 'pro'
+                  ? 'border-brand/40 bg-brand/[0.03]'
+                  : 'border-brand/30 bg-brand/[0.02]',
+              )}
+            >
+              {interval === 'year' && yearlySavings > 0 && (
+                <span className="absolute -top-2.5 right-4 rounded-full bg-brand px-2.5 py-0.5 text-[10px] font-bold text-brand-foreground uppercase tracking-wider">
+                  Best value
+                </span>
+              )}
+
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Pro</h3>
+                {currentTier === 'pro' && (
+                  <span className="rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-medium text-brand">
+                    Current
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-4 flex items-baseline gap-0.5">
+                <span className="text-[36px] font-bold tabular-nums leading-none tracking-tight">
+                  ${displayPrice ?? '–'}
+                </span>
+                <span className="text-sm font-medium text-muted-foreground">/mo</span>
+              </div>
+
+              <p className="mt-2 text-xs text-muted-foreground">
+                {interval === 'year'
+                  ? `Billed $${yearlyOption?.priceUsd ?? '–'}/yr`
+                  : 'Billed monthly'}
+              </p>
+
+              <div className="mt-6 flex-1 space-y-3">
+                {PRO_FEATURES.map((feature) => (
+                  <div key={feature} className="flex items-center gap-2.5">
+                    <Check weight="bold" className="size-3.5 text-brand shrink-0" />
+                    <span className="text-xs">{feature}</span>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                className="mt-6 w-full h-10 rounded-xl text-xs font-semibold shadow-[0_0_24px_rgba(124,58,237,0.15)] hover:shadow-[0_0_32px_rgba(124,58,237,0.25)] transition-shadow duration-300 cursor-pointer"
+                variant="brand"
+                disabled={isProActive || checkout.isPending}
+                onClick={startCheckout}
+              >
+                {checkout.isPending ? (
+                  <CircleNotch weight="bold" className="size-4 animate-spin" />
+                ) : isProActive ? (
+                  'Current plan'
+                ) : (
+                  'Upgrade to Pro'
+                )}
+              </Button>
+            </div>
+          </div>
+
+          <p className="mt-4 text-center text-[11px] text-muted-foreground/50">
+            Cancel anytime · No questions asked
           </p>
         </div>
       </DialogContent>

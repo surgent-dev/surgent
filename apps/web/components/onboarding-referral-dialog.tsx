@@ -1,28 +1,38 @@
 'use client'
 
-import { CheckCircle, Copy, CurrencyDollar, Gift, Users } from '@phosphor-icons/react'
-import { Check, X } from 'lucide-react'
+import { Copy, Gift } from '@phosphor-icons/react'
+import { ArrowRight, Check } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useReferralStats } from '@/hooks/use-referrals'
 import { cn } from '@/lib/utils'
 
-interface ReferralDialogProps {
+interface OnboardingReferralDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onNext?: () => void
 }
 
-export default function ReferralDialog({ open, onOpenChange }: ReferralDialogProps) {
+export default function OnboardingReferralDialog({
+  open,
+  onOpenChange,
+  onNext,
+}: OnboardingReferralDialogProps) {
   const { data } = useReferralStats()
   const [copied, setCopied] = useState(false)
 
   const copyLink = async () => {
-    if (!data) return
+    if (!data?.link) return
     await navigator.clipboard.writeText(data.link)
     setCopied(true)
     toast.success('Referral link copied', { position: 'top-right' })
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleNext = () => {
+    onOpenChange(false)
+    onNext?.()
   }
 
   const steps = [
@@ -49,16 +59,7 @@ export default function ReferralDialog({ open, onOpenChange }: ReferralDialogPro
         showCloseButton={false}
         className="sm:max-w-[480px] p-0 gap-0 overflow-hidden border-border/50"
       >
-        {/* Header */}
-        <div className="h-11 px-4 flex items-center justify-between border-b bg-muted/30">
-          <DialogTitle className="text-sm font-medium">Refer friends</DialogTitle>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
+        <DialogTitle className="sr-only">Invite friends to Surgent</DialogTitle>
 
         <div className="px-6 pt-6 pb-6">
           {/* Title */}
@@ -104,47 +105,20 @@ export default function ReferralDialog({ open, onOpenChange }: ReferralDialogPro
             ))}
           </div>
 
-          {/* Stats */}
-          <div className="mt-6 grid grid-cols-3 gap-2.5">
-            <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-3 text-center">
-              <div className="flex items-center justify-center gap-1.5 mb-1.5">
-                <Users weight="duotone" className="size-3 text-sky-500" />
-                <span className="text-[10px] text-muted-foreground">Signups</span>
-              </div>
-              <p className="text-[22px] font-bold tabular-nums leading-none">
-                {data?.signups ?? 0}
-              </p>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-3 text-center">
-              <div className="flex items-center justify-center gap-1.5 mb-1.5">
-                <CheckCircle weight="duotone" className="size-3 text-emerald-500" />
-                <span className="text-[10px] text-muted-foreground">Converted</span>
-              </div>
-              <p className="text-[22px] font-bold tabular-nums leading-none">
-                {data?.converted ?? 0}
-              </p>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-3 text-center">
-              <div className="flex items-center justify-center gap-1.5 mb-1.5">
-                <CurrencyDollar weight="duotone" className="size-3 text-amber-500" />
-                <span className="text-[10px] text-muted-foreground">Earned</span>
-              </div>
-              <p className="text-[22px] font-bold tabular-nums leading-none">
-                ${data?.earnedUsd ?? 0}
-              </p>
-            </div>
-          </div>
-
-          {/* Link + copy button */}
-          <div className="mt-6 space-y-3">
+          {/* Link */}
+          <div className="mt-6">
             <div className="flex items-center h-11 rounded-lg border border-border bg-muted/70 px-4">
               <span className="flex-1 min-w-0 truncate text-[13px] text-foreground/70 font-mono">
                 {data?.link ?? '...'}
               </span>
             </div>
+          </div>
+
+          {/* Actions */}
+          <div className="mt-4 flex items-center gap-2.5">
             <button
               onClick={copyLink}
-              className="w-full inline-flex items-center justify-center gap-2 h-9 px-5 rounded-[0.5rem] text-sm font-medium cursor-pointer btn-brand-secondary transition-all duration-300"
+              className="flex-1 inline-flex items-center justify-center gap-2 h-9 px-5 rounded-[0.5rem] text-sm font-medium cursor-pointer btn-brand-secondary transition-all duration-300"
             >
               {copied ? (
                 <>
@@ -154,9 +128,16 @@ export default function ReferralDialog({ open, onOpenChange }: ReferralDialogPro
               ) : (
                 <>
                   <Copy className="size-3.5" weight="bold" />
-                  Copy referral link
+                  Copy link
                 </>
               )}
+            </button>
+            <button
+              onClick={handleNext}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 px-5 rounded-[0.5rem] text-sm font-medium cursor-pointer btn-brand transition-all duration-300"
+            >
+              Continue
+              <ArrowRight className="size-3.5" />
             </button>
           </div>
         </div>

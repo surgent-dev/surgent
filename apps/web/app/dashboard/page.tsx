@@ -1,6 +1,6 @@
 'use client'
 
-import { FolderOpen, Loader2, Plus } from 'lucide-react'
+import { FolderOpen, Loader2, Plus, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import BillingSyncBridge from '@/components/billing-sync-bridge'
 import MigrationCreditBanner from '@/components/migration-credit-banner'
 import PlanDialog from '@/components/plan-dialog'
+import ReferralDialog from '@/components/referral-dialog'
 import UserMenu from '@/components/project-header/user-menu'
 import { SurgentLogo } from '@/components/surgent-logo'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -128,6 +129,7 @@ export default function DashboardPage() {
   const [projectToRename, setProjectToRename] = useState<Project | null>(null)
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
   const [newName, setNewName] = useState('')
+  const [referralOpen, setReferralOpen] = useState(false)
 
   useEffect(() => {
     authClient.getSession().then(({ data, error }) => {
@@ -227,6 +229,25 @@ export default function DashboardPage() {
               </button>
             </div>
 
+            {/* Referral CTA */}
+            <button
+              onClick={() => setReferralOpen(true)}
+              className="group w-full flex items-center gap-3 px-4 py-3 mb-8 rounded-lg border border-brand/20 bg-brand/[0.04] hover:bg-brand/[0.08] hover:border-brand/30 transition-all cursor-pointer text-left"
+            >
+              <div className="size-8 rounded-lg bg-brand/10 group-hover:bg-brand/15 flex items-center justify-center shrink-0 transition-colors">
+                <UserPlus className="size-4 text-brand" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium">Get credits</p>
+                <p className="text-[11px] text-muted-foreground/60">
+                  Invite friends and earn $5 for each signup
+                </p>
+              </div>
+              <span className="text-[12px] text-brand/60 group-hover:text-brand shrink-0 transition-colors">
+                &rarr;
+              </span>
+            </button>
+
             {/* Projects list */}
             {projects.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -325,6 +346,7 @@ export default function DashboardPage() {
         </Dialog>
 
         <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
+        <ReferralDialog open={referralOpen} onOpenChange={setReferralOpen} />
       </div>
     </>
   )

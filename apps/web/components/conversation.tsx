@@ -19,6 +19,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgentThread } from '@/components/agent/agent-thread'
 import QuestionPrompt from '@/components/agent/question-prompt'
+import OnboardingReferralDialog from '@/components/onboarding-referral-dialog'
 import PlanDialog from '@/components/plan-dialog'
 import ProviderDialog from '@/components/provider-dialog'
 import {
@@ -206,6 +207,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
   const [mode, setMode] = useState<'plan' | 'orchestrator'>('orchestrator')
   const [providerOpen, setProviderOpen] = useState(false)
+  const [referralOpen, setReferralOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const [subagentWorking, setSubagentWorking] = useState(false)
   const [selectedModel, setSelectedModel] = useState<
@@ -351,6 +353,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
     prefilledRef.current = true
     handleSend(text)
+    // Show referral dialog shortly after the initial prompt is sent
+    setTimeout(() => setReferralOpen(true), 1500)
 
     // Clean up URL param
     try {
@@ -964,6 +968,11 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
       <ProviderDialog open={providerOpen} onOpenChange={setProviderOpen} />
       <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
+      <OnboardingReferralDialog
+        open={referralOpen}
+        onOpenChange={setReferralOpen}
+        onNext={() => credits.setPlanDialogOpen(true)}
+      />
     </div>
   )
 }

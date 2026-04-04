@@ -1,12 +1,15 @@
 'use client'
 
+import { Gift } from '@phosphor-icons/react'
 import Link from 'next/link'
+import { useState } from 'react'
 import DownloadButton from '@/components/project-header/download-button'
 import GitHubButton from '@/components/project-header/github-button'
 import PayDialogs from '@/components/project-header/pay-dialogs'
 import PublishButton from '@/components/project-header/publish-button'
 import SupportMenu from '@/components/project-header/support-menu'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import ReferralDialog from '@/components/referral-dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface EditorHeaderProps {
   projectId: string
@@ -18,6 +21,8 @@ interface EditorHeaderProps {
 }
 
 export default function EditorHeader({ projectId, project }: EditorHeaderProps) {
+  const [referralOpen, setReferralOpen] = useState(false)
+
   return (
     <>
       <header className="flex shrink-0 items-center gap-2 sm:gap-3 rounded-lg bg-white px-2 sm:px-3 py-1.5 dark:bg-card">
@@ -42,6 +47,18 @@ export default function EditorHeader({ projectId, project }: EditorHeaderProps) 
 
         <TooltipProvider delayDuration={300}>
           <div className="flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setReferralOpen(true)}
+                  className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-brand hover:bg-brand/10 transition-colors cursor-pointer"
+                >
+                  <Gift className="size-3.5 gift-wiggle" weight="duotone" />
+                  <span className="text-[12px] font-medium hidden sm:inline">Get credits</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Invite friends, earn $5</TooltipContent>
+            </Tooltip>
             <DownloadButton projectId={projectId} projectName={project?.name} />
             <GitHubButton projectId={projectId} />
             <SupportMenu />
@@ -52,6 +69,7 @@ export default function EditorHeader({ projectId, project }: EditorHeaderProps) 
       </header>
 
       <PayDialogs projectId={projectId} />
+      <ReferralDialog open={referralOpen} onOpenChange={setReferralOpen} />
     </>
   )
 }

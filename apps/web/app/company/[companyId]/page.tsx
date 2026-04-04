@@ -5,6 +5,7 @@ import {
   CaretDown,
   CaretRight,
   Eye,
+  Gift,
   Globe,
   RocketLaunch,
   Sparkle,
@@ -13,6 +14,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useState } from 'react'
+import ReferralDialog from '@/components/referral-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,6 +71,7 @@ export default function DashboardPage() {
   const { companyId } = useParams<{ companyId: string }>()
   const base = `/company/${companyId}`
   const [rangeValue, setRangeValue] = useState<DateRangeValue>('7day')
+  const [referralOpen, setReferralOpen] = useState(false)
   const { data: project } = useProjectQuery(companyId)
   const { data: latestDeployment } = useLatestDeploymentQuery(companyId)
 
@@ -103,6 +106,26 @@ export default function DashboardPage() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+
+      {/* Referral banner */}
+      <div
+        onClick={() => setReferralOpen(true)}
+        className="group flex items-center gap-4 px-5 py-3 rounded-2xl bg-foreground/[0.03] dark:bg-white/[0.04] hover:bg-foreground/[0.05] transition-colors cursor-pointer"
+      >
+        <div className="size-8 rounded-lg bg-brand/10 flex items-center justify-center shrink-0">
+          <Gift className="size-4 text-brand gift-wiggle" weight="duotone" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-muted-foreground">Get credits</p>
+          <p className="text-[11px] text-muted-foreground/40 mt-0.5">
+            Invite friends and earn rewards when they join
+          </p>
+        </div>
+        <span className={actionBtn}>
+          Invite
+          <CaretRight className="size-3" />
+        </span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -237,6 +260,8 @@ export default function DashboardPage() {
 
         <AnalyticsCard projectId={companyId} href={`${base}/analytics`} rangeValue={rangeValue} />
       </div>
+
+      <ReferralDialog open={referralOpen} onOpenChange={setReferralOpen} />
     </div>
   )
 }

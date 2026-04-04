@@ -13,6 +13,8 @@ import {
   SquaresFour,
   Storefront,
   Sun,
+  Gift,
+  UserPlus,
 } from '@phosphor-icons/react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -20,6 +22,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
 import PlanDialog from '@/components/plan-dialog'
+import ReferralDialog from '@/components/referral-dialog'
 import TopupDialog from '@/components/topup-dialog'
 import { Button } from '@/components/ui/button'
 import {
@@ -52,6 +55,7 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [planOpen, setPlanOpen] = useState(false)
   const [topupOpen, setTopupOpen] = useState(false)
+  const [referralOpen, setReferralOpen] = useState(false)
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => {
@@ -121,6 +125,21 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
         })}
 
         <div className="flex-1" />
+
+        {/* Get credits */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setReferralOpen(true)}
+              className="size-9 rounded-xl bg-brand/[0.08] flex items-center justify-center text-brand hover:bg-brand/15 hover:rounded-lg transition-all duration-200 cursor-pointer"
+            >
+              <Gift className="size-[18px] gift-wiggle" weight="duotone" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>
+            Get credits
+          </TooltipContent>
+        </Tooltip>
 
         {/* User menu */}
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -217,6 +236,15 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
               <SquaresFour className="size-3.5" weight="duotone" />
               All projects
             </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                setMenuOpen(false)
+                setReferralOpen(true)
+              }}
+            >
+              <UserPlus className="size-3.5" weight="duotone" />
+              Refer friends
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => credits.openBillingPortal()}>
               <CreditCard className="size-3.5" weight="duotone" />
               Billing
@@ -294,6 +322,10 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
               <SquaresFour className="size-3.5" weight="duotone" />
               All projects
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setReferralOpen(true)}>
+              <UserPlus className="size-3.5" weight="duotone" />
+              Refer friends
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => credits.openBillingPortal()}>
               <CreditCard className="size-3.5" weight="duotone" />
               Billing
@@ -314,6 +346,7 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
       {/* Dialogs */}
       <PlanDialog open={planOpen} onOpenChange={setPlanOpen} />
       <TopupDialog open={topupOpen} onOpenChange={setTopupOpen} />
+      <ReferralDialog open={referralOpen} onOpenChange={setReferralOpen} />
     </TooltipProvider>
   )
 }
