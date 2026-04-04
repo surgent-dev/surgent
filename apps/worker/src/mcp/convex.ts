@@ -9,9 +9,13 @@ import {
   deleteProject,
   setDeploymentEnvVars,
   listDeploymentEnvVars,
+  listDeployments,
   callQuery,
   callMutation,
+  callAction,
   fetchDeploymentLogs,
+  fetchFunctionSpec,
+  fetchInsights,
   type ConvexValue,
   type LogEntry,
   generateAuthKeys,
@@ -89,6 +93,12 @@ type EnvWriteResult = { status: 'written'; path: string } | { status: 'failed'; 
 
 const createProjectSchema = {
   name: z.string().describe('Name for the new Convex project'),
+  region: z
+    .string()
+    .optional()
+    .describe(
+      'Optional Convex deployment region such as "aws-us-east-1" or "aws-eu-west-1". Uses the team default if omitted.',
+    ),
 }
 
 const deleteProjectSchema = {
@@ -128,6 +138,27 @@ const readLogsSchema = {
     .boolean()
     .default(false)
     .describe('Include successful function logs. By default only errors are shown.'),
+}
+
+const cloneEnvVarsSchema = {
+  sourceEnv: z
+    .enum(['development', 'production'])
+    .describe('Source environment to copy variables from.'),
+  targetEnv: z
+    .enum(['development', 'production'])
+    .describe('Target environment to copy variables to.'),
+  exclude: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Variable names to exclude from cloning (e.g., SITE_URL, CONVEX_DEPLOYMENT). Env-specific vars like SITE_URL are always excluded.',
+    ),
+  overwrite: z
+    .boolean()
+    .default(false)
+    .describe(
+      'Whether to overwrite existing variables on the target. Default: false (skip existing).',
+    ),
 }
 
 // ============================================
@@ -248,6 +279,7 @@ Use this when starting a new backend - it provisions a fresh Convex database ins
 
 Returns:
 - project: Object with projectId, deploymentName, deploymentUrl, deployKey
+- project.region: The configured hosting region if one was requested
 - envVars: Environment variables (CONVEX_DEPLOYMENT, CONVEX_URL, CONVEX_DEPLOY_KEY, VITE_CONVEX_URL, SITE_URL)
 - envFileContent: Complete .env file content as a string
 - integration: The integration record (id, provider, status)
@@ -287,6 +319,7 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
               provider: 'convex',
               status: existingIntegration.status,
               convexProjectId: cfg?.convexProjectId,
+              region: cfg?.region,
               deploymentName,
               deploymentUrl,
             },
@@ -296,7 +329,11 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
         }
 
         const [project, authKeys] = await Promise.all([
-          createProjectOnTeam({ name: args.name, deploymentType: 'dev' }),
+          createProjectOnTeam({
+            name: args.name,
+            deploymentType: 'dev',
+            deploymentRegion: args.region,
+          }),
           generateAuthKeys(),
         ])
         const deployKey = await createDeployKey(project.deploymentName)
@@ -329,10 +366,17 @@ If Convex integration already exists, returns existing. Subsequent tools auto-re
         const integration = await ProjectService.createIntegration({
           projectId,
           provider: 'convex',
-          config: withDeployment({ convexProjectId: project.projectId }, 'development', {
-            name: project.deploymentName,
-            url: project.deploymentUrl,
-          }) as Record<string, unknown>,
+          config: withDeployment(
+            {
+              convexProjectId: project.projectId,
+              region: project.deploymentRegion,
+            },
+            'development',
+            {
+              name: project.deploymentName,
+              url: project.deploymentUrl,
+            },
+          ) as Record<string, unknown>,
           status: 'connected',
         })
 
@@ -535,6 +579,265 @@ Shows only errors by default — set "success" to true to include all executions
           env: args.env,
           count: limited.length,
           logs: limited.map(formatLogEntry).join('\n\n'),
+        })
+      } catch (e) {
+        return err(errMsg(e))
+      }
+    },
+  )
+
+  server.registerTool(
+    'call_action',
+    {
+      title: 'Call Convex Action',
+      description: `Execute a Convex action function for external API calls or side effects.
+
+Actions are for calling third-party APIs, sending emails, processing files, etc.
+They run in Node.js and can use any npm package. They CANNOT access the database directly.
+Pass "env" to target development (default) or production.
+
+The 'path' format is "filename:functionName":
+- "ai:generate" → calls the 'generate' action in convex/ai.ts
+- "emails:sendWelcome" → calls the 'sendWelcome' action in convex/emails.ts
+
+Pass arguments as a JSON object matching the function's expected args.`,
+      inputSchema: callFunctionSchema,
+    },
+    async (args, extra) => {
+      const ctx = await getToolContext(extra, args.env)
+      if (!ctx) return err(`Convex ${args.env} deployment not provisioned`)
+
+      try {
+        const funcArgs = (args.args ?? {}) as Record<string, ConvexValue>
+        const result = await callAction(ctx.deploymentUrl, ctx.deployKey, args.path, funcArgs)
+        if (result.status === 'error') return err(result.errorMessage)
+        return ok({ value: result.value })
+      } catch (e) {
+        return err(errMsg(e))
+      }
+    },
+  )
+
+  server.registerTool(
+    'get_insights',
+    {
+      title: 'Get Deployment Insights',
+      description: `Fetch deployment health insights for the last 72 hours.
+
+Shows OCC (Optimistic Concurrency Control) conflicts, resource limit issues, slow functions,
+and other operational diagnostics. Use this BEFORE blaming code when things aren't working.
+
+Pass "env" to target development (default) or production.
+Returns a list of insight entries with type, message, severity, and optional details.`,
+      inputSchema: envParam,
+    },
+    async (args, extra) => {
+      const ctx = await getToolContext(extra, args.env)
+      if (!ctx) return err(`Convex ${args.env} deployment not provisioned`)
+
+      try {
+        const teamId = config.convex.teamId
+        if (!teamId) return err('Missing CONVEX_TEAM_ID')
+
+        const deploymentName = parseDeploymentNameFromUrl(ctx.deploymentUrl) ?? ctx.deploymentUrl
+        const insights = await fetchInsights(teamId, deploymentName)
+
+        if (!insights.length) {
+          return ok({ env: args.env, count: 0, message: `No issues found in the last 72 hours` })
+        }
+
+        return ok({
+          env: args.env,
+          count: insights.length,
+          insights,
+        })
+      } catch (e) {
+        return err(errMsg(e))
+      }
+    },
+  )
+
+  server.registerTool(
+    'function_spec',
+    {
+      title: 'Get Function Spec',
+      description: `Fetch metadata for all registered Convex functions on a deployment.
+
+Returns function paths, types (Query/Mutation/Action/HttpAction), visibility (public/internal),
+and argument/return validators. Use this to understand the available API surface.
+
+Pass "env" to target development (default) or production.`,
+      inputSchema: envParam,
+    },
+    async (args, extra) => {
+      const ctx = await getToolContext(extra, args.env)
+      if (!ctx) return err(`Convex ${args.env} deployment not provisioned`)
+
+      try {
+        const spec = await fetchFunctionSpec(ctx.deploymentUrl, ctx.deployKey)
+        const grouped = {
+          queries: spec.filter((f) => f.functionType === 'Query'),
+          mutations: spec.filter((f) => f.functionType === 'Mutation'),
+          actions: spec.filter((f) => f.functionType === 'Action'),
+          httpActions: spec.filter((f) => f.functionType === 'HttpAction'),
+        }
+        return ok({
+          env: args.env,
+          totalFunctions: spec.length,
+          ...grouped,
+        })
+      } catch (e) {
+        return err(errMsg(e))
+      }
+    },
+  )
+
+  server.registerTool(
+    'list_deployments',
+    {
+      title: 'List Deployments',
+      description: `List all deployments (dev, prod, preview) for the current Convex project.
+
+Returns deployment names, types, URLs, and regions. Useful for understanding the deployment
+landscape before creating new deployments or promoting environments.`,
+      inputSchema: {},
+    },
+    async (_args, extra) => {
+      const projectId = extractProjectId(extra)
+      if (!projectId) return err('Missing projectId')
+
+      try {
+        const integration = await ProjectService.getIntegrationByProvider(projectId, 'convex')
+        if (!integration) return err('Convex integration not found')
+
+        const cfg = integration.config as ConvexIntegrationConfig | null
+        if (!cfg?.convexProjectId) return err('Missing Convex project ID')
+
+        const deployments = await listDeployments(cfg.convexProjectId)
+        return ok({ deployments })
+      } catch (e) {
+        return err(errMsg(e))
+      }
+    },
+  )
+
+  server.registerTool(
+    'clone_env_vars',
+    {
+      title: 'Clone Environment Variables',
+      description: `Copy environment variables from one deployment environment to another.
+
+Clones all server-side environment variables from source to target. Env-specific variables
+(SITE_URL, CONVEX_DEPLOYMENT, VITE_CONVEX_URL, CONVEX_URL, CONVEX_DEPLOY_KEY) are always excluded.
+
+Set "overwrite" to true to replace existing variables on the target. By default, existing
+variables on the target are preserved (skipped).
+
+Common use case: clone dev env vars to production before first deploy.`,
+      inputSchema: cloneEnvVarsSchema,
+    },
+    async (args, extra) => {
+      const sourceCtx = await getToolContext(extra, args.sourceEnv)
+      if (!sourceCtx) return err(`Convex ${args.sourceEnv} deployment not provisioned`)
+
+      const targetCtx = await getToolContext(extra, args.targetEnv)
+      if (!targetCtx) return err(`Convex ${args.targetEnv} deployment not provisioned`)
+
+      try {
+        const sourceVars = await listDeploymentEnvVars(sourceCtx.deploymentUrl, sourceCtx.deployKey)
+
+        // Always exclude env-specific variables
+        const alwaysExclude = new Set([
+          'SITE_URL',
+          'CONVEX_DEPLOYMENT',
+          'VITE_CONVEX_URL',
+          'CONVEX_URL',
+          'CONVEX_DEPLOY_KEY',
+          ...(args.exclude ?? []),
+        ])
+
+        const varsToClone: Record<string, string> = {}
+        for (const [key, value] of Object.entries(sourceVars)) {
+          if (!alwaysExclude.has(key)) varsToClone[key] = value
+        }
+
+        if (!Object.keys(varsToClone).length) {
+          return ok({ message: 'No variables to clone (all excluded)', cloned: 0, skipped: 0 })
+        }
+
+        let targetVars: Record<string, string> = {}
+        if (!args.overwrite) {
+          targetVars = await listDeploymentEnvVars(targetCtx.deploymentUrl, targetCtx.deployKey)
+        }
+
+        const toSet: Record<string, string> = {}
+        let skipped = 0
+        for (const [key, value] of Object.entries(varsToClone)) {
+          if (!args.overwrite && key in targetVars) {
+            skipped++
+          } else {
+            toSet[key] = value
+          }
+        }
+
+        if (Object.keys(toSet).length) {
+          await setDeploymentEnvVars(targetCtx.deploymentUrl, targetCtx.deployKey, toSet)
+        }
+
+        return ok({
+          message: `Cloned ${Object.keys(toSet).length} variable(s) from ${args.sourceEnv} to ${args.targetEnv}`,
+          cloned: Object.keys(toSet).length,
+          skipped,
+          variables: Object.keys(toSet),
+        })
+      } catch (e) {
+        return err(errMsg(e))
+      }
+    },
+  )
+
+  server.registerTool(
+    'env_diff',
+    {
+      title: 'Compare Environment Variables',
+      description: `Compare environment variables between development and production deployments.
+
+Shows which variables exist only in dev, only in prod, and which have different values.
+Useful before promoting to production to ensure all required variables are set.`,
+      inputSchema: {},
+    },
+    async (_args, extra) => {
+      const devCtx = await getToolContext(extra, 'development')
+      if (!devCtx) return err('Convex development deployment not provisioned')
+
+      const prodCtx = await getToolContext(extra, 'production')
+      if (!prodCtx) return err('Convex production deployment not provisioned')
+
+      try {
+        const [devVars, prodVars] = await Promise.all([
+          listDeploymentEnvVars(devCtx.deploymentUrl, devCtx.deployKey),
+          listDeploymentEnvVars(prodCtx.deploymentUrl, prodCtx.deployKey),
+        ])
+
+        const allKeys = new Set([...Object.keys(devVars), ...Object.keys(prodVars)])
+        const onlyInDev: string[] = []
+        const onlyInProd: string[] = []
+        const different: string[] = []
+        const same: string[] = []
+
+        for (const key of allKeys) {
+          if (!(key in prodVars)) onlyInDev.push(key)
+          else if (!(key in devVars)) onlyInProd.push(key)
+          else if (devVars[key] !== prodVars[key]) different.push(key)
+          else same.push(key)
+        }
+
+        return ok({
+          onlyInDev,
+          onlyInProd,
+          different,
+          same: same.length,
+          summary: `${onlyInDev.length} dev-only, ${onlyInProd.length} prod-only, ${different.length} different, ${same.length} matching`,
         })
       } catch (e) {
         return err(errMsg(e))
