@@ -103,5 +103,6 @@ cdk.context.json
 
 # code references
 references/
+research/
 
 pgadmin-servers.json
