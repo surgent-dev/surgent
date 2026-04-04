@@ -410,38 +410,27 @@ export interface DeploymentInfo {
   region?: string
 }
 
-async function bigBrainApi<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!config.convex.teamToken) throw new Error('Missing CONVEX_TEAM_TOKEN')
-
-  const base = config.convex.host || 'https://api.convex.dev'
-  const res = await fetch(`${base}/api${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${config.convex.teamToken}`,
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  })
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(text || `Convex API ${res.status}`)
-  }
-
-  return safeJsonParse<T>(res)
-}
-
 /**
  * List all deployments for a project
  */
-export async function listDeployments(
-  teamSlug: string,
-  projectSlug: string,
-): Promise<DeploymentInfo[]> {
-  const body = await bigBrainApi<{ deployments: DeploymentInfo[] }>(
-    `/teams/${encodeURIComponent(teamSlug)}/projects/${encodeURIComponent(projectSlug)}/deployments`,
-  )
-  return body.deployments
+export async function listDeployments(projectId: string): Promise<DeploymentInfo[]> {
+  const body = await convexApi<
+    Array<{
+      name: string
+      deploymentType: 'dev' | 'prod' | 'preview' | 'custom'
+      deploymentUrl: string
+      region?: string
+    }>
+  >(`/projects/${encodeURIComponent(projectId)}/list_deployments`, {
+    method: 'GET',
+  })
+
+  return body.map((deployment) => ({
+    name: deployment.name,
+    deploymentType: deployment.deploymentType,
+    url: deployment.deploymentUrl,
+    region: deployment.region,
+  }))
 }
 
 // ── Insights ────────────────────────────────────────────────────────────────

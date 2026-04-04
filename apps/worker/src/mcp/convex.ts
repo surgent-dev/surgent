@@ -9,7 +9,6 @@ import {
   deleteProject,
   setDeploymentEnvVars,
   listDeploymentEnvVars,
-  listDeploymentRegions,
   listDeployments,
   callQuery,
   callMutation,
@@ -269,24 +268,6 @@ async function writeEnvToSandbox(
 
 export function createConvexMcpServer(): McpServer {
   const server = new McpServer({ name: 'convex-mcp', version: '1.0.0' })
-
-  server.registerTool(
-    'list_regions',
-    {
-      title: 'List Convex Regions',
-      description:
-        'List the available Convex deployment regions for the configured team, including whether each region is currently available.',
-      inputSchema: {},
-    },
-    async () => {
-      try {
-        const items = await listDeploymentRegions()
-        return ok({ regions: items })
-      } catch (e) {
-        return err(errMsg(e))
-      }
-    },
-  )
 
   server.registerTool(
     'create_project',
@@ -732,11 +713,7 @@ landscape before creating new deployments or promoting environments.`,
         const cfg = integration.config as ConvexIntegrationConfig | null
         if (!cfg?.convexProjectId) return err('Missing Convex project ID')
 
-        // We need team slug and project slug — derive from config
-        const teamId = config.convex.teamId
-        if (!teamId) return err('Missing CONVEX_TEAM_ID')
-
-        const deployments = await listDeployments(teamId, cfg.convexProjectId)
+        const deployments = await listDeployments(cfg.convexProjectId)
         return ok({ deployments })
       } catch (e) {
         return err(errMsg(e))

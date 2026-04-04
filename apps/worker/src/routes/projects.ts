@@ -41,6 +41,7 @@ import {
   countProjectsByOrganizationId,
   updateProjectStatus,
   updateDeployment,
+  getIntegrationByProvider,
   upsertEnvVar,
   getEnvVarsByProjectId,
   deleteEnvVar,
@@ -1599,13 +1600,11 @@ projects.get('/:id/convex/deployments', zValidator('param', idParam), async (c) 
   const { id } = c.req.valid('param')
   await getProjectWithAuth(id, c.get('user')!)
 
-  const integration = await resolveConvexIntegrationConfig(id)
+  const convex = await getIntegrationByProvider(id, 'convex')
+  const integration = await resolveConvexIntegrationConfig(id, convex?.config)
   if (!integration?.convexProjectId) return c.json({ error: 'Convex not provisioned' }, 400)
 
-  const teamId = config.convex.teamId
-  if (!teamId) return c.json({ error: 'Missing CONVEX_TEAM_ID' }, 500)
-
-  const deployments = await listDeployments(teamId, integration.convexProjectId)
+  const deployments = await listDeployments(integration.convexProjectId)
   return c.json({ deployments })
 })
 
