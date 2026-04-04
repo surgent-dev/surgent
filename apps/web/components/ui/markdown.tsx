@@ -1,11 +1,10 @@
 'use client'
 
 import { memo } from 'react'
-import type { BundledTheme } from 'shiki'
 import { Streamdown } from 'streamdown'
 import { cn } from '@/lib/utils'
 
-const shikiTheme: [BundledTheme, BundledTheme] = ['github-light', 'github-dark']
+const shikiTheme: ['github-light', 'github-dark'] = ['github-light', 'github-dark']
 
 export type MarkdownProps = {
   children: string
