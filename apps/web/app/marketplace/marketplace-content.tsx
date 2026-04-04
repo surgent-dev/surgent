@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowUpRight, ChevronLeft, ChevronRight, ExternalLink, ShoppingBag } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ShoppingBag } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -66,84 +66,65 @@ function ListingCard({ listing }: { listing: MarketplaceListing }) {
   return (
     <Link
       href={`/marketplace/${listing.id ?? listing.projectId}`}
-      className="group flex flex-col rounded-2xl overflow-hidden border border-[#1d1c220d] dark:border-border/20 bg-white dark:bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] hover:shadow-[0_2px_8px_rgba(0,0,0,0.08),0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-300 hover:-translate-y-0.5"
+      className="group flex flex-col rounded-xl overflow-hidden transition-all duration-300 hover:-translate-y-1"
     >
       {/* Image */}
-      <div className="relative aspect-[16/10] w-full overflow-hidden bg-[#f0f0f0] dark:bg-muted/40">
+      <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-[#e8e8ea] dark:bg-muted/30">
         {listing.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={listing.imageUrl}
             alt=""
-            className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]"
+            className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.04]"
           />
         ) : (
-          <div className="h-full w-full flex items-center justify-center">
-            <span className="text-4xl font-semibold text-[#d0d1d3] dark:text-muted-foreground/40">
+          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-[#e8e8ea] to-[#d8d8dc] dark:from-muted/30 dark:to-muted/50">
+            <span className="text-5xl font-light text-[#c0c0c4] dark:text-muted-foreground/30 select-none">
               {listing.title.charAt(0)}
             </span>
           </div>
         )}
         {/* Price badge */}
-        <div className="absolute top-3 right-3">
+        <div className="absolute bottom-3 right-3">
           {listing.priceAmount != null && listing.priceAmount > 0 ? (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[13px] font-semibold bg-white/90 dark:bg-card/90 backdrop-blur-sm text-[#1d1c22] dark:text-foreground shadow-sm">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[12px] font-semibold bg-white/80 dark:bg-black/50 backdrop-blur-md text-[#1d1c22] dark:text-white">
               {formatPrice(listing.priceAmount, listing.priceCurrency || 'usd')}
             </span>
           ) : (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[13px] font-semibold bg-emerald-500/90 backdrop-blur-sm text-white shadow-sm">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[12px] font-semibold bg-white/80 dark:bg-black/50 backdrop-blur-md text-emerald-600 dark:text-emerald-400">
               Free
             </span>
           )}
         </div>
-        {/* Demo badge */}
-        {listing.liveUrl && (
-          <div className="absolute top-3 left-3">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/90 dark:bg-card/90 backdrop-blur-sm text-[#475467] dark:text-muted-foreground shadow-sm uppercase tracking-wider">
-              <ExternalLink className="h-3 w-3" />
-              Demo
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Info */}
-      <div className="flex flex-col gap-3 p-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 mb-1">
-            <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-[#1d1c22] dark:text-foreground truncate">
-              {listing.title}
-            </h3>
-            <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#b0b1b3] group-hover:text-[#475467] dark:group-hover:text-muted-foreground transition-colors" />
-          </div>
-          {listing.description && (
-            <p className="text-[13px] text-[#475467] dark:text-muted-foreground line-clamp-2 leading-relaxed">
-              {listing.description}
-            </p>
-          )}
-        </div>
+      <div className="pt-3 pb-1 px-0.5">
+        <h3 className="text-[14px] font-medium tracking-[-0.01em] text-[#1d1c22] dark:text-foreground truncate">
+          {listing.title}
+        </h3>
+        {listing.description && (
+          <p className="mt-0.5 text-[13px] text-[#8a8a8e] dark:text-muted-foreground line-clamp-1">
+            {listing.description}
+          </p>
+        )}
 
-        {/* Seller + date */}
-        <div className="flex items-center justify-between pt-3 border-t border-[#1d1c220d] dark:border-border/15">
-          <div className="flex items-center gap-2 min-w-0">
-            {listing.sellerImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={listing.sellerImage}
-                alt=""
-                className="h-5 w-5 rounded-full object-cover shrink-0"
-              />
-            ) : (
-              <div className="h-5 w-5 rounded-full bg-[#f0f0f0] dark:bg-muted/40 shrink-0 flex items-center justify-center text-[9px] font-medium text-[#b0b1b3]">
-                {listing.sellerName?.charAt(0)}
-              </div>
-            )}
-            <span className="text-[13px] text-[#475467] dark:text-muted-foreground truncate">
-              {listing.sellerName}
-            </span>
-          </div>
-          <span className="text-[12px] text-[#b0b1b3] shrink-0">
-            {formatMarketplaceDate(listing.updatedAt)}
+        {/* Seller */}
+        <div className="flex items-center gap-1.5 mt-2">
+          {listing.sellerImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={listing.sellerImage}
+              alt=""
+              className="h-4 w-4 rounded-full object-cover shrink-0"
+            />
+          ) : (
+            <div className="h-4 w-4 rounded-full bg-[#e8e8ea] dark:bg-muted/40 shrink-0 flex items-center justify-center text-[8px] font-medium text-[#b0b1b3]">
+              {listing.sellerName?.charAt(0)}
+            </div>
+          )}
+          <span className="text-[12px] text-[#8a8a8e] dark:text-muted-foreground truncate">
+            {listing.sellerName}
           </span>
         </div>
       </div>
@@ -266,21 +247,16 @@ export default function MarketplaceContent({
 
         {/* ─── Grid ─── */}
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pb-14">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-8 pb-14">
             {Array.from({ length: 9 }).map((_, i) => (
-              <div
-                key={i}
-                className="rounded-2xl border border-[#1d1c220d] dark:border-border/20 bg-white dark:bg-card overflow-hidden animate-pulse"
-              >
-                <div className="aspect-[16/10] bg-[#f0f0f0] dark:bg-muted/40" />
-                <div className="p-4 space-y-3">
-                  <div className="space-y-2">
-                    <div className="h-4 w-3/4 rounded bg-[#f0f0f0] dark:bg-muted/40" />
-                    <div className="h-3 w-full rounded bg-[#f0f0f0] dark:bg-muted/30" />
-                  </div>
-                  <div className="pt-3 border-t border-[#1d1c220d] dark:border-border/15 flex items-center gap-2">
-                    <div className="h-5 w-5 rounded-full bg-[#f0f0f0] dark:bg-muted/40" />
-                    <div className="h-3 w-20 rounded bg-[#f0f0f0] dark:bg-muted/30" />
+              <div key={i} className="animate-pulse">
+                <div className="aspect-[16/10] rounded-xl bg-[#e8e8ea] dark:bg-muted/30" />
+                <div className="pt-3 space-y-2 px-0.5">
+                  <div className="h-4 w-3/5 rounded bg-[#e8e8ea] dark:bg-muted/30" />
+                  <div className="h-3 w-4/5 rounded bg-[#ededef] dark:bg-muted/20" />
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    <div className="h-4 w-4 rounded-full bg-[#e8e8ea] dark:bg-muted/30" />
+                    <div className="h-3 w-16 rounded bg-[#ededef] dark:bg-muted/20" />
                   </div>
                 </div>
               </div>
@@ -315,7 +291,7 @@ export default function MarketplaceContent({
           </div>
         ) : (
           <div className="pb-14">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-8">
               {listings.map((l) => (
                 <ListingCard key={l.id || l.projectId} listing={l} />
               ))}
