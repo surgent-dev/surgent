@@ -200,6 +200,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const contentRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLElement | null>(null)
   const shouldStickRef = useRef(true)
+  const showScrollButtonRef = useRef(false)
   const rafRef = useRef(0)
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const prefilledRef = useRef(false)
@@ -278,24 +279,36 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     setSubagentWorking(false)
   }, [activeId])
 
-  // Debounced scroll-to-bottom function
-  const scrollToBottom = useCallback((force = false) => {
-    const viewport = viewportRef.current
-    if (!viewport) return
-
-    // Debounce rapid calls during streaming
-    clearTimeout(scrollTimeoutRef.current)
-    scrollTimeoutRef.current = setTimeout(() => {
-      cancelAnimationFrame(rafRef.current)
-      rafRef.current = requestAnimationFrame(() => {
-        if (force || shouldStickRef.current) {
-          viewport.scrollTo({ top: viewport.scrollHeight, behavior: force ? 'smooth' : 'instant' })
-          shouldStickRef.current = true
-          setShowScrollButton(false)
-        }
-      })
-    }, 16) // ~1 frame debounce
+  const updateShowScrollButton = useCallback((next: boolean) => {
+    if (showScrollButtonRef.current === next) return
+    showScrollButtonRef.current = next
+    setShowScrollButton(next)
   }, [])
+
+  // Debounced scroll-to-bottom function
+  const scrollToBottom = useCallback(
+    (force = false) => {
+      const viewport = viewportRef.current
+      if (!viewport) return
+
+      // Debounce rapid calls during streaming
+      clearTimeout(scrollTimeoutRef.current)
+      scrollTimeoutRef.current = setTimeout(() => {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = requestAnimationFrame(() => {
+          if (force || shouldStickRef.current) {
+            viewport.scrollTo({
+              top: viewport.scrollHeight,
+              behavior: force ? 'smooth' : 'instant',
+            })
+            shouldStickRef.current = true
+            updateShowScrollButton(false)
+          }
+        })
+      }, 16) // ~1 frame debounce
+    },
+    [updateShowScrollButton],
+  )
 
   // Auto-scroll: observe content size changes for reliable streaming updates
   useEffect(() => {
@@ -315,16 +328,12 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       const isNearBottom = distanceFromBottom < 80
 
       shouldStickRef.current = isNearBottom
-      setShowScrollButton(!isNearBottom && scrollHeight > clientHeight)
+      updateShowScrollButton(!isNearBottom && scrollHeight > clientHeight)
     }
 
     // ResizeObserver triggers on any content size change (including streaming)
     const resizeObserver = new ResizeObserver(triggerScroll)
     resizeObserver.observe(content)
-
-    // MutationObserver as fallback for DOM changes ResizeObserver might miss
-    const mutationObserver = new MutationObserver(triggerScroll)
-    mutationObserver.observe(content, { childList: true, subtree: true, characterData: true })
 
     viewport.addEventListener('scroll', handleScroll, { passive: true })
 
@@ -332,17 +341,16 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     requestAnimationFrame(() => {
       viewport.scrollTop = viewport.scrollHeight
       shouldStickRef.current = true
-      setShowScrollButton(false)
+      updateShowScrollButton(false)
     })
 
     return () => {
       clearTimeout(scrollTimeoutRef.current)
       cancelAnimationFrame(rafRef.current)
       resizeObserver.disconnect()
-      mutationObserver.disconnect()
       viewport.removeEventListener('scroll', handleScroll)
     }
-  }, [activeId, scrollToBottom])
+  }, [activeId, scrollToBottom, updateShowScrollButton])
 
   // Auto-send initial prompt once session is connected and ready
   useEffect(() => {
@@ -627,8 +635,8 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   useEffect(() => {
     usageRef.current = null
     shouldStickRef.current = true
-    setShowScrollButton(false)
-  }, [activeId])
+    updateShowScrollButton(false)
+  }, [activeId, updateShowScrollButton])
 
   // Track context tokens from the last COMPLETED assistant message
   // During streaming, we keep showing the previous value to avoid flickering

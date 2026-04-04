@@ -1113,12 +1113,13 @@ export function AgentThread({
     }
 
     if (isTextPart(p)) {
-      const content = p.text?.trim()
-      if (!content) return null
+      const content = p.text ?? ''
+      if (!content.trim()) return null
       return (
         <Markdown
           key={p.id}
           className="[&_p]:text-[13px] [&_p]:sm:text-sm [&_li]:text-[13px] [&_li]:sm:text-sm"
+          isAnimating={!p.time?.end}
         >
           {content}
         </Markdown>

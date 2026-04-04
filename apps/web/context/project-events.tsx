@@ -238,7 +238,7 @@ export function ProjectEventProvider({
   const abortRef = useRef<AbortController | null>(null)
   const connectionIdRef = useRef(0)
   const subscribersRef = useRef(new Map<string, Set<Subscriber>>())
-  const queueRef = useRef<StreamEvent[]>([])
+  const queueRef = useRef<Array<StreamEvent | null>>([])
   const rafRef = useRef<number | null>(null)
   const attemptRef = useRef(0)
   const connectedAtRef = useRef(0)
@@ -415,16 +415,78 @@ export function ProjectEventProvider({
       ? `${backendBaseUrl}/api/agent/${projectId}/event`
       : `/api/agent/${projectId}/event`
 
+    // Event coalescing: dedup snapshots and merge deltas within a frame.
+    const coalesced = new Map<string, number>()
+
+    const eventKey = (ev: StreamEvent): string | undefined => {
+      const p = ev.properties
+      if (!p) return undefined
+      if (ev.type === 'session.status') return `ss:${p.sessionID || p.sessionId}`
+      if (ev.type === 'message.part.updated') {
+        const part = p.part as Record<string, unknown> | undefined
+        return part ? `mpu:${part.messageID}:${part.id}` : undefined
+      }
+      if (ev.type === 'message.part.delta') return `mpd:${p.messageID}:${p.partID}:${p.field}`
+      return undefined
+    }
+
     const flushQueue = () => {
-      if (rafRef.current) return
+      if (rafRef.current !== null) return
       rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null
         const events = queueRef.current
         queueRef.current = []
-        rafRef.current = null
-        events.forEach((event) => {
-          emitRouted(event)
-        })
+        coalesced.clear()
+        for (const event of events) {
+          if (event) emitRouted(event)
+        }
       })
+    }
+
+    const enqueue = (event: StreamEvent) => {
+      // A full snapshot supersedes any queued deltas for the same part
+      if (event.type === 'message.part.updated') {
+        const part = (event.properties as any)?.part
+        if (part) {
+          const prefix = `mpd:${part.messageID}:${part.id}:`
+          for (let i = 0; i < queueRef.current.length; i++) {
+            const q = queueRef.current[i]
+            if (!q) continue
+            const k = eventKey(q)
+            if (k?.startsWith(prefix)) {
+              coalesced.delete(k)
+              queueRef.current[i] = null
+            }
+          }
+        }
+      }
+
+      const key = eventKey(event)
+      if (!key) {
+        queueRef.current.push(event)
+        return
+      }
+
+      const idx = coalesced.get(key)
+      if (idx === undefined) {
+        coalesced.set(key, queueRef.current.length)
+        queueRef.current.push(event)
+        return
+      }
+
+      // Merge consecutive deltas by concatenating their text
+      const queued = queueRef.current[idx]
+      if (queued?.type === 'message.part.delta' && event.type === 'message.part.delta') {
+        const prev = (queued.properties as any)?.delta ?? ''
+        const next = (event.properties as any)?.delta ?? ''
+        queueRef.current[idx] = {
+          ...event,
+          properties: { ...event.properties, delta: prev + next },
+        }
+        return
+      }
+
+      queueRef.current[idx] = event
     }
 
     const scheduleReconnect = () => {
@@ -552,7 +614,7 @@ export function ProjectEventProvider({
                 syncSession(compactedSessionId, true)
               }
 
-              queueRef.current.push(event)
+              enqueue(event)
               flushQueue()
             } catch {}
           })
@@ -587,11 +649,12 @@ export function ProjectEventProvider({
       abortRef.current?.abort()
       abortRef.current = null
 
-      if (rafRef.current) {
+      if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
       }
       queueRef.current = []
+      coalesced.clear()
       inflight.clear()
 
       setConnectedState(false)

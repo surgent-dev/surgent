@@ -58,18 +58,6 @@ function upsertMessage(list: Message[], incoming: Message): Message[] {
   return [...list.slice(0, idx), merged, ...list.slice(idx + 1)]
 }
 
-function upsertPart(list: Part[] | undefined, incoming: Part): Part[] {
-  if (!list) return [incoming]
-  const idx = list.findIndex((p) => p.id === incoming.id)
-  if (idx === -1) {
-    const insertAt = list.findIndex((p) => p.id > incoming.id)
-    if (insertAt === -1) return [...list, incoming]
-    return [...list.slice(0, insertAt), incoming, ...list.slice(insertAt)]
-  }
-  const merged = { ...list[idx], ...incoming } as Part
-  return [...list.slice(0, idx), merged, ...list.slice(idx + 1)]
-}
-
 function getPartText(part: Part): string | undefined {
   const value = (part as Record<string, unknown>).text
   return typeof value === 'string' ? value : undefined
@@ -80,21 +68,31 @@ function getPartEnd(part: Part): number | undefined {
   return typeof time?.end === 'number' ? time.end : undefined
 }
 
+// Merge a snapshot part without regressing text that deltas already built up.
 function mergeSnapshotPart(existing: Part | undefined, incoming: Part): Part {
   if (!existing) return incoming
-
   const merged = { ...existing, ...incoming } as Part
   const existingText = getPartText(existing)
   const incomingText = getPartText(incoming)
-
   if (existingText === undefined || incomingText === undefined) return merged
-
   const existingEnd = getPartEnd(existing)
   const incomingEnd = getPartEnd(incoming)
   if (existingEnd && !incomingEnd) return existing
   if (incomingEnd || existingText.length <= incomingText.length) return merged
-
   return { ...merged, text: existingText } as Part
+}
+
+// Insert or merge a part into a sorted list, using snapshot-safe merge.
+function upsertPart(list: Part[] | undefined, incoming: Part): Part[] {
+  if (!list) return [incoming]
+  const idx = list.findIndex((p) => p.id === incoming.id)
+  if (idx === -1) {
+    const insertAt = list.findIndex((p) => p.id > incoming.id)
+    if (insertAt === -1) return [...list, incoming]
+    return [...list.slice(0, insertAt), incoming, ...list.slice(insertAt)]
+  }
+  const merged = mergeSnapshotPart(list[idx], incoming)
+  return [...list.slice(0, idx), merged, ...list.slice(idx + 1)]
 }
 
 function mergeParts(
@@ -103,16 +101,9 @@ function mergeParts(
 ): Part[] | undefined {
   if (incoming === undefined) return existing
   if (!existing) return incoming
-
   let next = existing
   for (const part of incoming) {
-    const idx = next.findIndex((item) => item.id === part.id)
-    if (idx === -1) {
-      next = upsertPart(next, part)
-      continue
-    }
-    const merged = mergeSnapshotPart(next[idx], part)
-    next = [...next.slice(0, idx), merged, ...next.slice(idx + 1)]
+    next = upsertPart(next, part)
   }
   return next
 }
