@@ -34,6 +34,7 @@ export default function TopupDialog({ open, onOpenChange }: TopupDialogProps) {
   const tooLow = isCustom && customValue !== '' && amount > 0 && amount < minUsd
   const brand = data?.paymentMethodBrand
   const last4 = data?.paymentMethodLast4
+  const hasPaymentMethod = Boolean(brand)
 
   const reset = () => {
     setSelected(20)
@@ -177,15 +178,16 @@ export default function TopupDialog({ open, onOpenChange }: TopupDialogProps) {
               >
                 {createIntent.isPending ? (
                   <CircleNotch weight="bold" className="size-4 animate-spin" />
-                ) : last4 ? (
+                ) : hasPaymentMethod ? (
                   `Add $${formatAmount(amount)} instantly`
                 ) : (
                   `Continue with $${formatAmount(amount)}`
                 )}
               </Button>
-              {last4 && (
+              {hasPaymentMethod && (
                 <p className="mt-2.5 text-center text-[11px] text-muted-foreground/50">
-                  Charging {brand ?? 'card'} ending in {last4}
+                  Charging {brand === 'link' ? 'Link' : (brand ?? 'card')}
+                  {last4 && last4 !== '0000' ? ` ending in ${last4}` : ''}
                 </p>
               )}
               {error && <p className="mt-2 text-center text-[12px] text-destructive">{error}</p>}

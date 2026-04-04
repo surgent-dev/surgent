@@ -8,6 +8,7 @@ import {
   findOrganizationIdByStripeCustomerId,
   refundBillingPayment,
   syncBillingPaymentFromInvoice,
+  syncBillingPaymentMethodFromCustomer,
   syncStripeCustomerToBillingState,
 } from '@/lib/billing'
 
@@ -112,6 +113,23 @@ async function processStripeWebhookEvent(eventId: string, eventType: string, eve
     return
   }
 
+  // Handle default payment method changes from the Stripe portal.
+  // Only sync PM when invoice_settings.default_payment_method actually changed.
+  if (event.type === 'customer.updated') {
+    const prev = (event.data as any).previous_attributes?.invoice_settings ?? {}
+    if (!('default_payment_method' in prev)) return
+
+    const customerId = event.data.object.id
+    const paymentMethodId = (event.data.object as any).invoice_settings?.default_payment_method
+    if (!customerId) return
+
+    await syncBillingPaymentMethodFromCustomer({
+      stripeCustomerId: customerId,
+      paymentMethodId,
+    })
+    return
+  }
+
   if (
     event.type === 'checkout.session.async_payment_failed' ||
     event.type === 'invoice.paid' ||
@@ -119,11 +137,10 @@ async function processStripeWebhookEvent(eventId: string, eventType: string, eve
     event.type === 'invoice.payment_action_required' ||
     event.type === 'customer.subscription.updated' ||
     event.type === 'customer.subscription.deleted' ||
-    event.type === 'customer.subscription.trial_will_end' ||
-    event.type === 'customer.updated'
+    event.type === 'customer.subscription.trial_will_end'
   ) {
     const object = event.data.object as { customer?: string | null; id?: string | null }
-    const customerId = event.type === 'customer.updated' ? object.id : object.customer
+    const customerId = object.customer
     if (!customerId) return
 
     const organizationId = await findOrganizationIdByStripeCustomerId(customerId)

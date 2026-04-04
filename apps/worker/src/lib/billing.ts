@@ -783,15 +783,6 @@ function pickSubscription(subscriptions: Stripe.Subscription[]) {
   })[0]
 }
 
-function getDefaultPaymentMethod(
-  customer: Stripe.Customer | Stripe.DeletedCustomer,
-): Stripe.PaymentMethod | null {
-  if (customer.deleted) return null
-  const paymentMethod = customer.invoice_settings.default_payment_method
-  if (!paymentMethod || typeof paymentMethod === 'string') return null
-  return paymentMethod
-}
-
 function getPaymentMethodCustomerId(paymentMethod: Stripe.PaymentMethod) {
   return typeof paymentMethod.customer === 'string'
     ? paymentMethod.customer
@@ -812,22 +803,6 @@ async function retrievePaymentMethodFromPaymentIntent(
   return paymentMethod
 }
 
-async function retrievePaymentMethodFromInvoice(
-  client: Stripe,
-  invoiceId: string | null | undefined,
-) {
-  if (!invoiceId) return null
-
-  const invoice = await client.invoices.retrieve(invoiceId, {
-    expand: ['payments'],
-  })
-  const paymentIntent = invoice.payments?.data[0]?.payment.payment_intent
-  const paymentIntentId =
-    typeof paymentIntent === 'string' ? paymentIntent : (paymentIntent?.id ?? null)
-
-  return retrievePaymentMethodFromPaymentIntent(client, paymentIntentId)
-}
-
 async function persistBillingPaymentMethod(args: {
   organizationId: string
   paymentMethod: Stripe.PaymentMethod | null
@@ -842,20 +817,57 @@ async function persistBillingPaymentMethod(args: {
 
   const now = new Date()
 
+  const brand =
+    paymentMethod.type === 'card' ? (paymentMethod.card?.brand ?? null) : paymentMethod.type // 'link', etc.
+  const last4 = paymentMethod.type === 'card' ? (paymentMethod.card?.last4 ?? null) : null
+
   await db
     .updateTable('billing_account')
     .set({
       defaultPaymentMethodId: paymentMethod.id,
-      paymentMethodBrand:
-        paymentMethod.type === 'card' ? (paymentMethod.card?.brand ?? null) : null,
-      paymentMethodLast4:
-        paymentMethod.type === 'card' ? (paymentMethod.card?.last4 ?? null) : null,
+      paymentMethodBrand: brand,
+      paymentMethodLast4: last4,
       updatedAt: now,
     })
     .where('organizationId', '=', args.organizationId)
     .execute()
 
   return true
+}
+
+/**
+ * Syncs the default payment method from a Stripe customer.updated event.
+ * Only call this when invoice_settings.default_payment_method actually changed
+ * (check previous_attributes in the webhook payload first).
+ */
+export async function syncBillingPaymentMethodFromCustomer(args: {
+  stripeCustomerId: string
+  paymentMethodId: string | null
+}) {
+  const organizationId = await findOrganizationIdByStripeCustomerId(args.stripeCustomerId)
+  if (!organizationId) return
+
+  if (!args.paymentMethodId) {
+    await db
+      .updateTable('billing_account')
+      .set({
+        defaultPaymentMethodId: null,
+        paymentMethodBrand: null,
+        paymentMethodLast4: null,
+        updatedAt: new Date(),
+      })
+      .where('organizationId', '=', organizationId)
+      .execute()
+    return
+  }
+
+  const client = requireStripe()
+  const paymentMethod = await client.paymentMethods.retrieve(args.paymentMethodId)
+  await persistBillingPaymentMethod({
+    organizationId,
+    paymentMethod,
+    stripeCustomerId: args.stripeCustomerId,
+  })
 }
 
 function getStripeErrorMessage(error: unknown) {
@@ -910,7 +922,7 @@ async function createCheckoutTopupSession(args: {
         address: 'auto',
       },
       mode: 'payment',
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'link'],
       line_items: [
         {
           price_data: {
@@ -984,9 +996,6 @@ export async function syncStripeCustomerToBillingState(args: {
   if (!customerId) return kind
 
   const client = requireStripe()
-  const customer = await client.customers.retrieve(customerId, {
-    expand: ['invoice_settings.default_payment_method'],
-  })
   const subscriptions = await client.subscriptions.list({
     customer: customerId,
     status: 'all',
@@ -996,12 +1005,7 @@ export async function syncStripeCustomerToBillingState(args: {
   const subscriptionDetails =
     primary &&
     (await client.subscriptions.retrieve(primary.id, {
-      expand: [
-        'default_payment_method',
-        'discounts',
-        'discounts.coupon',
-        'discounts.promotion_code',
-      ],
+      expand: ['discounts', 'discounts.coupon', 'discounts.promotion_code'],
     }))
   const activeSubscription =
     subscriptionDetails &&
@@ -1012,30 +1016,13 @@ export async function syncStripeCustomerToBillingState(args: {
     ? getPlanFromPriceId(activeSubscription.items.data[0]?.price.id)
     : freePlan
   const discount = getDiscountIds(activeSubscription?.discounts)
-  const customerPaymentMethod = getDefaultPaymentMethod(customer)
-  let paymentMethod = customerPaymentMethod
 
-  // Prefer the method that actually paid the latest successful subscription invoice.
-  if (activeSubscription?.latest_invoice) {
-    const invoiceId =
-      typeof activeSubscription.latest_invoice === 'string'
-        ? activeSubscription.latest_invoice
-        : activeSubscription.latest_invoice.id
-    paymentMethod = await retrievePaymentMethodFromInvoice(client, invoiceId)
-  }
-
-  if (!paymentMethod && activeSubscription?.default_payment_method) {
-    const pm = activeSubscription.default_payment_method
-    if (typeof pm === 'string') {
-      try {
-        paymentMethod = await client.paymentMethods.retrieve(pm)
-      } catch {}
-    } else {
-      paymentMethod = pm
-    }
-  }
-
-  if (!paymentMethod) paymentMethod = customerPaymentMethod
+  // PM is managed exclusively by persistBillingPaymentMethod (called after
+  // each successful payment) and syncBillingPaymentMethodFromCustomer (called
+  // on customer.updated when the user changes their default PM in the Stripe
+  // portal). This function never touches PM fields — doing so would overwrite
+  // the card PM saved by a topup with the subscription's PM (often Stripe
+  // Link), breaking off-session top-ups.
 
   const now = new Date()
   const nextPeriodStart = activeSubscription?.items.data[0]?.current_period_start
@@ -1074,11 +1061,6 @@ export async function syncStripeCustomerToBillingState(args: {
       .updateTable('billing_account')
       .set({
         stripeCustomerId: customerId,
-        defaultPaymentMethodId: paymentMethod?.id ?? null,
-        paymentMethodBrand:
-          paymentMethod?.type === 'card' ? (paymentMethod.card?.brand ?? null) : null,
-        paymentMethodLast4:
-          paymentMethod?.type === 'card' ? (paymentMethod.card?.last4 ?? null) : null,
         includedBalanceMicros: String(includedBalanceMicros),
         includedBalancePeriodStart: allowanceWindow.start,
         monthlySpendLimitMicros:
@@ -1180,7 +1162,7 @@ export async function createBillingCheckout(args: {
       customer,
       client_reference_id: args.organizationId,
       mode: 'subscription',
-      payment_method_collection: 'always',
+      payment_method_types: ['card', 'link'],
       ...discountConfig,
       line_items: [{ price: plan.priceId, quantity: 1 }],
       subscription_data: {
@@ -1235,9 +1217,10 @@ export async function createTopupPaymentIntent(args: {
     }))
   const state = await getBillingState(args.organizationId)
   const paymentMethodId = state.account.defaultPaymentMethodId
+  const hasPaymentMethod = Boolean(state.account.paymentMethodBrand)
   const client = requireStripe()
 
-  if (paymentMethodId) {
+  if (paymentMethodId && hasPaymentMethod) {
     try {
       const idempotencyKey = args.requestId ? `billing-topup-charge:${args.requestId}` : undefined
       const paymentIntent = await client.paymentIntents.create(
@@ -1246,7 +1229,7 @@ export async function createTopupPaymentIntent(args: {
           currency: 'usd',
           customer: customerId,
           payment_method: paymentMethodId,
-          payment_method_types: ['card'],
+          payment_method_types: ['card', 'link'],
           confirm: true,
           off_session: true,
           error_on_requires_action: true,
