@@ -7,6 +7,7 @@ import * as ProjectService from '@/services/projects'
 
 export interface ConvexIntegrationConfig {
   convexProjectId?: string
+  region?: string
   deployments?: {
     development?: { name?: string; url?: string }
     production?: { name?: string; url?: string }
@@ -134,7 +135,11 @@ export async function ensureConvexProdDeployment(projectId: string): Promise<voi
     parseDeploymentNameFromUrl(url) ??
     prodCfg?.name
   if (!name || !url) {
-    const created = await createDeployment({ projectId: cfg.convexProjectId, type: 'prod' })
+    const created = await createDeployment({
+      projectId: cfg.convexProjectId,
+      type: 'prod',
+      region: cfg.region,
+    })
     name = created.name
     url = created.deploymentUrl
   }

@@ -87,9 +87,12 @@ logs/
 # plans
 docs/plans
 
-# nix 
+# nix
 .direnv/
 .opencode
+
+# Convex local backend state (1.32+)
+.convex/
 
 # CDK
 cdk.out/

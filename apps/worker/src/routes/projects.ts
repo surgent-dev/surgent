@@ -26,8 +26,12 @@ import {
 import { HttpError } from '@/lib/errors'
 import {
   listDeploymentEnvVars,
+  listDeploymentRegions,
+  listDeployments,
   setDeploymentEnvVars,
   buildDashboardCredentials,
+  fetchInsights,
+  fetchFunctionSpec,
 } from '@/apis/convex'
 import { createGitHubApp, GitHubService, getValidUserToken } from '@/apis/github'
 import {
@@ -1479,6 +1483,15 @@ projects.post('/:id/convex/deploy/prod', zValidator('param', idParam), async (c)
   return c.json({ deployed: true })
 })
 
+// GET /projects/:id/convex/regions - List available Convex hosting regions
+projects.get('/:id/convex/regions', zValidator('param', idParam), async (c) => {
+  const { id } = c.req.valid('param')
+  await getProjectWithAuth(id, c.get('user')!)
+
+  const regions = await listDeploymentRegions()
+  return c.json({ regions })
+})
+
 // GET /projects/:id/convex/env - List deployment environment variables
 projects.get(
   '/:id/convex/env',
@@ -1539,6 +1552,62 @@ projects.get(
     return c.json(buildDashboardCredentials(creds))
   },
 )
+
+// GET /projects/:id/convex/insights - Get deployment health insights
+projects.get(
+  '/:id/convex/insights',
+  zValidator('param', idParam),
+  zValidator('query', z.object({ env: z.enum(['development', 'production']).optional() })),
+  async (c) => {
+    const { id } = c.req.valid('param')
+    const { env = 'development' } = c.req.valid('query')
+
+    await getProjectWithAuth(id, c.get('user')!)
+
+    const creds = await getConvexCredentials(id, env)
+    if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
+
+    const teamId = config.convex.teamId
+    if (!teamId) return c.json({ error: 'Missing CONVEX_TEAM_ID' }, 500)
+
+    const insights = await fetchInsights(teamId, creds.deploymentName)
+    return c.json({ insights })
+  },
+)
+
+// GET /projects/:id/convex/functions - Get all registered function metadata
+projects.get(
+  '/:id/convex/functions',
+  zValidator('param', idParam),
+  zValidator('query', z.object({ env: z.enum(['development', 'production']).optional() })),
+  async (c) => {
+    const { id } = c.req.valid('param')
+    const { env = 'development' } = c.req.valid('query')
+
+    await getProjectWithAuth(id, c.get('user')!)
+
+    const creds = await getConvexCredentials(id, env)
+    if (!creds) return c.json({ error: 'Convex not provisioned' }, 400)
+
+    const spec = await fetchFunctionSpec(creds.deploymentUrl, creds.deployKey)
+    return c.json({ functions: spec })
+  },
+)
+
+// GET /projects/:id/convex/deployments - List all Convex deployments for the project
+projects.get('/:id/convex/deployments', zValidator('param', idParam), async (c) => {
+  const { id } = c.req.valid('param')
+  await getProjectWithAuth(id, c.get('user')!)
+
+  const integration = await resolveConvexIntegrationConfig(id)
+  if (!integration?.convexProjectId) return c.json({ error: 'Convex not provisioned' }, 400)
+
+  const teamId = config.convex.teamId
+  if (!teamId) return c.json({ error: 'Missing CONVEX_TEAM_ID' }, 500)
+
+  const deployments = await listDeployments(teamId, integration.convexProjectId)
+  return c.json({ deployments })
+})
 
 // ============================================
 // GitHub Integration Endpoints
