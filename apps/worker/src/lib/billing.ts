@@ -236,7 +236,7 @@ const freePlan = (() => {
   return plan
 })()
 
-const PAID_MONTHLY_SPEND_LIMIT_MICROS = dollarsToMicros(500)
+const PAID_MONTHLY_SPEND_LIMIT_MICROS = dollarsToMicros(5000)
 
 function requireStripe() {
   if (!stripe) throw new Error('Stripe is not configured')
