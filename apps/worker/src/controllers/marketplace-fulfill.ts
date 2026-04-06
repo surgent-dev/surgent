@@ -1,8 +1,7 @@
-import stripJsonComments from 'strip-json-comments'
 import { config } from '@/lib/config'
 import { db } from '@/lib/db'
 import { createLogger } from '@/lib/logger'
-import { getProvider, workspacePath, defaultProviderName } from '@/lib/sandbox'
+import { getProvider, workspacePath } from '@/lib/sandbox'
 import { storage } from '@/lib/storage'
 import { buildBashCommand, shellQuote } from '@/lib/utils'
 import { checkBillingFeature } from '@/lib/billing'
@@ -16,10 +15,11 @@ import { withDeployment } from '@/lib/convex-env'
 import * as ProjectService from '@/services/projects'
 import * as MarketplaceService from '@/services/marketplace'
 import {
-  ensureOpencodeConfigRepo,
-  ensurePm2Process,
+  buildOpencodeEnv,
   getProjectEnvVars,
-  startOpencodeServer,
+  initializeDevServer,
+  setupOpencodeAgent,
+  finalizeProjectProvisioning,
 } from '@/controllers/projects'
 
 const log = createLogger('marketplace-fulfill')
@@ -46,7 +46,7 @@ interface FulfillmentMeta {
   opencodeReadyAt?: string
 }
 
-// Env vars that are re-created by integration provisioners
+// Env vars that are re-created by integration provisioners — skip entirely
 const REPROVISION_KEYS = new Set([
   'CONVEX_DEPLOYMENT',
   'CONVEX_URL',
@@ -54,10 +54,10 @@ const REPROVISION_KEYS = new Set([
   'VITE_CONVEX_URL',
 ])
 
-// Env vars that are freshly generated per buyer project
+// Env vars that are freshly generated per buyer project — skip entirely
 const REGENERATE_KEYS = new Set(['SURGENT_API_KEY', 'JWT_PRIVATE_KEY', 'JWKS'])
 
-// System-managed env vars that should not be copied
+// System-managed env vars — skip entirely
 const SKIP_KEYS = new Set([
   'OPENCODE_API_KEY',
   'OPENCODE_BASE_URL',
@@ -77,17 +77,6 @@ async function updateStep(purchaseId: string, step: string, extra?: Record<strin
   })
   await MarketplaceService.updatePurchaseStatus(purchaseId, 'provisioning', { step })
   log.info({ purchaseId, step }, 'fulfillment step completed')
-}
-
-function buildOpencodeEnv(devEnv: Record<string, string>, apiKey: string) {
-  return {
-    ...devEnv,
-    SURGENT_API_KEY: apiKey,
-    SURGENT_BASE_URL: config.surgent.baseUrl!,
-    OPENCODE_API_KEY: apiKey,
-    OPENCODE_BASE_URL: config.opencode.baseUrl!,
-    OPENCODE_CONFIG_DIR: config.opencode.configDir,
-  }
 }
 
 export async function runMarketplaceFulfillmentJob(data: FulfillmentJobData): Promise<void> {
@@ -206,7 +195,6 @@ export async function runMarketplaceFulfillmentJob(data: FulfillmentJobData): Pr
     const sandbox = await getProvider().resume(meta.sandboxId!)
     const workingDir = workspacePath(buyerProjectId)
 
-    // Generate signed URL and download inside sandbox
     const signedUrl = await storage.getSignedUrl(snapshot.storageKey, 3600)
     await sandbox.exec(`mkdir -p ${shellQuote(workingDir)}`, { timeout: 30_000 })
 
@@ -247,10 +235,16 @@ export async function runMarketplaceFulfillmentJob(data: FulfillmentJobData): Pr
     meta = getMeta(purchase)
   }
 
-  // ── Step 7: Classify and apply env vars ────────────────────────────────
+  // ── Step 7: Transfer env var keys (without values) ─────────────────────
   if (!meta.envVarsAppliedAt) {
-    await classifyAndApplyEnvVars(buyerProjectId, sellerProjectId)
+    const pendingKeys = await transferEnvVarKeys(buyerProjectId, sellerProjectId)
     await updateStep(purchaseId, 'envVarsApplied')
+    if (pendingKeys.length > 0) {
+      log.info(
+        { purchaseId, buyerProjectId, pendingKeys },
+        'buyer has unconfigured env vars that need manual setup',
+      )
+    }
     purchase = (await MarketplaceService.getPurchaseById(purchaseId))!
     meta = getMeta(purchase)
   }
@@ -259,32 +253,12 @@ export async function runMarketplaceFulfillmentJob(data: FulfillmentJobData): Pr
   if (!meta.initializedAt) {
     const sandbox = await getProvider().resume(meta.sandboxId!)
     const workingDir = workspacePath(buyerProjectId)
-    const devEnv = await getProjectEnvVars(buyerProjectId, 'development', { includeServer: false })
 
-    let initScript: string | undefined
-    let startCommand: string | undefined
-    let processName = `${buyerProjectId}-vite-server`
-
-    try {
-      const content = (await sandbox.read(`${workingDir}/surgent.json`)).toString('utf8')
-      const cfg = JSON.parse(stripJsonComments(content))
-      initScript = cfg?.scripts?.init
-      startCommand = cfg?.scripts?.dev
-      if (cfg?.name?.trim()) processName = cfg.name.trim()
-    } catch {}
-
-    if (initScript) {
-      const init = await sandbox.exec(buildBashCommand(workingDir, initScript), {
-        timeout: 600_000,
-      })
-      if (init.code !== 0) {
-        throw new Error(`Init script failed (exit ${init.code}): ${init.output}`)
-      }
-    }
-
-    if (startCommand) {
-      await ensurePm2Process(sandbox, workingDir, processName, startCommand, devEnv)
-    }
+    const { processName, startCommand } = await initializeDevServer(
+      sandbox,
+      buyerProjectId,
+      workingDir,
+    )
 
     await ProjectService.mergeProjectMetadata(buyerProjectId, {
       processName,
@@ -302,14 +276,8 @@ export async function runMarketplaceFulfillmentJob(data: FulfillmentJobData): Pr
     const sandbox = await getProvider().resume(meta.sandboxId!)
     const workingDir = workspacePath(buyerProjectId)
     const apiKey = await getApiKeyValue(buyerProjectId)
-    const devEnv = await getProjectEnvVars(buyerProjectId, 'development', { includeServer: false })
 
-    await ensureOpencodeConfigRepo(
-      sandbox,
-      config.opencode.configRepoUrl,
-      config.opencode.configDir,
-    )
-    await startOpencodeServer(sandbox, workingDir, buildOpencodeEnv(devEnv, apiKey))
+    await setupOpencodeAgent(sandbox, buyerProjectId, workingDir, apiKey)
 
     await ProjectService.mergeProjectMetadata(buyerProjectId, {
       provisioning: { opencodeReadyAt: new Date().toISOString() },
@@ -321,23 +289,10 @@ export async function runMarketplaceFulfillmentJob(data: FulfillmentJobData): Pr
   }
 
   // ── Step 10: Finalize ──────────────────────────────────────────────────
-  await ProjectService.upsertSandbox({
-    id: meta.sandboxId!,
-    projectId: buyerProjectId,
-    provider: defaultProviderName,
-    status: 'started',
-    host: meta.previewUrl!,
+  const workingDir = workspacePath(buyerProjectId)
+  await finalizeProjectProvisioning(buyerProjectId, meta.sandboxId!, meta.previewUrl!, {
+    workingDirectory: workingDir,
   })
-
-  await ProjectService.mergeProjectMetadata(buyerProjectId, {
-    provisioningStep: null,
-    provisioning: {
-      finalizedAt: new Date().toISOString(),
-      lastError: null,
-    },
-  })
-
-  await ProjectService.updateProjectStatus(buyerProjectId, 'ready')
   await MarketplaceService.updatePurchaseStatus(purchaseId, 'ready')
 
   log.info({ purchaseId, buyerProjectId }, 'marketplace fulfillment completed')
@@ -403,38 +358,46 @@ async function provisionConvexForBuyer(buyerProjectId: string, sandboxId: string
     env: devEnv,
   })
   if (deploy.code !== 0) {
-    log.warn(
-      { buyerProjectId, output: deploy.output },
-      'convex deploy failed (non-fatal for fulfillment)',
+    throw new Error(
+      `Convex schema/function deploy failed for buyer project ${buyerProjectId}: ${deploy.output}`,
     )
   }
 
   log.info({ buyerProjectId, convexProjectId: convexProject.projectId }, 'convex provisioned')
 }
 
-// ── Env var classification ───────────────────────────────────────────────
+// ── Env var transfer (keys only, no values) ──────────────────────────────
 
-async function classifyAndApplyEnvVars(
+/**
+ * Transfers env var keys from the seller project to the buyer project.
+ * Values are set to empty strings — the buyer must configure them manually.
+ * Returns the list of keys that need buyer configuration.
+ */
+async function transferEnvVarKeys(
   buyerProjectId: string,
   sellerProjectId: string,
-): Promise<void> {
+): Promise<string[]> {
   const sellerVars = await ProjectService.getEnvVarsByProjectId(sellerProjectId, 'development')
+  const pendingKeys: string[] = []
 
   for (const v of sellerVars) {
-    if (!v.value) continue
+    if (!v.key) continue
     if (REPROVISION_KEYS.has(v.key)) continue
     if (REGENERATE_KEYS.has(v.key)) continue
     if (SKIP_KEYS.has(v.key)) continue
 
-    // Copy bucket: safe to copy seller's value to buyer
+    // Transfer the key and destination but NOT the value
     await ProjectService.upsertEnvVar({
       projectId: buyerProjectId,
       environment: 'development',
       key: v.key,
-      value: v.value,
+      value: '',
       destination: v.destination,
     })
+    pendingKeys.push(v.key)
   }
+
+  return pendingKeys
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────

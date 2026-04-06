@@ -278,6 +278,102 @@ export async function startOpencodeServer(
   log.info('opencode server started on port 4096')
 }
 
+// ============================================================================
+// Shared provisioning helpers (used by project-create & marketplace-fulfill)
+// ============================================================================
+
+export function buildOpencodeEnv(devEnv: Record<string, string>, apiKey: string) {
+  return {
+    ...devEnv,
+    SURGENT_API_KEY: apiKey,
+    SURGENT_BASE_URL: config.surgent.baseUrl!,
+    OPENCODE_API_KEY: apiKey,
+    OPENCODE_BASE_URL: config.opencode.baseUrl!,
+    OPENCODE_CONFIG_DIR: config.opencode.configDir,
+  }
+}
+
+export async function readSurgentConfig(
+  sandbox: Sandbox,
+  workingDir: string,
+): Promise<{ initScript?: string; startCommand?: string; processName?: string }> {
+  try {
+    const content = (await sandbox.read(`${workingDir}/surgent.json`)).toString('utf8')
+    const cfg = JSON.parse(stripJsonComments(content))
+    return {
+      initScript: cfg?.scripts?.init,
+      startCommand: cfg?.scripts?.dev,
+      processName: cfg?.name?.trim() || undefined,
+    }
+  } catch {
+    return {}
+  }
+}
+
+export async function initializeDevServer(
+  sandbox: Sandbox,
+  projectId: string,
+  workingDir: string,
+): Promise<{ processName: string; startCommand?: string }> {
+  const cfg = await readSurgentConfig(sandbox, workingDir)
+  const processName = cfg.processName || `${projectId}-vite-server`
+
+  if (cfg.initScript) {
+    const init = await sandbox.exec(buildBashCommand(workingDir, cfg.initScript), {
+      timeout: 600_000,
+    })
+    if (init.code !== 0) {
+      throw new Error(`Init script failed (exit ${init.code}): ${init.output}`)
+    }
+  }
+
+  if (cfg.startCommand) {
+    const devEnv = await getProjectEnvVars(projectId, 'development', { includeServer: false })
+    await ensurePm2Process(sandbox, workingDir, processName, cfg.startCommand, devEnv)
+  }
+
+  return { processName, startCommand: cfg.startCommand }
+}
+
+export async function setupOpencodeAgent(
+  sandbox: Sandbox,
+  projectId: string,
+  workingDir: string,
+  apiKey: string,
+): Promise<void> {
+  const devEnv = await getProjectEnvVars(projectId, 'development', { includeServer: false })
+  await ensureOpencodeConfigRepo(sandbox, config.opencode.configRepoUrl, config.opencode.configDir)
+  await startOpencodeServer(sandbox, workingDir, buildOpencodeEnv(devEnv, apiKey))
+}
+
+export async function finalizeProjectProvisioning(
+  projectId: string,
+  sandboxId: string,
+  previewUrl: string,
+  opts?: { processName?: string; startCommand?: string; workingDirectory?: string },
+): Promise<void> {
+  await ProjectService.mergeProjectMetadata(projectId, {
+    workingDirectory: opts?.workingDirectory,
+    processName: opts?.processName,
+    startCommand: opts?.startCommand,
+    provisioningStep: null,
+    provisioning: {
+      finalizedAt: new Date().toISOString(),
+      lastError: null,
+    },
+  })
+
+  await ProjectService.upsertSandbox({
+    id: sandboxId,
+    projectId,
+    provider: defaultProviderName,
+    status: 'started',
+    host: previewUrl,
+  })
+
+  await ProjectService.updateProjectStatus(projectId, 'ready')
+}
+
 async function getOrCreateSandbox(opts: {
   port: number
   workingDirectory: string

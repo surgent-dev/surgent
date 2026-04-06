@@ -4,23 +4,21 @@ import {
   type ProjectProvisioningMetadata,
   type ProjectProvisioningStep,
 } from '@repo/db'
-import path from 'path'
-import stripJsonComments from 'strip-json-comments'
 import { config } from '@/lib/config'
 import { createLogger } from '@/lib/logger'
 import { getProvider, workspacePath, defaultProviderName } from '@/lib/sandbox'
 import { buildBashCommand } from '@/lib/utils'
 import * as ProjectService from '@/services/projects'
 import {
-  ensureOpencodeConfigRepo,
-  ensurePm2Process,
+  buildOpencodeEnv,
   getProjectEnvVars,
-  startOpencodeServer,
+  initializeDevServer,
+  setupOpencodeAgent,
+  finalizeProjectProvisioning,
 } from '@/controllers/projects'
 
 const log = createLogger('project-create')
 
-const posix = path.posix
 const PREVIEW_PORT = 3000
 
 export interface CreateProjectJobData {
@@ -42,17 +40,6 @@ function getProvisioning(
   metadata: ProjectMetadata | null | undefined,
 ): ProjectProvisioningMetadata {
   return metadata?.provisioning || {}
-}
-
-function buildOpencodeEnv(devEnv: Record<string, string>, apiKey: string) {
-  return {
-    ...devEnv,
-    SURGENT_API_KEY: apiKey,
-    SURGENT_BASE_URL: config.surgent.baseUrl!,
-    OPENCODE_API_KEY: apiKey,
-    OPENCODE_BASE_URL: config.opencode.baseUrl!,
-    OPENCODE_CONFIG_DIR: config.opencode.configDir,
-  }
 }
 
 async function setProvisioningStep(projectId: string, step: ProjectProvisioningStep) {
@@ -124,9 +111,6 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
   if (!provisioning.initializedAt) {
     await setProvisioningStep(projectId, 'installing_dependencies')
     const sandbox = await getProvider().resume(sandboxId)
-    let processName = provisioning.processName || `${projectId}-vite-server`
-    let startCommand = provisioning.startCommand
-    let initScript: string | undefined
 
     if (githubUrl) {
       log.info({ projectId, githubUrl }, 'project create template clone started')
@@ -140,30 +124,11 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
       }
     }
 
-    try {
-      const content = (await sandbox.read(`${workingDirectory}/surgent.json`)).toString('utf8')
-      const cfg = JSON.parse(stripJsonComments(content))
-      initScript = cfg?.scripts?.init
-      startCommand = cfg?.scripts?.dev
-      if (cfg?.name?.trim()) processName = cfg.name.trim()
-      log.info({ projectId, initScript, startCommand, processName }, 'project create config loaded')
-    } catch {
-      log.debug({ projectId }, 'project create config missing or invalid')
-    }
-
-    if (initScript) {
-      const init = await sandbox.exec(buildBashCommand(workingDirectory, initScript), {
-        timeout: 600_000,
-      })
-      if (init.code !== 0) {
-        throw new Error(`Init script failed (exit ${init.code}): ${init.output}`)
-      }
-    }
-
-    if (startCommand) {
-      const devEnv = await getProjectEnvVars(projectId, 'development', { includeServer: false })
-      await ensurePm2Process(sandbox, workingDirectory, processName, startCommand, devEnv)
-    }
+    const { processName, startCommand } = await initializeDevServer(
+      sandbox,
+      projectId,
+      workingDirectory,
+    )
 
     const next = await ProjectService.mergeProjectMetadata(projectId, {
       workingDirectory,
@@ -179,13 +144,7 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
   if (!provisioning.opencodeReadyAt) {
     await setProvisioningStep(projectId, 'starting_ai_agent')
     const sandbox = await getProvider().resume(sandboxId)
-    const devEnv = await getProjectEnvVars(projectId, 'development', { includeServer: false })
-    await ensureOpencodeConfigRepo(
-      sandbox,
-      config.opencode.configRepoUrl,
-      config.opencode.configDir,
-    )
-    await startOpencodeServer(sandbox, workingDirectory, buildOpencodeEnv(devEnv, apiKey))
+    await setupOpencodeAgent(sandbox, projectId, workingDirectory, apiKey)
 
     const next = await ProjectService.mergeProjectMetadata(projectId, {
       workingDirectory,
@@ -200,27 +159,11 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
 
   await setProvisioningStep(projectId, 'finalizing')
 
-  const processName = provisioning.processName || `${name || projectId}-vite-server`
-
-  await ProjectService.mergeProjectMetadata(projectId, {
-    workingDirectory,
-    processName,
+  await finalizeProjectProvisioning(projectId, sandboxId, previewUrl, {
+    processName: provisioning.processName || `${name || projectId}-vite-server`,
     startCommand: provisioning.startCommand,
-    provisioningStep: null,
-    provisioning: {
-      finalizedAt: new Date().toISOString(),
-      lastError: null,
-    },
+    workingDirectory,
   })
-
-  await ProjectService.upsertSandbox({
-    id: sandboxId,
-    projectId,
-    provider: defaultProviderName,
-    status: 'started',
-    host: previewUrl,
-  })
-  await ProjectService.updateProjectStatus(projectId, 'ready')
 
   log.info({ projectId }, 'project create completed')
 }
