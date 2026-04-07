@@ -712,7 +712,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   const contextExceeded = usageRef.current?.contextExceeded
 
   return (
-    <div className="flex flex-col h-full w-full min-w-0 @container/conversation">
+    <div className="flex h-full w-full min-w-0 flex-col bg-inherit @container/conversation">
       {/* Header */}
       <header className="flex h-10 items-center shrink-0 px-6 gap-2 min-w-0 text-xs">
         <span
@@ -821,9 +821,12 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
       {/* Chat */}
       <div className="flex flex-col flex-1 min-h-0 min-w-0">
-        <div ref={scrollRef} className="flex-1 min-h-0 min-w-0 relative">
-          <ScrollArea className="h-full">
-            <div ref={contentRef} className="max-w-3xl mx-auto px-6 py-4 overflow-hidden">
+        <div ref={scrollRef} className="relative flex-1 min-h-0 min-w-0 bg-inherit">
+          <ScrollArea className="h-full bg-inherit">
+            <div
+              ref={contentRef}
+              className="min-h-full max-w-3xl mx-auto overflow-hidden bg-inherit px-6 py-4"
+            >
               {showSkeleton ? (
                 <ConversationSkeleton />
               ) : visibleMessages.length ? (

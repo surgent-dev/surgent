@@ -30,7 +30,7 @@ export default function EditorHeader({ projectId, project }: EditorHeaderProps) 
 
   return (
     <>
-      <header className="flex shrink-0 items-center gap-2 sm:gap-3 rounded-lg bg-white px-2 sm:px-3 py-1.5 dark:bg-card">
+      <header className="flex shrink-0 items-center gap-2 sm:gap-3 rounded-lg border border-border/40 bg-background px-2 py-1.5 sm:px-3 dark:bg-card">
         <div className="hidden sm:flex items-center gap-1.5 text-[13px]">
           <Link
             href={`/company/${projectId}`}

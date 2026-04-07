@@ -9,9 +9,9 @@ import EditorTabs from '@/components/editor/editor-tabs'
 import { ProjectInitOverlay } from '@/components/project-init-overlay'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ProjectEventProvider } from '@/context/project-events'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useSandbox } from '@/hooks/use-sandbox'
 import { useSandboxReady } from '@/hooks/use-sandbox-ready'
-import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { useActivateProject } from '@/queries/projects'
 
@@ -44,6 +44,10 @@ export default function EditorPage() {
   const chatContent = isReady ? (
     <Conversation projectId={projectId} initialPrompt={initialPrompt} />
   ) : null
+  const panelClass =
+    'h-full min-h-0 overflow-hidden rounded-lg border border-border/40 bg-background dark:bg-card'
+  const mobileToggleClass =
+    'flex-1 flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors'
 
   const editorBody = (
     <div className="flex h-full flex-col gap-1 md:gap-1.5">
@@ -56,10 +60,10 @@ export default function EditorPage() {
             <button
               onClick={() => setMobilePanel('editor')}
               className={cn(
-                'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors',
+                mobileToggleClass,
                 mobilePanel === 'editor'
-                  ? 'bg-foreground text-background'
-                  : 'bg-white dark:bg-card text-muted-foreground',
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'border-border/40 bg-background text-muted-foreground hover:text-foreground dark:bg-card',
               )}
             >
               <Monitor
@@ -71,10 +75,10 @@ export default function EditorPage() {
             <button
               onClick={() => setMobilePanel('chat')}
               className={cn(
-                'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors',
+                mobileToggleClass,
                 mobilePanel === 'chat'
-                  ? 'bg-foreground text-background'
-                  : 'bg-white dark:bg-card text-muted-foreground',
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'border-border/40 bg-background text-muted-foreground hover:text-foreground dark:bg-card',
               )}
             >
               <Chat className="size-3.5" weight={mobilePanel === 'chat' ? 'fill' : 'regular'} />
@@ -85,13 +89,9 @@ export default function EditorPage() {
           {/* Mobile: single panel at a time */}
           <div className="min-h-0 flex-1">
             {mobilePanel === 'editor' ? (
-              <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
-                {editorContent}
-              </div>
+              <div className={panelClass}>{editorContent}</div>
             ) : (
-              <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
-                {chatContent}
-              </div>
+              <div className={panelClass}>{chatContent}</div>
             )}
           </div>
         </>
@@ -99,17 +99,13 @@ export default function EditorPage() {
         /* Desktop: resizable side-by-side */
         <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
           <ResizablePanel defaultSize={65} minSize={35}>
-            <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
-              {editorContent}
-            </div>
+            <div className={panelClass}>{editorContent}</div>
           </ResizablePanel>
 
           <ResizableHandle className="mx-0.5 w-px bg-transparent after:w-2 hover:bg-border/50 transition-colors" />
 
           <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
-            <div className="h-full overflow-hidden rounded-lg bg-white dark:bg-card">
-              {chatContent}
-            </div>
+            <div className={panelClass}>{chatContent}</div>
           </ResizablePanel>
         </ResizablePanelGroup>
       )}
