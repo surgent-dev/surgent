@@ -8,8 +8,8 @@ import { ensureActiveOrganization } from '@/lib/organizations'
 import { createLogger } from '@/lib/logger'
 
 const REFERRAL_COOKIE_NAME = 'surgent_referral'
-const REFERRAL_SIGNUP_REWARD_USD = 2
-const REFERRAL_CONVERSION_REWARD_USD = 3
+const REFERRAL_SIGNUP_REWARD_USD = 1
+const REFERRAL_CONVERSION_REWARD_USD = 2
 const uuid = z.string().uuid()
 const log = createLogger('referrals')
 

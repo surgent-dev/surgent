@@ -120,7 +120,7 @@ export const config = {
     secretKey: env.STRIPE_SECRET_KEY,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
     free: {
-      allowanceUsd: float(env.STRIPE_FREE_ALLOWANCE_USD, 3),
+      allowanceUsd: float(env.STRIPE_FREE_ALLOWANCE_USD, 1),
     },
     pro: {
       month: {
