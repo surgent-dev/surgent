@@ -70,7 +70,7 @@ export default function EditorHeader({ projectId, project }: EditorHeaderProps) 
             <SupportMenu />
           </div>
 
-          {isFree && (
+          {isFree ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -83,6 +83,20 @@ export default function EditorHeader({ projectId, project }: EditorHeaderProps) 
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Upgrade to Pro</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="brand-violet"
+                  size="sm"
+                  onClick={() => credits.setTopupDialogOpen(true)}
+                >
+                  <Lightning className="size-3.5" weight="fill" />
+                  <span className="hidden sm:inline">Top up</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Top up credits</TooltipContent>
             </Tooltip>
           )}
 
