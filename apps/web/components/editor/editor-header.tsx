@@ -60,7 +60,7 @@ export default function EditorHeader({ projectId, project }: EditorHeaderProps) 
                   className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-brand hover:bg-brand/10 transition-colors cursor-pointer"
                 >
                   <Gift className="size-3.5 gift-wiggle" weight="duotone" />
-                  <span className="text-[12px] font-medium hidden sm:inline">Get credits</span>
+                  <span className="text-[12px] font-medium hidden sm:inline">Free Credits</span>
                 </button>
               </TooltipTrigger>
               <TooltipContent>Invite friends, earn $5</TooltipContent>

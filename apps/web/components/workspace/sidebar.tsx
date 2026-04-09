@@ -4,6 +4,7 @@ import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import {
   ChartLineUp,
   CreditCard,
+  Dna,
   House,
   Lightning,
   Moon,
@@ -41,6 +42,7 @@ import { cn } from '@/lib/utils'
 const NAV: { icon: PhosphorIcon; label: string; href: string; absolute?: boolean }[] = [
   { icon: House, label: 'Dashboard', href: '' },
   { icon: MagicWand, label: 'Studio', href: '/editor' },
+  { icon: Dna, label: 'Brand DNA', href: '/brand' },
   { icon: ChartLineUp, label: 'Analytics', href: '/analytics' },
   { icon: Storefront, label: 'Marketplace', href: '/marketplace', absolute: true },
 ]
@@ -126,7 +128,7 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
 
         <div className="flex-1" />
 
-        {/* Get credits */}
+        {/* Free Credits */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -137,7 +139,7 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
             </button>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8}>
-            Get credits
+            Free Credits
           </TooltipContent>
         </Tooltip>
 

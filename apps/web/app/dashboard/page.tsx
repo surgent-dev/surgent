@@ -239,7 +239,7 @@ export default function DashboardPage() {
                 <UserPlus className="size-4 text-brand" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-medium">Get credits</p>
+                <p className="text-[13px] font-medium">Free Credits</p>
                 <p className="text-[11px] text-muted-foreground/60">
                   Invite friends and earn $5 for each signup
                 </p>
