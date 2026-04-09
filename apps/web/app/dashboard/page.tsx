@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import BillingSyncBridge from '@/components/billing-sync-bridge'
 import MigrationCreditBanner from '@/components/migration-credit-banner'
 import PlanDialog from '@/components/plan-dialog'
+import TopupDialog from '@/components/topup-dialog'
 import ReferralDialog from '@/components/referral-dialog'
 import UserMenu from '@/components/project-header/user-menu'
 import { SurgentLogo } from '@/components/surgent-logo'
@@ -346,6 +347,7 @@ export default function DashboardPage() {
         </Dialog>
 
         <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
+        <TopupDialog open={credits.topupDialogOpen} onOpenChange={credits.setTopupDialogOpen} />
         <ReferralDialog open={referralOpen} onOpenChange={setReferralOpen} />
       </div>
     </>

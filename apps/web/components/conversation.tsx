@@ -21,6 +21,7 @@ import { AgentThread } from '@/components/agent/agent-thread'
 import QuestionPrompt from '@/components/agent/question-prompt'
 import OnboardingReferralDialog from '@/components/onboarding-referral-dialog'
 import PlanDialog from '@/components/plan-dialog'
+import TopupDialog from '@/components/topup-dialog'
 import ProviderDialog from '@/components/provider-dialog'
 import {
   DropdownMenu,
@@ -902,10 +903,10 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
                   </p>
                   {displayError.isBilling ? (
                     <button
-                      onClick={() => credits.setPlanDialogOpen(true)}
+                      onClick={credits.openBalanceDialog}
                       className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-warning/15 hover:bg-warning/25 text-warning text-xs font-medium transition-colors shrink-0"
                     >
-                      Upgrade
+                      {credits.snapshot?.tier === 'pro' ? 'Add balance' : 'Upgrade'}
                     </button>
                   ) : (
                     <>
@@ -979,6 +980,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
       <ProviderDialog open={providerOpen} onOpenChange={setProviderOpen} />
       <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
+      <TopupDialog open={credits.topupDialogOpen} onOpenChange={credits.setTopupDialogOpen} />
       <OnboardingReferralDialog
         open={referralOpen}
         onOpenChange={setReferralOpen}

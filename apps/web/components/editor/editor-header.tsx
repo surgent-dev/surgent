@@ -4,6 +4,7 @@ import { Gift, Lightning } from '@phosphor-icons/react'
 import Link from 'next/link'
 import { useState } from 'react'
 import PlanDialog from '@/components/plan-dialog'
+import TopupDialog from '@/components/topup-dialog'
 import DownloadButton from '@/components/project-header/download-button'
 import GitHubButton from '@/components/project-header/github-button'
 import PayDialogs from '@/components/project-header/pay-dialogs'
@@ -92,6 +93,7 @@ export default function EditorHeader({ projectId, project }: EditorHeaderProps) 
       <PayDialogs projectId={projectId} />
       <ReferralDialog open={referralOpen} onOpenChange={setReferralOpen} />
       <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
+      <TopupDialog open={credits.topupDialogOpen} onOpenChange={credits.setTopupDialogOpen} />
     </>
   )
 }

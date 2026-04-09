@@ -15,6 +15,7 @@ function microsToUsd(value: number) {
 
 export function useCredits() {
   const [planDialogOpen, setPlanDialogOpen] = useState(false)
+  const [topupDialogOpen, setTopupDialogOpen] = useState(false)
   const subscription = useSubscription()
   const portal = useBillingPortal()
   const snapshot = subscription.data
@@ -53,8 +54,13 @@ export function useCredits() {
   const gate = () => {
     if (subscription.isLoading || !snapshot) return true
     if (snapshot.features.canUseAi) return true
-    toast.error('You have run out of usage balance. Please upgrade or add more balance.', {})
-    setPlanDialogOpen(true)
+    if (snapshot.tier === 'pro') {
+      toast.error('You have run out of usage balance. Please add more balance.', {})
+      setTopupDialogOpen(true)
+    } else {
+      toast.error('You have run out of usage balance. Please upgrade or add more balance.', {})
+      setPlanDialogOpen(true)
+    }
     return false
   }
 
@@ -74,6 +80,12 @@ export function useCredits() {
     gate,
     planDialogOpen,
     setPlanDialogOpen,
+    topupDialogOpen,
+    setTopupDialogOpen,
+    openBalanceDialog: () => {
+      if (snapshot?.tier === 'pro') setTopupDialogOpen(true)
+      else setPlanDialogOpen(true)
+    },
     openBillingPortal: async () => {
       if (!snapshot?.stripeCustomerId && snapshot?.tier === 'free') {
         setPlanDialogOpen(true)

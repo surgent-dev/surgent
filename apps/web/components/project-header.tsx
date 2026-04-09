@@ -31,6 +31,7 @@ import DeploymentStatusDialog from '@/components/deployment-status-dialog'
 import GitHubDialog from '@/components/github-dialog'
 import MigrationCreditBanner from '@/components/migration-credit-banner'
 import PlanDialog from '@/components/plan-dialog'
+import TopupDialog from '@/components/topup-dialog'
 import PayDialogs from '@/components/project-header/pay-dialogs'
 import SellDialog from '@/components/project-header/sell-dialog'
 import UserMenu from '@/components/project-header/user-menu'
@@ -792,6 +793,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
         screenshotUrl={latestDeployment?.screenshotUrl}
       />
       <PlanDialog open={credits.planDialogOpen} onOpenChange={credits.setPlanDialogOpen} />
+      <TopupDialog open={credits.topupDialogOpen} onOpenChange={credits.setTopupDialogOpen} />
     </>
   )
 }

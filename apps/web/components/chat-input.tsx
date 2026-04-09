@@ -4,6 +4,7 @@ import { FileText, Loader2, X } from 'lucide-react'
 import Image from 'next/image'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PlanDialog from '@/components/plan-dialog'
+import TopupDialog from '@/components/topup-dialog'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -340,8 +341,19 @@ export default function ChatInput({
   }
 
   const canSubmit = !hasUploading && !disabled && (value.trim() || attachments.length)
-  const { balance, total, remaining, unlimited, gate, planDialogOpen, setPlanDialogOpen } =
-    useCredits()
+  const {
+    balance,
+    total,
+    remaining,
+    unlimited,
+    gate,
+    planDialogOpen,
+    setPlanDialogOpen,
+    topupDialogOpen,
+    setTopupDialogOpen,
+    snapshot,
+    openBalanceDialog,
+  } = useCredits()
   const showCreditsBanner = !unlimited && total > 0 && remaining <= 20
 
   return (
@@ -367,16 +379,18 @@ export default function ChatInput({
           <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-muted/20 px-4 py-2">
             <span className="text-xs text-muted-foreground">
               {balance <= 0
-                ? "You've hit your limit — upgrade to keep building"
+                ? snapshot?.tier === 'pro'
+                  ? "You've run out of balance — top up to keep building"
+                  : "You've hit your limit — upgrade to keep building"
                 : `${balance.toLocaleString()} credits left — don't lose momentum`}
             </span>
             <button
               type="button"
-              onClick={() => setPlanDialogOpen(true)}
+              onClick={openBalanceDialog}
               className="inline-flex items-center gap-1.5 rounded-md border border-foreground/15 bg-foreground/5 px-2.5 py-1 text-xs font-medium text-foreground/70 shrink-0 transition-colors hover:bg-foreground/10"
             >
               <Lightning className="size-3" weight="fill" />
-              Upgrade
+              {snapshot?.tier === 'pro' ? 'Add balance' : 'Upgrade'}
             </button>
           </div>
         )}
@@ -575,6 +589,7 @@ export default function ChatInput({
         </div>
       </div>
       <PlanDialog open={planDialogOpen} onOpenChange={setPlanDialogOpen} />
+      <TopupDialog open={topupDialogOpen} onOpenChange={setTopupDialogOpen} />
     </div>
   )
 }

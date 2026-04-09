@@ -132,7 +132,7 @@ export default function PublishButton({ projectId, project }: PublishButtonProps
           onSuccess: () => setIsDeploying(false),
           onError: (err: unknown) => {
             const resp = (err as { response?: { status?: number } })?.response
-            if (resp?.status === 402) credits.setPlanDialogOpen(true)
+            if (resp?.status === 402) credits.openBalanceDialog()
             else toast.error(err instanceof Error ? err.message : 'Failed to deploy')
             setIsDeploying(false)
           },

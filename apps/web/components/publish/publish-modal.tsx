@@ -138,7 +138,7 @@ export function PublishModal({
           onError: (err: unknown) => {
             const resp = (err as { response?: { status?: number } })?.response
             if (resp?.status === 402) {
-              credits.setPlanDialogOpen(true)
+              credits.openBalanceDialog()
             } else {
               toast.error(err instanceof Error ? err.message : 'Failed to deploy', {})
             }

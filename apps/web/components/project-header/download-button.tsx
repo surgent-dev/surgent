@@ -35,7 +35,7 @@ export default function DownloadButton({ projectId, projectName }: DownloadButto
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 402) {
-        credits.setPlanDialogOpen(true)
+        credits.openBalanceDialog()
       } else {
         toast.error(err instanceof Error ? err.message : 'Download failed')
       }
