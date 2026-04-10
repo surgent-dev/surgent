@@ -52,6 +52,8 @@ export interface Database {
   domain: DomainTable
   domain_webhook_event: DomainWebhookEventTable
   trustmrr_startup: TrustMrrStartupTable
+  opencode_sync_entity: OpencodeSyncEntityTable
+  opencode_sync_op: OpencodeSyncOpTable
 }
 
 export interface UserTable {
@@ -896,4 +898,29 @@ export interface TrustMrrStartupTable {
   syncedAt: Date
   createdAt?: Date
   updatedAt?: Date
+}
+
+export interface OpencodeSyncEntityTable {
+  projectId: string
+  userId: string
+  organizationId: string
+  entity: string
+  id: string
+  sessionId: string | null
+  messageId: string | null
+  payload: unknown
+  createdAt: string | number
+  updatedAt: string | number
+}
+
+export interface OpencodeSyncOpTable {
+  seq: Generated<string | number>
+  projectId: string
+  userId: string
+  organizationId: string
+  entity: string
+  op: string
+  entityId: string
+  payload: unknown | null
+  createdAt: string | number
 }

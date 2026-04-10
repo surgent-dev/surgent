@@ -17,6 +17,7 @@ import billing from './routes/billing'
 import referrals from './routes/referrals'
 import domains, { domainWebhooks } from './routes/domains'
 import startups from './routes/startups'
+import sync from './routes/sync'
 import { auth } from './lib/auth'
 import { config, validateAnalyticsConfig, validateDomainConfig } from './lib/config'
 import { db } from './lib/db'
@@ -211,6 +212,7 @@ app.route('/api/referrals', referrals)
 app.route('/api/domains', domainWebhooks) // Webhook (before auth middleware applies)
 app.route('/api/domains', domains)
 app.route('/api/startups', startups)
+app.route('/api/sync', sync)
 app.route('/mcp', mcp)
 app.route('/preview', preview)
 
