@@ -56,7 +56,10 @@ jobs:
               - bunfig.toml
             gateway:
               - packages/gateway/**
-              - packages/db/**
+              - packages/db/index.ts
+              - packages/db/package.json
+              - packages/db/src/billing_windows.ts
+              - packages/db/src/kysely_db.ts
               - packages/typescript-config/**
               - package.json
               - bun.lock
