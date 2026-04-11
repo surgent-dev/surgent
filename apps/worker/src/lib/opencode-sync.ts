@@ -211,12 +211,24 @@ async function dels(trx: Trx, scope: Scope, ops: z.infer<typeof Delete>[]) {
 // Public API
 // ---------------------------------------------------------------------------
 
+function lock(trx: Trx, scope: Scope) {
+  return sql`select pg_advisory_xact_lock(hashtext(${`opencode-sync:${scope.projectId}`}))`.execute(
+    trx,
+  )
+}
+
 export async function write(scope: Scope, ops: z.infer<typeof Write>[]) {
-  return db.transaction().execute((trx) => writes(trx, scope, ops))
+  return db.transaction().execute(async (trx) => {
+    await lock(trx, scope)
+    return writes(trx, scope, ops)
+  })
 }
 
 export async function del(scope: Scope, ops: z.infer<typeof Delete>[]) {
-  return db.transaction().execute((trx) => dels(trx, scope, ops))
+  return db.transaction().execute(async (trx) => {
+    await lock(trx, scope)
+    return dels(trx, scope, ops)
+  })
 }
 
 export async function pull(scope: Scope, input: z.infer<typeof Pull>) {
@@ -247,9 +259,7 @@ export async function pull(scope: Scope, input: z.infer<typeof Pull>) {
 
 export async function bootstrap(scope: Scope, input: z.infer<typeof Bootstrap>) {
   return db.transaction().execute(async (trx) => {
-    await sql`select pg_advisory_xact_lock(hashtext(${`opencode-sync:${scope.projectId}`}))`.execute(
-      trx,
-    )
+    await lock(trx, scope)
 
     const seq = await max(trx, scope)
 
