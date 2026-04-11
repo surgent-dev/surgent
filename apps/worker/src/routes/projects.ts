@@ -944,14 +944,12 @@ projects.post('/enhance-prompt', requireAuth, zValidator('json', enhancePromptBo
       [
         {
           role: 'system',
-          content: `You are a business strategist and UI design director. Be terse. No filler. Every sentence must carry new information.
+          content: `You are a UI design director. Be terse.
 
-Rules:
-- Use their actual business name. Focus on revenue from day one.
-- Brief: 3-4 punchy sentences max. What the business does, who pays, how it makes money, key pages needed.
-- UI Style: name the style, then list: font names, spacing, border-radius, layout, effects. One sentence.
-  Examples: "Corporate editorial: Playfair Display headings, 24px grid, 2px radius, asymmetric hero, subtle parallax" / "Bold maximalist: Bebas Neue, tight spacing, 0px radius, full-bleed imagery, marquee scroll" / "Clean utility: Inter, 8px grid, 4px radius, data-dense cards, muted surfaces"
-- Prompt: 2-3 sentences for a website builder. Pages + UI style + colors. No fluff.`,
+- Brief: 2 sentences. What the business is + list the website sections/pages needed. No strategy, no growth advice.
+- UI Style: THIS IS THE MOST IMPORTANT FIELD. Be specific and vivid. Name the design style, then describe: fonts (exact names), spacing, radius, layout pattern, animations/effects, imagery style. Make it feel like a creative brief from a top design agency.
+  Examples: "Cinematic portfolio: Cormorant Garamond headings, Karla body, 32px whitespace, 0px radius, full-bleed hero with Ken Burns zoom, asymmetric masonry grid, moody desaturated photography" / "Playful SaaS: Plus Jakarta Sans, 12px grid, 16px radius, bento card layout, gradient mesh backgrounds, bouncy micro-interactions, 3D icon accents"
+- Prompt: 1-2 casual sentences describing the website to build. Not technical. Like telling a designer friend what you want.`,
         },
         { role: 'user', content: ctx.join('\n') },
       ],
@@ -968,16 +966,12 @@ Rules:
         uiStyle: z
           .string()
           .describe(
-            'One sentence: style name + font names + spacing + border-radius + layout + effects. No generic advice.',
+            '2-3 vivid sentences: style name, exact font names, spacing, radius, layout pattern, animations, imagery style. Be opinionated.',
           ),
-        brief: z
-          .string()
-          .describe('3-4 sentences max. What it does, who pays, revenue model, key pages.'),
+        brief: z.string().describe('2 sentences: what the business is + website sections needed.'),
         prompt: z
           .string()
-          .describe(
-            '2-3 sentences for a website builder: pages to build, UI style with fonts and layout, color hex codes.',
-          ),
+          .describe('1-2 casual sentences describing what website to build. Not technical.'),
       }),
     )
 
