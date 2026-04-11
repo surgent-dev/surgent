@@ -5,7 +5,7 @@ export async function up(db: Kysely<any>): Promise<void> {
   await sql`CREATE INDEX IF NOT EXISTS idx_session_token ON session (token)`.execute(db)
 
   // user.email — full scan on every email lookup
-  await sql`CREATE INDEX IF NOT EXISTS idx_user_email ON "user" (email)`.execute(db)
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_email ON "user" (email)`.execute(db)
 
   // account(accountId, providerId) — full scan on every OAuth lookup
   await sql`CREATE INDEX IF NOT EXISTS idx_account_provider ON account ("accountId", "providerId")`.execute(
