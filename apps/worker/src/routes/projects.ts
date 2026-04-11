@@ -958,10 +958,12 @@ Be specific to THIS business. Use their actual name. Focus on revenue from day o
         businessName: z.string(),
         tagline: z.string().describe('Max 8 words'),
         subtitle: z.string().describe('Industry · Location'),
-        colors: z.array(z.string()).length(5),
+        colors: z
+          .array(z.string())
+          .describe('Exactly 5 hex color codes: primary, secondary, accent, light, dark'),
         competitors: z
           .array(z.object({ name: z.string(), url: z.string(), note: z.string() }))
-          .length(3),
+          .describe('Exactly 3 real competitor companies'),
         brief: z
           .string()
           .describe(
@@ -972,8 +974,16 @@ Be specific to THIS business. Use their actual name. Focus on revenue from day o
     )
 
     return c.json(brief)
-  } catch (err) {
-    log.error({ err, userId: user.id }, '[enhance-prompt] brief generation failed')
+  } catch (err: any) {
+    log.error(
+      {
+        userId: user.id,
+        errMsg: err?.message,
+        errName: err?.name,
+        errCause: String(err?.cause ?? ''),
+      },
+      '[enhance-prompt] brief generation failed',
+    )
     return c.json({ error: 'Failed to generate brief. Please try again.' }, 500)
   }
 })
