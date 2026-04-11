@@ -10,6 +10,8 @@ import { createLogger } from '@/lib/logger'
 const REFERRAL_COOKIE_NAME = 'surgent_referral'
 const REFERRAL_SIGNUP_REWARD_USD = 1
 const REFERRAL_CONVERSION_REWARD_USD = 2
+const REFERRAL_HARD_LIMIT = 10
+const REFERRAL_CONVERSION_GATE_THRESHOLD = 3
 const uuid = z.string().uuid()
 const log = createLogger('referrals')
 
@@ -56,6 +58,51 @@ export async function consumeReferralAttribution(
         .executeTakeFirst()
 
       if (!referrer) return null
+
+      // Count existing referrals and conversions for this referrer
+      const [countRow, convertedRow] = await Promise.all([
+        tx
+          .selectFrom('referral')
+          .select(sql<number>`count(*)::int`.as('count'))
+          .where('referrerUserId', '=', referrerUserId)
+          .executeTakeFirst(),
+        tx
+          .selectFrom('referral')
+          .innerJoin('billing_payment', 'billing_payment.organizationId', 'referral.referredUserId')
+          .select(sql<number>`count(distinct referral."referredUserId")::int`.as('count'))
+          .where('referral.referrerUserId', '=', referrerUserId)
+          .where('billing_payment.status', '=', 'paid')
+          .where((eb) =>
+            eb.or([
+              eb('billing_payment.kind', '=', 'topup'),
+              eb('billing_payment.kind', '=', 'subscription'),
+            ]),
+          )
+          .executeTakeFirst(),
+      ])
+
+      const totalReferrals = Number(countRow?.count ?? 0)
+      const conversions = Number(convertedRow?.count ?? 0)
+
+      // Hard limit: 10 referrals max
+      if (totalReferrals >= REFERRAL_HARD_LIMIT) {
+        log.warn(
+          { referrerUserId, totalReferrals },
+          '[REFERRAL] blocked — hard limit of %d reached',
+          REFERRAL_HARD_LIMIT,
+        )
+        return null
+      }
+
+      // Conversion gate: after 3 referrals, need at least 1 conversion
+      if (totalReferrals >= REFERRAL_CONVERSION_GATE_THRESHOLD && conversions < 1) {
+        log.warn(
+          { referrerUserId, totalReferrals, conversions },
+          '[REFERRAL] blocked — %d referrals but no conversions yet',
+          totalReferrals,
+        )
+        return null
+      }
 
       return tx
         .insertInto('referral')
@@ -158,6 +205,17 @@ export async function getReferralStats(userId: string) {
   const converted = Number(convertedRow?.count ?? 0)
   const earnedUsd = Number(rewardRow?.amountMicros ?? 0) / 100_000_000
 
+  const reachedHardLimit = signups >= REFERRAL_HARD_LIMIT
+  const needsConversion = signups >= REFERRAL_CONVERSION_GATE_THRESHOLD && converted < 1
+  const canRefer = !reachedHardLimit && !needsConversion
+
+  let message: string | null = null
+  if (reachedHardLimit) {
+    message = `You've reached the maximum of ${REFERRAL_HARD_LIMIT} referrals.`
+  } else if (needsConversion) {
+    message = `At least 1 of your ${signups} referred users needs to make a purchase before you can invite more.`
+  }
+
   return {
     link: `${config.server.clientOrigin}?ref=${userId}`,
     signups,
@@ -165,7 +223,18 @@ export async function getReferralStats(userId: string) {
     earnedUsd,
     signupRewardUsd: REFERRAL_SIGNUP_REWARD_USD,
     conversionRewardUsd: REFERRAL_CONVERSION_REWARD_USD,
+    maxReferrals: REFERRAL_HARD_LIMIT,
+    canRefer,
+    reachedHardLimit,
+    needsConversion,
+    message,
   }
 }
 
-export { REFERRAL_COOKIE_NAME, REFERRAL_SIGNUP_REWARD_USD, REFERRAL_CONVERSION_REWARD_USD }
+export {
+  REFERRAL_COOKIE_NAME,
+  REFERRAL_SIGNUP_REWARD_USD,
+  REFERRAL_CONVERSION_REWARD_USD,
+  REFERRAL_HARD_LIMIT,
+  REFERRAL_CONVERSION_GATE_THRESHOLD,
+}
