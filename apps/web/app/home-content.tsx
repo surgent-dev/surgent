@@ -537,16 +537,16 @@ function IndexContent() {
           <p className="text-[15px] text-[#475467] dark:text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
             Join thousands of founders who launched their business with a single prompt.
           </p>
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/signup"
-              className="btn-brand inline-flex items-center gap-2 h-11 px-7 rounded-full font-display text-[0.95rem] font-medium cursor-pointer"
+              className="btn-brand inline-flex items-center justify-center gap-2 h-11 w-full sm:w-auto px-7 rounded-full font-display text-[0.95rem] font-medium cursor-pointer whitespace-nowrap"
             >
-              Start building <ArrowRight className="h-4 w-4" />
+              Start building <ArrowRight className="h-4 w-4 shrink-0" />
             </Link>
             <Link
               href="/inspirations"
-              className="btn-brand-secondary inline-flex items-center h-11 px-6 rounded-full font-display text-[0.95rem] font-medium"
+              className="btn-brand-secondary inline-flex items-center justify-center h-11 w-full sm:w-auto px-6 rounded-full font-display text-[0.95rem] font-medium whitespace-nowrap"
             >
               Browse inspirations
             </Link>

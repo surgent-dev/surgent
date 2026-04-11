@@ -1,6 +1,20 @@
 'use client'
 
-import { Check, CircleNotch } from '@phosphor-icons/react'
+import {
+  CircleNotch,
+  CurrencyDollar,
+  Eye,
+  EyeSlash,
+  Globe,
+  Key,
+  Lightning,
+  Rocket,
+  Storefront,
+  Users,
+  Cube,
+  Sparkle,
+  type Icon,
+} from '@phosphor-icons/react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -9,16 +23,21 @@ import { useBillingCheckout, useSubscription } from '@/hooks/use-subscription'
 import { track } from '@/lib/track'
 import { cn } from '@/lib/utils'
 
-const FREE_FEATURES = ['1 project', 'Community support', 'Basic AI usage', 'Public projects only']
+const FREE_FEATURES: { label: string; icon: Icon; color: string }[] = [
+  { label: '1 project', icon: Cube, color: '#737373' },
+  { label: 'Community support', icon: Users, color: '#737373' },
+  { label: 'Basic AI usage', icon: Sparkle, color: '#737373' },
+  { label: 'Public projects only', icon: Eye, color: '#737373' },
+]
 
-const PRO_FEATURES = [
-  '$20/mo AI credits included',
-  'Unlimited projects',
-  'Private projects',
-  'One-click deploy with custom domain',
-  'Sell on marketplace',
-  'Bring your own API keys',
-  'Priority support',
+const PRO_FEATURES: { label: string; icon: Icon; color: string }[] = [
+  { label: '$20/mo AI credits included', icon: Lightning, color: '#f59e0b' },
+  { label: 'Unlimited projects', icon: Rocket, color: '#3b82f6' },
+  { label: 'Private projects', icon: EyeSlash, color: '#8b5cf6' },
+  { label: 'One-click deploy with custom domain', icon: Globe, color: '#10b981' },
+  { label: 'Sell on marketplace', icon: Storefront, color: '#ec4899' },
+  { label: 'Bring your own API keys', icon: Key, color: '#f97316' },
+  { label: 'Priority support', icon: CurrencyDollar, color: '#06b6d4' },
 ]
 
 interface PlanDialogProps {
@@ -134,11 +153,16 @@ export default function PlanDialog({ open, onOpenChange }: PlanDialogProps) {
 
               <p className="mt-2 text-xs text-muted-foreground">Get started and explore for free</p>
 
-              <div className="mt-6 flex-1 space-y-3">
-                {FREE_FEATURES.map((feature) => (
-                  <div key={feature} className="flex items-center gap-2.5">
-                    <Check weight="bold" className="size-3.5 text-muted-foreground shrink-0" />
-                    <span className="text-xs text-muted-foreground">{feature}</span>
+              <div className="mt-6 flex-1 space-y-2.5">
+                {FREE_FEATURES.map(({ label, icon: FIcon, color }) => (
+                  <div key={label} className="flex items-center gap-2.5">
+                    <div
+                      className="size-6 rounded-md flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: `${color}15` }}
+                    >
+                      <FIcon weight="duotone" className="size-3.5" style={{ color }} />
+                    </div>
+                    <span className="text-xs text-muted-foreground">{label}</span>
                   </div>
                 ))}
               </div>
@@ -189,11 +213,16 @@ export default function PlanDialog({ open, onOpenChange }: PlanDialogProps) {
                   : 'Billed monthly'}
               </p>
 
-              <div className="mt-6 flex-1 space-y-3">
-                {PRO_FEATURES.map((feature) => (
-                  <div key={feature} className="flex items-center gap-2.5">
-                    <Check weight="bold" className="size-3.5 text-brand shrink-0" />
-                    <span className="text-xs">{feature}</span>
+              <div className="mt-6 flex-1 space-y-2.5">
+                {PRO_FEATURES.map(({ label, icon: PIcon, color }) => (
+                  <div key={label} className="flex items-center gap-2.5">
+                    <div
+                      className="size-6 rounded-md flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: `${color}15` }}
+                    >
+                      <PIcon weight="duotone" className="size-3.5" style={{ color }} />
+                    </div>
+                    <span className="text-xs">{label}</span>
                   </div>
                 ))}
               </div>

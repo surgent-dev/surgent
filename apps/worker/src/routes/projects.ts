@@ -907,6 +907,77 @@ projects.delete('/:id', zValidator('param', idParam), async (c) => {
   return c.json({ deleted: true })
 })
 
+// POST /projects/enhance-prompt - Generate a structured business brief from onboarding data
+const enhancePromptBody = z.object({
+  identity: z.string().optional(),
+  goal: z.string().optional(),
+  industry: z.string().optional(),
+  businessName: z.string().optional(),
+  location: z.string().optional(),
+  stage: z.string().optional(),
+  audience: z.string().optional(),
+  referenceUrls: z.array(z.string().url()).max(5).optional(),
+  prompt: z.string().trim().min(1).max(5000),
+})
+
+projects.post('/enhance-prompt', requireAuth, zValidator('json', enhancePromptBody), async (c) => {
+  const user = c.get('user')!
+  const organizationId = c.get('session')?.activeOrganizationId
+  if (!organizationId) return c.json({ error: 'No active organization' }, 400)
+
+  try {
+    const body = c.req.valid('json')
+
+    const ctx: string[] = []
+    if (body.businessName) ctx.push(`Business name: ${body.businessName}`)
+    if (body.identity) ctx.push(`Founder role: ${body.identity}`)
+    if (body.industry) ctx.push(`Industry: ${body.industry}`)
+    if (body.location) ctx.push(`Location: ${body.location}`)
+    if (body.audience) ctx.push(`Target audience: ${body.audience}`)
+    if (body.goal) ctx.push(`Business goal: ${body.goal}`)
+    if (body.stage) ctx.push(`Stage: ${body.stage}`)
+    if (body.referenceUrls?.length) ctx.push(`Reference sites: ${body.referenceUrls.join(', ')}`)
+    ctx.push(`Description: ${body.prompt}`)
+
+    const { generateJson } = await import('@/lib/ai')
+    const brief = await generateJson(
+      [
+        {
+          role: 'system',
+          content: `You are a business strategist. Given a business profile, produce a concise brief.
+
+Be specific to THIS business. Use their actual name. Focus on revenue from day one.
+
+- Colors: 5 hex codes (primary, secondary, accent, light, dark)
+- Competitors: 3 real companies with working URLs
+- Brief: one detailed paragraph (6-8 sentences) covering what the business does, who it serves, how it makes money, key website pages needed, and the 30-day launch plan`,
+        },
+        { role: 'user', content: ctx.join('\n') },
+      ],
+      z.object({
+        businessName: z.string(),
+        tagline: z.string().describe('Max 8 words'),
+        subtitle: z.string().describe('Industry · Location'),
+        colors: z.array(z.string()).length(5),
+        competitors: z
+          .array(z.object({ name: z.string(), url: z.string(), note: z.string() }))
+          .length(3),
+        brief: z
+          .string()
+          .describe(
+            '6-8 sentence business strategy covering model, audience, website structure, and launch plan',
+          ),
+        prompt: z.string().describe('Concise prompt for an AI website builder, 3-4 sentences'),
+      }),
+    )
+
+    return c.json(brief)
+  } catch (err) {
+    log.error({ err, userId: user.id }, '[enhance-prompt] brief generation failed')
+    return c.json({ error: 'Failed to generate brief. Please try again.' }, 500)
+  }
+})
+
 // POST /projects - Create project + fire async initialization in the background
 projects.post(
   '/',
@@ -927,9 +998,11 @@ projects.post(
               location: z.string().optional(),
               stage: z.string().optional(),
               audience: z.string().optional(),
+              referenceUrls: z.array(z.string()).optional(),
               prompt: z.string().trim().min(1).max(20000),
             })
             .optional(),
+          brandDna: z.any().optional(),
         })
         .optional(),
     }),
@@ -1045,6 +1118,31 @@ projects.post(
     }
   },
 )
+
+// POST /projects/:id/brand-dna - Generate brand DNA from onboarding data
+projects.post('/:id/brand-dna', zValidator('param', idParam), async (c) => {
+  try {
+    const { id } = c.req.valid('param')
+    const project = await getProjectWithAuth(id, c.get('user')!)
+    const onboarding = (project.metadata as Record<string, any>)?.onboarding
+    if (!onboarding?.prompt) {
+      return c.json({ error: 'No onboarding data found' }, 400)
+    }
+
+    const { generateBrandDna } = await import('@/controllers/brand-dna')
+    const brandDna = await generateBrandDna(onboarding)
+
+    const { mergeProjectMetadata } = await import('@/services/projects')
+    await mergeProjectMetadata(id, { brandDna })
+
+    return c.json(brandDna)
+  } catch (err) {
+    console.error('[brand-dna] generation failed', err)
+    const message = err instanceof Error ? err.message : 'Brand DNA generation failed'
+    return c.json({ error: message }, 500)
+  }
+})
+
 // POST /projects/:id/deploy - Deploy project to Cloudflare
 projects.post(
   '/:id/deploy',
