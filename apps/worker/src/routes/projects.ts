@@ -944,19 +944,14 @@ projects.post('/enhance-prompt', requireAuth, zValidator('json', enhancePromptBo
       [
         {
           role: 'system',
-          content: `You are a business strategist and UI design director. Given a business profile, produce a concise brief with a targeted visual direction.
+          content: `You are a business strategist and UI design director. Be terse. No filler. Every sentence must carry new information.
 
-Be specific to THIS business. Use their actual name. Focus on revenue from day one.
-
-- Colors: 5 hex codes (primary, secondary, accent, light, dark) that match the industry and brand personality
-- Competitors: 3 real companies with working URLs
-- Brief: one detailed paragraph (6-8 sentences) covering what the business does, who it serves, how it makes money, key website pages needed, and the 30-day launch plan
-- UI Style: a specific, opinionated visual direction for the website. Do NOT give generic advice. Instead, name a concrete design style and describe exactly how it should look. Examples of specificity:
-  - Law firm → "Corporate editorial: full-width hero with serif headings (Playfair Display), navy/gold palette, asymmetric grid, subtle parallax, large whitespace, testimonial cards with subtle drop shadows"
-  - Streetwear brand → "Bold maximalist: oversized type (Bebas Neue), high-contrast black/neon, full-bleed product photography, marquee scrolling text, brutalist grid, hover-triggered animations"
-  - SaaS dashboard → "Clean utility: Inter font, 4px border-radius, muted gray surfaces, accent-colored CTAs, tight 8px spacing grid, data-dense cards, minimal illustration"
-  - Bakery → "Warm artisanal: rounded sans-serif (Nunito), cream/terracotta palette, hand-drawn icon accents, soft shadows, organic flowing sections, lifestyle photography with warm color grading"
-  Match the style to the specific industry, audience, and brand personality. Be precise about typography, spacing, layout patterns, and visual effects.`,
+Rules:
+- Use their actual business name. Focus on revenue from day one.
+- Brief: 3-4 punchy sentences max. What the business does, who pays, how it makes money, key pages needed.
+- UI Style: name the style, then list: font names, spacing, border-radius, layout, effects. One sentence.
+  Examples: "Corporate editorial: Playfair Display headings, 24px grid, 2px radius, asymmetric hero, subtle parallax" / "Bold maximalist: Bebas Neue, tight spacing, 0px radius, full-bleed imagery, marquee scroll" / "Clean utility: Inter, 8px grid, 4px radius, data-dense cards, muted surfaces"
+- Prompt: 2-3 sentences for a website builder. Pages + UI style + colors. No fluff.`,
         },
         { role: 'user', content: ctx.join('\n') },
       ],
@@ -973,17 +968,15 @@ Be specific to THIS business. Use their actual name. Focus on revenue from day o
         uiStyle: z
           .string()
           .describe(
-            'Specific UI style directive: name the design style, then describe exact typography (font names), spacing, border-radius, layout pattern, visual effects, and photography style. 2-3 sentences, no generic advice.',
+            'One sentence: style name + font names + spacing + border-radius + layout + effects. No generic advice.',
           ),
         brief: z
           .string()
-          .describe(
-            '6-8 sentence business strategy covering model, audience, website structure, and launch plan. End with a sentence describing the exact UI style to use.',
-          ),
+          .describe('3-4 sentences max. What it does, who pays, revenue model, key pages.'),
         prompt: z
           .string()
           .describe(
-            'Detailed prompt for an AI website builder. 4-6 sentences. Include: what to build, key pages, the exact UI style (typography, layout, spacing, visual effects), and the color palette to use. Be specific enough that a developer could build it without asking questions.',
+            '2-3 sentences for a website builder: pages to build, UI style with fonts and layout, color hex codes.',
           ),
       }),
     )
