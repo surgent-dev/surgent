@@ -7,15 +7,18 @@ import {
   Buildings,
   DotsThree,
   ForkKnife,
+  Globe,
   GraduationCap,
   Laptop,
   MagnifyingGlass,
   Megaphone,
   Palette,
+  Plus,
   Rocket,
   ShoppingBag,
   Sparkle,
   Storefront,
+  Trash,
   User,
   Wrench,
 } from '@phosphor-icons/react'
@@ -110,6 +113,7 @@ type Data = {
   location: string
   stage: string
   audience: string
+  referenceUrls: string[]
 }
 
 const stepMeta = [
@@ -121,6 +125,10 @@ const stepMeta = [
   {
     question: 'Who are your customers?',
     hint: 'So we write the right messaging for your audience',
+  },
+  {
+    question: 'Any websites you love?',
+    hint: "Share sites you like or your own — we'll use them as inspiration",
   },
   { question: 'Review & generate', hint: 'Edit anything before we build' },
 ]
@@ -214,6 +222,10 @@ function buildPrompt(d: Data, initialPrompt: string): string {
   }
   if (features.size) prompt += ` Include: ${[...features].join(', ')}.`
 
+  if (d.referenceUrls.length > 0) {
+    prompt += ` Use these websites as design and style inspiration: ${d.referenceUrls.join(', ')}.`
+  }
+
   return prompt
 }
 
@@ -241,12 +253,15 @@ function OnboardingContent() {
     location: '',
     stage: '',
     audience: '',
+    referenceUrls: [],
   })
   const [finalPrompt, setFinalPrompt] = useState('')
   const [advancing, setAdvancing] = useState(false)
+  const [urlInput, setUrlInput] = useState('')
   const goalInputRef = useRef<HTMLInputElement>(null)
   const industryInputRef = useRef<HTMLInputElement>(null)
   const nameRef = useRef<HTMLInputElement>(null)
+  const urlInputRef = useRef<HTMLInputElement>(null)
   const promptRef = useRef<HTMLTextAreaElement>(null)
 
   const reviewStep = stepMeta.length - 1
@@ -263,7 +278,10 @@ function OnboardingContent() {
         const prompt = finalPrompt.trim()
         if (!prompt) return
         try {
-          sessionStorage.setItem('surgent:onboarding', JSON.stringify({ ...d, prompt }))
+          sessionStorage.setItem(
+            'surgent:onboarding',
+            JSON.stringify({ ...d, referenceUrls: d.referenceUrls, prompt }),
+          )
         } catch {}
         router.push(`/project/new?prompt=${encodeURIComponent(prompt)}`)
       }
@@ -292,6 +310,7 @@ function OnboardingContent() {
     if (step === 1) setTimeout(() => goalInputRef.current?.focus(), 400)
     if (step === 2) setTimeout(() => industryInputRef.current?.focus(), 400)
     if (step === 3) setTimeout(() => nameRef.current?.focus(), 400)
+    if (step === 6) setTimeout(() => urlInputRef.current?.focus(), 400)
     if (step === reviewStep) setTimeout(() => promptRef.current?.focus(), 400)
   }, [step, reviewStep])
 
@@ -300,14 +319,27 @@ function OnboardingContent() {
   const isCustomIndustry =
     data.industry !== '' && !industryOptions.some((o) => o.value === data.industry)
 
+  const addReferenceUrl = useCallback(() => {
+    const url = urlInput.trim()
+    if (!url) return
+    setData((d) => ({ ...d, referenceUrls: [...d.referenceUrls, url] }))
+    setUrlInput('')
+    setTimeout(() => urlInputRef.current?.focus(), 50)
+  }, [urlInput])
+
+  const removeReferenceUrl = useCallback((index: number) => {
+    setData((d) => ({ ...d, referenceUrls: d.referenceUrls.filter((_, i) => i !== index) }))
+  }, [])
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (
-      e.key === 'Enter' &&
-      !e.shiftKey &&
-      !(e.target instanceof HTMLTextAreaElement) &&
-      (step === 1 || step === 2 || step === 3)
-    )
-      advance(data)
+    if (e.key === 'Enter' && !e.shiftKey && !(e.target instanceof HTMLTextAreaElement)) {
+      if (step === 6) {
+        e.preventDefault()
+        addReferenceUrl()
+      } else if (step === 1 || step === 2 || step === 3) {
+        advance(data)
+      }
+    }
   }
 
   return (
@@ -540,7 +572,68 @@ function OnboardingContent() {
               </div>
             )}
 
-            {/* Step 6: Review */}
+            {/* Step 6: Reference websites */}
+            {step === 6 && (
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Globe
+                      weight="regular"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40"
+                    />
+                    <input
+                      ref={urlInputRef}
+                      type="url"
+                      value={urlInput}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                      placeholder="e.g. stripe.com, apple.com"
+                      className="w-full h-11 pl-9 pr-4 rounded-lg border border-border bg-muted/70 text-base sm:text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors"
+                    />
+                  </div>
+                  <button
+                    onClick={addReferenceUrl}
+                    disabled={!urlInput.trim()}
+                    className="inline-flex items-center justify-center h-11 w-11 rounded-lg border border-border hover:border-foreground/15 hover:bg-muted/50 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed transition-all duration-200"
+                  >
+                    <Plus weight="bold" className="w-4 h-4 text-foreground/70" />
+                  </button>
+                </div>
+                {data.referenceUrls.length > 0 && (
+                  <div className="space-y-2">
+                    {data.referenceUrls.map((url, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg border border-border bg-muted/30 group"
+                      >
+                        <Globe
+                          weight="regular"
+                          className="w-4 h-4 text-muted-foreground/50 shrink-0"
+                        />
+                        <span className="text-[13px] text-foreground/80 flex-1 truncate">
+                          {url}
+                        </span>
+                        <button
+                          onClick={() => removeReferenceUrl(i)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        >
+                          <Trash
+                            weight="regular"
+                            className="w-3.5 h-3.5 text-muted-foreground/40 hover:text-red-400 transition-colors"
+                          />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {data.referenceUrls.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground/40 text-center pt-2">
+                    Add websites you admire or your own — we'll match the style and vibe
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Step 7: Review */}
             {step === reviewStep && (
               <div className="space-y-8">
                 {/* Summary sentence */}
@@ -605,7 +698,18 @@ function OnboardingContent() {
                       {' stage.'}
                     </>
                   )}
-                  {Object.values(data).every((v) => !v) && (
+                  {data.referenceUrls.length > 0 && (
+                    <>
+                      {' Inspired by '}
+                      <span className="font-medium text-cyan-500 underline decoration-wavy decoration-cyan-400/25 underline-offset-3 drop-shadow-[0_0_8px_rgba(6,182,212,0.2)]">
+                        {data.referenceUrls.length === 1
+                          ? data.referenceUrls[0]
+                          : `${data.referenceUrls.length} websites`}
+                      </span>
+                      .
+                    </>
+                  )}
+                  {Object.values(data).every((v) => (Array.isArray(v) ? v.length === 0 : !v)) && (
                     <span className="text-muted-foreground/50">
                       No details added yet — edit the prompt below.
                     </span>
@@ -647,6 +751,7 @@ function OnboardingContent() {
                   </button>
                 )}
                 {(step === 3 ||
+                  step === 6 ||
                   (step === 1 && isCustomGoal) ||
                   (step === 2 && isCustomIndustry)) && (
                   <button

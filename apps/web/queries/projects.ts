@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { TERMINAL_DEPLOYMENT_STATUSES } from '@/lib/deployment'
 import { http } from '@/lib/http'
-import { CreateProjectResponseSchema, ProjectSchema, ProjectsSchema } from '@/lib/schemas/project'
+import {
+  CreateProjectResponseSchema,
+  ProjectSchema,
+  ProjectsSchema,
+  type BrandDna,
+} from '@/lib/schemas/project'
 
 const PROJECT_POLL_INTERVAL_MS = 1000
 
@@ -47,6 +52,7 @@ type CreateProjectArgs = {
       location?: string
       stage?: string
       audience?: string
+      referenceUrls?: string[]
       prompt: string
     }
   }
@@ -574,5 +580,20 @@ export function useLatestDeploymentQuery(projectId: string | undefined) {
     },
     refetchIntervalInBackground: false,
     staleTime: 1000,
+  })
+}
+
+// Brand DNA — regenerate for existing project (uses worker)
+async function generateBrandDnaReq({ id }: { id: string }): Promise<BrandDna> {
+  return http.post(`api/projects/${id}/brand-dna`).json()
+}
+
+export function useGenerateBrandDna() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: generateBrandDnaReq,
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['project', vars.id] })
+    },
   })
 }

@@ -448,11 +448,144 @@ export interface ProjectOnboardingMetadata {
   location?: string
   stage?: string
   audience?: string
+  referenceUrls?: string[]
   prompt: string
+}
+
+export interface BrandDnaColors {
+  primary: string
+  secondary: string
+  accent: string
+  background: string
+  text: string
+}
+
+export interface BrandDnaTypography {
+  heading: string
+  body: string
+}
+
+export interface BrandDnaCompetitor {
+  name: string
+  strengths: string[]
+  weaknesses: string[]
+}
+
+export interface BrandDnaCoreFeature {
+  name: string
+  description: string
+  priority: 'must-have' | 'nice-to-have'
+}
+
+export interface BrandDnaMarketingChannel {
+  channel: string
+  reason: string
+}
+
+export interface BrandDnaPricingTier {
+  name: string
+  price: string
+  description: string
+  features: string[]
+}
+
+export interface BrandDnaSeoKeyword {
+  keyword: string
+  intent: 'informational' | 'commercial' | 'transactional' | 'navigational'
+  difficulty: 'low' | 'medium' | 'high'
+}
+
+export interface BrandDnaContentPost {
+  day: string
+  platform: string
+  format: string
+  topic: string
+  caption: string
+}
+
+export interface BrandDnaAdVariation {
+  platform: string
+  headline: string
+  body: string
+  cta: string
+}
+
+export interface BrandDna {
+  brand: {
+    tagline: string
+    mission: string
+    voice: string
+    personality: string[]
+  }
+  colors: BrandDnaColors
+  typography: BrandDnaTypography
+  style: string[]
+  websiteCopy: {
+    heroHeadline: string
+    heroSubheadline: string
+    ctaButton: string
+    aboutBio: string
+    metaDescription: string
+    valuePropositions: string[]
+  }
+  socialProfiles: {
+    instagram: string
+    twitter: string
+    linkedin: string
+    tiktok: string
+    hashtags: string[]
+  }
+  elevatorPitch: {
+    thirtySeconds: string
+    sixtySeconds: string
+  }
+  idealCustomer: {
+    name: string
+    age: number
+    location: string
+    occupation: string
+    story: string
+    frustrations: string[]
+    goals: string[]
+    objections: string[]
+  }
+  pricing: {
+    strategy: string
+    tiers: BrandDnaPricingTier[]
+  }
+  seoKeywords: BrandDnaSeoKeyword[]
+  contentCalendar: BrandDnaContentPost[]
+  adCopy: BrandDnaAdVariation[]
+  marketResearch: {
+    targetAudience: {
+      demographics: string
+      psychographics: string
+      painPoints: string[]
+      desires: string[]
+    }
+    competitors: BrandDnaCompetitor[]
+    positioning: string
+    differentiators: string[]
+    trends: string[]
+  }
+  mvpStrategy: {
+    coreFeatures: BrandDnaCoreFeature[]
+    contentPriorities: string[]
+    marketingChannels: BrandDnaMarketingChannel[]
+    quickWins: string[]
+    keyMetrics: string[]
+    milestones: {
+      thirtyDays: string[]
+      sixtyDays: string[]
+      ninetyDays: string[]
+    }
+  }
+  generatedAt: string
 }
 
 export interface ProjectMetadata {
   onboarding?: ProjectOnboardingMetadata
+  brandDna?: BrandDna
   workingDirectory?: string
   processName?: string
   startCommand?: string

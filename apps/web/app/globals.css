@@ -1325,6 +1325,10 @@ iframe[src*="goentri.com"] {
   animation-delay: 2s;
 }
 
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
 /* ─── Sonner toast overrides ─── */
 
 [data-sonner-toaster] {
