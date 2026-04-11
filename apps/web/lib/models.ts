@@ -49,16 +49,6 @@ export const MODELS: ProviderModel[] = [
     badgeColor: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
   },
   {
-    id: 'glm-5',
-    name: 'GLM 5',
-    providerId: 'opencode',
-    providerName: 'OpenCode',
-    limit: { context: 200000 },
-    icon: '/zai-logo.svg',
-    badge: 'Pro',
-    badgeColor: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
-  },
-  {
     id: 'gemini-3-pro',
     name: 'Gemini 3 Pro',
     providerId: 'opencode',

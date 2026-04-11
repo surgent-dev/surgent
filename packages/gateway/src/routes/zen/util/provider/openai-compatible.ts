@@ -29,7 +29,16 @@ export const oaCompatHelper: ProviderHelper = () => ({
   },
   modifyBody: (body: Record<string, any>) => {
     return {
-      ...body,
+      model: body.model,
+      messages: body.messages,
+      max_tokens: body.max_tokens,
+      temperature: body.temperature,
+      top_p: body.top_p,
+      stop: body.stop,
+      tools: body.tools,
+      tool_choice: body.tool_choice,
+      response_format: body.response_format,
+      stream: body.stream,
       ...(body.stream ? { stream_options: { include_usage: true } } : {}),
     }
   },
@@ -244,8 +253,15 @@ export function fromOaCompatibleResponse(resp: any): CommonResponse {
 
   const content: any[] = []
 
-  if (typeof message.content === 'string' && message.content.length > 0) {
-    content.push({ type: 'text', text: message.content })
+  // Together AI returns GLM reasoning in message.reasoning with empty content
+  const textContent =
+    typeof message.content === 'string' && message.content.length > 0
+      ? message.content
+      : typeof message.reasoning === 'string' && message.reasoning.length > 0
+        ? message.reasoning
+        : null
+  if (textContent) {
+    content.push({ type: 'text', text: textContent })
   }
 
   if (Array.isArray(message.tool_calls)) {
@@ -441,10 +457,12 @@ export function fromOaCompatibleChunk(chunk: string): CommonChunk | string {
     choices: [],
   }
 
-  if (delta.content) {
+  // Together AI streams GLM reasoning in delta.reasoning, content in delta.content
+  const deltaContent = delta.content || delta.reasoning
+  if (deltaContent) {
     result.choices.push({
       index: choice.index ?? 0,
-      delta: { content: delta.content },
+      delta: { content: deltaContent },
       finish_reason: null,
     })
   }

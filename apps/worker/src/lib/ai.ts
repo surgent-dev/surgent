@@ -1,6 +1,11 @@
 import { generateObject } from 'ai'
-import { google } from '@ai-sdk/google'
+import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
+
+const together = createOpenAI({
+  baseURL: 'https://api.together.xyz/v1',
+  apiKey: process.env.TOGETHER_API_KEY,
+})
 
 export async function generateJson<T>(
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
@@ -13,7 +18,7 @@ export async function generateJson<T>(
     .join('\n\n')
 
   const { object } = await generateObject({
-    model: google('gemini-2.5-flash'),
+    model: together('zai-org/GLM-5.1'),
     system,
     prompt,
     schema,
