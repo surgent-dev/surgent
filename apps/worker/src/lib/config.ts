@@ -94,6 +94,7 @@ export const config = {
     openaiKey: env.OPENAI_API_KEY,
     heliconeKey: env.HELICONE_API_KEY,
     googleKey: env.GOOGLE_GENERATIVE_AI_API_KEY || env.GOOGLE_API_KEY,
+    gatewayKey: env.AI_GATEWAY_API_KEY,
   },
   vercel: {
     apiKey: env.VERCEL_API_KEY,

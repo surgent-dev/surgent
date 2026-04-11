@@ -15,6 +15,9 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "3.0.95",
+    "@ai-sdk/google": "3.0.61",
+    "@ai-sdk/openai": "3.0.52",
     "@aws-sdk/client-s3": "3.978.0",
     "@aws-sdk/s3-request-presigner": "3.978.0",
     "@better-auth/oauth-provider": "1.4.18",
@@ -31,7 +34,9 @@
     "@octokit/webhooks": "^14.2.0",
     "@repo/db": "*",
     "@types/pg": "^8.15.6",
+    "ai": "6.0.156",
     "better-auth": "1.4.18",
+    "blake3-wasm": "2.1.5",
     "cloudflare": "^5.1.0",
     "dotenv": "^17.2.3",
     "dub": "0.71.5",
@@ -50,6 +55,7 @@
     "resend": "6.10.0",
     "strip-json-comments": "^5.0.1",
     "stripe": "20.4.1",
+    "tar": "^6.2.1",
     "wrangler": "^4.0.0",
     "zod": "^4.1.12"
   },

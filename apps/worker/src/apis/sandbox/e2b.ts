@@ -45,9 +45,15 @@ class E2BSandboxImpl implements Sandbox {
   }
 
   async clone(url: string, dir: string) {
-    await this.exec(`git clone --depth 1 ${JSON.stringify(url)} ${JSON.stringify(dir)}`, {
-      timeout: 120_000,
-    })
+    const res = await this.exec(
+      `git clone --depth 1 ${JSON.stringify(url)} ${JSON.stringify(dir)}`,
+      {
+        timeout: 120_000,
+      },
+    )
+    if (res.code !== 0) {
+      throw new Error(`Failed to clone repository: ${res.output || 'git clone exited non-zero'}`)
+    }
   }
 
   host(port: number) {

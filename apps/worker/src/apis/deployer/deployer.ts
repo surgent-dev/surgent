@@ -8,6 +8,14 @@ const log = createLogger('deployer')
 
 type AssetFile = { path: string; content: Buffer; hash: string }
 
+const ASSET_UPLOAD_CONCURRENCY = 3
+const MAX_ASSET_UPLOAD_ATTEMPTS = 5
+const RETRIABLE_ASSET_UPLOAD_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504])
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 /**
  * Main deployment orchestrator using Cloudflare SDK
  * Handles both simple deployments and deployments with static assets
@@ -44,11 +52,14 @@ export class WorkerDeployer {
     }
 
     // Prepare asset files with hashes
-    const assetFiles: AssetFile[] = []
+    const assetFilesByHash = new Map<string, AssetFile>()
     for (const [path, info] of Object.entries(assetsManifest)) {
       const content = fileContents.get(path)
-      if (content) {
-        assetFiles.push({ path, content, hash: info.hash })
+      if (!content) {
+        throw new Error(`Asset content missing for ${path}`)
+      }
+      if (!assetFilesByHash.has(info.hash)) {
+        assetFilesByHash.set(info.hash, { path, content, hash: info.hash })
       }
     }
 
@@ -73,7 +84,7 @@ export class WorkerDeployer {
     let completionJwt = uploadJwt
     if (buckets && buckets.length > 0) {
       log.debug({ buckets: buckets.length }, 'uploading asset buckets')
-      completionJwt = await this.uploadAssetBuckets(buckets, assetFiles, uploadJwt)
+      completionJwt = await this.uploadAssetBuckets(buckets, assetFilesByHash, uploadJwt)
     } else {
       log.debug('all assets already cached')
     }
@@ -189,17 +200,48 @@ export class WorkerDeployer {
    */
   private async uploadAssetBuckets(
     buckets: string[][],
-    assetFiles: AssetFile[],
+    assetFilesByHash: Map<string, AssetFile>,
     uploadJwt: string,
   ): Promise<string> {
-    let completionJwt = uploadJwt
+    let completionJwt: string | undefined
+    let nextBucketIndex = 0
+    const workerCount = Math.min(ASSET_UPLOAD_CONCURRENCY, buckets.length)
 
-    for (let i = 0; i < buckets.length; i++) {
-      const bucket = buckets[i]!
+    const uploadNextBucket = async () => {
+      while (nextBucketIndex < buckets.length) {
+        const bucketIndex = nextBucketIndex++
+        const jwt = await this.uploadAssetBucket(
+          buckets[bucketIndex]!,
+          bucketIndex,
+          buckets.length,
+          assetFilesByHash,
+          uploadJwt,
+        )
+        if (jwt) completionJwt = jwt
+      }
+    }
+
+    await Promise.all(Array.from({ length: workerCount }, () => uploadNextBucket()))
+
+    if (!completionJwt) {
+      throw new Error('Failed to complete asset upload')
+    }
+
+    return completionJwt
+  }
+
+  private async uploadAssetBucket(
+    bucket: string[],
+    bucketIndex: number,
+    bucketCount: number,
+    assetFilesByHash: Map<string, AssetFile>,
+    uploadJwt: string,
+  ): Promise<string | undefined> {
+    for (let attempt = 0; attempt < MAX_ASSET_UPLOAD_ATTEMPTS; attempt++) {
       const formData = new FormData()
 
       for (const hash of bucket) {
-        const file = assetFiles.find((f) => f.hash === hash)
+        const file = assetFilesByHash.get(hash)
         if (!file) {
           throw new Error(`Asset with hash ${hash} not found`)
         }
@@ -207,29 +249,42 @@ export class WorkerDeployer {
         formData.append(hash, blob, hash)
       }
 
-      log.debug({ bucket: `${i + 1}/${buckets.length}` }, 'uploading bucket')
-
-      const response = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/workers/assets/upload?base64=true`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${completionJwt}` },
-          body: formData,
-        },
+      log.debug(
+        { bucket: `${bucketIndex + 1}/${bucketCount}`, attempt: attempt + 1 },
+        'uploading bucket',
       )
 
-      if (!response.ok) {
+      try {
+        const response = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/workers/assets/upload?base64=true`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${uploadJwt}` },
+            body: formData,
+          },
+        )
+
+        if (response.ok) {
+          if (response.status !== 201) return undefined
+          const data: any = await response.json()
+          return data?.result?.jwt
+        }
+
         const error = await response.text()
-        throw new Error(`Failed to upload assets: ${response.status} - ${error}`)
+        if (
+          attempt === MAX_ASSET_UPLOAD_ATTEMPTS - 1 ||
+          !RETRIABLE_ASSET_UPLOAD_STATUS_CODES.has(response.status)
+        ) {
+          throw new Error(`Failed to upload assets: ${response.status} - ${error}`)
+        }
+      } catch (error) {
+        if (attempt === MAX_ASSET_UPLOAD_ATTEMPTS - 1) throw error
       }
 
-      if (response.status === 201) {
-        const data: any = await response.json()
-        if (data?.result?.jwt) completionJwt = data.result.jwt
-      }
+      await sleep(Math.min(1_000 * 2 ** attempt, 8_000))
     }
 
-    return completionJwt
+    throw new Error(`Failed to upload asset bucket ${bucketIndex + 1}/${bucketCount}`)
   }
 
   /**

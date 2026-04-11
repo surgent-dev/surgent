@@ -108,7 +108,7 @@ export interface UploadAssetSession {
  */
 export interface AssetManifest {
   [path: string]: {
-    hash: string // SHA256 hash (first 32 chars)
+    hash: string // 32-character content hash used by Cloudflare asset uploads
     size: number // File size in bytes
   }
 }

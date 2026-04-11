@@ -1,12 +1,19 @@
+import { extname } from 'path'
+import { createRequire } from 'module'
+
+const require = createRequire(import.meta.url)
+const { hash: blake3hash }: { hash(input: string): Buffer } = require('blake3-wasm')
+
 /**
- * Calculate SHA256 hash of content (first 32 chars)
- * This matches Cloudflare's expected hash format
+ * Calculate the 32-character content hash Cloudflare expects for static assets.
  */
-export async function calculateFileHash(content: ArrayBuffer): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', content)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
-  return hashHex.substring(0, 32)
+export function calculateFileHash(content: ArrayBuffer | Buffer, filePath: string = ''): string {
+  const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content)
+  const base64Contents = buffer.toString('base64')
+  const extension = extname(filePath).slice(1)
+  return blake3hash(base64Contents + extension)
+    .toString('hex')
+    .slice(0, 32)
 }
 
 /**
@@ -79,26 +86,6 @@ export function validateConfig(config: any): void {
   if (!config.compatibility_date) {
     throw new Error('Compatibility date is required in configuration')
   }
-}
-
-/**
- * Create an asset manifest from file data
- */
-export async function createAssetManifest(
-  files: Map<string, ArrayBuffer>,
-): Promise<Record<string, { hash: string; size: number }>> {
-  const manifest: Record<string, { hash: string; size: number }> = {}
-  const entries = Array.from(files.entries())
-
-  for (const [path, content] of entries) {
-    const hash = await calculateFileHash(content)
-    manifest[path] = {
-      hash,
-      size: content.byteLength,
-    }
-  }
-
-  return manifest
 }
 
 /**

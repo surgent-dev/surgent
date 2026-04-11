@@ -12,7 +12,6 @@ import {
   validateProcessName,
   validateDevScript,
 } from '@/lib/utils'
-import { createHash } from 'crypto'
 import { parse as parseDotEnv } from 'dotenv'
 import path from 'path'
 import stripJsonComments from 'strip-json-comments'
@@ -28,18 +27,27 @@ import {
   parseWranglerConfig,
   deployToDispatch,
 } from '@/apis/deployer/deploy'
+import { calculateFileHash } from '@/apis/deployer/utils/index'
 import { auth } from '@/lib/auth'
 import { WorkerDeployer } from '@/apis/deployer/deployer'
 import Cloudflare from 'cloudflare'
 import { ensureAnalytics, syncProjectAnalyticsDomain } from '@/services/analytics'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'fs/promises'
+import { createRequire } from 'module'
+import { tmpdir } from 'os'
 
 const log = createLogger('projects')
+const require = createRequire(import.meta.url)
+const tar: {
+  x(options: { file: string; cwd: string; strict?: boolean }): Promise<void>
+} = require('tar')
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const PREVIEW_PORT = 3000
+const MAX_CLOUDFLARE_ASSET_SIZE = 25 * 1024 * 1024
 
 const DEFAULT_WORKER = `export default {
   async fetch(request, env) {
@@ -110,11 +118,43 @@ function stripTrailingSlash(s: string): string {
   return s.length > 1 && s.endsWith('/') ? s.slice(0, -1) : s
 }
 
-function resolveEntryPath(currentDir: string, entry: unknown): string {
-  const info = entry as Record<string, any>
-  if (typeof info.path === 'string' && info.path) return info.path
-  const name = typeof info.name === 'string' ? info.name : ''
-  return name ? posix.join(stripTrailingSlash(currentDir), name) : currentDir
+async function extractTarEntries(
+  archive: Buffer,
+): Promise<Array<{ path: string; content: Buffer }>> {
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'surgent-assets-'))
+  const archivePath = path.join(tempDir, 'assets.tar')
+  const extractDir = path.join(tempDir, 'files')
+
+  async function walk(dir: string, files: Array<{ path: string; content: Buffer }>) {
+    const entries = await readdir(dir, { withFileTypes: true })
+    entries.sort((a, b) => a.name.localeCompare(b.name))
+
+    for (const entry of entries) {
+      const entryPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        await walk(entryPath, files)
+        continue
+      }
+      if (!entry.isFile()) continue
+
+      files.push({
+        path: path.relative(extractDir, entryPath).split(path.sep).join(posix.sep),
+        content: await readFile(entryPath),
+      })
+    }
+  }
+
+  try {
+    await mkdir(extractDir)
+    await writeFile(archivePath, archive)
+    await tar.x({ file: archivePath, cwd: extractDir, strict: true })
+
+    const files: Array<{ path: string; content: Buffer }> = []
+    await walk(extractDir, files)
+    return files
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
 }
 
 function sanitizeScriptName(input: string): string {
@@ -177,30 +217,52 @@ async function downloadFileSafe(sandbox: Sandbox, filePath: string, cwd?: string
   }
 }
 
-async function collectAssets(sandbox: Sandbox, rootDir: string, hashSalt: string) {
-  const root = stripTrailingSlash(rootDir)
-  const manifest: Record<string, { hash: string; size: number }> = {}
-  const files: Array<{ path: string; base64: string }> = []
-
-  async function walk(dir: string) {
-    for (const entry of await sandbox.list(dir)) {
-      const entryPath = resolveEntryPath(dir, entry)
-      if (entry.isDir) {
-        await walk(entryPath)
-      } else {
-        const buffer = await downloadFileSafe(sandbox, entryPath)
-        const rel = `/${posix.relative(root, entryPath)}`
-        manifest[rel] = {
-          hash: createHash('sha256').update(hashSalt).update(buffer).digest('hex').slice(0, 32),
-          size: buffer.length,
-        }
-        files.push({ path: rel, base64: buffer.toString('base64') })
-      }
+async function buildAndDownloadArchive(
+  sandbox: Sandbox,
+  archivePath: string,
+  command: string,
+  opts?: { cwd?: string; timeout?: number },
+): Promise<Buffer> {
+  try {
+    const result = await sandbox.exec(command, { cwd: opts?.cwd, timeout: opts?.timeout })
+    if (result.code !== 0) {
+      throw new Error(`Failed to create archive: ${formatExecFailure(result.output)}`)
     }
+    return await downloadFileSafe(sandbox, archivePath, opts?.cwd)
+  } finally {
+    await sandbox.exec(`rm -f ${shellQuote(archivePath)}`).catch(() => {})
+  }
+}
+
+async function collectAssets(sandbox: Sandbox, rootDir: string) {
+  const manifest: Record<string, { hash: string; size: number }> = {}
+  const fileContents = new Map<string, Buffer>()
+  const archivePath = posix.join(
+    '/tmp',
+    `surgent-assets-${Date.now()}-${Math.random().toString(36).slice(2)}.tar`,
+  )
+
+  const archive = await buildAndDownloadArchive(
+    sandbox,
+    archivePath,
+    `tar -cf ${shellQuote(archivePath)} -C ${shellQuote(rootDir)} .`,
+    { timeout: 60_000 },
+  )
+  const files = await extractTarEntries(archive)
+
+  for (const file of files) {
+    const rel = file.path.startsWith('/') ? file.path : `/${file.path}`
+    if (file.content.length > MAX_CLOUDFLARE_ASSET_SIZE) {
+      throw new Error(`Asset exceeds Cloudflare's 25 MiB limit: ${rel}`)
+    }
+    manifest[rel] = {
+      hash: calculateFileHash(file.content, rel),
+      size: file.content.length,
+    }
+    fileContents.set(rel, file.content)
   }
 
-  await walk(rootDir)
-  return { manifest, files }
+  return { manifest, fileContents }
 }
 
 export async function ensureOpencodeConfigRepo(sandbox: Sandbox, repoUrl: string, dir: string) {
@@ -391,7 +453,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     const assetsDir = await findAssetsDir(sandbox, workingDir)
     if (!assetsDir) throw new Error('No dist/ directory found after build')
 
-    const { manifest, files } = await collectAssets(sandbox, assetsDir, scriptName)
+    const { manifest, fileContents } = await collectAssets(sandbox, assetsDir)
     const assetPaths = Object.keys(manifest)
     if (!assetPaths.length) throw new Error('No assets found in dist/')
 
@@ -447,7 +509,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
         assets: {
           dir: assetsDir,
           count: assetPaths.length,
-          files: files.length,
+          files: fileContents.size,
           paths: assetPreview,
           ...(assetMore ? { more: assetMore } : {}),
         },
@@ -461,7 +523,6 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       'project deploy plan',
     )
 
-    const fileContents = new Map(files.map((f) => [f.path, Buffer.from(f.base64, 'base64')]))
     await deployToDispatch(
       { ...deployConfig, dispatchNamespace: config.cloudflare.dispatchNamespace! },
       fileContents,
@@ -720,18 +781,15 @@ export async function downloadProject(
     '.',
   ].join(' ')
 
-  try {
-    const result = await sandbox.exec(tarCmd, { cwd: workingDir, timeout: 180_000 })
-    if (result.code !== 0) {
-      throw new HttpError(500, `Failed to create archive: ${result.output}`)
-    }
+  const buffer = await buildAndDownloadArchive(sandbox, archivePath, tarCmd, {
+    cwd: workingDir,
+    timeout: 180_000,
+  }).catch((error) => {
+    throw new HttpError(500, error instanceof Error ? error.message : 'Failed to create archive')
+  })
 
-    const buffer = await downloadFileSafe(sandbox, archivePath, workingDir)
-    const safeName = (project.name || 'project').replace(/[^a-zA-Z0-9_-]/g, '-')
-    return { buffer, filename: `${safeName}.tar.gz` }
-  } finally {
-    await sandbox.exec(`rm -f ${shellQuote(archivePath)}`).catch(() => {})
-  }
+  const safeName = (project.name || 'project').replace(/[^a-zA-Z0-9_-]/g, '-')
+  return { buffer, filename: `${safeName}.tar.gz` }
 }
 
 export async function deleteSandbox(args: DeleteProjectArgs): Promise<void> {
