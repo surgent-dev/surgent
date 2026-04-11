@@ -17,6 +17,7 @@ type Brief = {
   subtitle: string
   colors: string[]
   competitors: { name: string; url: string; note: string }[]
+  uiStyle: string
   brief: string
   prompt: string
 }
@@ -260,6 +261,16 @@ function Content() {
                             </div>
                           ))}
                         </div>
+                      </div>
+                    )}
+                    {brief.uiStyle && (
+                      <div>
+                        <p className="text-[11px] font-medium text-foreground/30 uppercase tracking-[0.12em] mb-2.5 sm:mb-3">
+                          UI Style
+                        </p>
+                        <p className="text-[11px] sm:text-[12px] text-foreground/40 leading-relaxed">
+                          {brief.uiStyle}
+                        </p>
                       </div>
                     )}
                     {brief.competitors?.length > 0 && (

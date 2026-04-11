@@ -944,13 +944,19 @@ projects.post('/enhance-prompt', requireAuth, zValidator('json', enhancePromptBo
       [
         {
           role: 'system',
-          content: `You are a business strategist. Given a business profile, produce a concise brief.
+          content: `You are a business strategist and UI design director. Given a business profile, produce a concise brief with a targeted visual direction.
 
 Be specific to THIS business. Use their actual name. Focus on revenue from day one.
 
-- Colors: 5 hex codes (primary, secondary, accent, light, dark)
+- Colors: 5 hex codes (primary, secondary, accent, light, dark) that match the industry and brand personality
 - Competitors: 3 real companies with working URLs
-- Brief: one detailed paragraph (6-8 sentences) covering what the business does, who it serves, how it makes money, key website pages needed, and the 30-day launch plan`,
+- Brief: one detailed paragraph (6-8 sentences) covering what the business does, who it serves, how it makes money, key website pages needed, and the 30-day launch plan
+- UI Style: a specific, opinionated visual direction for the website. Do NOT give generic advice. Instead, name a concrete design style and describe exactly how it should look. Examples of specificity:
+  - Law firm → "Corporate editorial: full-width hero with serif headings (Playfair Display), navy/gold palette, asymmetric grid, subtle parallax, large whitespace, testimonial cards with subtle drop shadows"
+  - Streetwear brand → "Bold maximalist: oversized type (Bebas Neue), high-contrast black/neon, full-bleed product photography, marquee scrolling text, brutalist grid, hover-triggered animations"
+  - SaaS dashboard → "Clean utility: Inter font, 4px border-radius, muted gray surfaces, accent-colored CTAs, tight 8px spacing grid, data-dense cards, minimal illustration"
+  - Bakery → "Warm artisanal: rounded sans-serif (Nunito), cream/terracotta palette, hand-drawn icon accents, soft shadows, organic flowing sections, lifestyle photography with warm color grading"
+  Match the style to the specific industry, audience, and brand personality. Be precise about typography, spacing, layout patterns, and visual effects.`,
         },
         { role: 'user', content: ctx.join('\n') },
       ],
@@ -964,12 +970,21 @@ Be specific to THIS business. Use their actual name. Focus on revenue from day o
         competitors: z
           .array(z.object({ name: z.string(), url: z.string(), note: z.string() }))
           .describe('Exactly 3 real competitor companies'),
+        uiStyle: z
+          .string()
+          .describe(
+            'Specific UI style directive: name the design style, then describe exact typography (font names), spacing, border-radius, layout pattern, visual effects, and photography style. 2-3 sentences, no generic advice.',
+          ),
         brief: z
           .string()
           .describe(
-            '6-8 sentence business strategy covering model, audience, website structure, and launch plan',
+            '6-8 sentence business strategy covering model, audience, website structure, and launch plan. End with a sentence describing the exact UI style to use.',
           ),
-        prompt: z.string().describe('Concise prompt for an AI website builder, 3-4 sentences'),
+        prompt: z
+          .string()
+          .describe(
+            'Detailed prompt for an AI website builder. 4-6 sentences. Include: what to build, key pages, the exact UI style (typography, layout, spacing, visual effects), and the color palette to use. Be specific enough that a developer could build it without asking questions.',
+          ),
       }),
     )
 
