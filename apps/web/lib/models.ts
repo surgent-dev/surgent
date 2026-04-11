@@ -14,6 +14,17 @@ export type ProviderModel = {
 
 export const MODELS: ProviderModel[] = [
   {
+    id: 'glm-5.1',
+    name: 'GLM 5.1',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+    maxVariant: 'max',
+    limit: { context: 200000 },
+    icon: '/zai-logo.svg',
+    badge: 'Latest',
+    badgeColor: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+  },
+  {
     id: 'claude-opus-4-6',
     name: 'Claude Opus 4.6',
     providerId: 'opencode',
@@ -36,6 +47,16 @@ export const MODELS: ProviderModel[] = [
     icon: '/OpenAI-logo.svg',
     badge: 'Latest',
     badgeColor: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  },
+  {
+    id: 'glm-5',
+    name: 'GLM 5',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+    limit: { context: 200000 },
+    icon: '/zai-logo.svg',
+    badge: 'Pro',
+    badgeColor: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
   },
   {
     id: 'gemini-3-pro',
