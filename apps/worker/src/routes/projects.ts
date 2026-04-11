@@ -947,8 +947,8 @@ projects.post('/enhance-prompt', requireAuth, zValidator('json', enhancePromptBo
           content: `You are a UI design director. Be terse.
 
 - Brief: 2 sentences. What the business is + list the website sections/pages needed. No strategy, no growth advice.
-- UI Style: THIS IS THE MOST IMPORTANT FIELD. Be specific and vivid. Name the design style, then describe: fonts (exact names), spacing, radius, layout pattern, animations/effects, imagery style. Make it feel like a creative brief from a top design agency.
-  Examples: "Cinematic portfolio: Cormorant Garamond headings, Karla body, 32px whitespace, 0px radius, full-bleed hero with Ken Burns zoom, asymmetric masonry grid, moody desaturated photography" / "Playful SaaS: Plus Jakarta Sans, 12px grid, 16px radius, bento card layout, gradient mesh backgrounds, bouncy micro-interactions, 3D icon accents"
+- UI Style: THIS IS THE MOST IMPORTANT FIELD. Match the brand personality but always favor restraint over flash. Specific and opinionated: name the style, fonts (exact names), spacing, radius, layout, subtle effects. No gimmicks — polished and intentional.
+  Examples: "Editorial minimal: Instrument Serif headings, Inter body, 32px whitespace, 4px radius, single-column flow, gentle fade-ins, natural-light photography" / "Warm artisan: DM Serif Display headings, Nunito body, 24px spacing, 12px radius, stacked card sections, soft shadows, earthy lifestyle imagery" / "Modern SaaS: Plus Jakarta Sans, 8px grid, 8px radius, bento layout, muted surfaces, crisp product screenshots"
 - Prompt: 1-2 casual sentences describing the website to build. Not technical. Like telling a designer friend what you want.`,
         },
         { role: 'user', content: ctx.join('\n') },
