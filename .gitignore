@@ -103,6 +103,12 @@ cdk.context.json
 
 # code references
 references/
-research/
+/research/
 
 pgadmin-servers.json
+
+# Claude Code
+.claude/
+
+# Wrangler
+.wrangler/
