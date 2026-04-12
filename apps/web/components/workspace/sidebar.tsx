@@ -137,7 +137,7 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
             </button>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8}>
-            Get credits
+            Free credits
           </TooltipContent>
         </Tooltip>
 

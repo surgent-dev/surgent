@@ -69,7 +69,7 @@ export default function ReferralDialog({ open, onOpenChange }: ReferralDialogPro
             <h2 className="font-display text-2xl text-foreground">
               Invite friends, earn credits
               <span className="ml-2 inline-flex align-middle text-[12px] font-bold tabular-nums text-brand bg-brand/10 rounded-full px-2.5 py-1 -translate-y-0.5">
-                +$5
+                +$3
               </span>
             </h2>
             <p className="text-sm text-muted-foreground/60 mt-1.5">
