@@ -25,6 +25,7 @@ type State = {
   connected: boolean
   loading: boolean
   compacting: boolean
+  replaceOnNextBatch: boolean
 }
 
 type OptimisticMessageInput = {
@@ -36,7 +37,7 @@ type StreamEvent = Event | { type: string; properties?: Record<string, any> }
 
 type SessionScope = { sessionID?: string; sessionId?: string }
 
-const initialState: State = {
+export const initialStreamState: State = {
   messages: [],
   parts: {},
   permissions: [],
@@ -45,6 +46,7 @@ const initialState: State = {
   connected: false,
   loading: false,
   compacting: false,
+  replaceOnNextBatch: false,
 }
 
 function upsertMessage(list: Message[], incoming: Message): Message[] {
@@ -116,7 +118,11 @@ function upsertPermission(list: Permission[] | undefined, incoming: Permission):
   return [...list.slice(0, idx), merged, ...list.slice(idx + 1)]
 }
 
-function reducer(state: State, event: StreamEvent, currentSessionId?: string): State {
+export function reduceStreamState(
+  state: State,
+  event: StreamEvent,
+  currentSessionId?: string,
+): State {
   const props = (event as any).properties
   const now = Date.now()
 
@@ -135,6 +141,7 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
           lastAt: now,
           loading: true,
           error: undefined,
+          replaceOnNextBatch: false,
         }
       case 'connection.closed':
         return { ...state, connected: false, lastAt: now }
@@ -154,18 +161,37 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
     // Batch load for initial messages - single dispatch instead of N+M
     case 'batch.load': {
       const items = props.messages as Array<{ info: Message; parts: Part[] }>
-      if (!items?.length) return { ...state, loading: false, compacting: false, lastAt: now }
-      let messages = state.messages
-      const parts: Record<string, Part[]> = { ...state.parts }
+      const waitingForReplacement = state.replaceOnNextBatch && !items?.length
+      if (!items?.length) {
+        return {
+          ...state,
+          loading: false,
+          compacting: waitingForReplacement ? state.compacting : false,
+          replaceOnNextBatch: waitingForReplacement,
+          lastAt: now,
+        }
+      }
+
+      const shouldReplaceSnapshot = state.replaceOnNextBatch
+      let messages = shouldReplaceSnapshot ? [] : state.messages
+      const parts: Record<string, Part[]> = shouldReplaceSnapshot ? {} : { ...state.parts }
       for (const { info, parts: msgParts } of items) {
         const sessionID =
           (info as Message & SessionScope).sessionID || (info as SessionScope).sessionId
-        if (sessionID !== currentSessionId) continue
+        if (sessionID && sessionID !== currentSessionId) continue
         messages = upsertMessage(messages, info)
         const merged = mergeParts(parts[info.id], msgParts)
         if (merged !== undefined) parts[info.id] = merged
       }
-      return { ...state, messages, parts, lastAt: now, loading: false, compacting: false }
+      return {
+        ...state,
+        messages,
+        parts,
+        lastAt: now,
+        loading: false,
+        compacting: false,
+        replaceOnNextBatch: false,
+      }
     }
 
     case 'batch.load.error':
@@ -194,6 +220,7 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
         questions: [],
         lastAt: now,
         error: undefined,
+        replaceOnNextBatch: false,
       }
     }
 
@@ -208,12 +235,11 @@ function reducer(state: State, event: StreamEvent, currentSessionId?: string): S
       if (sessionID !== currentSessionId) return state
       return {
         ...state,
-        messages: [],
-        parts: {},
         questions: [],
         lastAt: now,
-        loading: true,
+        loading: false,
         compacting: true,
+        replaceOnNextBatch: true,
       }
     }
 
@@ -401,8 +427,8 @@ export default function useAgentStream({
   const { subscribe: eventSubscribe, connected: eventConnected } = useProjectEvents()
 
   const [state, dispatch] = useReducer(
-    (state: State, event: StreamEvent) => reducer(state, event, sessionId),
-    initialState,
+    (state: State, event: StreamEvent) => reduceStreamState(state, event, sessionId),
+    initialStreamState,
   )
 
   const currentKeyRef = useRef(projectId && sessionId ? `${projectId}:${sessionId}` : '')
@@ -462,9 +488,10 @@ export default function useAgentStream({
   // Helper to check if we're in retry state
   const isRetrying = state.status?.type === 'retry'
   const retryInfo = isRetrying ? (state.status as SessionStatusRetry) : null
+  const { replaceOnNextBatch: _replaceOnNextBatch, ...publicState } = state
 
   return {
-    ...state,
+    ...publicState,
     dismissError,
     addOptimisticMessage,
     removeOptimisticMessage,
