@@ -29,6 +29,7 @@ const ProjectProvisioningMetadataSchema = z
     previewUrl: z.string().optional(),
     processName: z.string().optional(),
     startCommand: z.string().optional(),
+    clonedAt: z.string().optional(),
     initializedAt: z.string().optional(),
     opencodeReadyAt: z.string().optional(),
     finalizedAt: z.string().optional(),

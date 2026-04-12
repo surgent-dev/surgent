@@ -128,7 +128,7 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
     let startCommand = provisioning.startCommand
     let initScript: string | undefined
 
-    if (githubUrl) {
+    if (githubUrl && !provisioning.clonedAt) {
       log.info({ projectId, githubUrl }, 'project create template clone started')
       await sandbox.clone(githubUrl, workingDirectory)
       const reset = await sandbox.exec(
@@ -138,6 +138,11 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
       if (reset.code !== 0) {
         throw new Error(`Failed to reset git after clone: ${reset.output}`)
       }
+      const next = await ProjectService.mergeProjectMetadata(projectId, {
+        workingDirectory,
+        provisioning: { clonedAt: new Date().toISOString() },
+      })
+      provisioning = getProvisioning(next)
     }
 
     try {

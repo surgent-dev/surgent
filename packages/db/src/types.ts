@@ -434,6 +434,7 @@ export interface ProjectProvisioningMetadata {
   previewUrl?: string
   processName?: string
   startCommand?: string
+  clonedAt?: string
   initializedAt?: string
   opencodeReadyAt?: string
   finalizedAt?: string
