@@ -16,15 +16,15 @@ Your output must be a single JSON object with this exact structure:
     "personality": ["Trait1", "Trait2", "Trait3", "Trait4"]
   },
   "colors": {
-    "primary": "#hex",
-    "secondary": "#hex",
-    "accent": "#hex",
-    "background": "#hex",
-    "text": "#hex"
+    "primary": "#hex — the main brand color, drives buttons/links/CTAs",
+    "secondary": "#hex — complements primary, used for secondary elements",
+    "accent": "#hex — a pop color for highlights and interactive states",
+    "background": "#hex — page background, must have excellent contrast with text",
+    "text": "#hex — primary text color, must be highly readable on background"
   },
   "typography": {
-    "heading": "Google Font name",
-    "body": "Google Font name"
+    "heading": "Exact Google Font name — pick a font that matches the brand personality. Consider: serif for editorial/luxury, geometric sans for modern/tech, humanist sans for friendly/approachable, slab serif for bold/industrial",
+    "body": "Exact Google Font name — must be highly readable at 14-16px. Pair intentionally with the heading font"
   },
   "style": ["keyword1", "keyword2", "keyword3"],
 
@@ -131,8 +131,8 @@ Your output must be a single JSON object with this exact structure:
 
 CRITICAL GUIDELINES:
 - ALL copy must be specific to this exact business. Never use "[Business Name]" placeholders - use their actual name.
-- Colors must be valid hex codes that work beautifully together. Consider industry norms but don't be generic.
-- If reference websites are provided, draw heavy design inspiration from their aesthetic.
+- COLORS & TYPOGRAPHY ARE CRITICAL: Study the business type, industry, and target audience, then pick a cohesive visual system. Colors must be valid hex codes that work beautifully together — consider contrast ratios, emotional associations, and industry context. Don't default to generic blue/gray. Pick Google Fonts that genuinely match the brand personality and pair well together. A bakery shouldn't look like a SaaS dashboard and vice versa.
+- If reference websites are provided, draw heavy design inspiration from their aesthetic — match their color temperature, font style, spacing rhythm, and overall vibe.
 - Competitors must be REAL companies. If the niche is small, include adjacent/indirect competitors.
 - Social bios must fit platform character limits exactly.
 - Content calendar captions should sound human and authentic, not like a marketing textbook.
