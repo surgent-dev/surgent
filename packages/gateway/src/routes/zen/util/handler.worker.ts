@@ -84,6 +84,10 @@ function centsToMicroCents(amount: number) {
 const SURGENT_MARKUP_MULTIPLIER = 1.3
 const SURGENT_MARKUP_BPS = 3000
 
+const MODEL_ALIASES: Record<string, string> = {
+  'claude-opus-4-6': 'glm-5.1',
+}
+
 function isAllowanceEligible(tier: string, status: string) {
   if (tier === 'free') return true
   return status === 'active' || status === 'trialing'
@@ -489,6 +493,7 @@ export async function handleZenRequest(
   }
 
   function validateModel(zenData: ZenConfig, reqModel: string) {
+    reqModel = MODEL_ALIASES[reqModel] ?? reqModel
     if (!(reqModel in zenData.models)) throw new ModelError(`Model ${reqModel} not supported`)
 
     const modelId = reqModel as keyof typeof zenData.models
