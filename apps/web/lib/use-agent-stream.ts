@@ -261,7 +261,7 @@ export function reduceStreamState(
     case 'message.updated': {
       const info = props.info as Message & SessionScope
       const sessionID = info.sessionID || info.sessionId
-      if (sessionID !== currentSessionId) return state
+      if (sessionID && sessionID !== currentSessionId) return state
       return { ...state, messages: upsertMessage(state.messages, info), lastAt: now }
     }
 
@@ -282,7 +282,7 @@ export function reduceStreamState(
     case 'message.part.updated': {
       const part = props.part as Part & SessionScope
       const sessionID = part.sessionID || part.sessionId
-      if (sessionID !== currentSessionId) return state
+      if (sessionID && sessionID !== currentSessionId) return state
       return {
         ...state,
         parts: {
@@ -344,7 +344,7 @@ export function reduceStreamState(
     case 'permission.asked': {
       const permission = props as Permission & SessionScope
       const sessionID = permission.sessionID || permission.sessionId
-      if (sessionID !== currentSessionId) return state
+      if (sessionID && sessionID !== currentSessionId) return state
       return {
         ...state,
         permissions: upsertPermission(state.permissions, permission),
@@ -354,7 +354,7 @@ export function reduceStreamState(
 
     case 'permission.replied': {
       const sessionID = props.sessionID || props.sessionId
-      if (sessionID !== currentSessionId) return state
+      if (sessionID && sessionID !== currentSessionId) return state
       const permissionID = props.permissionID || props.requestID
       if (!permissionID) return state
       return {
