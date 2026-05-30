@@ -3,7 +3,7 @@
 import { CheckCircle, Copy, CurrencyDollar, Gift, Users } from '@phosphor-icons/react'
 import { Check, X } from 'lucide-react'
 import { useState } from 'react'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useReferralStats } from '@/hooks/use-referrals'
 import { cn } from '@/lib/utils'
