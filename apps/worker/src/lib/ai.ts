@@ -1,11 +1,18 @@
 import { generateObject } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
+import { config } from './config'
 
-const together = createOpenAI({
-  baseURL: 'https://api.together.xyz/v1',
-  apiKey: process.env.TOGETHER_API_KEY,
+const openai = createOpenAI({
+  apiKey: config.llms.openaiKey,
 })
+
+const gpt55FastOptions = {
+  openai: {
+    reasoningEffort: 'medium',
+    serviceTier: 'priority',
+  },
+} as const
 
 export async function generateJson<T>(
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
@@ -18,7 +25,8 @@ export async function generateJson<T>(
     .join('\n\n')
 
   const { object } = await generateObject({
-    model: together('zai-org/GLM-5.1'),
+    model: openai.responses('gpt-5.5'),
+    providerOptions: gpt55FastOptions,
     system,
     prompt,
     schema,

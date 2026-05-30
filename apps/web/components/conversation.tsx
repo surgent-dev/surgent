@@ -599,7 +599,7 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
   }, [activeId, lastAssistantError, sessionError, sessionsErrorMessage, sessionsQuery.isError])
 
   const { data: providerData } = useQuery<ProviderResponse>({
-    queryKey: ['opencode-models', projectId],
+    queryKey: ['agent-models', projectId],
     enabled: Boolean(projectId),
     staleTime: 60_000,
     queryFn: async () => http.get(`api/agent/${projectId}/provider`).json<ProviderResponse>(),
@@ -607,10 +607,11 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
 
   const availableModels = useMemo(() => {
     if (!providerData) return MODELS
-    const provider = providerData.all?.find((item) => item.id === 'opencode')
-    if (!provider?.models) return MODELS
-    const fromProvider = MODELS.filter((model) => Boolean(provider.models[model.id]))
-    return fromProvider.length ? fromProvider : MODELS
+    const providerModels = new Map(providerData.all.map(({ id, models }) => [id, models]))
+    const available = MODELS.filter(({ providerId, id }) =>
+      Boolean(providerModels.get(providerId)?.[id]),
+    )
+    return available.length ? available : MODELS
   }, [providerData])
 
   const handleModelChange = (modelId: string, providerId: string) => {
@@ -666,7 +667,9 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       let pct = usageRef.current?.contextPct
 
       if ('providerID' in last && 'modelID' in last) {
-        const limit = availableModels.find((m) => m.id === last.modelID)?.limit?.context
+        const limit = availableModels.find(
+          (m) => m.id === last.modelID && m.providerId === last.providerID,
+        )?.limit?.context
         if (limit) pct = Math.round((tokens / limit) * 100)
       }
 
