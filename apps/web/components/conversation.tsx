@@ -396,6 +396,17 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     if ((!trimmed && !files?.length) || inputWorking || !activeId) return
 
     setInputValue('')
+    const fallbackModel = getDefaultModelSelection()
+    const resolvedModel =
+      model && providerID
+        ? { id: model, providerId: providerID, variant }
+        : fallbackModel
+          ? {
+              id: fallbackModel.id,
+              providerId: fallbackModel.providerId,
+              variant: fallbackModel.defaultVariant,
+            }
+          : undefined
     const messageId = generateAscendingId('msg')
 
     const requestParts: SendPartInput[] = []
@@ -427,7 +438,9 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       role: 'user',
       time: { created: Date.now() },
       agent: mode,
-      model: model && providerID ? { providerID, modelID: model } : undefined,
+      model: resolvedModel
+        ? { providerID: resolvedModel.providerId, modelID: resolvedModel.id }
+        : undefined,
     } as Message
 
     const optimisticParts: Part[] = requestParts
@@ -444,7 +457,9 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
       parts: optimisticParts,
     })
 
-    const coder = model && providerID ? { model: { providerID, modelID: model } } : undefined
+    const coder = resolvedModel
+      ? { model: { providerID: resolvedModel.providerId, modelID: resolvedModel.id } }
+      : undefined
     const agentOverrides = coder ? { coder } : undefined
 
     send.mutate(
@@ -453,9 +468,9 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
         messageId,
         agent: mode,
         parts: requestParts,
-        model,
-        providerID,
-        variant,
+        model: resolvedModel?.id,
+        providerID: resolvedModel?.providerId,
+        variant: resolvedModel?.variant,
         agentOverrides,
       },
       {
@@ -613,6 +628,17 @@ export default function Conversation({ projectId, initialPrompt }: ConversationP
     )
     return available.length ? available : MODELS
   }, [providerData])
+
+  function getDefaultModelSelection() {
+    if (selectedModel) {
+      const current = availableModels.find(
+        (model) =>
+          model.id === selectedModel.modelId && model.providerId === selectedModel.providerId,
+      )
+      if (current) return current
+    }
+    return availableModels[0]
+  }
 
   const handleModelChange = (modelId: string, providerId: string) => {
     setSelectedModel({ modelId, providerId })

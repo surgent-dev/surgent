@@ -4,6 +4,7 @@ export type ProviderModel = {
   providerId: string
   providerName: string
   byokProvider?: 'openai' | 'anthropic' | 'google'
+  defaultVariant?: string
   maxVariant?: string
   limit: { context: number }
   icon: string
@@ -14,11 +15,12 @@ export type ProviderModel = {
 
 export const MODELS: ProviderModel[] = [
   {
-    id: 'gpt-5.5-fast',
+    id: 'gpt-5.5',
     name: 'GPT-5.5 Fast',
     providerId: 'openai',
     providerName: 'OpenAI',
     byokProvider: 'openai',
+    defaultVariant: 'medium',
     maxVariant: 'high',
     limit: { context: 1050000 },
     icon: '/OpenAI-logo.svg',

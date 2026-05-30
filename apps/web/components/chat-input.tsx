@@ -295,7 +295,7 @@ export default function ChatInput({
       fileParts.length ? fileParts : undefined,
       model.id,
       model.providerId,
-      effectiveMaxMode ? model.maxVariant : undefined,
+      effectiveMaxMode ? model.maxVariant : model.defaultVariant,
     )
   }
 
