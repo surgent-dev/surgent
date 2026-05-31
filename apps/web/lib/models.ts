@@ -17,8 +17,8 @@ export const MODELS: ProviderModel[] = [
   {
     id: 'gpt-5.5',
     name: 'GPT-5.5 Fast',
-    providerId: 'openai',
-    providerName: 'OpenAI',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
     byokProvider: 'openai',
     defaultVariant: 'medium',
     maxVariant: 'high',
