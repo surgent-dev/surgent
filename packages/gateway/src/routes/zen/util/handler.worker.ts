@@ -257,18 +257,12 @@ export async function handleZenRequest(
       const res = await fetch(reqUrl, {
         method: 'POST',
         headers: (() => {
-          const headers = new Headers(c.req.raw.headers)
+          const headers = new Headers({ 'content-type': 'application/json' })
           providerInfo.modifyHeaders(headers, body, providerInfo.apiKey)
           Object.entries(providerInfo.headerMappings ?? {}).forEach(([k, v]) => {
-            const value = headers.get(v)
+            const value = c.req.raw.headers.get(v)
             if (value) headers.set(k, value)
           })
-          headers.delete('host')
-          headers.delete('content-length')
-          headers.delete('x-opencode-request')
-          headers.delete('x-opencode-session')
-          headers.delete('x-opencode-project')
-          headers.delete('x-opencode-client')
           return headers
         })(),
         body: reqBody,
