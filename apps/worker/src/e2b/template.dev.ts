@@ -1,9 +1,16 @@
+import { randomUUID } from 'node:crypto'
 import { Template, waitForTimeout } from 'e2b'
 
 const token = process.env.GITHUB_TOKEN
 const repoUrl = token
   ? `https://${token}@github.com/surgent-dev/surgent.git`
   : 'https://github.com/surgent-dev/surgent.git'
+const sandboxDbUser = 'devuser'
+const sandboxDbName = 'devdb'
+const sandboxDbPassword = randomUUID()
+const sandboxDatabaseUrl = new URL(`postgresql://localhost:5432/${sandboxDbName}`)
+sandboxDatabaseUrl.username = sandboxDbUser
+sandboxDatabaseUrl.password = sandboxDbPassword
 
 export const devTemplate = Template()
   .fromNodeImage('lts-slim')
@@ -15,14 +22,14 @@ export const devTemplate = Template()
     'rm -rf /var/lib/apt/lists/*',
   ])
   .runCmd(
-    'service postgresql start && su - postgres -c "psql -c \\"CREATE USER devuser WITH SUPERUSER PASSWORD \'devpass\';\\"" && su - postgres -c "createdb -O devuser devdb" && service postgresql stop',
+    `service postgresql start && su - postgres -c "psql -c \\"CREATE USER ${sandboxDbUser} WITH SUPERUSER PASSWORD '${sandboxDbPassword}';\\"" && su - postgres -c "createdb -O ${sandboxDbUser} ${sandboxDbName}" && service postgresql stop`,
   )
   .runCmd('ln -s $(which fdfind) /usr/local/bin/fd')
   .runCmd('curl -fsSL https://bun.sh/install | bash')
   .setEnvs({
     BUN_INSTALL: '/root/.bun',
     PATH: '/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-    DATABASE_URL: 'postgresql://devuser:devpass@localhost:5432/devdb',
+    DATABASE_URL: sandboxDatabaseUrl.toString(),
   })
   .runCmd('/root/.bun/bin/bun add -g @ast-grep/cli @anthropic-ai/claude-code opencode-ai pm2')
   .runCmd(
