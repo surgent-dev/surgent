@@ -65,14 +65,12 @@ jobs:
               - bun.lock
               - bunfig.toml
               - .dockerignore
-              - .github/workflows/docker.yml
             analytics:
               - apps/analytics/**
               - package.json
               - bun.lock
               - bunfig.toml
               - .dockerignore
-              - .github/workflows/docker.yml
             dispatch:
               - apps/dispatch/**
               - packages/typescript-config/**
@@ -80,7 +78,6 @@ jobs:
               - bun.lock
               - bunfig.toml
               - .dockerignore
-              - .github/workflows/docker.yml
             gateway:
               - packages/gateway/**
               - packages/db/**
@@ -89,7 +86,6 @@ jobs:
               - bun.lock
               - bunfig.toml
               - .dockerignore
-              - .github/workflows/docker.yml
             infra:
               - infra/**
               - .github/workflows/docker.yml
