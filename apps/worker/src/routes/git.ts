@@ -5,6 +5,7 @@ import type { AppContext } from '@/types/application'
 import type { ProjectGitHub } from '@/types/github'
 import { db } from '@/lib/db'
 import { getSandboxByProjectId, workspacePath } from '@/lib/sandbox'
+import { shellQuote } from '@/lib/utils'
 import { getProjectWithAuth } from '@/services/projects'
 import { createGitHubApp } from '@/apis/github'
 
@@ -26,6 +27,14 @@ interface GitLogResult {
   branch: string
   ahead: number
   behind: number
+}
+
+function githubRemoteUrl(gh: ProjectGitHub): string {
+  return `https://github.com/${gh.repoOwner}/${gh.repoName}.git`
+}
+
+function gitAuthConfig(token: string): string {
+  return `-c http.extraHeader=${shellQuote(`Authorization: Bearer ${token}`)}`
 }
 
 // Auth
@@ -59,16 +68,15 @@ git.get('/:id/git/log', zValidator('param', idParam), async (c) => {
   const gh = project.github as ProjectGitHub | null
   const defaultBranch = gh?.defaultBranch || 'main'
 
-  // Build auth URL if connected and fetching
-  let authUrl = ''
+  let authConfig = ''
   let cleanUrl = ''
   if (shouldFetch && gh?.repoOwner && gh.repoName) {
-    cleanUrl = `https://github.com/${gh.repoOwner}/${gh.repoName}.git`
+    cleanUrl = githubRemoteUrl(gh)
     const githubApp = createGitHubApp()
     if (githubApp) {
       try {
         const { token } = await githubApp.getInstallationToken(gh.installationId)
-        authUrl = `https://x-access-token:${token}@github.com/${gh.repoOwner}/${gh.repoName}.git`
+        authConfig = gitAuthConfig(token)
       } catch (err) {
         c.var.logger.warn({ err }, 'failed to get token')
       }
@@ -77,7 +85,7 @@ git.get('/:id/git/log', zValidator('param', idParam), async (c) => {
 
   const script = `
 set -e
-cd '${cwd}' 2>/dev/null || exit 1
+cd ${shellQuote(cwd)} 2>/dev/null || exit 1
 
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
   echo "NOT_INITIALIZED"
@@ -96,14 +104,14 @@ AHEAD=0
 BEHIND=0
 PUSHED_HASHES=""
 ${
-  authUrl
+  authConfig
     ? `
-git remote set-url origin '${authUrl}' 2>/dev/null || git remote add origin '${authUrl}' 2>/dev/null || true
-git fetch origin $BRANCH 2>/dev/null || true
-git remote set-url origin '${cleanUrl}' 2>/dev/null || true
-AHEAD=$(git rev-list origin/$BRANCH..HEAD --count 2>/dev/null || echo 0)
-BEHIND=$(git rev-list HEAD..origin/$BRANCH --count 2>/dev/null || echo 0)
-PUSHED_HASHES=$(git rev-list origin/$BRANCH 2>/dev/null || echo "")
+	git remote get-url origin >/dev/null 2>&1 || git remote add origin ${shellQuote(cleanUrl)}
+	git remote set-url origin ${shellQuote(cleanUrl)}
+	git ${authConfig} fetch origin "$BRANCH" 2>/dev/null || true
+	AHEAD=$(git rev-list origin/$BRANCH..HEAD --count 2>/dev/null || echo 0)
+	BEHIND=$(git rev-list HEAD..origin/$BRANCH --count 2>/dev/null || echo 0)
+	PUSHED_HASHES=$(git rev-list origin/$BRANCH 2>/dev/null || echo "")
 `
     : `
 AHEAD=$(git rev-list origin/${defaultBranch}..HEAD --count 2>/dev/null || echo 0)
@@ -262,12 +270,12 @@ git.post(
 
     try {
       const script = `
-cd '${cwd}'
-git add -A
-git diff --cached --quiet && echo "NOTHING_TO_COMMIT" && exit 0
-git commit -m '${message.replace(/'/g, "'\"'\"'")}'
-echo "SHA:$(git rev-parse HEAD)"
-`
+	cd ${shellQuote(cwd)}
+	git add -A
+	git diff --cached --quiet && echo "NOTHING_TO_COMMIT" && exit 0
+	git commit -m ${shellQuote(message)}
+	echo "SHA:$(git rev-parse HEAD)"
+	`
       const res = await sandbox.exec(script, { cwd: '/', timeout: 30000 })
 
       if (res.output?.includes('NOTHING_TO_COMMIT')) {
@@ -275,17 +283,14 @@ echo "SHA:$(git rev-parse HEAD)"
       }
 
       if (res.code !== 0) {
-        return c.json({ success: false, error: res.output || 'Commit failed' }, 500)
+        return c.json({ success: false, error: 'Commit failed' }, 500)
       }
 
       const shaMatch = res.output?.match(/SHA:([a-f0-9]+)/)
       return c.json({ success: true, sha: shaMatch?.[1] })
     } catch (err) {
       c.var.logger.error({ err }, 'git commit error')
-      return c.json(
-        { success: false, error: err instanceof Error ? err.message : 'Commit failed' },
-        500,
-      )
+      return c.json({ success: false, error: 'Commit failed' }, 500)
     }
   },
 )
@@ -311,21 +316,19 @@ git.post('/:id/git/push', zValidator('param', idParam), async (c) => {
 
   try {
     const { token } = await githubApp.getInstallationToken(gh.installationId)
-    const authUrl = `https://x-access-token:${token}@github.com/${gh.repoOwner}/${gh.repoName}.git`
-    const cleanUrl = `https://github.com/${gh.repoOwner}/${gh.repoName}.git`
+    const cleanUrl = githubRemoteUrl(gh)
+    const authConfig = gitAuthConfig(token)
 
     const script = `
-cd '${cwd}'
-# Ensure remote
-git remote get-url origin >/dev/null 2>&1 || git remote add origin '${cleanUrl}'
-# Set auth, push, clean
-git remote set-url origin '${authUrl}'
-git push origin ${branch} 2>&1
-EXIT_CODE=$?
-git remote set-url origin '${cleanUrl}'
-if [ $EXIT_CODE -eq 0 ]; then
-  echo "SHA:$(git rev-parse HEAD)"
-fi
+	cd ${shellQuote(cwd)}
+	# Ensure remote
+	git remote get-url origin >/dev/null 2>&1 || git remote add origin ${shellQuote(cleanUrl)}
+	git remote set-url origin ${shellQuote(cleanUrl)}
+	git ${authConfig} push origin ${shellQuote(branch)} 2>&1
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -eq 0 ]; then
+	  echo "SHA:$(git rev-parse HEAD)"
+	fi
 exit $EXIT_CODE
 `
 
@@ -339,7 +342,7 @@ exit $EXIT_CODE
           409,
         )
       }
-      return c.json({ success: false, error: out || 'Push failed' }, 500)
+      return c.json({ success: false, error: 'Push failed' }, 500)
     }
 
     const shaMatch = res.output?.match(/SHA:([a-f0-9]+)/)
@@ -359,10 +362,7 @@ exit $EXIT_CODE
     return c.json({ success: true, sha })
   } catch (err) {
     c.var.logger.error({ err }, 'git push error')
-    return c.json(
-      { success: false, error: err instanceof Error ? err.message : 'Push failed' },
-      500,
-    )
+    return c.json({ success: false, error: 'Push failed' }, 500)
   }
 })
 
@@ -387,19 +387,18 @@ git.post('/:id/git/pull', zValidator('param', idParam), async (c) => {
 
   try {
     const { token } = await githubApp.getInstallationToken(gh.installationId)
-    const authUrl = `https://x-access-token:${token}@github.com/${gh.repoOwner}/${gh.repoName}.git`
-    const cleanUrl = `https://github.com/${gh.repoOwner}/${gh.repoName}.git`
+    const cleanUrl = githubRemoteUrl(gh)
+    const authConfig = gitAuthConfig(token)
 
     const script = `
-cd '${cwd}'
-git remote get-url origin >/dev/null 2>&1 || git remote add origin '${cleanUrl}'
-git remote set-url origin '${authUrl}'
-git pull origin ${branch} --ff-only 2>&1
-EXIT_CODE=$?
-git remote set-url origin '${cleanUrl}'
-if [ $EXIT_CODE -eq 0 ]; then
-  echo "SHA:$(git rev-parse HEAD)"
-fi
+	cd ${shellQuote(cwd)}
+	git remote get-url origin >/dev/null 2>&1 || git remote add origin ${shellQuote(cleanUrl)}
+	git remote set-url origin ${shellQuote(cleanUrl)}
+	git ${authConfig} pull origin ${shellQuote(branch)} --ff-only 2>&1
+	EXIT_CODE=$?
+	if [ $EXIT_CODE -eq 0 ]; then
+	  echo "SHA:$(git rev-parse HEAD)"
+	fi
 exit $EXIT_CODE
 `
 
@@ -413,17 +412,14 @@ exit $EXIT_CODE
           409,
         )
       }
-      return c.json({ success: false, error: out || 'Pull failed' }, 500)
+      return c.json({ success: false, error: 'Pull failed' }, 500)
     }
 
     const shaMatch = res.output?.match(/SHA:([a-f0-9]+)/)
     return c.json({ success: true, sha: shaMatch?.[1] })
   } catch (err) {
     c.var.logger.error({ err }, 'git pull error')
-    return c.json(
-      { success: false, error: err instanceof Error ? err.message : 'Pull failed' },
-      500,
-    )
+    return c.json({ success: false, error: 'Pull failed' }, 500)
   }
 })
 

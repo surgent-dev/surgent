@@ -8,8 +8,21 @@ import type { AppContext } from '@/types/application'
 
 // --- Test DB ---
 
-const DATABASE_URL =
-  process.env.TEST_DATABASE_URL || 'postgres://surgent:password@localhost:5432/surgent'
+function requireTestDatabaseUrl() {
+  const url = process.env.TEST_DATABASE_URL
+  if (!url) throw new Error('TEST_DATABASE_URL is required for DB-backed pay tests')
+
+  const databaseName = new URL(url).pathname.split('/').filter(Boolean).at(-1) ?? ''
+  if (!databaseName.toLowerCase().includes('test')) {
+    throw new Error(
+      `Refusing to run DB-backed pay tests against non-test database "${databaseName}"`,
+    )
+  }
+
+  return url
+}
+
+const DATABASE_URL = requireTestDatabaseUrl()
 const WEBHOOK_SECRET = Buffer.from('test-webhook-secret-key').toString('base64')
 
 let db: Kysely<Database>

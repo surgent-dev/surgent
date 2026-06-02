@@ -153,6 +153,7 @@ export const config = {
   },
   analytics: {
     url: env.ANALYTICS_URL || (env.NODE_ENV === 'production' ? undefined : 'http://127.0.0.1:3007'),
+    token: env.ANALYTICS_INTERNAL_TOKEN,
   },
   resend: {
     apiKey: env.RESEND_API_KEY,
@@ -195,6 +196,10 @@ export function validateAnalyticsConfig(): string[] {
 
   if (env.NODE_ENV === 'production' && !config.analytics.url) {
     warnings.push('ANALYTICS_URL is required in production')
+  }
+
+  if (env.NODE_ENV === 'production' && !config.analytics.token) {
+    warnings.push('ANALYTICS_INTERNAL_TOKEN is required in production')
   }
 
   return warnings

@@ -81,6 +81,28 @@ function getWebhookJobId(payload: EntriWebhookPayload): string | null {
   return payload.job_id || payload.jobId || null
 }
 
+function summarizeDomainWebhookPayload(payload: EntriWebhookPayload): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries({
+      id: payload.id,
+      type: payload.type,
+      event: payload.event,
+      jobId: getWebhookJobId(payload),
+      domain: payload.domain || payload.purchased_domains?.[0],
+      provider: payload.provider,
+      registrar: payload.registrar,
+      setupType: payload.setup_type,
+      propagationStatus: payload.propagation_status,
+      secureStatus: payload.secure_status,
+      powerStatus: payload.power_status,
+      freeDomain: payload.free_domain,
+      dnsStatus: payload.dns_status,
+      error: payload.error,
+      reason: payload.reason,
+    }).filter(([, value]) => value !== undefined),
+  )
+}
+
 function isProviderReady(value: string | null): boolean {
   return value === 'success' || value === 'exempt'
 }
@@ -703,7 +725,7 @@ domains.delete('/:projectId/:domainId', async (c) => {
   if (!domain) return c.json({ deleted: true })
 
   await db.deleteFrom('domain').where('id', '=', domainId).execute()
-  await syncProjectAnalyticsDomain(projectId).catch(() => {})
+  await syncProjectAnalyticsDomain(projectId)
 
   log.info({ projectId, domainId, domainName: domain.domainName }, 'domain removed')
 
@@ -770,7 +792,7 @@ domains.post(
       true,
     )
 
-    await syncProjectAnalyticsDomain(projectId).catch(() => {})
+    await syncProjectAnalyticsDomain(projectId)
 
     return c.json({ ok: true, primaryDomain: domain.domainName })
   },
@@ -895,6 +917,9 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
   if (!payload || typeof payload !== 'object') {
     return c.json({ error: 'Invalid payload' }, 400)
   }
+  if (!payload.id) {
+    return c.json({ error: 'Missing webhook id' }, 400)
+  }
 
   // Signature verification
   const webhookSecret = config.entri.webhookSecret
@@ -905,7 +930,7 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
     }
     log.warn('[ENTRI-WEBHOOK] no secret configured, skipping verification')
   } else {
-    const result = verifyEntriSignature(payload.id || '', webhookSecret, {
+    const result = verifyEntriSignature(payload.id, webhookSecret, {
       signatureV2: c.req.header('Entri-Signature-V2') || '',
       signatureV1: c.req.header('Entri-Signature') || '',
       timestamp: c.req.header('Entri-Timestamp') || '',
@@ -934,19 +959,16 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
       propagation_status: payload.propagation_status,
       setup_type: payload.setup_type,
       provider: payload.provider,
-      data: payload.data,
     },
     '[ENTRI-WEBHOOK] received',
   )
 
   // Store webhook event
-  const existingEvent = payload.id
-    ? await db
-        .selectFrom('domain_webhook_event')
-        .select(['status'])
-        .where('entriEventId', '=', payload.id)
-        .executeTakeFirst()
-    : null
+  const existingEvent = await db
+    .selectFrom('domain_webhook_event')
+    .select(['status'])
+    .where('entriEventId', '=', payload.id)
+    .executeTakeFirst()
 
   if (existingEvent?.status === 'processed') {
     log.info({ eventId: payload.id }, '[ENTRI-WEBHOOK] duplicate event, skipping')
@@ -964,10 +986,10 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
     await db
       .insertInto('domain_webhook_event')
       .values({
-        entriEventId: payload.id || null,
+        entriEventId: payload.id,
         eventType,
         domainName: payload.domain || payload.purchased_domains?.[0] || null,
-        payload: payload as Record<string, unknown>,
+        payload: summarizeDomainWebhookPayload(payload),
         status: 'pending',
       })
       .execute()
@@ -976,11 +998,12 @@ domainWebhooks.post('/webhooks/:provider', async (c) => {
   // Process synchronously (domain events are low volume)
   try {
     await processDomainWebhook(payload)
-    await markWebhookEventStatus(payload.id || null, 'processed')
+    await markWebhookEventStatus(payload.id, 'processed')
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Webhook processing failed'
-    await markWebhookEventStatus(payload.id || null, 'failed', message)
+    await markWebhookEventStatus(payload.id, 'failed', message)
     log.error({ err, eventType }, '[ENTRI-WEBHOOK] processing error')
+    return c.json({ error: 'Webhook processing failed' }, 500)
   }
 
   return c.json({ received: true }, 202)
@@ -1214,31 +1237,22 @@ async function processDomainWebhook(payload: EntriWebhookPayload) {
       return
     }
 
-    const project = extractedProjectId
-      ? await db
-          .selectFrom('project')
-          .select(['id', 'organizationId'])
-          .where('id', '=', extractedProjectId)
-          .where('userId', '=', resolvedUserId)
-          .where('deletedAt', 'is', null)
-          .executeTakeFirst()
-      : await db
-          .selectFrom('project')
-          .select(['id', 'organizationId'])
-          .where('userId', '=', resolvedUserId)
-          .where('deletedAt', 'is', null)
-          .orderBy('createdAt', 'desc')
-          .executeTakeFirst()
+    if (!extractedProjectId) {
+      throw new Error('Webhook missing project correlation')
+    }
+
+    const project = await db
+      .selectFrom('project')
+      .select(['id', 'organizationId'])
+      .where('id', '=', extractedProjectId)
+      .where('userId', '=', resolvedUserId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst()
 
     if (!project) {
-      log.warn({ userId: resolvedUserId, domainName }, '[ENTRI-WEBHOOK] no project found for user')
-      return
+      throw new Error('Webhook project correlation did not match an active project')
     }
-
-    if (!project.id) {
-      log.warn({ userId: resolvedUserId, domainName }, '[ENTRI-WEBHOOK] project missing id')
-      return
-    }
+    const projectId = project.id!
 
     const existingByName = await db
       .selectFrom('domain')
@@ -1248,7 +1262,7 @@ async function processDomainWebhook(payload: EntriWebhookPayload) {
 
     if (
       existingByName &&
-      (existingByName.projectId !== project.id || existingByName.userId !== resolvedUserId)
+      (existingByName.projectId !== projectId || existingByName.userId !== resolvedUserId)
     ) {
       log.warn(
         { domainName: finalDomainName, projectId: existingByName.projectId, resolvedUserId },
@@ -1273,7 +1287,7 @@ async function processDomainWebhook(payload: EntriWebhookPayload) {
       await db
         .updateTable('domain')
         .set({
-          projectId: project.id,
+          projectId,
           userId: resolvedUserId,
           organizationId: project.organizationId,
           domainName: finalDomainName,
@@ -1304,7 +1318,7 @@ async function processDomainWebhook(payload: EntriWebhookPayload) {
       const existingPrimary = await db
         .selectFrom('domain')
         .select('id')
-        .where('projectId', '=', project.id)
+        .where('projectId', '=', projectId)
         .where('isPrimary', '=', true)
         .where('status', 'in', ['active', 'ssl_provisioning', 'purchasing', 'dns_configuring'])
         .executeTakeFirst()
@@ -1312,7 +1326,7 @@ async function processDomainWebhook(payload: EntriWebhookPayload) {
       domainRecord = await db
         .insertInto('domain')
         .values({
-          projectId: project.id,
+          projectId,
           userId: resolvedUserId,
           organizationId: project.organizationId,
           domainName: finalDomainName,
@@ -1343,7 +1357,7 @@ async function processDomainWebhook(payload: EntriWebhookPayload) {
       status !== 'error',
     )
     if (status === 'active' && domainRecord.isPrimary && domainRecord.projectId) {
-      await syncProjectAnalyticsDomain(domainRecord.projectId).catch(() => {})
+      await syncProjectAnalyticsDomain(domainRecord.projectId)
     }
     return
   }
@@ -1388,7 +1402,7 @@ async function processDomainWebhook(payload: EntriWebhookPayload) {
     .execute()
 
   if (status === 'active' && domainRecord.isPrimary && domainRecord.projectId) {
-    await syncProjectAnalyticsDomain(domainRecord.projectId).catch(() => {})
+    await syncProjectAnalyticsDomain(domainRecord.projectId)
   }
 
   if (statusChanged) {

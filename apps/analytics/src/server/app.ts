@@ -78,9 +78,7 @@ export async function createApp() {
 
   app.onError((err) => {
     console.error(err)
-    return serverError({
-      message: err instanceof Error ? err.message : 'Internal Server Error',
-    })
+    return serverError({ message: 'Server error' })
   })
 
   app.notFound(() => new Response('Not found', { status: 404 }))

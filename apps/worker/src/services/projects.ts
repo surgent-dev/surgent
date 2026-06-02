@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import type {
+  DeploymentEnvSnapshot,
   EnvDestination,
   ProjectMetadata,
   ProjectProvisioningMetadata,
@@ -115,8 +116,13 @@ export async function createProject(args: {
       name: args.name,
       slug,
       status: 'provisioning',
+      failReason: null,
       github: args.githubUrl ? { url: args.githubUrl } : null,
+      settings: null,
+      deployment: null,
+      sandbox: null,
       metadata: args.metadata ?? null,
+      isPublic: false,
       createdAt: now,
       updatedAt: now,
     })
@@ -250,7 +256,7 @@ export async function createDeployment(args: {
   projectId: string
   scriptName: string
   status: string
-  envSnapshot?: any | null
+  envSnapshot?: DeploymentEnvSnapshot | null
   hostname?: string | null
   error?: string | null
   startedAt?: Date | null
@@ -286,7 +292,7 @@ export async function createDeployment(args: {
 
 type DeploymentUpdate = {
   status?: string
-  envSnapshot?: any | null
+  envSnapshot?: DeploymentEnvSnapshot | null
   hostname?: string | null
   error?: string | null
   startedAt?: Date | null

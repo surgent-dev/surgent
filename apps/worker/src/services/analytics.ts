@@ -9,13 +9,19 @@ interface AnalyticsWebsite {
   domain: string | null
 }
 
-interface AnalyticsWebsiteList {
-  data?: AnalyticsWebsite[]
+interface AnalyticsWebsitePage {
+  data: AnalyticsWebsite[]
 }
 
 function getAnalyticsUrl() {
   if (config.analytics.url) return config.analytics.url
   throw new Error('ANALYTICS_URL is not configured')
+}
+
+function analyticsHeaders(extra?: HeadersInit): Headers {
+  const headers = new Headers(extra)
+  if (config.analytics.token) headers.set('Authorization', `Bearer ${config.analytics.token}`)
+  return headers
 }
 
 function normalizeAnalyticsDomain(domain: string | undefined): string | undefined {
@@ -36,16 +42,13 @@ async function findAnalyticsWebsite(projectId: string): Promise<AnalyticsWebsite
   const url = new URL('/api/websites', getAnalyticsUrl())
   url.searchParams.set('externalProjectId', projectId)
 
-  const res = await fetch(url)
+  const res = await fetch(url, { headers: analyticsHeaders() })
   if (!res.ok) {
-    log.warn({ projectId, status: res.status }, 'failed to lookup analytics website')
-    return null
+    throw new Error(`Failed to lookup analytics website (${res.status})`)
   }
 
-  const body = (await res.json()) as AnalyticsWebsiteList | AnalyticsWebsite[]
-  if (Array.isArray(body)) return body[0] || null
-  if (Array.isArray(body.data)) return body.data[0] || null
-  return null
+  const body = (await res.json()) as AnalyticsWebsitePage
+  return body.data[0] ?? null
 }
 
 async function createAnalyticsWebsite(args: {
@@ -54,12 +57,12 @@ async function createAnalyticsWebsite(args: {
   userId: string
   name: string
   domain?: string
-}): Promise<AnalyticsWebsite | null> {
+}): Promise<AnalyticsWebsite> {
   const domain = normalizeAnalyticsDomain(args.domain)
 
   const res = await fetch(`${getAnalyticsUrl()}/api/websites`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: analyticsHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       name: args.name,
       domain: domain || null,
@@ -70,11 +73,7 @@ async function createAnalyticsWebsite(args: {
   })
 
   if (!res.ok) {
-    log.warn(
-      { projectId: args.projectId, status: res.status },
-      'failed to create analytics website',
-    )
-    return null
+    throw new Error(`Failed to create analytics website (${res.status})`)
   }
 
   return (await res.json()) as AnalyticsWebsite
@@ -84,12 +83,12 @@ async function updateAnalyticsWebsite(websiteId: string, domain: string) {
   const normalized = normalizeAnalyticsDomain(domain)
   const res = await fetch(`${getAnalyticsUrl()}/api/websites/${websiteId}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: analyticsHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ domain: normalized || null }),
   })
 
   if (!res.ok) {
-    log.warn({ websiteId, status: res.status }, 'failed to update analytics website')
+    throw new Error(`Failed to update analytics website (${res.status})`)
   }
 }
 
@@ -99,36 +98,26 @@ export async function ensureAnalytics(args: {
   userId: string
   name: string
   domain?: string
-}): Promise<AnalyticsWebsite | null> {
-  try {
-    const domain = normalizeAnalyticsDomain(args.domain)
-    const website = await findAnalyticsWebsite(args.projectId)
-    if (website?.id) {
-      if (domain && website.domain !== domain) {
-        await updateAnalyticsWebsite(website.id, domain)
-      }
-      log.info({ projectId: args.projectId, websiteId: website.id }, 'analytics connected')
-      return website
+}): Promise<AnalyticsWebsite> {
+  const domain = normalizeAnalyticsDomain(args.domain)
+  const website = await findAnalyticsWebsite(args.projectId)
+  if (website?.id) {
+    if (domain && website.domain !== domain) {
+      await updateAnalyticsWebsite(website.id, domain)
     }
-
-    const created = await createAnalyticsWebsite({ ...args, domain })
-    if (!created?.id) return null
-
-    log.info({ projectId: args.projectId, websiteId: created.id }, 'analytics connected')
-    return created
-  } catch (err) {
-    log.warn({ err, projectId: args.projectId }, 'analytics service unavailable — skipping')
-    return null
+    log.info({ projectId: args.projectId, websiteId: website.id }, 'analytics connected')
+    return website
   }
+
+  const created = await createAnalyticsWebsite({ ...args, domain })
+  if (!created.id) throw new Error('Analytics website response missing id')
+
+  log.info({ projectId: args.projectId, websiteId: created.id }, 'analytics connected')
+  return created
 }
 
 export async function getAnalyticsWebsite(projectId: string): Promise<AnalyticsWebsite | null> {
-  try {
-    return await findAnalyticsWebsite(projectId)
-  } catch (err) {
-    log.warn({ err, projectId }, 'failed to resolve analytics website')
-    return null
-  }
+  return findAnalyticsWebsite(projectId)
 }
 
 export async function syncProjectAnalyticsDomain(projectId: string): Promise<void> {
@@ -147,11 +136,12 @@ export async function removeAnalytics(projectId: string): Promise<void> {
   const website = await getAnalyticsWebsite(projectId)
   if (!website?.id) return
 
-  try {
-    await fetch(`${getAnalyticsUrl()}/api/websites/${website.id}`, {
-      method: 'DELETE',
-    })
-  } catch (err) {
-    log.warn({ err, projectId, websiteId: website.id }, 'failed to remove analytics website')
+  const res = await fetch(`${getAnalyticsUrl()}/api/websites/${website.id}`, {
+    method: 'DELETE',
+    headers: analyticsHeaders(),
+  })
+
+  if (!res.ok) {
+    throw new Error(`Failed to remove analytics website (${res.status})`)
   }
 }

@@ -115,10 +115,8 @@ export const storage = {
     return `${base.replace(/\/$/, '')}/${key}`
   },
 
-  generateKey(userId: string, filename: string): string {
-    const timestamp = Date.now()
-    const random = Math.random().toString(36).slice(2, 8)
-    const safe = filename.replace(/[^a-zA-Z0-9.-]/g, '_')
-    return `${userId}/${timestamp}-${random}-${safe}`
+  generateKey(filename: string): string {
+    const extension = filename.match(/\.[a-zA-Z0-9]{1,12}$/)?.[0].toLowerCase() ?? ''
+    return `uploads/${crypto.randomUUID()}${extension}`
   },
 }

@@ -15,19 +15,17 @@ export function createDataDumper(
   if (!executionCtx) return
   if (sessionId === '') return
 
-  let data: Record<string, unknown> = { sessionId, requestId, projectId }
   let metadata: Record<string, unknown> = { sessionId, requestId, projectId }
 
   return {
     provideModel: (model?: string) => {
-      data.modelName = model
       metadata.modelName = model
     },
-    provideRequest: (request: string) => (data.request = request),
-    provideResponse: (response: string) => (data.response = response),
-    provideStream: (chunk: string) => (data.response = ((data.response as string) ?? '') + chunk),
+    provideRequest: (_request: string) => {},
+    provideResponse: (_response: string) => {},
+    provideStream: (_chunk: string) => {},
     flush: () => {
-      if (!data.modelName) return
+      if (!metadata.modelName) return
 
       const timestamp = new Date().toISOString().replace(/[^0-9]/g, '')
       const [year, month, day, hour, minute, second] = [
@@ -41,14 +39,7 @@ export function createDataDumper(
 
       executionCtx.waitUntil(
         bucket.put(
-          `data/${data.modelName}/${year}/${month}/${day}/${hour}/${minute}/${second}/${requestId}.json`,
-          JSON.stringify({ timestamp, ...data }),
-        ),
-      )
-
-      executionCtx.waitUntil(
-        bucket.put(
-          `meta/${data.modelName}/${sessionId}/${requestId}.json`,
+          `meta/${metadata.modelName}/${year}/${month}/${day}/${hour}/${minute}/${second}/${sessionId}/${requestId}.json`,
           JSON.stringify({ timestamp, ...metadata }),
         ),
       )

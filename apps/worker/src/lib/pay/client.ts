@@ -46,11 +46,11 @@ export class PayClient {
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const url = `${this.baseUrl}${path}`
-    const keyHint = this.apiKey
-      ? `${this.apiKey.slice(0, 8)}...${this.apiKey.slice(-4)}`
-      : '(empty)'
 
-    log.debug({ method, url, keyHint, company: this.platformCompanyId }, 'request')
+    log.debug(
+      { method, url, hasApiKey: Boolean(this.apiKey), company: this.platformCompanyId },
+      'request',
+    )
 
     const response = await fetch(url, {
       method,
@@ -66,7 +66,7 @@ export class PayClient {
     const data = toJson(text)
 
     if (!response.ok) {
-      log.error({ status: response.status, method, path, body: text }, 'request failed')
+      log.error({ status: response.status, method, path, hasBody: Boolean(text) }, 'request failed')
       throw new HttpError(
         response.status,
         parseWhopError(data, text || `Whop API ${response.status}`),

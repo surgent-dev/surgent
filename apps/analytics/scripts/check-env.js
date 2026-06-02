@@ -21,3 +21,7 @@ function checkMissing(vars) {
 if (!process.env.SKIP_DB_CHECK && !process.env.DATABASE_TYPE) {
   checkMissing(['DATABASE_URL'])
 }
+
+if (process.env.REQUIRE_ANALYTICS_INTERNAL_TOKEN === '1' || process.env.NODE_ENV === 'production') {
+  checkMissing(['ANALYTICS_INTERNAL_TOKEN'])
+}

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM oven/bun:1 AS deps
+FROM oven/bun:1.3.11 AS deps
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
 COPY apps/web/package.json ./apps/web/
@@ -11,14 +11,20 @@ COPY packages/db/package.json ./packages/db/
 COPY packages/gateway/package.json ./packages/gateway/
 RUN HUSKY=0 bun install --frozen-lockfile
 
-FROM oven/bun:1 AS builder
+FROM oven/bun:1.3.11 AS builder
 WORKDIR /app
 COPY --from=deps /app /app
 COPY apps/analytics ./apps/analytics
 WORKDIR /app/apps/analytics
-RUN bun run build-docker
+ARG REQUIRE_GEO_DATABASE=0
+ARG REQUIRE_ANALYTICS_INTERNAL_TOKEN=0
+RUN --mount=type=secret,id=maxmind_license_key \
+  if [ -f /run/secrets/maxmind_license_key ]; then export MAXMIND_LICENSE_KEY="$(cat /run/secrets/maxmind_license_key)"; fi; \
+  REQUIRE_ANALYTICS_INTERNAL_TOKEN="$REQUIRE_ANALYTICS_INTERNAL_TOKEN" \
+  REQUIRE_GEO_DATABASE="$REQUIRE_GEO_DATABASE" \
+  bun run build-docker
 
-FROM oven/bun:1-slim AS production
+FROM oven/bun:1.3.11-slim AS production
 RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules

@@ -8,12 +8,14 @@
   "scripts": {
     "db:migrate": "bun ./src/migrate.ts",
     "db:check": "bun ./src/migrate.ts check",
-    "db:rollback": "bun ./src/migrate.ts down"
+    "db:rollback": "bun ./src/migrate.ts down",
+    "typecheck": "tsc --noEmit",
+    "check-types": "bun run typecheck"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
     "dotenv": "^17.2.3",
-    "kysely": "^0.28.8",
+    "kysely": "0.29.2",
     "kysely-neon": "^2.0.2",
     "pg": "^8.16.3"
   },

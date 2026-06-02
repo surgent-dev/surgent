@@ -46,12 +46,14 @@ export namespace ZenData {
     ),
   })
 
-  const ProviderSchema = z.object({
-    api: z.string(),
-    apiKey: z.string(),
-    format: FormatSchema,
-    headerMappings: z.record(z.string(), z.string()).optional(),
-  })
+  const ProviderSchema = z
+    .object({
+      api: z.string(),
+      apiKeyBinding: z.string().optional(),
+      format: FormatSchema,
+      headerMappings: z.record(z.string(), z.string()).optional(),
+    })
+    .strict()
 
   export const ModelsSchema = z.object({
     models: z.record(
@@ -62,7 +64,12 @@ export namespace ZenData {
   })
 }
 
-export type ZenDataResponse = z.infer<typeof ZenData.ModelsSchema>
+type RawZenDataResponse = z.infer<typeof ZenData.ModelsSchema>
+type ZenProvider = RawZenDataResponse['providers'][string] & { apiKey: string }
+
+export type ZenDataResponse = Omit<RawZenDataResponse, 'providers'> & {
+  providers: Record<string, ZenProvider>
+}
 
 function isByokProvider(provider: string) {
   return provider === 'openai' || provider === 'anthropic' || provider === 'google'
@@ -84,14 +91,41 @@ function readModelsEnv(env: Bindings) {
     .join('')
 }
 
+function defaultApiKeyBinding(providerId: string) {
+  return `${providerId.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_API_KEY`
+}
+
+function readProviderApiKey(
+  env: Bindings,
+  providerId: string,
+  provider: RawZenDataResponse['providers'][string],
+) {
+  const binding = provider.apiKeyBinding ?? defaultApiKeyBinding(providerId)
+  const value = (env as unknown as Record<string, unknown>)[binding]
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`Provider ${providerId} is missing ${binding}`)
+  }
+  return value
+}
+
 export function loadZenData(env: Bindings): ZenDataResponse {
   const raw = readModelsEnv(env)
   if (!raw) {
     throw new Error('ZEN_MODELS is not configured')
   }
   const data = ZenData.ModelsSchema.parse(JSON.parse(raw))
+  const providers = Object.fromEntries(
+    Object.entries(data.providers).map(([providerId, provider]) => [
+      providerId,
+      {
+        ...provider,
+        apiKey: readProviderApiKey(env, providerId, provider),
+      },
+    ]),
+  )
+  const zenData = { ...data, providers }
 
-  for (const [modelId, value] of Object.entries(data.models)) {
+  for (const [modelId, value] of Object.entries(zenData.models)) {
     const models = Array.isArray(value) ? value : [value]
 
     for (const model of models) {
@@ -105,5 +139,5 @@ export function loadZenData(env: Bindings): ZenDataResponse {
     }
   }
 
-  return data
+  return zenData
 }

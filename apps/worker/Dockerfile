@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM oven/bun:1 AS deps
+FROM oven/bun:1.3.11 AS deps
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
 COPY apps/analytics/package.json ./apps/analytics/
@@ -11,7 +11,7 @@ COPY packages/db/package.json ./packages/db/
 COPY packages/gateway/package.json ./packages/gateway/
 RUN HUSKY=0 bun install --frozen-lockfile
 
-FROM oven/bun:1-slim AS production
+FROM oven/bun:1.3.11-slim AS production
 RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=deps /app /app

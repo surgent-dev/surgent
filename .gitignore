@@ -8,6 +8,7 @@ node_modules
 # Local env files
 .env
 .env.local
+.env.prod
 .env.development.local
 .env.test.local
 .env.production.local
@@ -99,11 +100,14 @@ cdk.out/
 cdk.context.json
 
 # deployments
-.env.prod
+PROD-GUIDE.md
 
 # code references
 references/
 /research/
+/docs/research/
+apps/worker/existing_customers.json
+scripts/paid-customers-projects.ts
 
 pgadmin-servers.json
 
@@ -112,3 +116,8 @@ pgadmin-servers.json
 
 # Wrangler
 .wrangler/
+**/wrangler.private.jsonc
+
+# Local deploy config
+infra/deploy-prod-private.sh
+infra/diff-prod-private.sh

@@ -45,6 +45,93 @@ const portalSchema = z.object({
   returnPath: z.string().trim().min(1).optional(),
 })
 
+function compactStripeObject(event: Stripe.Event): Record<string, unknown> {
+  const object = event.data.object as Record<string, any>
+
+  if (
+    event.type === 'checkout.session.completed' ||
+    event.type === 'checkout.session.async_payment_succeeded' ||
+    event.type === 'checkout.session.async_payment_failed'
+  ) {
+    return {
+      id: object.id,
+      customer: typeof object.customer === 'string' ? object.customer : object.customer?.id,
+      mode: object.mode,
+      payment_status: object.payment_status,
+      metadata: { organizationId: object.metadata?.organizationId },
+    }
+  }
+
+  if (event.type === 'payment_intent.succeeded') {
+    return {
+      id: object.id,
+      customer: typeof object.customer === 'string' ? object.customer : object.customer?.id,
+      metadata: {
+        kind: object.metadata?.kind,
+        organizationId: object.metadata?.organizationId,
+      },
+    }
+  }
+
+  if (event.type === 'customer.updated') {
+    return {
+      id: object.id,
+      invoice_settings: {
+        default_payment_method: object.invoice_settings?.default_payment_method,
+      },
+    }
+  }
+
+  if (event.type === 'charge.refunded') {
+    return {
+      id: object.id,
+      customer: typeof object.customer === 'string' ? object.customer : object.customer?.id,
+      payment_intent:
+        typeof object.payment_intent === 'string'
+          ? object.payment_intent
+          : object.payment_intent?.id,
+      amount_refunded: object.amount_refunded,
+    }
+  }
+
+  return {
+    id: object.id,
+    customer: typeof object.customer === 'string' ? object.customer : object.customer?.id,
+  }
+}
+
+function compactStripeEvent(event: Stripe.Event): Stripe.Event {
+  const previousAttributes =
+    event.type === 'customer.updated'
+      ? { invoice_settings: (event.data as any).previous_attributes?.invoice_settings ?? {} }
+      : undefined
+
+  return {
+    id: event.id,
+    object: 'event',
+    api_version: event.api_version,
+    created: event.created,
+    livemode: event.livemode,
+    pending_webhooks: event.pending_webhooks,
+    request: event.request,
+    type: event.type,
+    data: {
+      object: compactStripeObject(event),
+      ...(previousAttributes ? { previous_attributes: previousAttributes } : {}),
+    },
+  } as unknown as Stripe.Event
+}
+
+function summarizeStripeEvent(event: Stripe.Event): Record<string, unknown> {
+  return {
+    id: event.id,
+    type: event.type,
+    created: event.created,
+    livemode: event.livemode,
+    object: compactStripeObject(event),
+  }
+}
+
 billing.post('/webhooks/stripe', async (c) => {
   if (!stripe || !config.stripe.webhookSecret) {
     return c.json({ error: 'Stripe webhooks are not configured' }, 503)
@@ -63,12 +150,14 @@ billing.post('/webhooks/stripe', async (c) => {
     return c.json({ error: message }, 400)
   }
 
+  const compactEvent = compactStripeEvent(event)
+
   const inserted = await db
     .insertInto('billing_event')
     .values({
       stripeEventId: event.id,
       type: event.type,
-      payload: event as any,
+      payload: summarizeStripeEvent(event) as any,
       status: 'pending',
       error: null,
       receivedAt: new Date(),
@@ -86,7 +175,7 @@ billing.post('/webhooks/stripe', async (c) => {
       .executeTakeFirst()
 
     if (existing?.status === 'pending' || existing?.status === 'failed') {
-      await enqueueBillingWebhookJob(event.id, event.type, event)
+      await enqueueBillingWebhookJob(event.id, event.type, compactEvent)
       return c.json({ ok: true, duplicate: true, queued: true }, 202)
     }
 
@@ -94,7 +183,7 @@ billing.post('/webhooks/stripe', async (c) => {
   }
 
   try {
-    await enqueueBillingWebhookJob(event.id, event.type, event)
+    await enqueueBillingWebhookJob(event.id, event.type, compactEvent)
     return c.json({ ok: true, queued: true }, 202)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Webhook processing failed'

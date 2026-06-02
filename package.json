@@ -3,28 +3,29 @@
   "name": "surgent",
   "description": "Surgent monorepo",
   "private": true,
+  "license": "Apache-2.0",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types",
-    "typecheck": "bun turbo typecheck",
+    "check-types": "turbo run typecheck",
+    "typecheck": "turbo run typecheck",
+    "test": "bun --filter @surgent/analytics test && bun --filter worker test:unit",
     "prepare": "husky",
-    "db:migrate": "bun --filter @repo/db db:migrate",
-    "db:rollback": "bun --filter @repo/db db:rollback",
-    "trustmrr:sync": "bun scripts/trustmrr-sync.ts"
+    "db:migrate": "bun run --cwd apps/worker --env-file=.env.local migrate-db",
+    "db:rollback": "bun run --cwd apps/worker --env-file=.env.local rollback-db"
   },
   "devDependencies": {
     "@tsconfig/bun": "1.0.10",
     "husky": "9.1.7",
     "lint-staged": "16.2.7",
     "prettier": "3.8.1",
-    "turbo": "2.8.0",
+    "turbo": "2.9.14",
     "typescript": "5.9.2"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.9.0"
   },
   "packageManager": "bun@1.3.11",
   "workspaces": [
@@ -34,13 +35,13 @@
   "dependencies": {
     "@ai-sdk/provider": "2.0.0",
     "@ai-sdk/provider-utils": "3.0.19",
-    "@aws-sdk/s3-request-presigner": "3.978.0",
-    "@hono/mcp": "0.2.3",
-    "@modelcontextprotocol/sdk": "1.25.3",
+    "@aws-sdk/s3-request-presigner": "3.1056.0",
+    "@hono/mcp": "0.3.0",
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@opencode-ai/plugin": "0.15.31",
     "@opencode-ai/sdk": "0.15.31",
     "ai": "5.0.97",
-    "convex": "1.34.0",
+    "convex": "1.39.1",
     "entrijs": "1.0.0",
     "monaco-themes": "0.4.8",
     "react-simple-maps": "3.0.0",
@@ -56,7 +57,25 @@
   },
   "overrides": {
     "@codemirror/state": "6.5.4",
-    "@codemirror/view": "6.39.11"
+    "@codemirror/view": "6.39.11",
+    "@ai-sdk/provider-utils": "4.0.27",
+    "@hono/node-server": "2.0.4",
+    "axios": "1.16.1",
+    "basic-ftp": "6.0.1",
+    "brace-expansion": "5.0.6",
+    "d3-color": "3.1.0",
+    "dompurify": "3.4.7",
+    "fast-uri": "3.1.2",
+    "follow-redirects": "1.16.0",
+    "ip-address": "10.2.0",
+    "lodash-es": "4.18.1",
+    "mermaid": "11.15.0",
+    "postcss": "8.5.15",
+    "protobufjs": "8.4.2",
+    "qs": "6.15.2",
+    "serialize-javascript": "7.0.5",
+    "uuid": "11.1.1",
+    "ws": "8.21.0"
   },
   "catalog": {
     "@tsconfig/bun": "^1.0.7",

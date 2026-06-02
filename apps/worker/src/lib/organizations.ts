@@ -53,6 +53,7 @@ export async function ensureActiveOrganization(userId: string): Promise<string> 
       id: organizationId,
       name,
       slug,
+      metadata: null,
       createdAt: now,
       updatedAt: now,
     })

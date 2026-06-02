@@ -432,9 +432,6 @@ export function getProjectProvisioningStepLabel(
 export interface ProjectProvisioningMetadata {
   sandboxId?: string
   previewUrl?: string
-  processName?: string
-  startCommand?: string
-  clonedAt?: string
   initializedAt?: string
   opencodeReadyAt?: string
   finalizedAt?: string
@@ -660,12 +657,17 @@ export interface EnvVarTable {
   updatedAt?: Date
 }
 
+export interface DeploymentEnvSnapshot {
+  keys?: string[]
+  capturedAt?: string
+}
+
 export interface DeploymentTable {
   id: string | null
   projectId: string
   scriptName: string
   status: string
-  envSnapshot: any | null
+  envSnapshot: DeploymentEnvSnapshot | null
   error: string | null
   startedAt: Date | null
   finishedAt: Date | null

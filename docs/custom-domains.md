@@ -275,17 +275,17 @@ All events are stored in `domain_webhook_event` for audit.
 
 ### `domain_webhook_event` table
 
-| Column         | Type         | Constraints                    |
-| -------------- | ------------ | ------------------------------ |
-| `id`           | uuid         | PK, auto-generated             |
-| `entriEventId` | varchar(255) | Entri event ID                 |
-| `eventType`    | varchar(100) | NOT NULL                       |
-| `domainName`   | varchar(255) | —                              |
-| `payload`      | jsonb        | NOT NULL, full webhook payload |
-| `status`       | varchar(20)  | NOT NULL, default `'pending'`  |
-| `error`        | text         | —                              |
-| `createdAt`    | timestamptz  | NOT NULL, default `now()`      |
-| `processedAt`  | timestamptz  | —                              |
+| Column         | Type         | Constraints                      |
+| -------------- | ------------ | -------------------------------- |
+| `id`           | uuid         | PK, auto-generated               |
+| `entriEventId` | varchar(255) | Entri event ID                   |
+| `eventType`    | varchar(100) | NOT NULL                         |
+| `domainName`   | varchar(255) | —                                |
+| `payload`      | jsonb        | NOT NULL, redacted event summary |
+| `status`       | varchar(20)  | NOT NULL, default `'pending'`    |
+| `error`        | text         | —                                |
+| `createdAt`    | timestamptz  | NOT NULL, default `now()`        |
+| `processedAt`  | timestamptz  | —                                |
 
 **Indexes:**
 

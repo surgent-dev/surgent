@@ -56,6 +56,7 @@ import {
 } from '@/lib/pay/mappers'
 import { coerceEvent, verifySignature } from './handlers'
 import { enqueueWebhookJob } from '@/lib/pay/queue'
+import { redactWhopWebhookEvent, summarizeWhopWebhookEvent } from '@/lib/pay/webhooks'
 
 const pay = new Hono<AppContext>()
 
@@ -651,7 +652,6 @@ pay.post(
     ])
 
     const accountMeta = {
-      email: body.email || null,
       title: companyTitle,
       country: (body.country || 'us').toLowerCase(),
       businessType: body.businessType || null,
@@ -921,8 +921,6 @@ pay.post('/checkout', zValidator('json', checkoutBodySchema), async (c) => {
     title,
     ...(productId ? { product_id: productId } : {}),
     ...(body.customerId ? { customer_id: body.customerId } : {}),
-    ...(body.customerEmail ? { customer_email: body.customerEmail } : {}),
-    ...(body.customerName ? { customer_name: body.customerName } : {}),
     redirect_url: safeRedirectUrl,
   }
 
@@ -1553,8 +1551,10 @@ pay.post(
       return c.json({ error: parsed.error }, 400)
     }
 
-    const eventId = parsed.value.eventId || verification.value.eventId
-    const eventType = parsed.value.eventType
+    const webhookEvent = parsed.value
+    const storedWebhookEvent = redactWhopWebhookEvent(webhookEvent)
+    const eventId = webhookEvent.eventId || verification.value.eventId
+    const eventType = webhookEvent.eventType
     const now = new Date()
 
     c.var.logger.info({ eventId }, `${tag} ${eventType} received`)
@@ -1565,7 +1565,7 @@ pay.post(
         id: eventId,
         eventType,
         env,
-        payload: payload as Record<string, unknown>,
+        payload: summarizeWhopWebhookEvent(storedWebhookEvent),
         status: 'pending',
         receivedAt: now,
         handledAt: null,
@@ -1583,14 +1583,14 @@ pay.post(
         .executeTakeFirst()
       if (existing?.status === 'pending' || existing?.status === 'failed') {
         c.var.logger.info({ eventId }, `${tag} duplicate (${existing.status}), re-queuing`)
-        await enqueueWebhookJob(eventId, eventType, parsed.value, env)
+        await enqueueWebhookJob(eventId, eventType, storedWebhookEvent, env)
         return c.json({ ok: true, duplicate: true, queued: true }, 202)
       }
       c.var.logger.info({ eventId }, `${tag} duplicate, already ${existing?.status}`)
       return c.json({ ok: true, duplicate: true })
     }
 
-    await enqueueWebhookJob(eventId, eventType, parsed.value, env)
+    await enqueueWebhookJob(eventId, eventType, storedWebhookEvent, env)
 
     c.var.logger.info({ eventId }, `${tag} enqueued → webhook.process`)
     return c.json({ ok: true, queued: true }, 202)

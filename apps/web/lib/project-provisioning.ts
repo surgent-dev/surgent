@@ -10,9 +10,6 @@ export type ProjectProvisioningStep = (typeof PROJECT_PROVISIONING_STEPS)[number
 export interface ProjectProvisioningMetadata {
   sandboxId?: string
   previewUrl?: string
-  processName?: string
-  startCommand?: string
-  clonedAt?: string
   initializedAt?: string
   opencodeReadyAt?: string
   finalizedAt?: string

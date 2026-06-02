@@ -32,7 +32,7 @@ function parseArgs(): SeedConfig {
 
     if (arg === '--days' && args[i + 1]) {
       config.days = parseInt(args[i + 1], 10)
-      if (isNaN(config.days) || config.days < 1) {
+      if (Number.isNaN(config.days) || config.days < 1) {
         console.error('Error: --days must be a positive integer')
         process.exit(1)
       }
@@ -46,7 +46,7 @@ function parseArgs(): SeedConfig {
       process.exit(0)
     } else if (arg.startsWith('--days=')) {
       config.days = parseInt(arg.split('=')[1], 10)
-      if (isNaN(config.days) || config.days < 1) {
+      if (Number.isNaN(config.days) || config.days < 1) {
         console.error('Error: --days must be a positive integer')
         process.exit(1)
       }

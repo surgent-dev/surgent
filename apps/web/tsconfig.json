@@ -20,13 +20,20 @@
       }
     ],
     "allowJs": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "noEmit": true,
     "baseUrl": ".", // to make @ possible in the web project
     "paths": {
       "@/*": ["./*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", "next.config.js", ".next/types/**/*.ts"],
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "next-env.d.ts",
+    "next.config.js",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
   "exclude": ["node_modules"]
 }

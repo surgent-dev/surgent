@@ -1,7 +1,7 @@
 'use client'
 
-import posthog from 'posthog-js'
 import { useEffect } from 'react'
+import { captureClientException } from '@/lib/posthog-client'
 
 export default function ErrorPage({
   error,
@@ -11,7 +11,7 @@ export default function ErrorPage({
   reset: () => void
 }) {
   useEffect(() => {
-    posthog.captureException(error)
+    captureClientException(error)
   }, [error])
 
   return (

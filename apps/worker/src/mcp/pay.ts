@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import {
   requiredId,
-  hashApiKey,
   normalizeSlug,
   getProductsWithPrices,
   resolveActiveAccountId,
@@ -11,14 +10,8 @@ import {
 import type { PayEnv } from '@/lib/pay/types'
 
 export interface McpContext {
-  apiKey: string
-}
-
-const envSchema = {
-  env: z
-    .enum(['test', 'live'])
-    .optional()
-    .describe('Environment: "test" (sandbox) or "live". Defaults to API key environment.'),
+  projectId: string
+  env: PayEnv
 }
 
 type McpResponse = { content: { type: 'text'; text: string }[]; isError?: boolean }
@@ -35,29 +28,12 @@ function getContext(extra: Record<string, unknown>): McpContext | undefined {
   const meta = extra._meta as { context?: unknown } | undefined
   const ctx = meta?.context
   if (!ctx || typeof ctx !== 'object') return undefined
-  return ctx as McpContext
-}
 
-async function resolveProjectId(
-  apiKey: string,
-): Promise<{ projectId: string; env: PayEnv } | null> {
-  const hashed = await hashApiKey(apiKey)
+  const { projectId, env } = ctx as { projectId?: unknown; env?: unknown }
+  if (typeof projectId !== 'string') return undefined
+  if (env !== 'test' && env !== 'live') return undefined
 
-  const row = await db
-    .selectFrom('apikey')
-    .select(['projectId', 'expiresAt', 'env'])
-    .where('key', '=', hashed)
-    .where('enabled', '=', true)
-    .executeTakeFirst()
-
-  if (!row) return null
-  if (row.expiresAt && row.expiresAt <= new Date()) return null
-
-  if (!row.projectId) return null
-  return {
-    projectId: row.projectId,
-    env: row.env === 'test' ? 'test' : 'live',
-  }
+  return { projectId, env }
 }
 
 /**
@@ -91,21 +67,19 @@ CHECKOUT ARGS:
 - customerId: ID of the customer making the purchase
 - redirectUrl: Where to send the user after payment
 
-REQUIRES _meta.context with apiKey (project-scoped API key).`,
-      inputSchema: envSchema,
+REQUIRES project scope injected by the worker MCP route.`,
+      inputSchema: {},
     },
     async (args, extra) => {
       const ctx = getContext(extra)
-      if (!ctx?.apiKey) return err('Missing apiKey in context')
+      if (!ctx) return err('Missing project context')
 
       try {
-        const scope = await resolveProjectId(ctx.apiKey)
-        if (!scope) return err('Invalid API key')
-        const env = (args.env as PayEnv) || scope.env
+        const env = ctx.env
 
-        const accountId = await resolveActiveAccountId(scope.projectId, env)
+        const accountId = await resolveActiveAccountId(ctx.projectId, env)
         const { products: allProducts, pricesByProduct } = await getProductsWithPrices(
-          scope.projectId,
+          ctx.projectId,
           env,
           accountId,
         )
@@ -163,9 +137,8 @@ Returns:
 - product: { productId, productGroup, slug }
 - price: { priceId, priceAmount, priceCurrency, recurringInterval }
 
-REQUIRES _meta.context with apiKey (project-scoped API key).`,
+REQUIRES project scope injected by the worker MCP route.`,
       inputSchema: {
-        ...envSchema,
         name: z.string().min(1).max(200).describe('Product name'),
         slug: z.string().min(1).max(200).describe('URL-friendly slug for the product'),
         description: z.string().max(2000).optional().describe('Product description'),
@@ -187,23 +160,21 @@ REQUIRES _meta.context with apiKey (project-scoped API key).`,
     },
     async (args, extra) => {
       const ctx = getContext(extra)
-      if (!ctx?.apiKey) return err('Missing apiKey in context')
+      if (!ctx) return err('Missing project context')
 
       try {
-        const scope = await resolveProjectId(ctx.apiKey)
-        if (!scope) return err('Invalid API key')
-        const env = (args.env as PayEnv) || scope.env
+        const env = ctx.env
 
         const slug = normalizeSlug(args.slug)
         if (!slug) return err('Invalid slug')
 
-        const accountId = await resolveActiveAccountId(scope.projectId, env)
+        const accountId = await resolveActiveAccountId(ctx.projectId, env)
         if (!accountId) return err('No active payment account found. Connect one first.')
 
         const existingSlug = await db
           .selectFrom('product')
           .select('id')
-          .where('projectId', '=', scope.projectId)
+          .where('projectId', '=', ctx.projectId)
           .where('env', '=', env)
           .where('slug', '=', slug)
           .executeTakeFirst()
@@ -215,7 +186,7 @@ REQUIRES _meta.context with apiKey (project-scoped API key).`,
           const versions = await trx
             .selectFrom('product')
             .select('version')
-            .where('projectId', '=', scope.projectId)
+            .where('projectId', '=', ctx.projectId)
             .where('env', '=', env)
             .where('productGroup', '=', productGroup)
             .forUpdate()
@@ -227,7 +198,7 @@ REQUIRES _meta.context with apiKey (project-scoped API key).`,
             .insertInto('product')
             .values({
               productGroup,
-              projectId: scope.projectId,
+              projectId: ctx.projectId,
               accountId,
               name: args.name,
               description: args.description || null,

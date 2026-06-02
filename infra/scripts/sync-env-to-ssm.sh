@@ -1,18 +1,18 @@
 #!/bin/bash
 # Sync .env file to AWS SSM Parameter Store
-# Usage: ./sync-env-to-ssm.sh <path-to-env-file>
+# Usage: ./sync-env-to-ssm.sh <path-to-env-file> <ssm-prefix> <aws-region>
 
 set -e
 
-if [ -z "$1" ]; then
-  echo "Usage: ./sync-env-to-ssm.sh <path-to-env-file>"
-  echo "Example: ./sync-env-to-ssm.sh ~/.env.prod"
+if [ "$#" -ne 3 ]; then
+  echo "Usage: ./sync-env-to-ssm.sh <path-to-env-file> <ssm-prefix> <aws-region>"
+  echo "Example: ./sync-env-to-ssm.sh ~/.env.prod /your-app/worker us-east-1"
   exit 1
 fi
 
 ENV_FILE="$1"
-SSM_PREFIX="/surgent/prod"
-REGION="us-east-1"
+SSM_PREFIX="${2%/}"
+REGION="$3"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "Error: .env file not found at $ENV_FILE"

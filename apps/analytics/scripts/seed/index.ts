@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import 'dotenv/config'
 import { PrismaPg } from '@prisma/adapter-pg'
-import { PrismaClient, Prisma } from '../../src/generated/prisma/client.js'
+import { PrismaClient, type Prisma } from '../../src/generated/prisma/client.js'
 import { uuid, generateDatesBetween, subDays, formatNumber, progressBar } from './utils.js'
 import { createSessions, type SessionData } from './generators/sessions.js'
 import {

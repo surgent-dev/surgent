@@ -6,21 +6,19 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "head_sampling_rate": 1,
   },
   "vars": {
-    "ANALYTICS_UPSTREAM": "https://analytics.surgent.dev"
+    "ANALYTICS_UPSTREAM": "http://localhost:4001",
   },
-  "routes": [
-    { "pattern": "*/*", "zone_name": "surgent.site" }
-  ],
+  "routes": [],
   "preview_urls": true,
   "workers_dev": true,
   "dispatch_namespaces": [
     {
       "binding": "dispatcher",
-      "namespace": "surgent-apps-prod",
-      "remote": true
-    }
-  ]
+      "namespace": "surgent-apps-dev",
+      "remote": false,
+    },
+  ],
 }

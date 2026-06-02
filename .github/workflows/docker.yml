@@ -2,27 +2,40 @@ name: Docker
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - apps/worker/**
+      - apps/analytics/**
+      - apps/dispatch/**
+      - packages/gateway/**
+      - packages/db/**
+      - packages/typescript-config/**
+      - infra/**
+      - package.json
+      - bun.lock
+      - bunfig.toml
+      - .dockerignore
+      - .github/workflows/docker.yml
   push:
     branches: [main]
     tags: [v*]
     paths:
       - apps/worker/**
       - apps/analytics/**
+      - apps/dispatch/**
       - packages/gateway/**
       - packages/db/**
       - packages/typescript-config/**
+      - infra/**
       - package.json
       - bun.lock
       - bunfig.toml
+      - .dockerignore
       - .github/workflows/docker.yml
 
 permissions:
   contents: read
-  id-token: write
-
-env:
-  AWS_REGION: us-east-1
-  ECR_REGISTRY: 784713213970.dkr.ecr.us-east-1.amazonaws.com
+  pull-requests: read
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -34,6 +47,8 @@ jobs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
       has_changes: ${{ steps.build-matrix.outputs.has_changes }}
       gateway_changed: ${{ steps.build-matrix.outputs.gateway_changed }}
+      dispatch_changed: ${{ steps.build-matrix.outputs.dispatch_changed }}
+      infra_changed: ${{ steps.build-matrix.outputs.infra_changed }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,21 +64,35 @@ jobs:
               - package.json
               - bun.lock
               - bunfig.toml
+              - .dockerignore
+              - .github/workflows/docker.yml
             analytics:
               - apps/analytics/**
               - package.json
               - bun.lock
               - bunfig.toml
-            gateway:
-              - packages/gateway/**
-              - packages/db/index.ts
-              - packages/db/package.json
-              - packages/db/src/billing_windows.ts
-              - packages/db/src/kysely_db.ts
+              - .dockerignore
+              - .github/workflows/docker.yml
+            dispatch:
+              - apps/dispatch/**
               - packages/typescript-config/**
               - package.json
               - bun.lock
               - bunfig.toml
+              - .dockerignore
+              - .github/workflows/docker.yml
+            gateway:
+              - packages/gateway/**
+              - packages/db/**
+              - packages/typescript-config/**
+              - package.json
+              - bun.lock
+              - bunfig.toml
+              - .dockerignore
+              - .github/workflows/docker.yml
+            infra:
+              - infra/**
+              - .github/workflows/docker.yml
 
       - name: Build service matrix
         id: build-matrix
@@ -75,10 +104,14 @@ jobs:
             WORKER=true
             ANALYTICS=true
             GATEWAY=true
+            DISPATCH=true
+            INFRA=true
           else
             WORKER=${{ steps.filter.outputs.worker }}
             ANALYTICS=${{ steps.filter.outputs.analytics }}
             GATEWAY=${{ steps.filter.outputs.gateway }}
+            DISPATCH=${{ steps.filter.outputs.dispatch }}
+            INFRA=${{ steps.filter.outputs.infra }}
           fi
 
           if [ "$WORKER" = "true" ]; then
@@ -110,19 +143,21 @@ jobs:
           fi
 
           echo "gateway_changed=$GATEWAY" >> "$GITHUB_OUTPUT"
+          echo "dispatch_changed=$DISPATCH" >> "$GITHUB_OUTPUT"
+          echo "infra_changed=$INFRA" >> "$GITHUB_OUTPUT"
           echo "matrix={\"include\":$SERVICES}" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
-  # 2. Build, push, migrate, and deploy each changed service (in parallel)
+  # 2. Build changed ECS images on PRs without production secrets.
   # ---------------------------------------------------------------------------
-  build-and-deploy:
+  build-images:
     needs: changes
-    if: needs.changes.outputs.has_changes == 'true'
+    if: needs.changes.outputs.has_changes == 'true' && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.changes.outputs.matrix) }}
-    name: ${{ matrix.name }}
+    name: build ${{ matrix.name }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -130,23 +165,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Configure AWS credentials via OIDC
-        if: github.event_name != 'pull_request'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::784713213970:role/github-actions-ecr
-          role-session-name: github-actions-${{ github.run_id }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Log in to Amazon ECR
-        if: github.event_name != 'pull_request'
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Resolve Docker image name
+        id: image
+        run: echo "name=local/${{ matrix.ecr_repo }}" >> "$GITHUB_OUTPUT"
 
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.ECR_REGISTRY }}/${{ matrix.ecr_repo }}
+          images: ${{ steps.image.outputs.name }}
           labels: |
             org.opencontainers.image.title=${{ matrix.ecr_repo }}
           tags: |
@@ -157,53 +184,184 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
+      - name: Build Docker image
+        if: matrix.name != 'analytics'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
+      - name: Build analytics Docker image
+        if: matrix.name == 'analytics'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          build-args: |
+            REQUIRE_GEO_DATABASE=0
+            REQUIRE_ANALYTICS_INTERNAL_TOKEN=0
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # ---------------------------------------------------------------------------
+  # 3. Push changed ECS images and deploy from the protected production environment.
+  # ---------------------------------------------------------------------------
+  deploy-ecs:
+    needs: changes
+    if: needs.changes.outputs.has_changes == 'true' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.changes.outputs.matrix) }}
+    name: deploy ${{ matrix.name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate AWS deploy config
+        run: |
+          set -eu
+          : "${AWS_REGION:?Set AWS_REGION environment variable}"
+          : "${ECR_REGISTRY:?Set ECR_REGISTRY environment variable}"
+          : "${ECS_CLUSTER:?Set ECS_CLUSTER environment variable}"
+          : "${AWS_GITHUB_ACTIONS_ROLE_ARN:?Set AWS_GITHUB_ACTIONS_ROLE_ARN environment secret}"
+          if [ "${{ matrix.name }}" = "analytics" ]; then
+            : "${MAXMIND_LICENSE_KEY:?Set MAXMIND_LICENSE_KEY environment secret}"
+          fi
+        env:
+          AWS_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          MAXMIND_LICENSE_KEY: ${{ secrets.MAXMIND_LICENSE_KEY }}
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          role-session-name: github-actions-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve Docker image name
+        id: image
+        run: echo "name=${{ env.ECR_REGISTRY }}/${{ matrix.ecr_repo }}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.ecr_repo }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        if: matrix.name != 'analytics'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Build and push analytics Docker image
+        if: matrix.name == 'analytics'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          build-args: |
+            REQUIRE_GEO_DATABASE=1
+            REQUIRE_ANALYTICS_INTERNAL_TOKEN=1
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          secrets: |
+            maxmind_license_key=${{ secrets.MAXMIND_LICENSE_KEY }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
       - name: Check ECS service exists
         id: ecs-check
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         run: |
           ACTIVE=$(aws ecs describe-services \
-            --cluster surgent-cluster \
+            --cluster "${{ env.ECS_CLUSTER }}" \
             --services ${{ matrix.ecs_service }} \
             --query 'services[?status==`ACTIVE`] | length(@)' \
             --output text)
-          echo "exists=$([[ "$ACTIVE" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          if [ "$ACTIVE" != "1" ]; then
+            aws ecs describe-services \
+              --cluster "${{ env.ECS_CLUSTER }}" \
+              --services ${{ matrix.ecs_service }} \
+              --query 'services[*].{name:serviceName,status:status,failures:failures}'
+            exit 1
+          fi
+          echo "exists=true" >> "$GITHUB_OUTPUT"
 
       - name: Run database migrations
         if: steps.ecs-check.outputs.exists == 'true'
         run: |
           SERVICE_JSON=$(aws ecs describe-services \
-            --cluster surgent-cluster \
+            --cluster "${{ env.ECS_CLUSTER }}" \
             --services ${{ matrix.ecs_service }})
 
           TASK_DEF=$(echo "$SERVICE_JSON" | jq -r '.services[0].taskDefinition')
           NETWORK_CONFIG=$(echo "$SERVICE_JSON" | jq -c '{awsvpcConfiguration: .services[0].networkConfiguration.awsvpcConfiguration}')
 
-          TASK_ARN=$(aws ecs run-task \
-            --cluster surgent-cluster \
+          RUN_TASK=$(aws ecs run-task \
+            --cluster "${{ env.ECS_CLUSTER }}" \
             --launch-type FARGATE \
             --task-definition "$TASK_DEF" \
             --network-configuration "$NETWORK_CONFIG" \
-            --overrides '{"containerOverrides":[{"name":"${{ matrix.container }}","command":["bun","run","${{ matrix.migrate_cmd }}"]}]}' \
-            --query 'tasks[0].taskArn' \
-            --output text)
+            --overrides '{"containerOverrides":[{"name":"${{ matrix.container }}","command":["bun","run","${{ matrix.migrate_cmd }}"]}]}')
+          FAILURES=$(echo "$RUN_TASK" | jq '.failures | length')
+          if [ "$FAILURES" != "0" ]; then
+            echo "$RUN_TASK" | jq '.failures'
+            exit 1
+          fi
+          TASK_ARN=$(echo "$RUN_TASK" | jq -r '.tasks[0].taskArn // empty')
+          if [ -z "$TASK_ARN" ]; then
+            echo "Migration task did not start"
+            exit 1
+          fi
 
           aws ecs wait tasks-stopped \
-            --cluster surgent-cluster \
+            --cluster "${{ env.ECS_CLUSTER }}" \
             --tasks "$TASK_ARN"
 
           EXIT_CODE=$(aws ecs describe-tasks \
-            --cluster surgent-cluster \
+            --cluster "${{ env.ECS_CLUSTER }}" \
             --tasks "$TASK_ARN" \
             --query "tasks[0].containers[?name=='${{ matrix.container }}'] | [0].exitCode" \
             --output text)
@@ -211,7 +369,7 @@ jobs:
           echo "Migration exit code: $EXIT_CODE"
           if [ "$EXIT_CODE" != "0" ]; then
             aws ecs describe-tasks \
-              --cluster surgent-cluster \
+              --cluster "${{ env.ECS_CLUSTER }}" \
               --tasks "$TASK_ARN" \
               --query 'tasks[0].{stopCode:stopCode,stoppedReason:stoppedReason,containers:containers[*].{name:name,exitCode:exitCode,reason:reason}}'
             exit 1
@@ -221,13 +379,22 @@ jobs:
         if: steps.ecs-check.outputs.exists == 'true'
         run: |
           aws ecs update-service \
-            --cluster surgent-cluster \
+            --cluster "${{ env.ECS_CLUSTER }}" \
             --service ${{ matrix.ecs_service }} \
             --force-new-deployment
+          if ! aws ecs wait services-stable \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services ${{ matrix.ecs_service }}; then
+            aws ecs describe-services \
+              --cluster "${{ env.ECS_CLUSTER }}" \
+              --services ${{ matrix.ecs_service }} \
+              --query 'services[*].events[0:10]'
+            exit 1
+          fi
 
-  deploy-gateway:
+  check-gateway:
     needs: changes
-    if: needs.changes.outputs.gateway_changed == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: needs.changes.outputs.gateway_changed == 'true' && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -236,14 +403,249 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.3.11
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Typecheck gateway
+        working-directory: packages/gateway
+        run: bun run typecheck
+
+  deploy-gateway:
+    needs: changes
+    if: needs.changes.outputs.gateway_changed == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Write private gateway config
+        working-directory: packages/gateway
+        env:
+          GATEWAY_ROUTE_PATTERN: ${{ vars.GATEWAY_ROUTE_PATTERN }}
+          GATEWAY_ZONE_NAME: ${{ vars.GATEWAY_ZONE_NAME }}
+          GATEWAY_KV_NAMESPACE_ID: ${{ vars.GATEWAY_KV_NAMESPACE_ID }}
+          GATEWAY_KV_PREVIEW_NAMESPACE_ID: ${{ vars.GATEWAY_KV_PREVIEW_NAMESPACE_ID }}
+          GATEWAY_HYPERDRIVE_ID: ${{ vars.GATEWAY_HYPERDRIVE_ID }}
+          GATEWAY_R2_BUCKET: ${{ vars.GATEWAY_R2_BUCKET }}
+          GATEWAY_R2_PREVIEW_BUCKET: ${{ vars.GATEWAY_R2_PREVIEW_BUCKET }}
+          GATEWAY_ZEN_MODELS: ${{ vars.GATEWAY_ZEN_MODELS }}
+        run: |
+          set -eu
+
+          : "${GATEWAY_ROUTE_PATTERN:?Set GATEWAY_ROUTE_PATTERN environment variable}"
+          : "${GATEWAY_ZONE_NAME:?Set GATEWAY_ZONE_NAME environment variable}"
+          : "${GATEWAY_KV_NAMESPACE_ID:?Set GATEWAY_KV_NAMESPACE_ID environment variable}"
+          : "${GATEWAY_KV_PREVIEW_NAMESPACE_ID:?Set GATEWAY_KV_PREVIEW_NAMESPACE_ID environment variable}"
+          : "${GATEWAY_HYPERDRIVE_ID:?Set GATEWAY_HYPERDRIVE_ID environment variable}"
+          : "${GATEWAY_R2_BUCKET:?Set GATEWAY_R2_BUCKET environment variable}"
+          : "${GATEWAY_R2_PREVIEW_BUCKET:?Set GATEWAY_R2_PREVIEW_BUCKET environment variable}"
+          : "${GATEWAY_ZEN_MODELS:?Set GATEWAY_ZEN_MODELS environment variable}"
+          printf '%s' "$GATEWAY_ZEN_MODELS" | jq -e '
+            .providers as $providers
+            | if ($providers | type) != "object" then error("providers must be an object") else . end
+            | if ([$providers[] | select(has("apiKey"))] | length) > 0 then error("provider apiKey belongs in Cloudflare secrets") else . end
+          ' >/dev/null
+          REQUIRED_PROVIDER_KEYS=$(printf '%s' "$GATEWAY_ZEN_MODELS" | jq -c '
+            [
+              .providers
+              | to_entries[]
+              | (.value.apiKeyBinding // ((.key | ascii_upcase | gsub("[^A-Z0-9]"; "_")) + "_API_KEY"))
+            ]
+            | unique
+          ')
+          ZEN_MODELS_JSON=$(printf '%s' "$GATEWAY_ZEN_MODELS" | jq -Rs .)
+
+          cat > wrangler.private.jsonc <<EOF
+          {
+            "name": "gateway",
+            "main": "src/index.ts",
+            "compatibility_date": "2025-10-21",
+            "compatibility_flags": ["nodejs_compat"],
+            "workers_dev": false,
+            "vars": {
+              "STAGE": "production",
+              "ZEN_MODELS": ${ZEN_MODELS_JSON}
+            },
+            "secrets": {
+              "required": ${REQUIRED_PROVIDER_KEYS}
+            },
+            "routes": [
+              {
+                "pattern": "${GATEWAY_ROUTE_PATTERN}",
+                "zone_name": "${GATEWAY_ZONE_NAME}"
+              }
+            ],
+            "observability": {
+              "enabled": true,
+              "head_sampling_rate": 1
+            },
+            "kv_namespaces": [
+              {
+                "binding": "GATEWAY_KV",
+                "id": "${GATEWAY_KV_NAMESPACE_ID}",
+                "preview_id": "${GATEWAY_KV_PREVIEW_NAMESPACE_ID}"
+              }
+            ],
+            "r2_buckets": [
+              {
+                "binding": "GATEWAY_DATA",
+                "bucket_name": "${GATEWAY_R2_BUCKET}",
+                "preview_bucket_name": "${GATEWAY_R2_PREVIEW_BUCKET}"
+              }
+            ],
+            "hyperdrive": [
+              {
+                "binding": "HYPERDRIVE",
+                "id": "${GATEWAY_HYPERDRIVE_ID}"
+              }
+            ]
+          }
+          EOF
 
       - name: Deploy gateway to Cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CONFIRM_PROD: "1"
-        run: bun --filter gateway deploy:prod
+          CONFIRM_PROD: '1'
+        run: bun --filter gateway deploy:private
+
+  check-dispatch:
+    needs: changes
+    if: needs.changes.outputs.dispatch_changed == 'true' && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck dispatch
+        working-directory: apps/dispatch
+        run: bun run typecheck
+
+  deploy-dispatch:
+    needs: changes
+    if: needs.changes.outputs.dispatch_changed == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Write private dispatch config
+        working-directory: apps/dispatch
+        env:
+          DISPATCH_ROUTE_PATTERN: ${{ vars.DISPATCH_ROUTE_PATTERN }}
+          DISPATCH_ZONE_NAME: ${{ vars.DISPATCH_ZONE_NAME }}
+          DISPATCH_NAMESPACE: ${{ vars.DISPATCH_NAMESPACE }}
+          DISPATCH_ANALYTICS_UPSTREAM: ${{ vars.DISPATCH_ANALYTICS_UPSTREAM }}
+        run: |
+          set -eu
+
+          : "${DISPATCH_ROUTE_PATTERN:?Set DISPATCH_ROUTE_PATTERN environment variable}"
+          : "${DISPATCH_ZONE_NAME:?Set DISPATCH_ZONE_NAME environment variable}"
+          : "${DISPATCH_NAMESPACE:?Set DISPATCH_NAMESPACE environment variable}"
+          : "${DISPATCH_ANALYTICS_UPSTREAM:?Set DISPATCH_ANALYTICS_UPSTREAM environment variable}"
+
+          cat > wrangler.private.jsonc <<EOF
+          {
+            "name": "dispatch",
+            "main": "src/index.ts",
+            "compatibility_date": "2025-10-21",
+            "compatibility_flags": ["nodejs_compat"],
+            "workers_dev": false,
+            "vars": {
+              "ANALYTICS_UPSTREAM": "${DISPATCH_ANALYTICS_UPSTREAM}"
+            },
+            "routes": [
+              {
+                "pattern": "${DISPATCH_ROUTE_PATTERN}",
+                "zone_name": "${DISPATCH_ZONE_NAME}"
+              }
+            ],
+            "observability": {
+              "enabled": true,
+              "head_sampling_rate": 1
+            },
+            "dispatch_namespaces": [
+              {
+                "binding": "dispatcher",
+                "namespace": "${DISPATCH_NAMESPACE}"
+              }
+            ]
+          }
+          EOF
+
+      - name: Deploy dispatch to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CONFIRM_PROD: '1'
+        run: bun --filter dispatch deploy:private
+
+  check-infra:
+    needs: changes
+    if: needs.changes.outputs.infra_changed == 'true' && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install infra dependencies
+        working-directory: infra
+        run: bun install --frozen-lockfile
+
+      - name: Build infra
+        working-directory: infra
+        run: bun run build
+
+      - name: Synthesize infra
+        working-directory: infra
+        env:
+          AWS_ACCOUNT_ID: '111111111111'
+          AWS_REGION: us-east-1
+        run: |
+          bun cdk synth \
+            -c appName=surgent-ci \
+            -c publicDomain=example.com \
+            -c apiHostname=api.example.com \
+            -c analyticsHostname=analytics.example.com \
+            -c internalNamespace=surgent.local \
+            -c workerSsmPrefix=/surgent-ci/worker \
+            -c analyticsSsmPrefix=/surgent-ci/analytics

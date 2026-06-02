@@ -138,7 +138,7 @@ const stepMeta = [
 function buildPrompt(d: Data, initialPrompt: string): string {
   let prompt = ''
   if (initialPrompt) {
-    prompt = initialPrompt.endsWith('.') ? initialPrompt : initialPrompt + '.'
+    prompt = initialPrompt.endsWith('.') ? initialPrompt : `${initialPrompt}.`
     prompt += '\n\n'
   }
 
@@ -150,7 +150,7 @@ function buildPrompt(d: Data, initialPrompt: string): string {
   }
   if (d.businessName) parts.push(`for "${d.businessName}"`)
   if (d.location) parts.push(`based in ${d.location}`)
-  if (parts.length) prompt += parts.join(' ') + '.'
+  if (parts.length) prompt += `${parts.join(' ')}.`
 
   const goalMap: Record<string, string> = {
     'Launch my business online':
@@ -165,7 +165,7 @@ function buildPrompt(d: Data, initialPrompt: string): string {
     'Replace my current website':
       'I need a modern, high-converting website to replace my current one.',
   }
-  if (d.goal && goalMap[d.goal]) prompt += ' ' + goalMap[d.goal]
+  if (d.goal && goalMap[d.goal]) prompt += ` ${goalMap[d.goal]}`
 
   if (d.audience === 'Individual consumers')
     prompt += ' My target customers are individual consumers.'

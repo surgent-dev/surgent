@@ -32,6 +32,7 @@ export type {
   ChatsTable,
   GitHubInstallationsTable,
   DeploymentTable,
+  DeploymentEnvSnapshot,
   ListingTable,
   EnvDestination,
   DomainTable,

@@ -129,20 +129,22 @@ dispatch.all('/*', async (c) => {
     const analyticsUpstream = c.env.ANALYTICS_UPSTREAM
 
     if (url.pathname === TRACKER_PATH) {
-      if (!analyticsUpstream) return new Response(null, { status: 204 })
+      if (!analyticsUpstream) return c.text('Analytics upstream is not configured', 503)
       try {
         return await proxyScript(c.req.raw, analyticsUpstream)
-      } catch {
-        return new Response(null, { status: 204 })
+      } catch (error) {
+        console.error(error)
+        return c.text('Analytics script proxy failed', 502)
       }
     }
 
     if (url.pathname === EVENT_PATH) {
-      if (!analyticsUpstream) return new Response(null, { status: 204 })
+      if (!analyticsUpstream) return c.text('Analytics upstream is not configured', 503)
       try {
         return await proxy(c.req.raw, analyticsUpstream, '/api/send', hostname)
-      } catch {
-        return new Response(null, { status: 204 })
+      } catch (error) {
+        console.error(error)
+        return c.text('Analytics event proxy failed', 502)
       }
     }
 
@@ -155,8 +157,8 @@ dispatch.all('/*', async (c) => {
 
     return injectTracker(response)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return c.text(`Dispatch failed: ${message}`, 502)
+    console.error(error)
+    return c.text('Dispatch failed', 502)
   }
 })
 

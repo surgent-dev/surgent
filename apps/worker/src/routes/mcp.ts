@@ -1,9 +1,11 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { StreamableHTTPTransport } from '@hono/mcp'
 import { createConvexMcpServer } from '@/mcp/convex'
 import { createPayMcpServer } from '@/mcp/pay'
-import { db } from '@/lib/db'
+import { authorizePayApiKey } from '@/lib/pay/apikeys'
 import type { AppContext } from '@/types/application'
+import { requireAdmin } from '@/middleware/admin'
+import { db } from '@/lib/db'
 
 const mcp = new Hono<AppContext>()
 
@@ -14,38 +16,47 @@ const convexMcpTransport = new StreamableHTTPTransport()
 const payMcp = createPayMcpServer()
 const payMcpTransport = new StreamableHTTPTransport()
 
-// Hash API key same as gateway (SHA-256 -> base64url)
-function base64UrlEncode(bytes: Uint8Array) {
-  const base64 = btoa(String.fromCharCode(...bytes))
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+type McpRequestBody = {
+  params?: {
+    _meta?: {
+      context?: Record<string, unknown>
+    }
+  }
 }
 
-async function hashApiKey(key: string) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key))
-  return base64UrlEncode(new Uint8Array(digest))
+function addMcpContext(body: McpRequestBody, context: Record<string, unknown>) {
+  if (!body.params) return body
+
+  body.params._meta = {
+    ...body.params._meta,
+    context: {
+      ...body.params._meta?.context,
+      ...context,
+    },
+  }
+
+  return body
 }
 
-async function getProjectIdFromApiKey(headers: Headers): Promise<string | null> {
-  const raw = headers.get('x-api-key') || headers.get('authorization')?.replace(/^Bearer\s+/i, '')
-  if (!raw) return null
+function readProjectId(c: Context<AppContext>) {
+  return c.req.header('x-project-id') || c.req.query('projectId') || null
+}
 
-  const hashed = await hashApiKey(raw)
-  const row = await db
-    .selectFrom('apikey')
-    .select('projectId')
-    .where('key', '=', hashed)
-    .where('enabled', '=', true)
+async function projectExists(projectId: string) {
+  const project = await db
+    .selectFrom('project')
+    .select('id')
+    .where('id', '=', projectId)
+    .where('deletedAt', 'is', null)
     .executeTakeFirst()
 
-  return row?.projectId ?? null
+  return Boolean(project)
 }
 
 /**
- * MCP endpoint for Convex tools
- *
- * The projectId is automatically looked up from the API key.
+ * MCP endpoints for project-scoped tools.
  */
-mcp.get('/', async (c) => {
+mcp.get('/', requireAdmin, async (c) => {
   if (!convexMcp.isConnected()) {
     await convexMcp.connect(convexMcpTransport)
   }
@@ -64,59 +75,36 @@ mcp.get('/', async (c) => {
   })
 })
 
-mcp.all('/convex', async (c) => {
-  const user = c.get('user')
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401)
-  }
+mcp.all('/convex', requireAdmin, async (c) => {
+  const projectId = readProjectId(c)
+  if (!projectId) return c.json({ error: 'projectId is required' }, 400)
+  if (!(await projectExists(projectId))) return c.json({ error: 'Project not found' }, 404)
 
   if (!convexMcp.isConnected()) {
     await convexMcp.connect(convexMcpTransport)
   }
 
-  // Lookup projectId from API key
-  const projectId = await getProjectIdFromApiKey(c.req.raw.headers)
-  if (!projectId) {
-    return c.json({ error: 'API key not linked to a project' }, 400)
-  }
+  if (c.req.method !== 'POST') return convexMcpTransport.handleRequest(c)
 
-  // Clone request and inject projectId into _meta.context
-  const body = await c.req.json()
-  if (body.params) {
-    body.params._meta = body.params._meta || {}
-    body.params._meta.context = { ...body.params._meta.context, projectId }
-  }
-
+  const body = addMcpContext(await c.req.json(), { projectId })
   return convexMcpTransport.handleRequest(c, body)
 })
 
 mcp.all('/pay', async (c) => {
-  const user = c.get('user')
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401)
-  }
+  const auth = await authorizePayApiKey(c.req.raw.headers)
+  if (!auth?.projectId) return c.json({ error: 'Unauthorized' }, 401)
 
   if (!payMcp.isConnected()) {
     await payMcp.connect(payMcpTransport)
   }
 
-  // Extract API key from headers and inject into request context for POST requests
   if (c.req.method === 'POST') {
-    const apiKey =
-      c.req.header('x-api-key') || c.req.header('authorization')?.replace(/^Bearer\s+/i, '')
+    const body = addMcpContext(await c.req.json(), {
+      projectId: auth.projectId,
+      env: auth.env,
+    })
 
-    if (apiKey) {
-      const body = await c.req.json()
-
-      // Inject apiKey into params._meta.context
-      if (body.params) {
-        body.params._meta = body.params._meta || {}
-        body.params._meta.context = body.params._meta.context || {}
-        body.params._meta.context.apiKey = apiKey
-      }
-
-      return payMcpTransport.handleRequest(c, body)
-    }
+    return payMcpTransport.handleRequest(c, body)
   }
 
   return payMcpTransport.handleRequest(c)

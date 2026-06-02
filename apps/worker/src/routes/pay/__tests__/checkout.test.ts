@@ -13,8 +13,21 @@ import type { Kysely } from 'kysely'
  * Instead we test the DB-level guarantees directly — the same logic the handler relies on.
  */
 
-const DATABASE_URL =
-  process.env.TEST_DATABASE_URL || 'postgres://surgent:password@localhost:5432/surgent'
+function requireTestDatabaseUrl() {
+  const url = process.env.TEST_DATABASE_URL
+  if (!url) throw new Error('TEST_DATABASE_URL is required for DB-backed pay tests')
+
+  const databaseName = new URL(url).pathname.split('/').filter(Boolean).at(-1) ?? ''
+  if (!databaseName.toLowerCase().includes('test')) {
+    throw new Error(
+      `Refusing to run DB-backed pay tests against non-test database "${databaseName}"`,
+    )
+  }
+
+  return url
+}
+
+const DATABASE_URL = requireTestDatabaseUrl()
 
 let db: Kysely<Database>
 const TEST_PROJECT_ID = '00000000-0000-0000-0000-000000000001'
@@ -34,6 +47,7 @@ beforeAll(async () => {
       id: TEST_ORG_ID,
       name: 'Test Org',
       slug: 'test-checkout-org',
+      metadata: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     })
@@ -62,6 +76,12 @@ beforeAll(async () => {
       name: 'Test Project',
       slug: `test-checkout-proj-${Date.now()}`,
       status: 'provisioning',
+      failReason: null,
+      github: null,
+      settings: null,
+      deployment: null,
+      sandbox: null,
+      metadata: null,
       isPublic: true,
       createdAt: new Date(),
       updatedAt: new Date(),

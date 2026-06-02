@@ -11,7 +11,7 @@ export function createLogger(stage?: string): Logger {
     },
     log: console.log,
     debug: (message: string) => {
-      if (stage === 'production') return
+      if (stage !== 'dev') return
       console.debug(message)
     },
   }

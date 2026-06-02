@@ -1,5 +1,6 @@
 import { Sandbox as E2BSandbox } from 'e2b'
 import { templateName } from '@/e2b/template'
+import { shellQuote } from '@/lib/utils'
 import type { Sandbox, SandboxProvider, FileInfo } from './types'
 
 class E2BSandboxImpl implements Sandbox {
@@ -45,14 +46,11 @@ class E2BSandboxImpl implements Sandbox {
   }
 
   async clone(url: string, dir: string) {
-    const res = await this.exec(
-      `git clone --depth 1 ${JSON.stringify(url)} ${JSON.stringify(dir)}`,
-      {
-        timeout: 120_000,
-      },
-    )
+    const res = await this.exec(`git clone --depth 1 ${shellQuote(url)} ${shellQuote(dir)}`, {
+      timeout: 120_000,
+    })
     if (res.code !== 0) {
-      throw new Error(`Failed to clone repository: ${res.output || 'git clone exited non-zero'}`)
+      throw new Error(`Failed to clone repository (exit ${res.code})`)
     }
   }
 
@@ -61,7 +59,7 @@ class E2BSandboxImpl implements Sandbox {
   }
 
   async pause() {
-    await this.sbx.betaPause()
+    await this.sbx.pause()
   }
 
   kill() {
@@ -73,10 +71,10 @@ export class E2BProvider implements SandboxProvider {
   constructor(private template = templateName) {}
 
   async create(env?: Record<string, string>, name?: string) {
-    const sbx = await E2BSandbox.betaCreate(this.template, {
+    const sbx = await E2BSandbox.create(this.template, {
       envs: env ?? {},
       metadata: name ? { name } : undefined,
-      autoPause: true,
+      lifecycle: { onTimeout: 'pause', autoResume: true },
     })
     return new E2BSandboxImpl(sbx)
   }

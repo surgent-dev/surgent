@@ -34,7 +34,7 @@ async function captureDeploymentScreenshot(data: ScreenshotJobData): Promise<voi
 
   const siteUrl = `https://${deployment.scriptName}.${config.cloudflare.deployDomain}`
   const buffer = await captureScreenshot({ url: siteUrl })
-  const key = storage.generateKey(data.projectId, `deploy-${data.deploymentId.slice(0, 8)}.jpg`)
+  const key = storage.generateKey('deploy.jpg')
 
   await storage.upload(key, buffer, 'image/jpeg')
   const url = storage.getPublicUrl(key) || (await storage.getSignedUrl(key))
@@ -91,9 +91,8 @@ export async function registerProjectWorkers(): Promise<void> {
         try {
           await runProjectCreationJob(job.data)
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Project creation failed'
           await ProjectService.mergeProjectMetadata(job.data.projectId, {
-            provisioning: { lastError: message },
+            provisioning: { lastError: 'Project creation failed' },
           }).catch(() => {})
           throw err
         }

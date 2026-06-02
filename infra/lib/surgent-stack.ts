@@ -7,9 +7,6 @@ import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2'
 import { Construct } from 'constructs'
 
-const WORKER_SSM_PREFIX = '/surgent/prod'
-const ANALYTICS_SSM_PREFIX = '/surgent/prod/analytics'
-
 const WORKER_SECRET_NAMES = [
   'BETTER_AUTH_SECRET',
   'BETTER_AUTH_URL',
@@ -43,6 +40,7 @@ const WORKER_SECRET_NAMES = [
   'OPENAI_API_KEY',
   'POSTGRES_TYPE',
   'TRUSTED_ORIGINS',
+  'ANALYTICS_INTERNAL_TOKEN',
   'XAI_API_KEY',
   'OPENCODE_BASE_URL',
   'SURGENT_BASE_URL',
@@ -78,7 +76,7 @@ const WORKER_SECRET_NAMES = [
   'TOGETHER_API_KEY',
 ] as const
 
-const ANALYTICS_SECRET_NAMES = ['DATABASE_URL'] as const
+const ANALYTICS_SECRET_NAMES = ['DATABASE_URL', 'ANALYTICS_INTERNAL_TOKEN'] as const
 
 function createRepository(scope: Construct, id: string, repositoryName: string) {
   return new ecr.Repository(scope, id, {
@@ -108,9 +106,25 @@ function loadSecrets(scope: Construct, prefix: string, names: readonly string[])
   return secrets
 }
 
+function requiredContext(scope: Construct, name: string) {
+  const value = scope.node.tryGetContext(name)
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`Missing CDK context "${name}"`)
+  }
+  return value
+}
+
 export class SurgentStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props)
+
+    const appName = requiredContext(this, 'appName')
+    const publicDomain = requiredContext(this, 'publicDomain')
+    const apiHostname = requiredContext(this, 'apiHostname')
+    const analyticsHostname = requiredContext(this, 'analyticsHostname')
+    const internalNamespace = requiredContext(this, 'internalNamespace')
+    const workerSsmPrefix = requiredContext(this, 'workerSsmPrefix')
+    const analyticsSsmPrefix = requiredContext(this, 'analyticsSsmPrefix')
 
     // VPC with 2 public subnets, no NAT gateway
     const vpc = new ec2.Vpc(this, 'SurgentVpc', {
@@ -125,33 +139,36 @@ export class SurgentStack extends cdk.Stack {
       ],
     })
 
-    const workerRepository = createRepository(this, 'SurgentWorkerRepo', 'surgent/worker')
-    const analyticsRepository = createRepository(this, 'SurgentAnalyticsRepo', 'surgent/analytics')
+    const workerRepository = createRepository(this, 'SurgentWorkerRepo', `${appName}/worker`)
+    const analyticsRepository = createRepository(
+      this,
+      'SurgentAnalyticsRepo',
+      `${appName}/analytics`,
+    )
 
     // ECS Cluster
     const cluster = new ecs.Cluster(this, 'SurgentCluster', {
       vpc,
-      clusterName: 'surgent-cluster',
+      clusterName: `${appName}-cluster`,
       defaultCloudMapNamespace: {
-        name: 'surgent.internal',
+        name: internalNamespace,
       },
     })
 
-    // Wildcard ACM Certificate for *.surgent.dev
     const certificate = new acm.Certificate(this, 'SurgentWildcardCert', {
-      domainName: '*.surgent.dev',
+      domainName: `*.${publicDomain}`,
       validation: acm.CertificateValidation.fromDns(),
     })
 
-    const workerSecrets = loadSecrets(this, WORKER_SSM_PREFIX, WORKER_SECRET_NAMES)
-    const analyticsSecrets = loadSecrets(this, ANALYTICS_SSM_PREFIX, ANALYTICS_SECRET_NAMES)
+    const workerSecrets = loadSecrets(this, workerSsmPrefix, WORKER_SECRET_NAMES)
+    const analyticsSecrets = loadSecrets(this, analyticsSsmPrefix, ANALYTICS_SECRET_NAMES)
 
     // ==================== ALB ====================
 
     const alb = new elbv2.ApplicationLoadBalancer(this, 'SharedAlb', {
       vpc,
       internetFacing: true,
-      loadBalancerName: 'surgent-alb',
+      loadBalancerName: `${appName}-alb`,
     })
 
     alb.addListener('HttpListener', {
@@ -190,14 +207,14 @@ export class SurgentStack extends cdk.Stack {
         NODE_ENV: 'production',
         PORT: '4000',
         HOST: '0.0.0.0',
-        ANALYTICS_URL: 'http://analytics.surgent.internal:3007',
+        ANALYTICS_URL: `http://analytics.${internalNamespace}:3007`,
       },
-      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'surgent-worker' }),
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: `${appName}-worker` }),
     })
 
     const workerService = new ecs.FargateService(this, 'SurgentWorkerService', {
       cluster,
-      serviceName: 'surgent-worker',
+      serviceName: `${appName}-worker`,
       taskDefinition: workerTaskDef,
       desiredCount: 2,
       assignPublicIp: true,
@@ -228,7 +245,7 @@ export class SurgentStack extends cdk.Stack {
     httpsListener.addTargetGroups('WorkerRule', {
       targetGroups: [workerTargetGroup],
       priority: 10,
-      conditions: [elbv2.ListenerCondition.hostHeaders(['api.surgent.dev'])],
+      conditions: [elbv2.ListenerCondition.hostHeaders([apiHostname])],
     })
 
     const workerScaling = workerService.autoScaleTaskCount({
@@ -257,19 +274,19 @@ export class SurgentStack extends cdk.Stack {
       containerName: 'analytics',
       portMappings: [{ containerPort: 3007 }],
       secrets: {
-        DATABASE_URL: analyticsSecrets.DATABASE_URL,
+        ...analyticsSecrets,
       },
       environment: {
         NODE_ENV: 'production',
         PORT: '3007',
         HOSTNAME: '0.0.0.0',
       },
-      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'surgent-analytics' }),
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: `${appName}-analytics` }),
     })
 
     const analyticsService = new ecs.FargateService(this, 'SurgentAnalyticsService', {
       cluster,
-      serviceName: 'surgent-analytics',
+      serviceName: `${appName}-analytics`,
       taskDefinition: analyticsTaskDef,
       desiredCount: 2,
       assignPublicIp: true,
@@ -304,7 +321,7 @@ export class SurgentStack extends cdk.Stack {
       targetGroups: [analyticsTargetGroup],
       priority: 20,
       conditions: [
-        elbv2.ListenerCondition.hostHeaders(['analytics.surgent.dev']),
+        elbv2.ListenerCondition.hostHeaders([analyticsHostname]),
         elbv2.ListenerCondition.pathPatterns([
           '/api/send',
           '/api/batch',
@@ -318,7 +335,7 @@ export class SurgentStack extends cdk.Stack {
       targetGroups: [analyticsTargetGroup],
       priority: 21,
       conditions: [
-        elbv2.ListenerCondition.hostHeaders(['analytics.surgent.dev']),
+        elbv2.ListenerCondition.hostHeaders([analyticsHostname]),
         elbv2.ListenerCondition.pathPatterns(['/', '/script.js', '/p/*', '/q/*']),
       ],
     })
@@ -346,7 +363,7 @@ export class SurgentStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
-      description: 'ALB DNS name - point api.surgent.dev and analytics.surgent.dev CNAMEs here',
+      description: `ALB DNS name - point ${apiHostname} and ${analyticsHostname} CNAMEs here`,
     })
 
     new cdk.CfnOutput(this, 'WorkerRepositoryUri', {

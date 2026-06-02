@@ -35,7 +35,6 @@ upload.post('/', requireAuth, async (c) => {
     return c.json({ error: 'Storage not configured' }, 503)
   }
 
-  const user = c.get('user')!
   const body = await c.req.parseBody()
   const file = body.file
 
@@ -47,7 +46,7 @@ upload.post('/', requireAuth, async (c) => {
     return c.json({ error: 'File too large' }, 413)
   }
 
-  const key = storage.generateKey(user.id, file.name)
+  const key = storage.generateKey(file.name)
   const buffer = Buffer.from(await file.arrayBuffer())
 
   await storage.upload(key, buffer, file.type)

@@ -1,6 +1,5 @@
 import { startOfHour, startOfMonth } from 'date-fns'
 import { isbot } from 'isbot'
-import { serializeError } from 'serialize-error'
 import { z } from 'zod'
 import { COLLECTION_TYPE, EVENT_TYPE } from '@/lib/constants'
 import { hash, secret, uuid } from '@/lib/crypto'
@@ -318,12 +317,8 @@ export async function POST(request: Request) {
     const token = createToken({ websiteId, sessionId, visitId, iat }, secret())
 
     return json({ cache: token, sessionId, visitId })
-  } catch (e) {
-    const error = serializeError(e)
-
-    // eslint-disable-next-line no-console
-    console.log(error)
-
-    return serverError({ errorObject: error })
+  } catch (error) {
+    console.error(error)
+    return serverError({ message: 'Server error' })
   }
 }

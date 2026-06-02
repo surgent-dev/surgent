@@ -1,0 +1,35 @@
+Surgent
+Copyright 2026 Surgent contributors
+
+This product includes code and ideas from open source dependencies listed in the
+workspace package manifests and lockfile.
+
+The analytics app contains code derived from the Umami analytics project, used
+under the MIT License. Keep upstream attribution with any redistributed
+analytics source or binary artifacts.
+
+Umami
+Copyright (c) 2022 Umami Software, Inc.
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+GeoIP support uses MaxMind GeoLite2 data when configured by the deployer.
+GeoLite2 databases are not included in this repository and must be obtained
+under MaxMind's license terms.

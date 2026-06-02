@@ -3,6 +3,7 @@ import { config } from '@/lib/config'
 import {
   composeWhopWebhookSignature,
   parseWhopWebhookEvent,
+  summarizeWhopWebhookEvent,
   verifyWhopWebhookSignature,
 } from '@/lib/pay/webhooks'
 import type { ParsedWhopWebhookEvent, PayEnv } from '@/lib/pay/types'
@@ -29,6 +30,10 @@ type Trx = Kysely<Database> | Transaction<Database>
 // Strip null/undefined — on UPDATE, skipped fields keep their existing DB value
 function defined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v != null)) as Partial<T>
+}
+
+function eventSummary(event: ParsedWhopWebhookEvent): Record<string, unknown> {
+  return summarizeWhopWebhookEvent(event)
 }
 
 async function resolveProjectId(
@@ -524,7 +529,7 @@ async function upsertPaymentFromWebhook(
       customerEmail: ev.userEmail || null,
       customerName: ev.userName || null,
       metadata: paymentMetadata,
-      raw: ev.data,
+      raw: eventSummary(ev),
       env,
       createdAt: now,
       updatedAt: now,
@@ -539,7 +544,7 @@ async function upsertPaymentFromWebhook(
         customerName: ev.userName || null,
         ...paymentDetails,
         metadata: paymentMetadata,
-        raw: ev.data,
+        raw: eventSummary(ev),
         ...defined(linking),
         updatedAt: now,
       }),
@@ -580,7 +585,7 @@ async function upsertPaymentFromWebhook(
         amount: ev.amount ?? 0,
         currency: ev.currency || 'usd',
         metadata: paymentMetadata,
-        raw: ev.data,
+        raw: eventSummary(ev),
         happenedAt,
         env,
       },
@@ -605,7 +610,7 @@ async function upsertPaymentFromWebhook(
           amount: fee.amount,
           currency: fee.currency,
           metadata: { ...paymentMetadata, ...(fee.name ? { fee_name: fee.name } : {}) },
-          raw: ev.data,
+          raw: eventSummary(ev),
           happenedAt,
           env,
         },
@@ -702,7 +707,7 @@ async function upsertMembershipFromWebhook(
       status,
       cancelAtPeriodEnd: ev.cancelAtPeriodEnd || false,
       metadata: ev.metadata,
-      raw: ev.data,
+      raw: eventSummary(ev),
       env,
       createdAt: now,
       updatedAt: now,
@@ -713,7 +718,7 @@ async function upsertMembershipFromWebhook(
         whopUserId: ev.userId || null,
         cancelAtPeriodEnd: ev.cancelAtPeriodEnd || false,
         metadata: ev.metadata,
-        raw: ev.data,
+        raw: eventSummary(ev),
         ...defined(linking),
         updatedAt: now,
       }),
@@ -775,7 +780,7 @@ async function upsertRefundFromWebhook(
       currency,
       reason: ev.reason || null,
       metadata: ev.metadata,
-      raw: ev.data,
+      raw: eventSummary(ev),
       env,
       createdAt: now,
       updatedAt: now,
@@ -787,7 +792,7 @@ async function upsertRefundFromWebhook(
         currency,
         reason: ev.reason || null,
         metadata: ev.metadata,
-        raw: ev.data,
+        raw: eventSummary(ev),
         ...defined(linking),
         updatedAt: now,
       }),
@@ -807,7 +812,7 @@ async function upsertRefundFromWebhook(
       amount,
       currency,
       metadata: ev.metadata,
-      raw: ev.data,
+      raw: eventSummary(ev),
       happenedAt,
       env,
     },
@@ -874,7 +879,7 @@ async function upsertDisputeFromWebhook(
       reason: ev.reason || null,
       resolvedAt: resolved ? now : null,
       metadata: ev.metadata,
-      raw: ev.data,
+      raw: eventSummary(ev),
       env,
       createdAt: now,
       updatedAt: now,
@@ -887,7 +892,7 @@ async function upsertDisputeFromWebhook(
         reason: ev.reason || null,
         ...(resolved && { resolvedAt: now }),
         metadata: ev.metadata,
-        raw: ev.data,
+        raw: eventSummary(ev),
         ...defined(linking),
         updatedAt: now,
       }),
@@ -907,7 +912,7 @@ async function upsertDisputeFromWebhook(
       amount,
       currency,
       metadata: ev.metadata,
-      raw: ev.data,
+      raw: eventSummary(ev),
       happenedAt,
       env,
     },
@@ -994,7 +999,7 @@ async function upsertInvoiceFromWebhook(
       currency,
       hostedUrl: null,
       metadata: ev.metadata,
-      raw: ev.data,
+      raw: eventSummary(ev),
       env,
       createdAt: now,
       updatedAt: now,
@@ -1005,7 +1010,7 @@ async function upsertInvoiceFromWebhook(
         amount,
         currency,
         metadata: ev.metadata,
-        raw: ev.data,
+        raw: eventSummary(ev),
         ...defined(linking),
         updatedAt: now,
       }),
@@ -1032,7 +1037,7 @@ async function upsertInvoiceFromWebhook(
       amount,
       currency,
       metadata: ev.metadata,
-      raw: ev.data,
+      raw: eventSummary(ev),
       happenedAt,
       env,
     },
@@ -1074,7 +1079,7 @@ async function upsertWithdrawalFromWebhook(
       amount,
       currency,
       metadata: ev.metadata,
-      raw: ev.data,
+      raw: eventSummary(ev),
       happenedAt,
       env,
     },
@@ -1096,7 +1101,7 @@ async function upsertWithdrawalFromWebhook(
         amount: feeAmount,
         currency,
         metadata: ev.metadata,
-        raw: ev.data,
+        raw: eventSummary(ev),
         happenedAt,
         env,
       },
@@ -1132,7 +1137,11 @@ async function handleVerificationWebhook(
   await trx
     .updateTable('pay_account')
     .set({
-      metadata: { ...(row.metadata || {}), verificationStatus, verification: ev.data },
+      metadata: {
+        ...(row.metadata || {}),
+        verificationStatus,
+        verification: eventSummary(ev),
+      },
       updatedAt: new Date(),
     })
     .where('whopCompanyId', '=', ev.companyId)

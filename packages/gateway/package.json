@@ -6,22 +6,26 @@
     "dev": "wrangler dev --port 8080 --inspector-port 9231",
     "start": "wrangler dev --verbose --port 8080 --inspector-port 9231",
     "deploy": "echo 'Use deploy:dev or deploy:prod' && exit 1",
-    "deploy:dev": "wrangler deploy --env dev",
-    "deploy:prod": "if [ \"$CONFIRM_PROD\" != \"1\" ]; then echo \"Set CONFIRM_PROD=1 to deploy to prod\"; exit 1; fi; wrangler deploy --env \"\"",
-    "generate-types": "wrangler types"
+    "deploy:dev": "echo 'Use deploy:dev:private with wrangler.private.jsonc' && exit 1",
+    "deploy:prod": "echo 'Use deploy:private with wrangler.private.jsonc' && exit 1",
+    "deploy:private": "if [ \"$CONFIRM_PROD\" != \"1\" ]; then echo \"Set CONFIRM_PROD=1 to deploy private prod config\"; exit 1; fi; wrangler deploy --config wrangler.private.jsonc",
+    "deploy:dev:private": "wrangler deploy --config wrangler.private.jsonc --env dev",
+    "generate-types": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "check-types": "bun run typecheck"
   },
   "dependencies": {
     "@repo/db": "*",
     "@smithy/eventstream-codec": "4.2.8",
     "@smithy/util-utf8": "4.2.0",
     "@types/node": "25.0.10",
-    "hono": "4.10.7",
-    "kysely": "^0.28.8",
+    "hono": "4.12.23",
+    "kysely": "0.29.2",
     "zod": "4.1.8"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20251008.0",
     "typescript": "^5.9.2",
-    "wrangler": "^4.54.0"
+    "wrangler": "4.95.0"
   }
 }

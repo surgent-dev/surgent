@@ -6,7 +6,6 @@ import { sql } from 'kysely'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../middleware/auth'
-import { auth } from '@/lib/auth'
 import { config } from '@/lib/config'
 import { checkBillingFeature } from '@/lib/billing'
 import { getAccountForUser, getClient } from '@/lib/pay/utils'
@@ -51,7 +50,6 @@ import {
   resolveConvexIntegrationConfig,
   syncEnvVarsToConvexForEnv,
 } from '@/lib/convex-env'
-import { DaytonaProvider, E2BProvider } from '@/apis/sandbox'
 import {
   cancelProjectDeployJob,
   enqueueProjectCreateJob,
@@ -60,6 +58,7 @@ import {
 import { createLogger } from '@/lib/logger'
 import { ensureAnalytics, getAnalyticsWebsite, removeAnalytics } from '@/services/analytics'
 import type { ProjectMetadata } from '@repo/db'
+import { createProjectPayApiKey } from '@/lib/pay/apikeys'
 
 const log = createLogger('projects')
 const projects = new Hono<AppContext>()
@@ -73,6 +72,35 @@ const listingBody = z.object({
   productId: z.string().uuid().optional(),
   priceId: z.string().uuid().optional(),
 })
+
+const starterGitHubUrl = z
+  .string()
+  .trim()
+  .transform((value, ctx) => {
+    let url: URL
+    try {
+      url = new URL(value)
+    } catch {
+      ctx.addIssue({ code: 'custom', message: 'Invalid GitHub repository URL' })
+      return z.NEVER
+    }
+
+    const match = url.pathname.match(/^\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/)
+    if (
+      url.protocol !== 'https:' ||
+      url.hostname.toLowerCase() !== 'github.com' ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      !match
+    ) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid GitHub repository URL' })
+      return z.NEVER
+    }
+
+    return `https://github.com/${match[1]}/${match[2]}.git`
+  })
 
 function serializeListing(row: {
   id: string | null
@@ -347,8 +375,6 @@ projects.post('/marketplace/checkout', zValidator('json', marketplaceCheckoutBod
     product_id: listing.productId,
     listing_id: listing.id,
     customer_id: user.id,
-    customer_email: user.email,
-    customer_name: user.name || undefined,
     redirect_url: redirectUrl,
   }
 
@@ -886,7 +912,7 @@ projects.delete('/:id', zValidator('param', idParam), async (c) => {
 
   await getProjectWithAuth(id, c.get('user')!)
 
-  await removeAnalytics(id).catch(() => {})
+  await removeAnalytics(id)
 
   // Delete sandbox before soft deleting project
   await deleteSandbox({ projectId: id })
@@ -913,7 +939,7 @@ projects.post(
   zValidator(
     'json',
     z.object({
-      githubUrl: z.string(),
+      githubUrl: starterGitHubUrl,
       name: z.string().optional(),
       initConvex: z.boolean().optional(),
       metadata: z
@@ -980,16 +1006,13 @@ projects.post(
       projectId = created.id
 
       // Create a test API key for development (live key is created on first deploy)
-      const apiKeyResult = await auth.api.createApiKey({
-        body: { name: `p-${projectId.slice(0, 8)}`, prefix: 'sk_test_' },
-        headers: c.req.raw.headers,
+      const apiKeyResult = await createProjectPayApiKey({
+        name: `p-${projectId.slice(0, 8)}`,
+        env: 'test',
+        userId,
+        organizationId,
+        projectId,
       })
-
-      await db
-        .updateTable('apikey')
-        .set({ projectId, organizationId, env: 'test' })
-        .where('id', '=', apiKeyResult.id)
-        .execute()
 
       await db
         .insertInto('env_var')
@@ -1004,7 +1027,6 @@ projects.post(
         })
         .execute()
 
-      // Connect analytics (best-effort — doesn't block project creation)
       await ensureAnalytics({
         projectId,
         organizationId,
@@ -1022,9 +1044,7 @@ projects.post(
           name: projectName,
         })
       } catch (sendErr) {
-        await updateProjectStatus(projectId, 'failed', 'Failed to dispatch creation event').catch(
-          () => {},
-        )
+        await updateProjectStatus(projectId, 'failed', 'Failed to dispatch creation event')
         throw sendErr
       }
 
@@ -1035,7 +1055,7 @@ projects.post(
           projectId,
           'failed',
           err instanceof Error ? err.message : 'Project creation failed',
-        ).catch(() => {})
+        )
       }
       const status = err instanceof HttpError ? err.status : 500
       const message = err instanceof Error ? err.message : 'Failed to create project'
@@ -1118,16 +1138,13 @@ projects.post(
         .executeTakeFirst()
 
       if (!existingLiveKey?.value) {
-        const liveKey = await auth.api.createApiKey({
-          body: { name: `p-${id.slice(0, 8)}-live`, prefix: 'sk_live_' },
-          headers: c.req.raw.headers,
+        const liveKey = await createProjectPayApiKey({
+          name: `p-${id.slice(0, 8)}-live`,
+          env: 'live',
+          userId: project.userId,
+          organizationId: project.organizationId,
+          projectId: id,
         })
-
-        await db
-          .updateTable('apikey')
-          .set({ projectId: id, organizationId: project.organizationId, env: 'live' })
-          .where('id', '=', liveKey.id)
-          .execute()
 
         await upsertEnvVar({
           projectId: id,
@@ -1153,6 +1170,7 @@ projects.post(
 
       const deployName = resolveDeployScriptName(name)
       const deployment = await createDeploymentRecord(id, deployName)
+      await supersedeOlderDeployments(id, deployment.id, deployment.createdAt)
 
       try {
         await enqueueProjectDeployJob({
@@ -1165,16 +1183,9 @@ projects.post(
           status: 'deploy_failed',
           error: 'Failed to dispatch deployment event',
           finishedAt: new Date(),
-        }).catch(() => {})
+        })
         throw sendErr
       }
-
-      await supersedeOlderDeployments(id, deployment.id, deployment.createdAt).catch((error) => {
-        log.warn(
-          { projectId: id, deploymentId: deployment.id, error },
-          'failed to supersede older deployments',
-        )
-      })
 
       console.log('[deploy] scheduled', { projectId: id, deploymentId: deployment.id })
       return c.json({ deploymentId: deployment.id, status: 'queued' })
@@ -1260,7 +1271,7 @@ projects.post(
       finishedAt: new Date(),
     })
 
-    await cancelProjectDeployJob(deploymentId).catch(() => {})
+    await cancelProjectDeployJob(deploymentId)
 
     log.info({ projectId: id, deploymentId }, 'deployment cancelled')
     return c.json({ cancelled: true })
@@ -1403,9 +1414,9 @@ projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
   const sandboxId = sandboxRow?.id
   if (!sandboxId) return c.json({ error: 'Sandbox not found' }, 400)
 
-  resumeProject({ projectId: id, sandboxId }).catch(() => {})
+  await resumeProject({ projectId: id, sandboxId })
 
-  return c.json({ scheduled: true })
+  return c.json({ resumed: true })
 })
 
 // GET /projects/:id/logs - Get PM2 logs from sandbox
@@ -1523,8 +1534,7 @@ projects.put(
 
     await upsertEnvVar({ projectId: id, environment, key, value, destination })
 
-    // Fire-and-forget sync to Convex if provisioned
-    syncEnvVarsToConvexForEnv(id, environment).catch(() => {})
+    await syncEnvVarsToConvexForEnv(id, environment)
 
     return c.json({ updated: true })
   },
@@ -1548,8 +1558,7 @@ projects.delete(
 
     await deleteEnvVar(id, environment, key)
 
-    // Fire-and-forget sync to Convex if provisioned
-    syncEnvVarsToConvexForEnv(id, environment).catch(() => {})
+    await syncEnvVarsToConvexForEnv(id, environment)
 
     return c.json({ deleted: true })
   },
@@ -1832,40 +1841,6 @@ projects.post(
       .where('id', '=', id)
       .execute()
 
-    // Update git remote in sandbox
-    const sandboxRow = await db
-      .selectFrom('sandbox')
-      .select(['id', 'provider'])
-      .where('projectId', '=', id)
-      .executeTakeFirst()
-
-    if (sandboxRow?.id) {
-      const repoUrl = `https://github.com/${owner}/${repo}.git`
-      const cwd = `/home/user/workspace/${id.replace(/[^a-zA-Z0-9_-]+/g, '-') || 'project'}`
-
-      try {
-        const providerName = sandboxRow.provider || config.sandbox.provider
-        const sandbox =
-          providerName === 'daytona'
-            ? await new DaytonaProvider(
-                config.daytona.apiKey,
-                config.daytona.serverUrl,
-                config.daytona.snapshot,
-              ).resume(sandboxRow.id)
-            : await new E2BProvider(config.e2b.template).resume(sandboxRow.id)
-
-        const remoteCheck = await sandbox.exec('git remote get-url origin 2>/dev/null', { cwd })
-        if (remoteCheck.code === 0) {
-          await sandbox.exec(`git remote set-url origin '${repoUrl}'`, { cwd })
-        } else {
-          await sandbox.exec(`git remote add origin '${repoUrl}'`, { cwd })
-        }
-        console.log('[github] Updated git remote to', repoUrl)
-      } catch (err) {
-        console.warn('[github] Failed to update git remote', err)
-      }
-    }
-
     return c.json({ connected: true })
   },
 )
@@ -1985,89 +1960,8 @@ projects.post(
         .where('id', '=', id)
         .execute()
 
-      // Initialize git and push to new repo (single shell call)
-      const sandboxRow = await db
-        .selectFrom('sandbox')
-        .select(['id', 'provider'])
-        .where('projectId', '=', id)
-        .executeTakeFirst()
-
-      let pushed = false
-      let sha: string | undefined
-
-      if (sandboxRow?.id) {
-        const cleanUrl = `https://github.com/${repo.owner.login}/${repo.name}.git`
-        const cwd = `/home/user/workspace/${id.replace(/[^a-zA-Z0-9_-]+/g, '-') || 'project'}`
-        const branch = repo.default_branch || 'main'
-
-        try {
-          const providerName = sandboxRow.provider || config.sandbox.provider
-          const sandbox =
-            providerName === 'daytona'
-              ? await new DaytonaProvider(
-                  config.daytona.apiKey,
-                  config.daytona.serverUrl,
-                  config.daytona.snapshot,
-                ).resume(sandboxRow.id)
-              : await new E2BProvider(config.e2b.template).resume(sandboxRow.id)
-
-          // Get auth URL
-          const githubApp = createGitHubApp()
-          let authUrl = cleanUrl
-          if (githubApp) {
-            const { token } = await githubApp.getInstallationToken(installation.installationId)
-            authUrl = `https://x-access-token:${token}@github.com/${repo.owner.login}/${repo.name}.git`
-          }
-
-          // Commit and push to GitHub
-          const script = `
-cd '${cwd}' || exit 1
-
-# Stage and commit changes
-git add -A
-git diff --cached --quiet || git commit -m 'Initial commit'
-
-# Set remote and push
-git remote remove origin 2>/dev/null || true
-git remote add origin '${authUrl}'
-
-if git push -u origin '${branch}' 2>&1; then
-  git remote set-url origin '${cleanUrl}'
-  echo "PUSHED:true"
-  echo "SHA:$(git rev-parse HEAD)"
-else
-  git remote set-url origin '${cleanUrl}'
-  echo "PUSHED:false"
-fi
-`
-          const res = await sandbox.exec(script, { cwd: '/', timeout: 60000 })
-          const output = res.output || ''
-
-          pushed = output.includes('PUSHED:true')
-          const shaMatch = output.match(/SHA:([a-f0-9]+)/)
-          sha = shaMatch?.[1]
-
-          if (pushed && sha) {
-            await db
-              .updateTable('project')
-              .set({
-                github: { ...github, lastPushedSha: sha, lastPushAt: new Date().toISOString() },
-                updatedAt: new Date(),
-              })
-              .where('id', '=', id)
-              .execute()
-          }
-
-          console.log('[github] Initialized git and pushed:', pushed)
-        } catch (err) {
-          console.warn('[github] Failed to init git (sandbox may be offline)', err)
-        }
-      }
-
       return c.json({
         success: true,
-        pushed,
-        sha,
         repo: {
           id: repo.id,
           name: repo.name,
@@ -2120,16 +2014,19 @@ projects.get(
     const incoming = new URL(c.req.url)
     incoming.searchParams.forEach((v, k) => url.searchParams.set(k, v))
 
-    const res = await fetch(url)
+    const headers = new Headers()
+    if (config.analytics.token) headers.set('Authorization', `Bearer ${config.analytics.token}`)
+
+    const res = await fetch(url, { headers })
     const data = await res.json()
-    const headers = new Headers(res.headers)
-    headers.set('content-type', 'application/json; charset=utf-8')
-    headers.delete('content-length')
+    const responseHeaders = new Headers(res.headers)
+    responseHeaders.set('content-type', 'application/json; charset=utf-8')
+    responseHeaders.delete('content-length')
 
     return new Response(JSON.stringify(data), {
       status: res.status,
       statusText: res.statusText,
-      headers,
+      headers: responseHeaders,
     })
   },
 )

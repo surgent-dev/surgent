@@ -15,6 +15,8 @@ import { serializeJsonLd } from '@/lib/json-ld'
 import { getReferralCookieDomain } from '@/lib/referrals'
 import { organizationStructuredData, siteConfig, websiteStructuredData } from '@/lib/seo'
 
+const DUB_REFER_DOMAIN = 'go.surgent.dev'
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   applicationName: siteConfig.name,
@@ -104,12 +106,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  let dubCookieDomain: string | undefined
-  try {
-    dubCookieDomain = getReferralCookieDomain(
-      new URL(process.env.NEXT_PUBLIC_APP_URL ?? '').hostname,
-    )
-  } catch {}
+  const dubKey = process.env.NEXT_PUBLIC_DUB_PUBLISHABLE_KEY
+  const googleAnalyticsId = process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID
+  const dubCookieDomain = dubKey
+    ? getReferralCookieDomain(new URL(process.env.NEXT_PUBLIC_APP_URL!).hostname)
+    : undefined
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -127,15 +128,15 @@ export default function RootLayout({
       >
         <Providers>{children}</Providers>
         <Toaster position="top-center" theme="system" gap={8} />
-        <DubAnalytics
-          publishableKey={process.env.NEXT_PUBLIC_DUB_PUBLISHABLE_KEY}
-          domainsConfig={{
-            refer: 'go.surgent.dev',
-          }}
-          cookieOptions={dubCookieDomain ? { domain: dubCookieDomain } : undefined}
-        />
+        {dubKey ? (
+          <DubAnalytics
+            publishableKey={dubKey}
+            domainsConfig={{ refer: DUB_REFER_DOMAIN }}
+            cookieOptions={dubCookieDomain ? { domain: dubCookieDomain } : undefined}
+          />
+        ) : null}
       </body>
-      <GoogleAnalytics gaId="G-ZXHRJ2KM14" />
+      {googleAnalyticsId ? <GoogleAnalytics gaId={googleAnalyticsId} /> : null}
     </html>
   )
 }

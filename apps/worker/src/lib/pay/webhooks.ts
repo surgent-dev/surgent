@@ -239,3 +239,53 @@ export function parseWhopWebhookEvent(payload: unknown): ParsedWhopWebhookEvent 
     data,
   }
 }
+
+export function summarizeWhopWebhookEvent(event: ParsedWhopWebhookEvent): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries({
+      eventId: event.eventId,
+      eventType: event.eventType,
+      occurredAt: event.occurredAt,
+      companyId: event.companyId,
+      sessionId: event.sessionId,
+      paymentId: event.paymentId,
+      refundId: event.refundId,
+      disputeId: event.disputeId,
+      invoiceId: event.invoiceId,
+      membershipId: event.membershipId,
+      withdrawalId: event.withdrawalId,
+      status: event.status,
+      reason: event.reason,
+      amount: event.amount,
+      amountAfterFees: event.amountAfterFees,
+      feeAmount: event.feeAmount,
+      feeType: event.feeType,
+      currency: event.currency,
+      planId: event.planId,
+      productId: event.productId,
+    }).filter(([, value]) => value !== undefined),
+  )
+}
+
+function summarizeWhopMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    ['session_id', 'project_id', 'product_id', 'customer_id']
+      .map((key) => [key, metadata[key]])
+      .filter(([, value]) => typeof value === 'string'),
+  )
+}
+
+export function redactWhopWebhookEvent(event: ParsedWhopWebhookEvent): ParsedWhopWebhookEvent {
+  const metadata = summarizeWhopMetadata(event.metadata)
+
+  return {
+    ...event,
+    userEmail: undefined,
+    userName: undefined,
+    cardBrand: undefined,
+    cardLast4: undefined,
+    failureMessage: undefined,
+    metadata,
+    data: summarizeWhopWebhookEvent({ ...event, metadata }),
+  }
+}

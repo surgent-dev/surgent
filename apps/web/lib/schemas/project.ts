@@ -27,9 +27,6 @@ const ProjectProvisioningMetadataSchema = z
   .object({
     sandboxId: z.string().optional(),
     previewUrl: z.string().optional(),
-    processName: z.string().optional(),
-    startCommand: z.string().optional(),
-    clonedAt: z.string().optional(),
     initializedAt: z.string().optional(),
     opencodeReadyAt: z.string().optional(),
     finalizedAt: z.string().optional(),
@@ -203,7 +200,7 @@ export const ProjectSchema = z.object({
     })
     .nullable()
     .catch(null),
-  isPublic: z.boolean().default(true),
+  isPublic: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
   sandbox: SandboxSchema,

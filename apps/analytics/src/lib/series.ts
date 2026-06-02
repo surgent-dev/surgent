@@ -1,5 +1,5 @@
 import { eachHourOfInterval, eachMinuteOfInterval } from 'date-fns'
-import { formatInTimeZone, zonedTimeToUtc } from 'date-fns-tz'
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz'
 import { isValidTimezone, normalizeTimezone } from '@/lib/date'
 import type { QueryFilters } from '@/lib/types'
 
@@ -89,12 +89,12 @@ function getSeriesDate(value: string | Date, unit: SeriesUnit, timezone: string)
   if (value instanceof Date) return value
   const localValue = value
   if (unit === 'month') {
-    return zonedTimeToUtc(`${localValue}-01T00:00:00`, timezone)
+    return fromZonedTime(`${localValue}-01T00:00:00`, timezone)
   }
   if (unit === 'year') {
-    return zonedTimeToUtc(`${localValue}-01-01T00:00:00`, timezone)
+    return fromZonedTime(`${localValue}-01-01T00:00:00`, timezone)
   }
-  return zonedTimeToUtc(`${localValue}T00:00:00`, timezone)
+  return fromZonedTime(`${localValue}T00:00:00`, timezone)
 }
 
 export function normalizeTimeSeries(

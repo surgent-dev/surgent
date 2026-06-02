@@ -111,12 +111,7 @@ const ScheduledSchema = z.object({ scheduled: z.boolean() })
 
 async function activateProjectReq({ id }: { id: string }) {
   const data = await http.post(`api/projects/${id}/activate`).json()
-  // activate returns full project row; accept either shape for resiliency
-  try {
-    return ProjectSchema.parse(data)
-  } catch {
-    return ScheduledSchema.parse(data)
-  }
+  return ScheduledSchema.parse(data)
 }
 
 export function useActivateProject() {
@@ -430,7 +425,6 @@ export function useSandboxLogsQuery(id?: string, enabled = true) {
 // Deployment history
 const DeploymentEnvSnapshotSchema = z
   .object({
-    vars: z.record(z.string(), z.string()).optional(),
     keys: z.array(z.string()).optional(),
     capturedAt: z.string().optional(),
   })

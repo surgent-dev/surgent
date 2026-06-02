@@ -1,18 +1,11 @@
 import type { Context } from 'hono'
-import { db } from '@/lib/db'
 import { HttpError } from '@/lib/errors'
-import { hashApiKey } from '@/lib/pay/utils'
+import { authorizePayApiKey, readApiKey } from '@/lib/pay/apikeys'
 import { getProjectWithAuth } from '@/services/projects'
 import type { AppContext } from '@/types/application'
 import type { PayEnv } from '@/lib/pay/types'
 
 type UserLike = { id: string; role?: string | null }
-
-function readApiKey(headers: Headers): string | null {
-  return (
-    headers.get('x-api-key') || headers.get('authorization')?.replace(/^Bearer\s+/i, '') || null
-  )
-}
 
 export type AuthResult = {
   userId: string
@@ -23,20 +16,10 @@ export type AuthResult = {
 
 export async function authorizeRequest(c: Context<AppContext>): Promise<AuthResult> {
   // API key takes priority — we need projectId + env from the apikey row
-  const rawApiKey = readApiKey(c.req.raw.headers)
-  if (rawApiKey) {
-    const hashed = await hashApiKey(rawApiKey)
-    const key = await db
-      .selectFrom('apikey')
-      .select(['projectId', 'userId', 'enabled', 'expiresAt', 'env'])
-      .where('key', '=', hashed)
-      .executeTakeFirst()
-
-    if (key && key.enabled) {
-      if (key.expiresAt && key.expiresAt <= new Date()) throw new HttpError(401, 'API key expired')
-      const env: PayEnv = key.env === 'test' ? 'test' : 'live'
-      return { userId: key.userId, mode: 'api_key', projectId: key.projectId, env }
-    }
+  if (readApiKey(c.req.raw.headers)) {
+    const key = await authorizePayApiKey(c.req.raw.headers)
+    if (!key) throw new HttpError(401, 'Invalid API key')
+    return { userId: key.userId, mode: 'api_key', projectId: key.projectId, env: key.env }
   }
 
   // Fall back to session auth (browser/dashboard)

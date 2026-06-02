@@ -24,19 +24,16 @@ export async function generateEntriToken(_userId: string): Promise<string> {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    log.error({ status: res.status, body: text }, 'failed to fetch Entri token')
+    log.error({ status: res.status, hasBody: Boolean(text) }, 'failed to fetch Entri token')
     throw new Error(`Failed to fetch Entri token: ${res.status}`)
   }
 
   const data = (await res.json()) as { auth_token: string }
 
-  log.info(
-    { applicationId, hasToken: !!data.auth_token, tokenPreview: data.auth_token?.slice(0, 20) },
-    'Entri token response',
-  )
+  log.info({ applicationId, hasToken: !!data.auth_token }, 'Entri token response')
 
   if (!data.auth_token) {
-    log.error({ data }, 'Entri API did not return an auth_token')
+    log.error('Entri API did not return an auth_token')
     throw new Error('Entri API did not return an auth_token')
   }
 

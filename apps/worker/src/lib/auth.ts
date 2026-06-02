@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth'
-import { admin, apiKey, jwt, organization } from 'better-auth/plugins'
+import { admin, jwt, organization } from 'better-auth/plugins'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import { createAccessControl } from 'better-auth/plugins/access'
 import { dialect } from '@/lib/db'
@@ -39,17 +39,6 @@ export const auth = betterAuth({
     admin({
       adminUserIds: config.auth.adminUserIds,
       adminRoles: config.auth.adminRoles,
-    }),
-    apiKey({
-      rateLimit: { enabled: false },
-      enableSessionForAPIKeys: true,
-      customAPIKeyGetter: (ctx) => {
-        const xApiKey = ctx.headers?.get('x-api-key')
-        if (xApiKey) return xApiKey
-        const authHeader = ctx.headers?.get('authorization')
-        if (authHeader) return authHeader.replace(/^Bearer\s+/i, '')
-        return null
-      },
     }),
     jwt({
       jwt: {

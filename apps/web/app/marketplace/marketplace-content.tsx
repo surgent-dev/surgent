@@ -8,7 +8,6 @@ import { useEffect, useState } from 'react'
 import { SurgentLogo } from '@/components/surgent-logo'
 import { formatPrice } from '@/components/payments/utils'
 import { authClient } from '@/lib/auth-client'
-import { formatMarketplaceDate } from '@/lib/format'
 import {
   type MarketplaceListing,
   type MarketplaceListingsResponse,

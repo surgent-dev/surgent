@@ -51,14 +51,14 @@ export async function registerPayWorkers(): Promise<void> {
   const b = getBoss()
 
   await b.createQueue(DLQ_NAME, {
-    retentionSeconds: 2_592_000, // 30 days
+    retentionSeconds: 604800,
   })
 
   await b.createQueue(QUEUE_NAME, {
     retryLimit: 5,
     retryBackoff: true,
-    expireInSeconds: 600, // 10 minutes
-    retentionSeconds: 604800, // 7 days
+    expireInSeconds: 600,
+    retentionSeconds: 86400,
     deadLetter: DLQ_NAME,
   })
 

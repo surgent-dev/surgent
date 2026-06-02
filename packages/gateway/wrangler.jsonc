@@ -4,45 +4,42 @@
   "compatibility_date": "2025-10-21",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
-  "routes": [
-    {
-      "pattern": "ai.surgent.dev/zen/*",
-      "zone_name": "surgent.dev"
-    }
-  ],
+  "routes": [],
+  "vars": {
+    "STAGE": "dev",
+  },
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "head_sampling_rate": 1,
   },
   "kv_namespaces": [
     {
       "binding": "GATEWAY_KV",
-      "id": "3a1289612aa74ed1a85ca702637a5cf7",
-      "preview_id": "6511bb33dad84989b4ca8b5acaf09ba4"
-    }
+      "id": "replace-with-kv-namespace-id",
+      "preview_id": "replace-with-preview-kv-namespace-id",
+    },
   ],
   "r2_buckets": [
     {
       "binding": "GATEWAY_DATA",
       "bucket_name": "gateway-data",
-      "preview_bucket_name": "gateway-data-preview"
-    }
+      "preview_bucket_name": "gateway-data-preview",
+    },
   ],
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "37ec3c99113a428badc26fd0e02c1039"
-    }
+      "id": "replace-with-hyperdrive-id",
+    },
   ],
 
-  // Development environment (separate worker)
   "env": {
     "dev": {
       "name": "gateway-dev",
-      "routes": ["ai-dev.surgent.dev/zen/*"],
+      "routes": [],
       "vars": {
-        "STAGE": "dev"
-      }
-    }
-  }
+        "STAGE": "dev",
+      },
+    },
+  },
 }

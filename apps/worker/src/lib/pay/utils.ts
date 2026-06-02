@@ -130,7 +130,8 @@ export async function resolveActiveAccountId(
   try {
     const account = await getAccountForUser({ projectId, env })
     return account.id
-  } catch {
+  } catch (error) {
+    if (!(error instanceof HttpError) || error.status !== 404) throw error
     return null
   }
 }

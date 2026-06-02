@@ -1,7 +1,8 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { FileMigrationProvider, Kysely, Migrator, sql } from 'kysely'
+import { Kysely, sql } from 'kysely'
+import { FileMigrationProvider, Migrator, type MigrationResultSet } from 'kysely/migration'
 import { createClient } from './kysely_db'
 
 const migrationFolder = fileURLToPath(new URL('./migrations', import.meta.url))
@@ -18,7 +19,7 @@ function createMigrator<DB>(db: Kysely<DB>) {
   })
 }
 
-function logResults(results: Awaited<ReturnType<typeof migrate>>['results']) {
+function logResults(results: MigrationResultSet['results']) {
   results?.forEach((it) => {
     if (it.status === 'Success') {
       console.log(`✅ Migration "${it.migrationName}" was executed successfully`)

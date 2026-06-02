@@ -356,7 +356,7 @@ export function PublishModal({
           <div className="flex items-center gap-2">
             <Globe className="size-3.5 text-muted-foreground/70" weight="duotone" />
             <span className="text-xs font-medium text-muted-foreground">
-              {(project?.isPublic ?? true) ? 'Public' : 'Private'}
+              {(project?.isPublic ?? false) ? 'Public' : 'Private'}
             </span>
             {!canToggleVisibility && (
               <button
@@ -371,7 +371,7 @@ export function PublishModal({
                 <span>
                   <Switch
                     className={canToggleVisibility ? 'ml-auto' : ''}
-                    checked={project?.isPublic ?? true}
+                    checked={project?.isPublic ?? false}
                     onCheckedChange={(checked) => {
                       if (!projectId) return
                       updateVisibility.mutate(
@@ -387,7 +387,7 @@ export function PublishModal({
               </TooltipTrigger>
               <TooltipContent side="bottom">
                 {canToggleVisibility
-                  ? (project?.isPublic ?? true)
+                  ? (project?.isPublic ?? false)
                     ? 'Make private'
                     : 'Make public'
                   : 'Upgrade to control visibility'}

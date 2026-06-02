@@ -2,10 +2,10 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from 'next-themes'
-import posthog from 'posthog-js'
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { authClient } from '@/lib/auth-client'
+import { identifyClientUser } from '@/lib/posthog-client'
 import { track } from '@/lib/track'
 
 type ProvidersProps = {
@@ -18,7 +18,7 @@ export default function Providers({ children }: ProvidersProps) {
   useEffect(() => {
     authClient.getSession().then(({ data }) => {
       if (!data?.user) return
-      posthog.identify(data.user.id, { email: data.user.email })
+      identifyClientUser(data.user)
 
       // Consume signup_complete cookie set by server databaseHook on new user creation
       const match = document.cookie.match(/(?:^|; )signup_complete=([^;]+)/)

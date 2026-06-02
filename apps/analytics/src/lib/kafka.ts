@@ -1,7 +1,6 @@
 import type * as tls from 'node:tls'
 import debug from 'debug'
 import { Kafka, logLevel, type Producer, type RecordMetadata, type SASLOptions } from 'kafkajs'
-import { serializeError } from 'serialize-error'
 import { KAFKA, KAFKA_PRODUCER } from '@/lib/db'
 
 const log = debug('umami:kafka')
@@ -67,27 +66,22 @@ async function sendMessage(
   topic: string,
   message: Record<string, string | number> | Record<string, string | number>[],
 ): Promise<RecordMetadata[]> {
-  try {
-    await connect()
+  await connect()
 
-    return producer.send({
-      topic,
-      messages: Array.isArray(message)
-        ? message.map((a) => {
-            return { value: JSON.stringify(a) }
-          })
-        : [
-            {
-              value: JSON.stringify(message),
-            },
-          ],
-      timeout: SEND_TIMEOUT,
-      acks: ACKS,
-    })
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.log('KAFKA ERROR:', serializeError(e))
-  }
+  return producer.send({
+    topic,
+    messages: Array.isArray(message)
+      ? message.map((a) => {
+          return { value: JSON.stringify(a) }
+        })
+      : [
+          {
+            value: JSON.stringify(message),
+          },
+        ],
+    timeout: SEND_TIMEOUT,
+    acks: ACKS,
+  })
 }
 
 async function connect(): Promise<Kafka> {

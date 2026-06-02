@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { parseRequest } from '@/lib/request'
 import { json, notFound, ok } from '@/lib/response'
 import { anyObjectParam, segmentTypeParam } from '@/lib/schema'
-import { deleteSegment, getSegment, updateSegment } from '@/queries/prisma'
+import { deleteSegment, getWebsiteSegment, updateSegment } from '@/queries/prisma'
 
 export async function GET(
   request: Request,
@@ -16,7 +16,8 @@ export async function GET(
 
   const { websiteId, segmentId } = await params
 
-  const segment = await getSegment(segmentId)
+  const segment = await getWebsiteSegment(websiteId, segmentId)
+  if (!segment) return notFound()
 
   return json(segment)
 }
@@ -40,7 +41,7 @@ export async function POST(
   const { websiteId, segmentId } = await params
   const { type, name, parameters } = body
 
-  const segment = await getSegment(segmentId)
+  const segment = await getWebsiteSegment(websiteId, segmentId)
 
   if (!segment) {
     return notFound()
@@ -67,7 +68,7 @@ export async function DELETE(
 
   const { websiteId, segmentId } = await params
 
-  const segment = await getSegment(segmentId)
+  const segment = await getWebsiteSegment(websiteId, segmentId)
 
   if (!segment) {
     return notFound()

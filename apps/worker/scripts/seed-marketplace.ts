@@ -148,7 +148,7 @@ const clean = process.argv.includes('--clean')
       .select('id')
       .where('userId', 'in', userIds)
       .execute()
-    const projectIds = seededProjects.map((p) => p.id)
+    const projectIds = seededProjects.map((p) => p.id).filter((id): id is string => Boolean(id))
 
     if (projectIds.length > 0) {
       await db.deleteFrom('listing').where('projectId', 'in', projectIds).execute()
@@ -175,11 +175,12 @@ console.log(`Seeding ${LISTINGS.length} marketplace listings...`)
 const createdUsers: { id: string; orgId: string; idx: number }[] = []
 
 for (let i = 0; i < FAKE_SELLERS.length; i++) {
-  const seller = FAKE_SELLERS[i]
+  const seller = FAKE_SELLERS[i]!
 
   const user = await db
     .insertInto('user')
     .values({
+      id: crypto.randomUUID(),
       name: seller.name,
       email: `${slug(seller.name)}${SEED_EMAIL_DOMAIN}`,
       emailVerified: true,
@@ -193,9 +194,11 @@ for (let i = 0; i < FAKE_SELLERS.length; i++) {
   const org = await db
     .insertInto('organization')
     .values({
+      id: crypto.randomUUID(),
       name: `${seller.name}'s Org`,
       slug: `seed-${slug(seller.name)}-org`,
       createdBy: user.id,
+      metadata: null,
       createdAt: daysAgo(30 + i),
       updatedAt: daysAgo(30 + i),
     })
@@ -209,8 +212,8 @@ console.log(`Created ${createdUsers.length} fake sellers`)
 
 // Create projects + listings
 for (let i = 0; i < LISTINGS.length; i++) {
-  const listing = LISTINGS[i]
-  const seller = createdUsers[i % createdUsers.length]
+  const listing = LISTINGS[i]!
+  const seller = createdUsers[i % createdUsers.length]!
   const age = Math.floor(Math.random() * 21) + 1 // 1–21 days ago
 
   const project = await db
@@ -238,7 +241,7 @@ for (let i = 0; i < LISTINGS.length; i++) {
   await db
     .insertInto('listing')
     .values({
-      projectId: project.id,
+      projectId: project.id!,
       title: listing.title,
       description: listing.description,
       imageUrl: listing.image,

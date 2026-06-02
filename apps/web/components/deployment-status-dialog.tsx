@@ -1,14 +1,6 @@
 'use client'
 
-import {
-  ArrowSquareOut,
-  Copy,
-  Eye,
-  EyeSlash,
-  PencilSimple,
-  RocketLaunch,
-  X,
-} from '@phosphor-icons/react'
+import { ArrowSquareOut, Copy, PencilSimple, RocketLaunch, X } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -44,7 +36,6 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
   const [rollId, setRollId] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [input, setInput] = useState('')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
   const prevStatusRef = useRef<string | null>(null)
 
   const { data: history, isLoading } = useDeploymentHistoryQuery(projectId, open)
@@ -316,11 +307,7 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                 const pend = !TERMINAL_DEPLOYMENT_STATUSES.includes(d.status)
                 const ok = d.status === 'deployed'
                 const snap = d.envSnapshot
-                const varEntries = snap?.vars
-                  ? Object.entries(snap.vars).sort(([a], [b]) => a.localeCompare(b))
-                  : snap?.keys?.map((k) => [k, ''] as const) || []
-                const isExpanded = expandedId === d.id
-                const hasVals = Boolean(snap?.vars)
+                const envKeys = snap?.keys?.slice().sort((a, b) => a.localeCompare(b)) || []
                 return (
                   <div
                     key={d.id}
@@ -365,22 +352,13 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        {varEntries.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setExpandedId(isExpanded ? null : d.id)}
-                            className={`h-7 px-1.5 sm:px-2 rounded-md text-xs inline-flex items-center gap-1 sm:gap-1.5 transition-colors ${isExpanded ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}
-                          >
-                            {isExpanded ? (
-                              <EyeSlash className="size-3.5" weight="bold" />
-                            ) : (
-                              <Eye className="size-3.5" />
-                            )}
+                        {envKeys.length > 0 && (
+                          <span className="h-7 px-1.5 sm:px-2 rounded-md text-xs inline-flex items-center gap-1 sm:gap-1.5 text-muted-foreground bg-muted/40">
                             <span className="tabular-nums hidden sm:inline">
-                              {varEntries.length} env
+                              {envKeys.length} env
                             </span>
-                            <span className="tabular-nums sm:hidden">{varEntries.length}</span>
-                          </button>
+                            <span className="tabular-nums sm:hidden">{envKeys.length}</span>
+                          </span>
                         )}
                         {ok && d.cloudflareVersionId && i > 0 && (
                           <button
@@ -399,30 +377,16 @@ export default function DeploymentStatusDialog({ open, onOpenChange, projectId, 
                       </div>
                     </div>
 
-                    {/* Env snapshot expanded */}
-                    {isExpanded && varEntries.length > 0 && (
-                      <div className="mt-3 sm:ml-5 rounded-lg border bg-muted/10 overflow-hidden">
-                        <div className="grid grid-cols-[minmax(80px,auto)_1fr] sm:grid-cols-[minmax(120px,auto)_1fr] text-[11px] font-mono">
-                          {varEntries.map(([k, v], idx) => (
-                            <div
-                              key={`${d.id}-${k}`}
-                              className={`contents ${idx < varEntries.length - 1 ? '[&>*]:border-b' : ''}`}
-                            >
-                              <div className="px-2 sm:px-3 py-2 text-muted-foreground bg-muted/30 font-medium truncate">
-                                {k}
-                              </div>
-                              <div className="px-2 sm:px-3 py-2 text-foreground/85 break-all">
-                                {hasVals ? (
-                                  v || (
-                                    <span className="text-muted-foreground/40 italic">empty</span>
-                                  )
-                                ) : (
-                                  <span className="text-muted-foreground/40">—</span>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                    {envKeys.length > 0 && (
+                      <div className="mt-2 sm:ml-5 flex flex-wrap gap-1.5">
+                        {envKeys.map((key) => (
+                          <span
+                            key={`${d.id}-${key}`}
+                            className="rounded-md bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground"
+                          >
+                            {key}
+                          </span>
+                        ))}
                       </div>
                     )}
                   </div>

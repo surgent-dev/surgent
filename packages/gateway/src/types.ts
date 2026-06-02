@@ -11,6 +11,9 @@ export interface Bindings {
   ZEN_MODELS6?: string
   ZEN_MODELS7?: string
   ZEN_MODELS8?: string
+  OPENAI_API_KEY?: string
+  ANTHROPIC_API_KEY?: string
+  GOOGLE_API_KEY?: string
   GATEWAY_KV: KVNamespace
   POSTGRES_TYPE?: string
   GATEWAY_DATA?: R2Bucket

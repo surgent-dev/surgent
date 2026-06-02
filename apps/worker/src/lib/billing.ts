@@ -200,7 +200,7 @@ export const planCatalog: PlanConfig[] = [
     priceUsd: 0,
     monthlyAllowanceMicros: dollarsToMicros(config.stripe.free.allowanceUsd),
     projectsLimit: 3,
-    privateProjects: false,
+    privateProjects: true,
     publishYourApp: true,
     downloadCode: false,
   },

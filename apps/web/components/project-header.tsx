@@ -50,7 +50,7 @@ import {
   TERMINAL_DEPLOYMENT_STATUSES,
 } from '@/lib/deployment'
 import { http } from '@/lib/http'
-import { useProjectDomains, useRemoveDomain } from '@/queries/domains'
+import { useProjectDomains } from '@/queries/domains'
 import { useGitHubStatus } from '@/queries/github'
 import {
   useCancelDeployment,
@@ -107,7 +107,6 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
   const { data: latestDeployment } = useLatestDeploymentQuery(projectId)
   const updateVisibility = useUpdateProjectVisibility()
   const { data: domainsData } = useProjectDomains(projectId)
-  const _removeDomain = useRemoveDomain()
 
   // Domain states
   const activeDomains = domainsData?.domains?.filter((d) => d.status === 'active') ?? []
@@ -702,7 +701,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                 <div className="flex items-center gap-2">
                   <Globe className="size-3.5 text-muted-foreground/70" weight="duotone" />
                   <span className="text-xs font-medium text-muted-foreground">
-                    {(project?.isPublic ?? true) ? 'Public' : 'Private'}
+                    {(project?.isPublic ?? false) ? 'Public' : 'Private'}
                   </span>
                   {!canToggleVisibility && (
                     <button
@@ -717,7 +716,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                       <span>
                         <Switch
                           className={canToggleVisibility ? 'ml-auto' : ''}
-                          checked={project?.isPublic ?? true}
+                          checked={project?.isPublic ?? false}
                           onCheckedChange={(checked) => {
                             if (!projectId) return
                             updateVisibility.mutate(
@@ -733,7 +732,7 @@ export default function ProjectHeader({ projectId, project }: ProjectHeaderProps
                     </TooltipTrigger>
                     <TooltipContent side="bottom">
                       {canToggleVisibility
-                        ? (project?.isPublic ?? true)
+                        ? (project?.isPublic ?? false)
                           ? 'Make private'
                           : 'Make public'
                         : 'Upgrade to control visibility'}

@@ -1,6 +1,7 @@
 {
   "name": "dispatch",
   "version": "1.0.0",
+  "private": true,
   "license": "Apache-2.0",
   "engines": {
     "node": ">=18"
@@ -9,15 +10,18 @@
     "@cloudflare/workers-types": "^4.20250214.0",
     "@types/node": "^18.0.0",
     "typescript": "^5.9.2",
-    "wrangler": "^4.54.0"
+    "wrangler": "4.95.0"
   },
   "dependencies": {
-    "hono": "^4.10.3"
+    "hono": "4.12.23"
   },
   "scripts": {
     "dev": "wrangler dev --port 8000",
     "start": "wrangler dev --verbose --port 8000",
-    "deploy": "wrangler deploy",
-    "generate-types": "wrangler types"
+    "deploy": "echo 'Use deploy:private with wrangler.private.jsonc' && exit 1",
+    "deploy:private": "if [ \"$CONFIRM_PROD\" != \"1\" ]; then echo \"Set CONFIRM_PROD=1 to deploy private prod config\"; exit 1; fi; wrangler deploy --config wrangler.private.jsonc",
+    "generate-types": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "check-types": "bun run typecheck"
   }
 }

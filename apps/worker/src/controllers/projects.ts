@@ -31,7 +31,7 @@ import { calculateFileHash } from '@/apis/deployer/utils/index'
 import { auth } from '@/lib/auth'
 import { WorkerDeployer } from '@/apis/deployer/deployer'
 import Cloudflare from 'cloudflare'
-import { ensureAnalytics, syncProjectAnalyticsDomain } from '@/services/analytics'
+import { ensureAnalytics } from '@/services/analytics'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'fs/promises'
 import { createRequire } from 'module'
 import { tmpdir } from 'os'
@@ -39,7 +39,13 @@ import { tmpdir } from 'os'
 const log = createLogger('projects')
 const require = createRequire(import.meta.url)
 const tar: {
-  x(options: { file: string; cwd: string; strict?: boolean }): Promise<void>
+  x(options: {
+    file: string
+    cwd: string
+    strict?: boolean
+    preservePaths?: boolean
+    filter?: (filePath: string, entry?: { type?: string }) => boolean
+  }): Promise<void>
 } = require('tar')
 
 // ============================================================================
@@ -118,6 +124,15 @@ function stripTrailingSlash(s: string): string {
   return s.length > 1 && s.endsWith('/') ? s.slice(0, -1) : s
 }
 
+function isSafeArchiveEntry(filePath: string, entry?: { type?: string }): boolean {
+  const normalized = posix.normalize(filePath.replace(/\\/g, '/'))
+  if (normalized === '.' || normalized.startsWith('../') || posix.isAbsolute(normalized)) {
+    return false
+  }
+
+  return !entry?.type || entry.type === 'File' || entry.type === 'Directory'
+}
+
 async function extractTarEntries(
   archive: Buffer,
 ): Promise<Array<{ path: string; content: Buffer }>> {
@@ -147,7 +162,13 @@ async function extractTarEntries(
   try {
     await mkdir(extractDir)
     await writeFile(archivePath, archive)
-    await tar.x({ file: archivePath, cwd: extractDir, strict: true })
+    await tar.x({
+      file: archivePath,
+      cwd: extractDir,
+      strict: true,
+      preservePaths: false,
+      filter: isSafeArchiveEntry,
+    })
 
     const files: Array<{ path: string; content: Buffer }> = []
     await walk(extractDir, files)
@@ -188,14 +209,7 @@ async function deployConvexFunctions(
     env,
   })
   if (result.code === 0) return
-  throw new Error(`Convex deploy failed: ${formatExecFailure(result.output)}`)
-}
-
-function formatExecFailure(output: string, limit = 8_000): string {
-  const text = String(output || '').trim()
-  if (!text) return 'command exited without output'
-  if (text.length <= limit) return text
-  return `[truncated to last ${limit} chars]\n${text.slice(-limit)}`
+  throw new Error(`Convex deploy failed (exit ${result.code})`)
 }
 
 async function directoryExists(sandbox: Sandbox, dir: string): Promise<boolean> {
@@ -212,7 +226,7 @@ async function downloadFileSafe(sandbox: Sandbox, filePath: string, cwd?: string
   } catch {
     const cmd = `base64 -w0 ${shellQuote(filePath)} 2>/dev/null || base64 ${shellQuote(filePath)}`
     const res = await sandbox.exec(cmd, { timeout: 60_000, cwd })
-    if (res.code !== 0) throw new Error(`downloadFileSafe failed: ${res.output}`)
+    if (res.code !== 0) throw new Error(`downloadFileSafe failed (exit ${res.code})`)
     return Buffer.from((res.output || '').toString().trim(), 'base64')
   }
 }
@@ -226,7 +240,7 @@ async function buildAndDownloadArchive(
   try {
     const result = await sandbox.exec(command, { cwd: opts?.cwd, timeout: opts?.timeout })
     if (result.code !== 0) {
-      throw new Error(`Failed to create archive: ${formatExecFailure(result.output)}`)
+      throw new Error(`Failed to create archive (exit ${result.code})`)
     }
     return await downloadFileSafe(sandbox, archivePath, opts?.cwd)
   } finally {
@@ -278,7 +292,8 @@ export async function ensureOpencodeConfigRepo(sandbox: Sandbox, repoUrl: string
     const pull = await sandbox.exec(`git -C ${shellQuote(repoDir)} pull --ff-only`, {
       timeout: 120_000,
     })
-    if (pull.code !== 0) throw new Error(`Failed to update opencode config repo: ${pull.output}`)
+    if (pull.code !== 0)
+      throw new Error(`Failed to update opencode config repo (exit ${pull.code})`)
     return
   }
 
@@ -289,7 +304,7 @@ export async function ensureOpencodeConfigRepo(sandbox: Sandbox, repoUrl: string
       timeout: 120_000,
     },
   )
-  if (clone.code !== 0) throw new Error(`Failed to clone opencode config repo: ${clone.output}`)
+  if (clone.code !== 0) throw new Error(`Failed to clone opencode config repo (exit ${clone.code})`)
 }
 
 async function execPm2Start(
@@ -447,7 +462,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       env: envVars,
     })
     if (build.code !== 0) {
-      throw new Error(`Build failed: ${formatExecFailure(build.output)}`)
+      throw new Error(`Build failed (exit ${build.code})`)
     }
 
     const assetsDir = await findAssetsDir(sandbox, workingDir)
@@ -481,17 +496,13 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       name: project.name,
       domain: workerHostname,
     })
-    if (analytics?.id) {
-      log.info({ projectId, websiteId: analytics.id }, 'analytics: website ensured')
-    } else {
-      log.warn({ projectId }, 'analytics: no websiteId returned — analytics will not be active')
-    }
+    log.info({ projectId, websiteId: analytics.id }, 'analytics: website ensured')
 
     const assetPreview = assetPaths.slice(0, 12)
     const assetMore = assetPaths.length - assetPreview.length
     const envKeys = Object.keys(deployConfig.vars || {}).sort()
     const envSnapshot = {
-      vars: deployConfig.vars || {},
+      keys: envKeys,
       capturedAt: new Date().toISOString(),
     }
     const envPreview = envKeys.slice(0, 20)
@@ -549,8 +560,6 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       status: 'active',
     })
 
-    await syncProjectAnalyticsDomain(projectId).catch(() => {})
-
     if (prevName && prevName !== scriptName) {
       await new WorkerDeployer()
         .deleteWorker(prevName, config.cloudflare.dispatchNamespace!)
@@ -573,7 +582,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     const failStatus = stage === 'building' ? 'build_failed' : 'deploy_failed'
     await ProjectService.updateDeployment(deploymentId, {
       status: failStatus,
-      error: err?.message || 'Deployment failed',
+      error: failStatus === 'build_failed' ? 'Build failed' : 'Deployment failed',
       finishedAt: new Date(),
     }).catch(() => {})
     // Don't update worker status on deploy failure - previous version may still be running

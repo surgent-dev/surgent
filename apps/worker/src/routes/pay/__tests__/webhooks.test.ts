@@ -1,5 +1,10 @@
 import { describe, test, expect } from 'bun:test'
-import { composeWhopWebhookSignature, verifyWhopWebhookSignature } from '@/lib/pay/webhooks'
+import {
+  composeWhopWebhookSignature,
+  parseWhopWebhookEvent,
+  redactWhopWebhookEvent,
+  verifyWhopWebhookSignature,
+} from '@/lib/pay/webhooks'
 
 const SECRET = Buffer.from('test-secret-key').toString('base64')
 // Production's decodeWebhookSecret treats non-whsec_ secrets as raw UTF-8 bytes
@@ -197,5 +202,55 @@ describe('verifyWhopWebhookSignature', () => {
         toleranceSeconds: 10,
       }),
     ).toThrow(/tolerance/i)
+  })
+})
+
+describe('redactWhopWebhookEvent', () => {
+  test('keeps routing identifiers and removes customer/card fields', () => {
+    const parsed = parseWhopWebhookEvent({
+      id: 'evt_1',
+      type: 'payment.succeeded',
+      data: {
+        id: 'pay_1',
+        total: 1000,
+        currency: 'usd',
+        status: 'succeeded',
+        metadata: {
+          session_id: 'session_1',
+          project_id: 'project_1',
+          product_id: 'product_1',
+          customer_id: 'customer_1',
+          customer_email: 'customer@example.com',
+          custom: 'do-not-store',
+        },
+        user: {
+          id: 'user_1',
+          email: 'customer@example.com',
+          name: 'Customer Name',
+        },
+        payment_method: {
+          card: {
+            brand: 'visa',
+            last4: '4242',
+          },
+        },
+      },
+    })
+
+    const redacted = redactWhopWebhookEvent(parsed)
+
+    expect(redacted.metadata).toEqual({
+      session_id: 'session_1',
+      project_id: 'project_1',
+      product_id: 'product_1',
+      customer_id: 'customer_1',
+    })
+    expect(redacted.userEmail).toBeUndefined()
+    expect(redacted.userName).toBeUndefined()
+    expect(redacted.cardBrand).toBeUndefined()
+    expect(redacted.cardLast4).toBeUndefined()
+    expect(JSON.stringify(redacted)).not.toContain('customer@example.com')
+    expect(JSON.stringify(redacted)).not.toContain('4242')
+    expect(JSON.stringify(redacted)).not.toContain('do-not-store')
   })
 })
