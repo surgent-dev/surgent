@@ -641,7 +641,12 @@ jobs:
           AWS_ACCOUNT_ID: '111111111111'
           AWS_REGION: us-east-1
         run: |
-          bun cdk synth \
+          cat > cdk.context.json <<'EOF'
+          {
+            "availability-zones:account=111111111111:region=us-east-1": ["us-east-1a", "us-east-1b"]
+          }
+          EOF
+          bun cdk synth --no-lookups \
             -c appName=surgent-ci \
             -c publicDomain=example.com \
             -c apiHostname=api.example.com \

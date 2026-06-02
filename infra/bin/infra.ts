@@ -13,7 +13,7 @@ function requiredEnv(...names: string[]) {
 
 new SurgentStack(app, 'SurgentStack', {
   env: {
-    account: requiredEnv('CDK_DEFAULT_ACCOUNT', 'AWS_ACCOUNT_ID'),
-    region: requiredEnv('CDK_DEFAULT_REGION', 'AWS_REGION'),
+    account: requiredEnv('AWS_ACCOUNT_ID', 'CDK_DEFAULT_ACCOUNT'),
+    region: requiredEnv('AWS_REGION', 'CDK_DEFAULT_REGION'),
   },
 })
