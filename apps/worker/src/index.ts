@@ -279,24 +279,7 @@ async function startServer() {
     fetch: (req) => app.fetch(req),
   })
 
-  const mask = (k?: string) => (k ? `${k.slice(0, 8)}...${k.slice(-4)}` : '(missing)')
-  log.info(
-    {
-      host,
-      port,
-      whop: {
-        test: {
-          apiKey: mask(config.whop.test.apiKey),
-          company: config.whop.test.platformCompanyId,
-        },
-        live: {
-          apiKey: mask(config.whop.live.apiKey),
-          company: config.whop.live.platformCompanyId,
-        },
-      },
-    },
-    'listening',
-  )
+  log.info({ host, port }, 'listening')
 
   const shutdown = async (signal: string) => {
     log.info({ signal }, 'shutting down')
