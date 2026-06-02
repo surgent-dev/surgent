@@ -12,7 +12,7 @@ upload.get('/*', async (c) => {
     return c.json({ error: 'Storage not configured' }, 503)
   }
 
-  const key = c.req.param('*')
+  const key = new URL(c.req.url).pathname.slice('/api/upload/'.length)
   if (!key || key.includes('..')) {
     return c.json({ error: 'Invalid key' }, 400)
   }
