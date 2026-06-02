@@ -250,7 +250,7 @@ function createPrismaClient(): PrismaClient {
     throw new Error(
       'DATABASE_URL environment variable is not set.\n' +
         'Please set DATABASE_URL in your .env file or environment.\n' +
-        'Example: DATABASE_URL=postgresql://user:password@localhost:5432/umami',
+        'Example: DATABASE_URL=<postgres-url>',
     )
   }
 
@@ -261,7 +261,7 @@ function createPrismaClient(): PrismaClient {
   } catch {
     throw new Error(
       'DATABASE_URL is not a valid URL.\n' +
-        'Expected format: postgresql://user:password@host:port/database\n' +
+        'Expected format: postgres URL with database name\n' +
         `Received: ${url.substring(0, 30)}...`,
     )
   }

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Local Postgres: `postgres://surgent:password@localhost:5432/surgent` (or `TEST_DATABASE_URL`)
+- Local Postgres via `TEST_DATABASE_URL`
 - No Whop API keys, no external services, no Docker beyond Postgres
 
 ```bash

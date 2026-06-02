@@ -13,11 +13,7 @@
 # Databases:
 #   PostgreSQL:   surgent (web/worker), surgent_analytics (analytics)
 #
-# Connection URLs for .env.local:
-#   apps/worker/.env.local:
-#     DATABASE_URL=postgresql://surgent:password@localhost:5432/surgent
-#   apps/analytics/.env.local:
-#     DATABASE_URL=postgresql://surgent:password@localhost:5432/surgent_analytics
+# Copy the local Postgres connection string from your own .env.local files.
 
 services:
   postgres:

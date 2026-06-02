@@ -19,5 +19,5 @@ bun run test
 DB-backed pay tests are separate:
 
 ```sh
-TEST_DATABASE_URL=postgres://surgent:password@localhost:5432/surgent_test bun --filter worker test:db
+TEST_DATABASE_URL='<test-database-url>' bun --filter worker test:db
 ```
