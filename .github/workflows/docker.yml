@@ -86,6 +86,7 @@ jobs:
               - bun.lock
               - bunfig.toml
               - .dockerignore
+              - .github/workflows/docker.yml
             infra:
               - infra/**
               - .github/workflows/docker.yml
@@ -431,8 +432,6 @@ jobs:
       - name: Write private gateway config
         working-directory: packages/gateway
         env:
-          GATEWAY_ROUTE_PATTERN: ${{ vars.GATEWAY_ROUTE_PATTERN }}
-          GATEWAY_ZONE_NAME: ${{ vars.GATEWAY_ZONE_NAME }}
           GATEWAY_KV_NAMESPACE_ID: ${{ vars.GATEWAY_KV_NAMESPACE_ID }}
           GATEWAY_KV_PREVIEW_NAMESPACE_ID: ${{ vars.GATEWAY_KV_PREVIEW_NAMESPACE_ID }}
           GATEWAY_HYPERDRIVE_ID: ${{ vars.GATEWAY_HYPERDRIVE_ID }}
@@ -442,8 +441,6 @@ jobs:
         run: |
           set -eu
 
-          : "${GATEWAY_ROUTE_PATTERN:?Set GATEWAY_ROUTE_PATTERN environment variable}"
-          : "${GATEWAY_ZONE_NAME:?Set GATEWAY_ZONE_NAME environment variable}"
           : "${GATEWAY_KV_NAMESPACE_ID:?Set GATEWAY_KV_NAMESPACE_ID environment variable}"
           : "${GATEWAY_KV_PREVIEW_NAMESPACE_ID:?Set GATEWAY_KV_PREVIEW_NAMESPACE_ID environment variable}"
           : "${GATEWAY_HYPERDRIVE_ID:?Set GATEWAY_HYPERDRIVE_ID environment variable}"
@@ -479,12 +476,6 @@ jobs:
             "secrets": {
               "required": ${REQUIRED_PROVIDER_KEYS}
             },
-            "routes": [
-              {
-                "pattern": "${GATEWAY_ROUTE_PATTERN}",
-                "zone_name": "${GATEWAY_ZONE_NAME}"
-              }
-            ],
             "observability": {
               "enabled": true,
               "head_sampling_rate": 1
