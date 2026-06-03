@@ -15,8 +15,8 @@ export type ProviderModel = {
 
 export const MODELS: ProviderModel[] = [
   {
-    id: 'gpt-5.4',
-    name: 'GPT-5.4',
+    id: 'gpt-5.5',
+    name: 'GPT-5.5 Fast',
     providerId: 'opencode',
     providerName: 'OpenCode',
     byokProvider: 'openai',
@@ -24,7 +24,7 @@ export const MODELS: ProviderModel[] = [
     maxVariant: 'high',
     limit: { context: 1050000 },
     icon: '/OpenAI-logo.svg',
-    badge: 'Default',
+    badge: 'Latest',
     badgeColor: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
   },
   {

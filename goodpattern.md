@@ -273,8 +273,8 @@ Use one value:
 
 ```ts
 export const DEFAULT_AGENT_MODEL = {
-  providerId: 'openai',
-  modelId: 'gpt-5.4',
+  providerId: 'opencode',
+  modelId: 'gpt-5.5',
   variant: 'medium',
 } as const
 ```

@@ -7,7 +7,7 @@ const openai = createOpenAI({
   apiKey: config.llms.openaiKey,
 })
 
-const gpt54Options = {
+const gpt55FastOptions = {
   openai: {
     reasoningEffort: 'medium',
     serviceTier: 'priority',
@@ -25,8 +25,8 @@ export async function generateJson<T>(
     .join('\n\n')
 
   const { object } = await generateObject({
-    model: openai.responses('gpt-5.4'),
-    providerOptions: gpt54Options,
+    model: openai.responses('gpt-5.5'),
+    providerOptions: gpt55FastOptions,
     system,
     prompt,
     schema,
