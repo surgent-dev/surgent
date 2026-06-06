@@ -31,7 +31,7 @@ export function LandingCta() {
             href="/signup"
             className="inline-flex items-center gap-2 btn-brand px-6 py-3 rounded-xl text-sm font-medium"
           >
-            Get started free
+            Get started
             <ArrowRight className="h-4 w-4" />
           </Link>
           <a

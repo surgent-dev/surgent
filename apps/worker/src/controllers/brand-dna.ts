@@ -62,7 +62,7 @@ Your output must be a single JSON object with this exact structure:
   },
 
   "pricing": {
-    "strategy": "1-2 sentences explaining the recommended pricing approach and why (e.g., 'Start with a free tier to build trust, then convert to a mid-range monthly plan. Your market is price-sensitive but values quality.')",
+    "strategy": "1-2 sentences explaining the recommended pricing approach and why (e.g., 'Start with a simple paid starter plan, then expand into higher-touch monthly tiers. Your market is price-sensitive but values quality.')",
     "tiers": [
       {
         "name": "Tier name",

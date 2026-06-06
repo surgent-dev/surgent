@@ -117,9 +117,9 @@ export default function DashboardPage() {
           <Gift className="size-4 text-brand gift-wiggle" weight="duotone" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-muted-foreground">Free credits</p>
+          <p className="text-sm font-semibold text-muted-foreground">Referral rewards</p>
           <p className="text-[11px] text-muted-foreground/40 mt-0.5">
-            Invite friends and earn rewards when they join
+            Invite friends and earn rewards when they subscribe
           </p>
         </div>
         <span className={actionBtn}>
