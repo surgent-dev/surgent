@@ -84,8 +84,7 @@ function centsToMicroCents(amount: number) {
 const SURGENT_MARKUP_MULTIPLIER = 1.3
 const SURGENT_MARKUP_BPS = 3000
 
-function isAllowanceEligible(tier: string, status: string) {
-  if (tier === 'free') return true
+function isAllowanceEligible(status: string) {
   return status === 'active' || status === 'trialing'
 }
 
@@ -102,7 +101,7 @@ function getEffectiveIncludedBalance(
   },
   now = new Date(),
 ) {
-  if (!isAllowanceEligible(row.tier, row.status)) return 0
+  if (!isAllowanceEligible(row.status)) return 0
   const window = getAllowanceWindow(
     {
       tier: row.tier,

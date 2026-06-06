@@ -126,7 +126,7 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
 
         <div className="flex-1" />
 
-        {/* Get credits */}
+        {/* Referral rewards */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -137,7 +137,7 @@ export default function WorkspaceSidebar({ companyId }: { companyId: string }) {
             </button>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8}>
-            Free credits
+            Referral rewards
           </TooltipContent>
         </Tooltip>
 

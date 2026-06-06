@@ -3,16 +3,12 @@
 import {
   CircleNotch,
   CurrencyDollar,
-  Eye,
   EyeSlash,
   Globe,
   Key,
   Lightning,
   Rocket,
   Storefront,
-  Users,
-  Cube,
-  Sparkle,
   type Icon,
 } from '@phosphor-icons/react'
 import { useState } from 'react'
@@ -22,13 +18,6 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useBillingCheckout, useSubscription } from '@/hooks/use-subscription'
 import { track } from '@/lib/track'
 import { cn } from '@/lib/utils'
-
-const FREE_FEATURES: { label: string; icon: Icon; color: string }[] = [
-  { label: '1 project', icon: Cube, color: '#737373' },
-  { label: 'Community support', icon: Users, color: '#737373' },
-  { label: 'Basic AI usage', icon: Sparkle, color: '#737373' },
-  { label: 'Public projects only', icon: Eye, color: '#737373' },
-]
 
 const PRO_FEATURES: { label: string; icon: Icon; color: string }[] = [
   { label: '$20/mo AI credits included', icon: Lightning, color: '#f59e0b' },
@@ -96,9 +85,7 @@ export default function PlanDialog({ open, onOpenChange }: PlanDialogProps) {
         {/* Header */}
         <div className="px-6 pt-7 sm:px-8 sm:pt-8 text-center">
           <h2 className="font-display text-2xl text-foreground">Choose your plan</h2>
-          <p className="text-sm text-muted-foreground/60 mt-1.5">
-            Start free, upgrade when you&apos;re ready
-          </p>
+          <p className="text-sm text-muted-foreground/60 mt-1.5">Upgrade to build with AI</p>
 
           {/* Billing toggle */}
           <div className="mt-5 inline-flex items-center h-9 rounded-lg bg-muted dark:bg-background p-1 border border-border/50 shadow-inner">
@@ -125,57 +112,9 @@ export default function PlanDialog({ open, onOpenChange }: PlanDialogProps) {
           </div>
         </div>
 
-        {/* Plans side by side */}
+        {/* Pro plan */}
         <div className="px-6 pt-6 pb-7 sm:px-8 sm:pb-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Free Plan */}
-            <div
-              className={cn(
-                'rounded-2xl border px-5 py-6 flex flex-col',
-                currentTier === 'free' ? 'border-foreground/20 bg-muted/20' : 'border-border/50',
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Free</h3>
-                {currentTier === 'free' && (
-                  <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-[10px] font-medium">
-                    Current
-                  </span>
-                )}
-              </div>
-
-              <div className="mt-4 flex items-baseline gap-0.5">
-                <span className="text-[36px] font-bold tabular-nums leading-none tracking-tight">
-                  $0
-                </span>
-                <span className="text-sm font-medium text-muted-foreground">/mo</span>
-              </div>
-
-              <p className="mt-2 text-xs text-muted-foreground">Get started and explore for free</p>
-
-              <div className="mt-6 flex-1 space-y-2.5">
-                {FREE_FEATURES.map(({ label, icon: FIcon, color }) => (
-                  <div key={label} className="flex items-center gap-2.5">
-                    <div
-                      className="size-6 rounded-md flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: `${color}15` }}
-                    >
-                      <FIcon weight="duotone" className="size-3.5" style={{ color }} />
-                    </div>
-                    <span className="text-xs text-muted-foreground">{label}</span>
-                  </div>
-                ))}
-              </div>
-
-              <Button
-                variant="outline"
-                className="mt-6 w-full h-10 rounded-xl text-xs font-medium cursor-pointer"
-                disabled
-              >
-                {currentTier === 'free' ? 'Current plan' : 'Downgrade'}
-              </Button>
-            </div>
-
+          <div className="mx-auto max-w-sm">
             {/* Pro Plan */}
             <div
               className={cn(

@@ -59,10 +59,10 @@ export default function EditorHeader({ projectId, project }: EditorHeaderProps) 
                   className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-brand hover:bg-brand/10 transition-colors cursor-pointer"
                 >
                   <Gift className="size-3.5 gift-wiggle" weight="duotone" />
-                  <span className="text-[12px] font-medium hidden sm:inline">Free credits</span>
+                  <span className="text-[12px] font-medium hidden sm:inline">Referral rewards</span>
                 </button>
               </TooltipTrigger>
-              <TooltipContent>Invite friends, earn $3</TooltipContent>
+              <TooltipContent>Invite friends, earn rewards after subscription</TooltipContent>
             </Tooltip>
             <DownloadButton projectId={projectId} projectName={project?.name} />
             <GitHubButton projectId={projectId} />

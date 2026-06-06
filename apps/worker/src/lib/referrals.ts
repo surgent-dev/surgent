@@ -8,7 +8,7 @@ import { ensureActiveOrganization } from '@/lib/organizations'
 import { createLogger } from '@/lib/logger'
 
 const REFERRAL_COOKIE_NAME = 'surgent_referral'
-const REFERRAL_SIGNUP_REWARD_USD = 1
+const REFERRAL_SIGNUP_REWARD_USD = 0
 const REFERRAL_CONVERSION_REWARD_USD = 2
 const REFERRAL_HARD_LIMIT = 10
 const REFERRAL_CONVERSION_GATE_THRESHOLD = 3
@@ -116,13 +116,15 @@ export async function consumeReferralAttribution(
 
     if (!inserted) return
 
-    await grantReferralCredits({
-      referrerUserId,
-      referredUserId,
-      amountUsd: REFERRAL_SIGNUP_REWARD_USD,
-      reason: 'Referral signup reward',
-      idempotencyKey: `referral:signup:${referrerUserId}:referred:${referredUserId}`,
-    })
+    if (REFERRAL_SIGNUP_REWARD_USD > 0) {
+      await grantReferralCredits({
+        referrerUserId,
+        referredUserId,
+        amountUsd: REFERRAL_SIGNUP_REWARD_USD,
+        reason: 'Referral signup reward',
+        idempotencyKey: `referral:signup:${referrerUserId}:referred:${referredUserId}`,
+      })
+    }
   } catch (err) {
     log.error({ err, referredUserId, referrerUserId }, '[REFERRAL] attribution failed')
   }

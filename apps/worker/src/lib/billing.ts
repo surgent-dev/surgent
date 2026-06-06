@@ -194,14 +194,14 @@ function billingSuccessUrl(returnPath?: string | null) {
 export const planCatalog: PlanConfig[] = [
   {
     tier: 'free',
-    label: 'Free',
+    label: 'Unpaid',
     interval: null,
     priceId: null,
     priceUsd: 0,
-    monthlyAllowanceMicros: dollarsToMicros(config.stripe.free.allowanceUsd),
-    projectsLimit: 3,
-    privateProjects: true,
-    publishYourApp: true,
+    monthlyAllowanceMicros: 0,
+    projectsLimit: 0,
+    privateProjects: false,
+    publishYourApp: false,
     downloadCode: false,
   },
   {
@@ -230,9 +230,9 @@ export const planCatalog: PlanConfig[] = [
   },
 ]
 
-const freePlan = (() => {
+const unpaidPlan = (() => {
   const plan = planCatalog.find((item) => item.tier === 'free' && item.interval === null)
-  if (!plan) throw new Error('Missing free billing plan config')
+  if (!plan) throw new Error('Missing unpaid billing plan config')
   return plan
 })()
 
@@ -348,7 +348,7 @@ export async function generateFounderCoupon(
 function getPlanConfig(tier: string, interval: string | null = null): PlanConfig {
   const match = planCatalog.find((item) => item.tier === tier && item.interval === interval)
   if (match) return match
-  if (tier === 'free') return freePlan
+  if (tier === 'free') return unpaidPlan
   throw new Error(`Unknown billing tier: ${tier}:${interval ?? 'none'}`)
 }
 
@@ -393,7 +393,6 @@ function getDiscountIds(discounts: Array<string | Stripe.Discount | Stripe.Delet
 }
 
 function allowanceEligible(row: BillingStateRow['subscription']) {
-  if (row.tier === 'free') return true
   return ALLOWANCE_STATUSES.has(row.status)
 }
 
@@ -420,7 +419,7 @@ function getEffectiveIncludedBalance(row: BillingStateRow, now = new Date()) {
 function getCatalogDisplay(): CatalogDisplay {
   return {
     billingOptions: planCatalog
-      .filter((item) => item.tier === 'free' || item.priceId)
+      .filter((item) => item.priceId)
       .map((item) => ({
         tier: item.tier,
         label: item.label,
@@ -515,7 +514,7 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
       id: crypto.randomUUID(),
       organizationId,
       stripeCustomerId: null,
-      includedBalanceMicros: String(freePlan.monthlyAllowanceMicros),
+      includedBalanceMicros: '0',
       includedBalancePeriodStart: startOfMonth(now),
       prepaidBalanceMicros: '0',
       autoReloadEnabled: false,
@@ -549,7 +548,7 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
       currentPeriodEnd: addMonths(startOfMonth(now), 1),
       cancelAtPeriodEnd: false,
       canceledAt: null,
-      monthlyAllowanceMicros: String(freePlan.monthlyAllowanceMicros),
+      monthlyAllowanceMicros: '0',
       stripeCouponId: null,
       stripeDiscountId: null,
       stripePromotionCodeId: null,
@@ -562,7 +561,7 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
   await tx
     .updateTable('billing_subscription')
     .set({
-      monthlyAllowanceMicros: String(freePlan.monthlyAllowanceMicros),
+      monthlyAllowanceMicros: '0',
       updatedAt: now,
     })
     .where('organizationId', '=', organizationId)
@@ -1014,7 +1013,7 @@ export async function syncStripeCustomerToBillingState(args: {
       : null
   const plan = activeSubscription
     ? getPlanFromPriceId(activeSubscription.items.data[0]?.price.id)
-    : freePlan
+    : unpaidPlan
   const discount = getDiscountIds(activeSubscription?.discounts)
 
   // PM is managed exclusively by persistBillingPaymentMethod (called after

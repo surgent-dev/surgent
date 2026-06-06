@@ -34,7 +34,7 @@ export default function ReferralDialog({ open, onOpenChange }: ReferralDialogPro
     {
       label: 'They sign up',
       detail: 'Your friend creates an account',
-      reward: `$${data?.signupRewardUsd ?? 2}`,
+      reward: null,
     },
     {
       label: 'They subscribe',
@@ -67,13 +67,13 @@ export default function ReferralDialog({ open, onOpenChange }: ReferralDialogPro
               <Gift className="size-5 text-brand" weight="duotone" />
             </div>
             <h2 className="font-display text-2xl text-foreground">
-              Invite friends, earn credits
+              Invite friends, earn rewards
               <span className="ml-2 inline-flex align-middle text-[12px] font-bold tabular-nums text-brand bg-brand/10 rounded-full px-2.5 py-1 -translate-y-0.5">
-                +$3
+                +${data?.conversionRewardUsd ?? 2}
               </span>
             </h2>
             <p className="text-sm text-muted-foreground/60 mt-1.5">
-              Get rewarded when your friends join Surgent
+              Get rewarded after your friends subscribe
             </p>
           </div>
 

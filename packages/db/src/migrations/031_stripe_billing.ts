@@ -224,7 +224,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .execute()
 
   // Backfill: create billing_account + billing_subscription for existing orgs
-  const FREE_MONTHLY_ALLOWANCE_MICROS = 300000000
+  const UNPAID_MONTHLY_ALLOWANCE_MICROS = 0
 
   await sql`
     INSERT INTO billing_account (
@@ -302,7 +302,7 @@ export async function up(db: Kysely<any>): Promise<void> {
       (date_trunc('month', now() AT TIME ZONE 'UTC') + interval '1 month') AT TIME ZONE 'UTC',
       false,
       NULL,
-      ${String(FREE_MONTHLY_ALLOWANCE_MICROS)}::bigint,
+      ${String(UNPAID_MONTHLY_ALLOWANCE_MICROS)}::bigint,
       (date_trunc('month', now() AT TIME ZONE 'UTC') + interval '1 month') AT TIME ZONE 'UTC',
       NULL,
       NULL,

@@ -30,9 +30,9 @@ const faqs = [
       'One click. Your app is deployed to our global infrastructure with SSL, custom domains, and automatic scaling. No server configuration or DevOps knowledge required.',
   },
   {
-    question: 'Is there a free tier?',
+    question: 'Is payment required?',
     answer:
-      'Yes! You can start building and deploying apps for free. We offer generous free credits to get you going, with paid plans for teams and high-volume usage.',
+      'Yes. Surgent requires an active paid plan before users can create projects, deploy apps, or use AI generation.',
   },
   {
     question: 'Can I use my own domain?',
