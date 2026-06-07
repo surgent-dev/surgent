@@ -9,21 +9,25 @@ interface UseSandboxReadyResult {
 }
 
 export function useSandboxReady(projectId: string | undefined): UseSandboxReadyResult {
-  const { data: project, isLoading } = useProjectQuery(projectId)
+  const { data: project, isError, isLoading } = useProjectQuery(projectId)
 
   const isProvisioning = project?.status === 'provisioning'
   const isFailed = project?.status === 'failed'
 
   // Don't poll sandbox health while project is still provisioning or failed
-  const { data: health } = useSandboxHealthQuery(projectId, !isProvisioning && !isFailed)
+  const { data: health } = useSandboxHealthQuery(
+    projectId,
+    Boolean(project) && !isProvisioning && !isFailed,
+  )
 
   const hasSandboxUrl = Boolean(project?.sandbox?.url)
   const isHealthy = health?.status === 'running'
-  const isReady = hasSandboxUrl && isHealthy && !isProvisioning && !isFailed
+  const isReady = hasSandboxUrl && isHealthy && !isProvisioning && !isFailed && !isError
 
-  const stage: SandboxStage =
-    isLoading || !project
-      ? 'loading'
+  const stage: SandboxStage = isLoading
+    ? 'loading'
+    : isError || !project
+      ? 'failed'
       : isFailed
         ? 'failed'
         : isProvisioning
