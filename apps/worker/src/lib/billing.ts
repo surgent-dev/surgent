@@ -568,14 +568,27 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
     .where('tier', '=', 'free')
     .execute()
 
-  const account = await tx
-    .selectFrom('billing_account')
+  const subscription = await tx
+    .selectFrom('billing_subscription')
     .selectAll()
     .where('organizationId', '=', organizationId)
     .executeTakeFirstOrThrow()
 
-  const subscription = await tx
-    .selectFrom('billing_subscription')
+  if (subscription.tier === 'free') {
+    await tx
+      .updateTable('billing_account')
+      .set({
+        includedBalanceMicros: '0',
+        includedBalancePeriodStart: null,
+        prepaidBalanceMicros: '0',
+        updatedAt: now,
+      })
+      .where('organizationId', '=', organizationId)
+      .execute()
+  }
+
+  const account = await tx
+    .selectFrom('billing_account')
     .selectAll()
     .where('organizationId', '=', organizationId)
     .executeTakeFirstOrThrow()
@@ -1049,19 +1062,20 @@ export async function syncStripeCustomerToBillingState(args: {
       ? asNumber(state.account.monthlySpendUsageMicros)
       : await getUsageSpentMicrosTx(tx, args.organizationId, allowanceWindow.start)
     const monthlySpendUsagePeriodStart = monthlySpendUsageMicros > 0 ? allowanceWindow.start : null
-    const includedBalanceMicros = sameAllowanceWindowStart(
-      state.account.includedBalancePeriodStart,
-      allowanceWindow.start,
-    )
-      ? asNumber(state.account.includedBalanceMicros)
-      : plan.monthlyAllowanceMicros
+    const includedBalanceMicros =
+      plan.tier === 'free'
+        ? 0
+        : sameAllowanceWindowStart(state.account.includedBalancePeriodStart, allowanceWindow.start)
+          ? asNumber(state.account.includedBalanceMicros)
+          : plan.monthlyAllowanceMicros
 
     await tx
       .updateTable('billing_account')
       .set({
         stripeCustomerId: customerId,
         includedBalanceMicros: String(includedBalanceMicros),
-        includedBalancePeriodStart: allowanceWindow.start,
+        includedBalancePeriodStart: plan.tier === 'free' ? null : allowanceWindow.start,
+        prepaidBalanceMicros: plan.tier === 'free' ? '0' : state.account.prepaidBalanceMicros,
         monthlySpendLimitMicros:
           plan.tier === 'pro' ? String(PAID_MONTHLY_SPEND_LIMIT_MICROS) : null,
         monthlySpendUsageMicros: String(monthlySpendUsageMicros),
@@ -1664,7 +1678,9 @@ export async function grantCredits(args: {
   if (amountMicros <= 0) throw new Error('Grant amount must be positive')
 
   await db.transaction().execute(async (tx) => {
-    await ensureBillingStateTx(tx, args.organizationId)
+    const state = await ensureBillingStateTx(tx, args.organizationId)
+    if (state.subscription.tier === 'free') return
+
     const inserted = await insertBillingPaymentEntry(tx, {
       organizationId: args.organizationId,
       kind: 'reward',
