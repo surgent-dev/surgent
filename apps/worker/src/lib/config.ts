@@ -120,9 +120,6 @@ export const config = {
   stripe: {
     secretKey: env.STRIPE_SECRET_KEY,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
-    free: {
-      allowanceUsd: float(env.STRIPE_FREE_ALLOWANCE_USD, 2),
-    },
     pro: {
       month: {
         priceId: env.STRIPE_PRO_MONTHLY_PRICE_ID,

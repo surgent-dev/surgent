@@ -757,6 +757,10 @@ export async function handleZenRequest(
       )
 
     if (!state) throw new CreditsError('Billing state is not ready yet. Please try again.')
+    if (state.tier === 'free') {
+      throw new CreditsError('Upgrade to a paid plan to use AI.')
+    }
+
     const allowanceWindow = getAllowanceWindow(
       {
         tier: state.tier,
