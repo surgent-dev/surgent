@@ -824,7 +824,7 @@ projects.delete('/:id/listing', zValidator('param', idParam), async (c) => {
 })
 
 // GET /projects/:id - Get single project
-projects.get('/:id', zValidator('param', idParam), async (c) => {
+projects.get('/:id', zValidator('param', idParam), requireAuth, async (c) => {
   const { id } = c.req.valid('param')
   const project = await getProjectWithAuth(id, c.get('user')!)
 
@@ -936,6 +936,7 @@ projects.delete('/:id', zValidator('param', idParam), async (c) => {
 // POST /projects - Create project + fire async initialization in the background
 projects.post(
   '/',
+  requireAuth,
   zValidator(
     'json',
     z.object({
@@ -1402,7 +1403,7 @@ projects.post(
 )
 
 // POST /projects/:id/activate - Resume project sandbox (alias)
-projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
+projects.post('/:id/activate', zValidator('param', idParam), requireAuth, async (c) => {
   const { id } = c.req.valid('param')
   await getProjectWithAuth(id, c.get('user')!)
 
@@ -1420,7 +1421,7 @@ projects.post('/:id/activate', zValidator('param', idParam), async (c) => {
 })
 
 // GET /projects/:id/logs - Get PM2 logs from sandbox
-projects.get('/:id/logs', zValidator('param', idParam), async (c) => {
+projects.get('/:id/logs', zValidator('param', idParam), requireAuth, async (c) => {
   const { id } = c.req.valid('param')
   await getProjectWithAuth(id, c.get('user')!)
 
@@ -1435,7 +1436,7 @@ projects.get('/:id/logs', zValidator('param', idParam), async (c) => {
 })
 
 // GET /projects/:id/health - Check if sandbox preview is reachable
-projects.get('/:id/health', zValidator('param', idParam), async (c) => {
+projects.get('/:id/health', zValidator('param', idParam), requireAuth, async (c) => {
   const { id } = c.req.valid('param')
   await getProjectWithAuth(id, c.get('user')!)
 
