@@ -189,6 +189,20 @@ export async function upsertSandbox(args: {
 }) {
   const now = new Date()
 
+  const result = await db
+    .updateTable('sandbox')
+    .set({
+      id: args.id,
+      provider: args.provider,
+      status: args.status,
+      host: args.host ?? null,
+      updatedAt: now,
+    })
+    .where('projectId', '=', args.projectId)
+    .executeTakeFirst()
+
+  if (result.numUpdatedRows > 0n) return
+
   await db
     .insertInto('sandbox')
     .values({
@@ -200,15 +214,6 @@ export async function upsertSandbox(args: {
       createdAt: now,
       updatedAt: now,
     })
-    .onConflict((oc) =>
-      oc.column('projectId').doUpdateSet({
-        id: args.id,
-        provider: args.provider,
-        status: args.status,
-        host: args.host ?? null,
-        updatedAt: now,
-      }),
-    )
     .execute()
 }
 
