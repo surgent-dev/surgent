@@ -94,8 +94,7 @@ agent.all(
     if (!sandboxRow?.id) return c.json({ error: 'Sandbox not found' }, 400)
 
     try {
-      const provider = sandboxRow.provider || config.sandbox.provider
-      const preview = await getPreview(provider, sandboxRow.id, 4096)
+      const preview = await getPreview(sandboxRow.provider, sandboxRow.id, 4096)
 
       const reqUrl = new URL(c.req.url)
       const targetUrl = buildTargetUrl(preview.url, reqUrl, projectId)

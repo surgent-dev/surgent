@@ -4,7 +4,7 @@ import { config } from '@/lib/config'
 import { createLogger } from '@/lib/logger'
 import { db } from '@/lib/db'
 import { HttpError } from '@/lib/errors'
-import { getProvider, resumeSandbox, workspacePath, defaultProviderName } from '@/lib/sandbox'
+import { getProvider, workspacePath } from '@/lib/sandbox'
 import {
   sanitizeHostname,
   shellQuote,
@@ -74,6 +74,7 @@ const DEFAULT_WRANGLER = {
 export interface ResumeProjectArgs {
   projectId: string
   sandboxId: string
+  provider: string
 }
 
 export interface RunAgentArgs {
@@ -316,7 +317,7 @@ async function execPm2Start(
 ) {
   const quotedName = shellQuote(name)
   const quotedCommand = shellQuote(command)
-  await sandbox.exec(
+  const result = await sandbox.exec(
     `pm2 delete ${quotedName} 2>/dev/null; pm2 start ${quotedCommand} --name ${quotedName}`,
     {
       timeout: 300_000,
@@ -324,6 +325,9 @@ async function execPm2Start(
       env,
     },
   )
+  if (result.code !== 0) {
+    throw new Error(`Failed to start ${name} (exit ${result.code})`)
+  }
 }
 
 export async function ensurePm2Process(
@@ -357,23 +361,15 @@ export async function startOpencodeServer(
 
 async function getOrCreateSandbox(opts: {
   port: number
-  workingDirectory: string
   sandboxId?: string
+  providerName: string
   env?: Record<string, string>
   name?: string
 }) {
-  const provider = getProvider()
-  let sandbox: Sandbox
-
-  if (opts.sandboxId) {
-    try {
-      sandbox = await provider.resume(opts.sandboxId)
-    } catch {
-      sandbox = await provider.create(opts.env, opts.name)
-    }
-  } else {
-    sandbox = await provider.create(opts.env, opts.name)
-  }
+  const provider = getProvider(opts.providerName)
+  const sandbox = opts.sandboxId
+    ? await provider.resume(opts.sandboxId)
+    : await provider.create(opts.env, opts.name)
 
   return { sandbox, previewUrl: await sandbox.host(opts.port) }
 }
@@ -441,7 +437,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     await syncServerVarsToConvex(projectId)
     const envVars = await getProjectEnvVars(projectId, 'production')
 
-    const sandbox = await getProvider().resume(sandboxRow.id)
+    const sandbox = await getProvider(sandboxRow.provider).resume(sandboxRow.id)
 
     // Deploy Convex functions to production (if project uses Convex)
     const convexCreds = await getConvexCredentials(projectId, 'production')
@@ -697,35 +693,31 @@ export async function resumeProject(
 
   const { sandbox, previewUrl } = await getOrCreateSandbox({
     sandboxId: args.sandboxId,
+    providerName: args.provider,
     port: PREVIEW_PORT,
-    workingDirectory,
     name: 'server',
     env: opencodeEnv,
   })
 
-  try {
-    const project = await ProjectService.getProjectById(args.projectId)
-    const metadata = project?.metadata as ProjectMetadata | null
-    if (metadata?.startCommand && metadata?.processName) {
-      await ensurePm2Process(
-        sandbox,
-        workingDirectory,
-        metadata.processName,
-        metadata.startCommand,
-        appEnv,
-      )
-    }
-
-    await ensureOpencodeConfigRepo(sandbox, config.opencode.configRepoUrl, opencodeConfigDir)
-    await startOpencodeServer(sandbox, workingDirectory, opencodeEnv)
-  } catch (err) {
-    log.error({ err }, 'resume error')
+  const project = await ProjectService.getProjectById(args.projectId)
+  const metadata = project?.metadata as ProjectMetadata | null
+  if (metadata?.startCommand && metadata?.processName) {
+    await ensurePm2Process(
+      sandbox,
+      workingDirectory,
+      metadata.processName,
+      metadata.startCommand,
+      appEnv,
+    )
   }
+
+  await ensureOpencodeConfigRepo(sandbox, config.opencode.configRepoUrl, opencodeConfigDir)
+  await startOpencodeServer(sandbox, workingDirectory, opencodeEnv)
 
   await ProjectService.upsertSandbox({
     id: sandbox.id,
     projectId: args.projectId,
-    provider: defaultProviderName,
+    provider: args.provider,
     status: 'started',
     host: previewUrl,
   })
@@ -755,7 +747,7 @@ export async function deployConvexProd(args: { projectId: string }): Promise<voi
   // Use production env vars so the Convex CLI picks up the prod deploy key
   const prodEnv = await getProjectEnvVars(args.projectId, 'production')
 
-  const sandbox = await getProvider().resume(sandboxRow.id)
+  const sandbox = await getProvider(sandboxRow.provider).resume(sandboxRow.id)
   const cwd = project.metadata?.workingDirectory || workspacePath(args.projectId)
 
   await deployConvexFunctions(sandbox, cwd, prodEnv)
@@ -771,7 +763,7 @@ export async function downloadProject(
   const sandboxRow = await ProjectService.getSandboxByProjectId(projectId)
   if (!sandboxRow?.id) throw new HttpError(400, 'Sandbox not initialized')
 
-  const sandbox = await getProvider().resume(sandboxRow.id)
+  const sandbox = await getProvider(sandboxRow.provider).resume(sandboxRow.id)
   const metadata = project.metadata as ProjectMetadata | null
   const workingDir = metadata?.workingDirectory || workspacePath(projectId)
   const archivePath = `/tmp/${projectId}-download.tar.gz`
@@ -809,7 +801,7 @@ export async function deleteSandbox(args: DeleteProjectArgs): Promise<void> {
   if (!sandboxRow?.id) return
 
   try {
-    await getProvider().kill(sandboxRow.id)
+    await getProvider(sandboxRow.provider).kill(sandboxRow.id)
     log.info({ projectId: args.projectId, sandboxId: sandboxRow.id }, 'sandbox deleted')
   } catch (err) {
     log.error(
@@ -829,7 +821,7 @@ export async function getSandboxLogs(
   const sandboxRow = await ProjectService.getSandboxByProjectId(projectId)
   if (!sandboxRow?.id) throw new HttpError(400, 'Sandbox not initialized')
 
-  const sandbox = await getProvider().resume(sandboxRow.id)
+  const sandbox = await getProvider(sandboxRow.provider).resume(sandboxRow.id)
   const metadata = project.metadata as ProjectMetadata | null
 
   const [app, opencode] = await Promise.all([

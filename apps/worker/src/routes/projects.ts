@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../middleware/auth'
 import { config } from '@/lib/config'
+import { getSandboxHealthStatus } from '@/lib/sandbox-health'
 import { checkBillingFeature } from '@/lib/billing'
 import { getAccountForUser, getClient } from '@/lib/pay/utils'
 import type { PayEnv } from '@/lib/pay/types'
@@ -1409,15 +1410,15 @@ projects.post('/:id/activate', zValidator('param', idParam), requireAuth, async 
 
   const sandboxRow = await db
     .selectFrom('sandbox')
-    .select(['id'])
+    .select(['id', 'provider'])
     .where('projectId', '=', id)
     .executeTakeFirst()
   const sandboxId = sandboxRow?.id
   if (!sandboxId) return c.json({ error: 'Sandbox not found' }, 400)
 
-  await resumeProject({ projectId: id, sandboxId })
+  await resumeProject({ projectId: id, sandboxId, provider: sandboxRow.provider })
 
-  return c.json({ resumed: true })
+  return c.json({ scheduled: true })
 })
 
 // GET /projects/:id/logs - Get PM2 logs from sandbox
@@ -1442,21 +1443,16 @@ projects.get('/:id/health', zValidator('param', idParam), requireAuth, async (c)
 
   const sandboxRow = await db
     .selectFrom('sandbox')
-    .select(['host'])
+    .select(['id', 'host', 'provider'])
     .where('projectId', '=', id)
     .executeTakeFirst()
-  const previewUrl = sandboxRow?.host
+  const previewUrl =
+    sandboxRow?.provider === 'daytona'
+      ? sandboxRow.host
+      : getSandboxPreviewUrl(sandboxRow?.id, Number(config.sandbox.defaultPort), sandboxRow?.host)
   if (!previewUrl) return c.json({ status: 'no_sandbox' })
 
-  try {
-    const res = await fetch(previewUrl, { method: 'HEAD' })
-    if (res.status === 502 || res.status === 503) {
-      return c.json({ status: 'paused' })
-    }
-    return c.json({ status: 'running' })
-  } catch {
-    return c.json({ status: 'paused' })
-  }
+  return c.json({ status: await getSandboxHealthStatus(previewUrl) })
 })
 
 // GET /projects/:id/download - Download project as tar.gz

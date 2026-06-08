@@ -90,6 +90,8 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
   const metadata = project.metadata
   const workingDirectory = metadata?.workingDirectory || workspacePath(projectId)
   const apiKey = await getProjectApiKey(projectId)
+  const providerName = defaultProviderName
+  const provider = getProvider(providerName)
   let provisioning = getProvisioning(metadata)
   let processName = metadata?.processName || `${projectId}-vite-server`
   let startCommand = metadata?.startCommand
@@ -97,11 +99,11 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
   if (!provisioning.sandboxId) {
     await setProvisioningStep(projectId, 'provisioning_sandbox')
     const devEnv = await getProjectEnvVars(projectId, 'development', { includeServer: false })
-    const sandbox = await getProvider().create(buildOpencodeEnv(devEnv, apiKey), 'server')
+    const sandbox = await provider.create(buildOpencodeEnv(devEnv, apiKey), 'server')
     const previewUrl = await sandbox.host(PREVIEW_PORT)
 
     log.info(
-      { projectId, sandboxId: sandbox.id, provider: defaultProviderName },
+      { projectId, sandboxId: sandbox.id, provider: providerName },
       'project create sandbox provisioned',
     )
 
@@ -116,7 +118,7 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
   }
 
   if (!provisioning.previewUrl && provisioning.sandboxId) {
-    const sandbox = await getProvider().resume(provisioning.sandboxId)
+    const sandbox = await provider.resume(provisioning.sandboxId)
     const previewUrl = await sandbox.host(PREVIEW_PORT)
     const next = await ProjectService.mergeProjectMetadata(projectId, {
       workingDirectory,
@@ -135,7 +137,6 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
   if (!provisioning.initializedAt) {
     await setProvisioningStep(projectId, 'installing_dependencies')
     let initScript: string | undefined
-    const provider = getProvider()
 
     try {
       const sandbox = await provider.resume(sandboxId)
@@ -233,7 +234,7 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
 
   if (!provisioning.opencodeReadyAt) {
     await setProvisioningStep(projectId, 'starting_ai_agent')
-    const sandbox = await getProvider().resume(sandboxId)
+    const sandbox = await provider.resume(sandboxId)
     const devEnv = await getProjectEnvVars(projectId, 'development', { includeServer: false })
     await ensureOpencodeConfigRepo(
       sandbox,
@@ -269,7 +270,7 @@ export async function runProjectCreationJob(data: CreateProjectJobData): Promise
   await ProjectService.upsertSandbox({
     id: sandboxId,
     projectId,
-    provider: defaultProviderName,
+    provider: providerName,
     status: 'started',
     host: previewUrl,
   })
