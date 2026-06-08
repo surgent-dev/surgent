@@ -72,7 +72,7 @@
     "e2b:build:dev-sandbox": "bun run src/e2b/build.dev.ts",
     "typecheck": "tsc --noEmit",
     "check-types": "bun run typecheck",
-    "test:unit": "bun test src/routes/pay/__tests__/webhooks.test.ts src/routes/pay/__tests__/handlers.test.ts",
+    "test:unit": "bun test src/routes/pay/__tests__/webhooks.test.ts src/routes/pay/__tests__/handlers.test.ts src/controllers/__tests__/projects.test.ts src/lib/__tests__/sandbox-health.test.ts",
     "test:db": "bun test src/routes/pay/__tests__/checkout.test.ts src/routes/pay/__tests__/webhook.test.ts"
   }
 }

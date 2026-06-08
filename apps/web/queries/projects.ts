@@ -352,6 +352,7 @@ export function useDeleteEnvVar() {
 
 // Sandbox health check
 type SandboxStatus = 'running' | 'paused' | 'no_sandbox' | 'not_found' | 'forbidden'
+const terminalSandboxStatuses = new Set<SandboxStatus>(['not_found', 'forbidden'])
 
 async function fetchSandboxHealth(id: string): Promise<{ status: SandboxStatus }> {
   return http.get(`api/projects/${id}/health`).json()
@@ -365,6 +366,7 @@ export function useSandboxHealthQuery(id?: string, enabled = true) {
     // Only poll when tab is focused; pause when hidden
     refetchInterval: (query) => {
       const status = query.state.data?.status
+      if (status && terminalSandboxStatuses.has(status)) return false
       // Poll faster when not running yet, slower when stable
       return status === 'running' ? 30000 : 5000
     },
