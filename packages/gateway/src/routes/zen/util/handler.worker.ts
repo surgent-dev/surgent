@@ -83,6 +83,7 @@ function centsToMicroCents(amount: number) {
 
 const SURGENT_MARKUP_MULTIPLIER = 1.3
 const SURGENT_MARKUP_BPS = 3000
+const DEFAULT_LONG_CONTEXT_COST_THRESHOLD_TOKENS = 200_000
 
 function isAllowanceEligible(status: string) {
   return status === 'active' || status === 'trialing'
@@ -805,10 +806,12 @@ export async function handleZenRequest(
       return rate * tokens * 100
     }
 
+    const billableInputTokens =
+      inputTokens + (cacheReadTokens ?? 0) + (cacheWrite5mTokens ?? 0) + (cacheWrite1hTokens ?? 0)
+    const longContextThreshold =
+      modelInfo.costThresholdTokens ?? DEFAULT_LONG_CONTEXT_COST_THRESHOLD_TOKENS
     const modelCost =
-      modelInfo.cost200K &&
-      inputTokens + (cacheReadTokens ?? 0) + (cacheWrite5mTokens ?? 0) + (cacheWrite1hTokens ?? 0) >
-        200_000
+      modelInfo.cost200K && billableInputTokens > longContextThreshold
         ? modelInfo.cost200K
         : modelInfo.cost
 
