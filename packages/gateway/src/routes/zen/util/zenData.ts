@@ -29,6 +29,7 @@ export namespace ZenData {
     name: z.string(),
     cost: ModelCostSchema,
     cost200K: ModelCostSchema.optional(),
+    costThresholdTokens: z.number().int().positive().optional(),
     allowAnonymous: z.boolean().optional(),
     byokProvider: ByokProviderSchema.optional(),
     stickyProvider: z.enum(['strict', 'prefer']).optional(),
