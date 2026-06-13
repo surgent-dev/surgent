@@ -20,12 +20,14 @@ const stageLabels: Record<SandboxStage, string> = {
   starting: 'Starting environment',
   ready: 'Ready',
   failed: 'Setup failed',
+  unavailable: 'Project unavailable',
 }
 
 export function ProjectInitOverlay({ show, stage, provisioningStep }: ProjectInitOverlayProps) {
   const vibe = useFunVibe(2000)
   const Icon = vibe.icon
   const isFailed = stage === 'failed'
+  const isUnavailable = stage === 'unavailable'
 
   return (
     <AnimatePresence>
@@ -55,19 +57,22 @@ export function ProjectInitOverlay({ show, stage, provisioningStep }: ProjectIni
                 transition={{ duration: 0.2 }}
                 className="text-sm text-muted-foreground"
               >
-                {isFailed ? 'Something went wrong' : vibe.message}
+                {isFailed || isUnavailable ? 'Something went wrong' : vibe.message}
               </motion.p>
               <motion.span
                 key={stage}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 0.5 }}
-                className={cn('text-xs text-muted-foreground', isFailed && 'text-destructive')}
+                className={cn(
+                  'text-xs text-muted-foreground',
+                  (isFailed || isUnavailable) && 'text-destructive',
+                )}
               >
                 {stage === 'creating'
                   ? getProvisioningStepLabel(provisioningStep) || stageLabels[stage]
                   : stageLabels[stage]}
               </motion.span>
-              {isFailed && (
+              {(isFailed || isUnavailable) && (
                 <Link
                   href="/dashboard"
                   className="mt-3 text-xs text-muted-foreground underline hover:text-foreground"
