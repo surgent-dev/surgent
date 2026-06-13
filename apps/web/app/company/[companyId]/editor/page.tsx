@@ -19,8 +19,8 @@ export default function EditorPage() {
   const { companyId: projectId } = useParams<{ companyId: string }>()
   const searchParams = useSearchParams()
   const initialPrompt = searchParams.get('initial') || undefined
-  const { isReady, stage, project } = useSandboxReady(projectId)
-  const { mutate: activateProject } = useActivateProject()
+  const { mutate: activateProject, status: activationStatus } = useActivateProject()
+  const { isReady, stage, project } = useSandboxReady(projectId, activationStatus)
   const setSandboxId = useSandbox((s) => s.setSandboxId)
   const activated = useRef(false)
   const isMobile = useIsMobile()

@@ -1,6 +1,14 @@
 import { useProjectQuery, useSandboxHealthQuery } from '@/queries/projects'
 
-export type SandboxStage = 'creating' | 'loading' | 'activating' | 'starting' | 'ready' | 'failed'
+export type ActivationStatus = 'idle' | 'pending' | 'success' | 'error'
+export type SandboxStage =
+  | 'creating'
+  | 'loading'
+  | 'activating'
+  | 'starting'
+  | 'ready'
+  | 'failed'
+  | 'unavailable'
 
 interface UseSandboxReadyResult {
   isReady: boolean
@@ -8,12 +16,16 @@ interface UseSandboxReadyResult {
   project: ReturnType<typeof useProjectQuery>['data']
 }
 
-export function useSandboxReady(projectId: string | undefined): UseSandboxReadyResult {
+export function useSandboxReady(
+  projectId: string | undefined,
+  activationStatus: ActivationStatus,
+): UseSandboxReadyResult {
   const { data: project, isError, isLoading } = useProjectQuery(projectId)
 
   const isProvisioning = project?.status === 'provisioning'
   const isFailed = project?.status === 'failed'
-  const shouldCheckHealth = Boolean(project) && !isProvisioning && !isFailed
+  const shouldCheckHealth =
+    Boolean(project) && !isProvisioning && !isFailed && activationStatus === 'success'
 
   const { data: health, isError: isHealthError } = useSandboxHealthQuery(
     projectId,
@@ -27,9 +39,11 @@ export function useSandboxReady(projectId: string | undefined): UseSandboxReadyR
 
   let stage: SandboxStage = 'ready'
   if (isLoading) stage = 'loading'
-  else if (isError || !project || isFailed || isHealthError || isTerminalHealth) stage = 'failed'
+  else if (isError || !project) stage = 'unavailable'
+  else if (isFailed || activationStatus === 'error' || isHealthError || isTerminalHealth)
+    stage = 'failed'
   else if (isProvisioning) stage = 'creating'
-  else if (!hasSandboxUrl) stage = 'activating'
+  else if (!hasSandboxUrl || activationStatus !== 'success') stage = 'activating'
   else if (!isHealthy) stage = 'starting'
 
   return { isReady, stage, project }
