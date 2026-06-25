@@ -15,6 +15,17 @@ export type ProviderModel = {
 
 export const MODELS: ProviderModel[] = [
   {
+    id: 'gpt-5.4-mini',
+    name: 'GPT-5.4 Mini',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+    byokProvider: 'openai',
+    limit: { context: 200000 },
+    icon: '/OpenAI-logo.svg',
+    badge: 'Default',
+    badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  },
+  {
     id: 'gpt-5.5',
     name: 'GPT-5.5 Fast',
     providerId: 'opencode',
@@ -24,8 +35,19 @@ export const MODELS: ProviderModel[] = [
     maxVariant: 'high',
     limit: { context: 1050000 },
     icon: '/OpenAI-logo.svg',
-    badge: 'Latest',
+    badge: 'Best',
     badgeColor: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  },
+  {
+    id: 'gpt-5-nano',
+    name: 'GPT-5 Nano',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+    byokProvider: 'openai',
+    limit: { context: 200000 },
+    icon: '/OpenAI-logo.svg',
+    badge: 'Cheap',
+    badgeColor: 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
   },
   {
     id: 'claude-opus-4-6',
