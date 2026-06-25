@@ -216,7 +216,7 @@ export class SurgentStack extends cdk.Stack {
       cluster,
       serviceName: `${appName}-worker`,
       taskDefinition: workerTaskDef,
-      desiredCount: 2,
+      desiredCount: 1,
       assignPublicIp: true,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       healthCheckGracePeriod: cdk.Duration.seconds(60),
@@ -249,7 +249,7 @@ export class SurgentStack extends cdk.Stack {
     })
 
     const workerScaling = workerService.autoScaleTaskCount({
-      minCapacity: 2,
+      minCapacity: 1,
       maxCapacity: 8,
     })
 
@@ -288,7 +288,7 @@ export class SurgentStack extends cdk.Stack {
       cluster,
       serviceName: `${appName}-analytics`,
       taskDefinition: analyticsTaskDef,
-      desiredCount: 2,
+      desiredCount: 0,
       assignPublicIp: true,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       healthCheckGracePeriod: cdk.Duration.seconds(60),
@@ -341,7 +341,7 @@ export class SurgentStack extends cdk.Stack {
     })
 
     const analyticsScaling = analyticsService.autoScaleTaskCount({
-      minCapacity: 2,
+      minCapacity: 0,
       maxCapacity: 6,
     })
 
