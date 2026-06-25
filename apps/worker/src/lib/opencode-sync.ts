@@ -78,31 +78,51 @@ function sessionId(op: z.infer<typeof Write>) {
 
 async function upsert(trx: Trx, scope: Scope, op: z.infer<typeof Write>) {
   const now = Date.now()
-  await trx
-    .insertInto('opencode_sync_entity')
-    .values({
-      projectId: scope.projectId,
-      userId: scope.userId,
-      organizationId: scope.organizationId,
-      entity: op.entity,
-      id: op.id,
-      sessionId: sessionId(op),
-      messageId: op.message_id ?? null,
-      payload: op.payload,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflict((oc) =>
-      oc.columns(['projectId', 'entity', 'id']).doUpdateSet({
-        userId: scope.userId,
-        organizationId: scope.organizationId,
-        sessionId: sessionId(op),
-        messageId: op.message_id ?? null,
-        payload: op.payload,
-        updatedAt: now,
-      }),
+  const payload = JSON.stringify(op.payload ?? null)
+  const session = sessionId(op)
+  const message = op.message_id ?? null
+  const result = await sql<{ changed: boolean }>`
+    with changed as (
+      insert into opencode_sync_entity (
+        "projectId",
+        "userId",
+        "organizationId",
+        entity,
+        id,
+        "sessionId",
+        "messageId",
+        payload,
+        "createdAt",
+        "updatedAt"
+      )
+      values (
+        ${scope.projectId},
+        ${scope.userId},
+        ${scope.organizationId},
+        ${op.entity},
+        ${op.id},
+        ${session},
+        ${message},
+        ${payload}::jsonb,
+        ${now},
+        ${now}
+      )
+      on conflict ("projectId", entity, id) do update set
+        "userId" = excluded."userId",
+        "organizationId" = excluded."organizationId",
+        "sessionId" = excluded."sessionId",
+        "messageId" = excluded."messageId",
+        payload = excluded.payload,
+        "updatedAt" = excluded."updatedAt"
+      where opencode_sync_entity."sessionId" is distinct from excluded."sessionId"
+        or opencode_sync_entity."messageId" is distinct from excluded."messageId"
+        or opencode_sync_entity.payload is distinct from excluded.payload
+      returning 1
     )
-    .execute()
+    select exists(select 1 from changed) as changed
+  `.execute(trx)
+
+  return result.rows[0]?.changed ?? false
 }
 
 async function remove(trx: Trx, scope: Scope, op: z.infer<typeof Delete>) {
@@ -145,7 +165,7 @@ async function log(trx: Trx, scope: Scope, op: Op, kind: 'write' | 'delete') {
       entity: op.entity,
       op: kind,
       entityId: op.id,
-      payload: 'payload' in op ? op.payload : null,
+      payload: null,
       createdAt: Date.now(),
     })
     .returning(['seq', 'entity', 'op', 'entityId', 'payload', 'createdAt'])
@@ -192,8 +212,9 @@ async function load(conn: Conn, scope: Scope) {
 async function writes(trx: Trx, scope: Scope, ops: z.infer<typeof Write>[]) {
   const result = []
   for (const op of ops) {
-    await upsert(trx, scope, op)
-    result.push(await log(trx, scope, op, 'write'))
+    if (await upsert(trx, scope, op)) {
+      result.push(await log(trx, scope, op, 'write'))
+    }
   }
   return result
 }
@@ -233,11 +254,24 @@ export async function del(scope: Scope, ops: z.infer<typeof Delete>[]) {
 
 export async function pull(scope: Scope, input: z.infer<typeof Pull>) {
   const rows = await db
-    .selectFrom('opencode_sync_op')
-    .select(['seq', 'entity', 'op', 'entityId', 'payload', 'createdAt'])
-    .where('projectId', '=', scope.projectId)
-    .where('seq', '>', input.after)
-    .orderBy('seq', 'asc')
+    .selectFrom('opencode_sync_op as op')
+    .leftJoin('opencode_sync_entity as entity', (join) =>
+      join
+        .onRef('entity.projectId', '=', 'op.projectId')
+        .onRef('entity.entity', '=', 'op.entity')
+        .onRef('entity.id', '=', 'op.entityId'),
+    )
+    .select([
+      'op.seq',
+      'op.entity',
+      'op.op',
+      'op.entityId',
+      'op.createdAt',
+      'entity.payload as currentPayload',
+    ])
+    .where('op.projectId', '=', scope.projectId)
+    .where('op.seq', '>', input.after)
+    .orderBy('op.seq', 'asc')
     .limit(input.limit)
     .execute()
 
@@ -246,7 +280,7 @@ export async function pull(scope: Scope, input: z.infer<typeof Pull>) {
     entity: row.entity,
     op: row.op as 'write' | 'delete',
     id: row.entityId,
-    payload: row.payload,
+    payload: row.op === 'write' ? row.currentPayload : null,
     created_at: Number(row.createdAt),
   }))
 
