@@ -62,6 +62,7 @@
   },
   "scripts": {
     "check-db": "bun ../../packages/db/src/migrate.ts check",
+    "archive:opencode-sync": "bun scripts/archive-opencode-sync-entity.ts",
     "dev": "APP_DEBUG=true bun --hot src/index.ts",
     "migrate-db": "bun ../../packages/db/src/migrate.ts",
     "rollback-db": "bun ../../packages/db/src/migrate.ts down",
