@@ -128,6 +128,10 @@ export default function PrivacyPage() {
             <p className="text-foreground/80 leading-relaxed mt-4">
               These services have their own privacy policies and we encourage you to review them.
             </p>
+            <p className="text-foreground/80 leading-relaxed mt-4">
+              Mobile information will not be sold or shared with third parties for promotional or
+              marketing purposes.
+            </p>
           </section>
 
           <section className="mt-8">
