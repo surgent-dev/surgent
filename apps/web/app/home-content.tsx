@@ -601,29 +601,21 @@ function IndexContent() {
               ))}
             </div>
             <div className="mt-10 border-t border-[#1d1c220d] dark:border-border/15 pt-6 text-[12px] leading-relaxed text-[#475467] dark:text-muted-foreground">
-              <p className="font-medium text-[#1d1c22] dark:text-foreground">
-                Text or call us: +1 (628) 212-4887
+              <p className="max-w-3xl">
+                <span className="font-medium text-[#1d1c22] dark:text-foreground">
+                  SMS support:
+                </span>{' '}
+                Text +1 (628) 212-4887 for Surgent customer care. Message frequency varies. Message
+                and data rates may apply. Reply HELP for help, STOP to cancel.{' '}
+                <Link href="/privacy" className="underline underline-offset-4">
+                  Privacy Policy
+                </Link>{' '}
+                ·{' '}
+                <Link href="/terms" className="underline underline-offset-4">
+                  Terms
+                </Link>
+                .
               </p>
-              <label className="mt-3 flex max-w-3xl gap-2">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-brand"
-                  aria-label="SMS customer-care consent"
-                />
-                <span>
-                  By checking this box, you agree to receive customer-care text messages from
-                  Surgent at the number provided. Message frequency varies. Message and data rates
-                  may apply. Reply HELP for help. Reply STOP to cancel. See our{' '}
-                  <Link href="/privacy" className="underline underline-offset-4">
-                    Privacy Policy
-                  </Link>{' '}
-                  and{' '}
-                  <Link href="/terms" className="underline underline-offset-4">
-                    Terms
-                  </Link>
-                  .
-                </span>
-              </label>
             </div>
             <div className="mt-12 pt-6 border-t border-[#1d1c220d] dark:border-border/15 text-[12px] text-[#b0b1b3]">
               &copy; {new Date().getFullYear()} Surgent. All rights reserved.
