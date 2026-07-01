@@ -492,7 +492,9 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
       name: project.name,
       domain: workerHostname,
     })
-    log.info({ projectId, websiteId: analytics.id }, 'analytics: website ensured')
+    if (analytics) {
+      log.info({ projectId, websiteId: analytics.id }, 'analytics: website ensured')
+    }
 
     const assetPreview = assetPaths.slice(0, 12)
     const assetMore = assetPaths.length - assetPreview.length

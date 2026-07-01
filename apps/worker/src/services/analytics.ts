@@ -92,7 +92,7 @@ async function updateAnalyticsWebsite(websiteId: string, domain: string) {
   }
 }
 
-export async function ensureAnalytics(args: {
+async function ensureAnalyticsWebsite(args: {
   projectId: string
   organizationId: string
   userId: string
@@ -116,32 +116,55 @@ export async function ensureAnalytics(args: {
   return created
 }
 
+export async function ensureAnalytics(args: {
+  projectId: string
+  organizationId: string
+  userId: string
+  name: string
+  domain?: string
+}): Promise<AnalyticsWebsite | null> {
+  try {
+    return await ensureAnalyticsWebsite(args)
+  } catch (err) {
+    log.warn({ err, projectId: args.projectId }, 'analytics unavailable')
+    return null
+  }
+}
+
 export async function getAnalyticsWebsite(projectId: string): Promise<AnalyticsWebsite | null> {
   return findAnalyticsWebsite(projectId)
 }
 
 export async function syncProjectAnalyticsDomain(projectId: string): Promise<void> {
-  const website = await getAnalyticsWebsite(projectId)
-  if (!website?.id) return
+  try {
+    const website = await getAnalyticsWebsite(projectId)
+    if (!website?.id) return
 
-  const primary = await ProjectService.getActivePrimaryDomainByProjectId(projectId)
-  const worker = await ProjectService.getWorkerByProjectId(projectId)
-  const domain = primary?.domainName || worker?.hostname || undefined
-  if (!domain) return
+    const primary = await ProjectService.getActivePrimaryDomainByProjectId(projectId)
+    const worker = await ProjectService.getWorkerByProjectId(projectId)
+    const domain = primary?.domainName || worker?.hostname || undefined
+    if (!domain) return
 
-  await updateAnalyticsWebsite(website.id, domain)
+    await updateAnalyticsWebsite(website.id, domain)
+  } catch (err) {
+    log.warn({ err, projectId }, 'analytics domain sync unavailable')
+  }
 }
 
 export async function removeAnalytics(projectId: string): Promise<void> {
-  const website = await getAnalyticsWebsite(projectId)
-  if (!website?.id) return
+  try {
+    const website = await getAnalyticsWebsite(projectId)
+    if (!website?.id) return
 
-  const res = await fetch(`${getAnalyticsUrl()}/api/websites/${website.id}`, {
-    method: 'DELETE',
-    headers: analyticsHeaders(),
-  })
+    const res = await fetch(`${getAnalyticsUrl()}/api/websites/${website.id}`, {
+      method: 'DELETE',
+      headers: analyticsHeaders(),
+    })
 
-  if (!res.ok) {
-    throw new Error(`Failed to remove analytics website (${res.status})`)
+    if (!res.ok) {
+      throw new Error(`Failed to remove analytics website (${res.status})`)
+    }
+  } catch (err) {
+    log.warn({ err, projectId }, 'analytics removal unavailable')
   }
 }
