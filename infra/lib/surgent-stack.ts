@@ -288,7 +288,7 @@ export class SurgentStack extends cdk.Stack {
       cluster,
       serviceName: `${appName}-analytics`,
       taskDefinition: analyticsTaskDef,
-      desiredCount: 0,
+      desiredCount: 1,
       assignPublicIp: true,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       healthCheckGracePeriod: cdk.Duration.seconds(60),
@@ -341,7 +341,7 @@ export class SurgentStack extends cdk.Stack {
     })
 
     const analyticsScaling = analyticsService.autoScaleTaskCount({
-      minCapacity: 0,
+      minCapacity: 1,
       maxCapacity: 6,
     })
 
