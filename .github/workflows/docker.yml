@@ -224,7 +224,7 @@ jobs:
       ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
     concurrency:
-      group: production-deploy
+      group: production-deploy-${{ matrix.name }}
       cancel-in-progress: false
     strategy:
       fail-fast: false
@@ -472,7 +472,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     concurrency:
-      group: production-deploy
+      group: production-deploy-gateway
       cancel-in-progress: false
     steps:
       - name: Checkout repository
@@ -593,7 +593,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     concurrency:
-      group: production-deploy
+      group: production-deploy-dispatch
       cancel-in-progress: false
     steps:
       - name: Checkout repository
