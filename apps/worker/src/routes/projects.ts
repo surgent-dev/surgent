@@ -14,6 +14,7 @@ import type { PayEnv } from '@/lib/pay/types'
 import { sanitizeHostname, getSandboxPreviewUrl } from '@/lib/utils'
 import {
   createDeploymentRecord,
+  markDeploymentCancelled,
   resolveDeployScriptName,
   undeployProject,
   resumeProject,
@@ -1252,26 +1253,15 @@ projects.post(
     const { id, deploymentId } = c.req.valid('param')
     await getProjectWithAuth(id, c.get('user')!)
 
-    const deployment = await db
-      .selectFrom('deployment')
-      .select(['id', 'status', 'projectId'])
-      .where('id', '=', deploymentId)
-      .where('projectId', '=', id)
-      .executeTakeFirst()
+    const result = await markDeploymentCancelled(id, deploymentId)
 
-    if (!deployment) {
+    if (result === 'not_found') {
       return c.json({ error: 'Deployment not found' }, 404)
     }
 
-    if (TERMINAL_DEPLOYMENT_STATUSES.includes(deployment.status)) {
+    if (result === 'terminal') {
       return c.json({ error: 'Deployment is not in progress' }, 409)
     }
-
-    await updateDeployment(deploymentId, {
-      status: 'cancelled',
-      error: 'Cancelled by user',
-      finishedAt: new Date(),
-    })
 
     await cancelProjectDeployJob(deploymentId)
 

@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib'
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import * as ecs from 'aws-cdk-lib/aws-ecs'
 import * as ecr from 'aws-cdk-lib/aws-ecr'
@@ -114,6 +115,45 @@ function requiredContext(scope: Construct, name: string) {
   return value
 }
 
+function addServiceHealthAlarms(
+  scope: Construct,
+  service: ecs.FargateService,
+  targetGroup: elbv2.ApplicationTargetGroup,
+  minimumTasks: number,
+) {
+  new cloudwatch.Alarm(scope, `${service.node.id}RunningTaskShortfallAlarm`, {
+    alarmName: `${service.serviceName}-running-task-shortfall`,
+    metric: new cloudwatch.Metric({
+      namespace: 'ECS/ContainerInsights',
+      metricName: 'RunningTaskCount',
+      dimensionsMap: {
+        ClusterName: service.cluster.clusterName,
+        ServiceName: service.serviceName,
+      },
+      period: cdk.Duration.minutes(1),
+      statistic: 'Minimum',
+    }),
+    threshold: minimumTasks,
+    comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+    evaluationPeriods: 2,
+    datapointsToAlarm: 2,
+    treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+  })
+
+  new cloudwatch.Alarm(scope, `${service.node.id}UnhealthyTargetsAlarm`, {
+    alarmName: `${service.serviceName}-unhealthy-targets`,
+    metric: targetGroup.metrics.unhealthyHostCount({
+      period: cdk.Duration.minutes(1),
+      statistic: 'Maximum',
+    }),
+    threshold: 1,
+    comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    evaluationPeriods: 2,
+    datapointsToAlarm: 2,
+    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+  })
+}
+
 export class SurgentStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props)
@@ -150,6 +190,7 @@ export class SurgentStack extends cdk.Stack {
     const cluster = new ecs.Cluster(this, 'SurgentCluster', {
       vpc,
       clusterName: `${appName}-cluster`,
+      containerInsightsV2: ecs.ContainerInsights.ENABLED,
       defaultCloudMapNamespace: {
         name: internalNamespace,
       },
@@ -193,7 +234,7 @@ export class SurgentStack extends cdk.Stack {
 
     const workerTaskDef = new ecs.FargateTaskDefinition(this, 'WorkerTaskDef', {
       cpu: 512,
-      memoryLimitMiB: 1024,
+      memoryLimitMiB: 2048,
     })
 
     workerTaskDef.addContainer('worker', {
@@ -216,12 +257,13 @@ export class SurgentStack extends cdk.Stack {
       cluster,
       serviceName: `${appName}-worker`,
       taskDefinition: workerTaskDef,
-      desiredCount: 1,
+      desiredCount: 2,
       assignPublicIp: true,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       healthCheckGracePeriod: cdk.Duration.seconds(60),
       minHealthyPercent: 50,
       maxHealthyPercent: 200,
+      circuitBreaker: { enable: true, rollback: true },
     })
 
     const workerTargetGroup = new elbv2.ApplicationTargetGroup(this, 'WorkerTargetGroup', {
@@ -249,7 +291,7 @@ export class SurgentStack extends cdk.Stack {
     })
 
     const workerScaling = workerService.autoScaleTaskCount({
-      minCapacity: 1,
+      minCapacity: 2,
       maxCapacity: 8,
     })
 
@@ -294,6 +336,7 @@ export class SurgentStack extends cdk.Stack {
       healthCheckGracePeriod: cdk.Duration.seconds(60),
       minHealthyPercent: 50,
       maxHealthyPercent: 200,
+      circuitBreaker: { enable: true, rollback: true },
       cloudMapOptions: {
         name: 'analytics',
       },
@@ -358,6 +401,24 @@ export class SurgentStack extends cdk.Stack {
       ec2.Port.tcp(3007),
       'Allow private worker traffic to analytics',
     )
+
+    // ==================== ALARMS ====================
+
+    addServiceHealthAlarms(this, workerService, workerTargetGroup, 2)
+    addServiceHealthAlarms(this, analyticsService, analyticsTargetGroup, 1)
+
+    new cloudwatch.Alarm(this, 'Alb5xxAlarm', {
+      alarmName: `${appName}-alb-5xx`,
+      metric: alb.metrics.httpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT, {
+        period: cdk.Duration.minutes(1),
+        statistic: 'Sum',
+      }),
+      threshold: 5,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      evaluationPeriods: 2,
+      datapointsToAlarm: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    })
 
     // ==================== OUTPUTS ====================
 

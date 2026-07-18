@@ -3,6 +3,7 @@ import { createLogger } from '@/lib/logger'
 import * as ProjectService from '@/services/projects'
 
 const log = createLogger('analytics')
+const ANALYTICS_REQUEST_TIMEOUT_MS = 5_000
 
 interface AnalyticsWebsite {
   id: string
@@ -42,7 +43,10 @@ async function findAnalyticsWebsite(projectId: string): Promise<AnalyticsWebsite
   const url = new URL('/api/websites', getAnalyticsUrl())
   url.searchParams.set('externalProjectId', projectId)
 
-  const res = await fetch(url, { headers: analyticsHeaders() })
+  const res = await fetch(url, {
+    headers: analyticsHeaders(),
+    signal: AbortSignal.timeout(ANALYTICS_REQUEST_TIMEOUT_MS),
+  })
   if (!res.ok) {
     throw new Error(`Failed to lookup analytics website (${res.status})`)
   }
@@ -70,6 +74,7 @@ async function createAnalyticsWebsite(args: {
       externalOrgId: args.organizationId,
       externalUserId: args.userId,
     }),
+    signal: AbortSignal.timeout(ANALYTICS_REQUEST_TIMEOUT_MS),
   })
 
   if (!res.ok) {
@@ -85,6 +90,7 @@ async function updateAnalyticsWebsite(websiteId: string, domain: string) {
     method: 'POST',
     headers: analyticsHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ domain: normalized || null }),
+    signal: AbortSignal.timeout(ANALYTICS_REQUEST_TIMEOUT_MS),
   })
 
   if (!res.ok) {
@@ -140,9 +146,8 @@ export async function syncProjectAnalyticsDomain(projectId: string): Promise<voi
     const website = await getAnalyticsWebsite(projectId)
     if (!website?.id) return
 
-    const primary = await ProjectService.getActivePrimaryDomainByProjectId(projectId)
     const worker = await ProjectService.getWorkerByProjectId(projectId)
-    const domain = primary?.domainName || worker?.hostname || undefined
+    const domain = worker?.hostname || undefined
     if (!domain) return
 
     await updateAnalyticsWebsite(website.id, domain)
@@ -159,6 +164,7 @@ export async function removeAnalytics(projectId: string): Promise<void> {
     const res = await fetch(`${getAnalyticsUrl()}/api/websites/${website.id}`, {
       method: 'DELETE',
       headers: analyticsHeaders(),
+      signal: AbortSignal.timeout(ANALYTICS_REQUEST_TIMEOUT_MS),
     })
 
     if (!res.ok) {
