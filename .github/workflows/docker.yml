@@ -262,11 +262,13 @@ jobs:
         if: matrix.name == 'worker'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           : "${CLOUDFLARE_API_TOKEN:?Set CLOUDFLARE_API_TOKEN production secret}"
+          : "${CLOUDFLARE_ACCOUNT_ID:?Set CLOUDFLARE_ACCOUNT_ID production secret}"
           curl --fail-with-body --silent --show-error \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            https://api.cloudflare.com/client/v4/user/tokens/verify \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify" \
             | jq -e '.success == true and .result.status == "active"' >/dev/null
           aws ssm put-parameter \
             --name /surgent/prod/CLOUDFLARE_API_TOKEN \
