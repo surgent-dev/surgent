@@ -179,8 +179,8 @@ export async function POST(request: Request) {
 
     const sessionId = id ? uuid(sourceId, id) : uuid(sourceId, ip, userAgent, sessionSalt)
 
-    // Create a session if not found
-    if (!isClickhouseEnabled() && !cache?.sessionId) {
+    // The insert is idempotent, so always repair a missing relational session before its event.
+    if (!isClickhouseEnabled()) {
       await createSession({
         id: sessionId,
         websiteId: sourceId,

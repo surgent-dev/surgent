@@ -23,6 +23,23 @@ const getProvider = mock(() => ({
   kill: providerKill,
 }))
 const upsertSandbox = mock(async () => {})
+let nextUpdateResult: { id: string } | undefined = { id: 'deployment-id' }
+let nextSelectResult: { id: string } | undefined
+const executeUpdate = mock(async () => nextUpdateResult)
+const executeSelect = mock(async () => nextSelectResult)
+const updateQuery: any = {
+  set: mock(() => updateQuery),
+  where: mock(() => updateQuery),
+  returning: mock(() => updateQuery),
+  executeTakeFirst: executeUpdate,
+}
+const selectQuery: any = {
+  select: mock(() => selectQuery),
+  where: mock(() => selectQuery),
+  executeTakeFirst: executeSelect,
+}
+const updateTable = mock(() => updateQuery)
+const selectFrom = mock(() => selectQuery)
 
 mock.module('@/lib/config', () => ({
   config: {
@@ -37,7 +54,7 @@ mock.module('@/lib/config', () => ({
     surgent: { baseUrl: 'https://surgent.test' },
   },
 }))
-mock.module('@/lib/db', () => ({ db: {} }))
+mock.module('@/lib/db', () => ({ db: { updateTable, selectFrom } }))
 mock.module('@/lib/auth', () => ({ auth: {} }))
 mock.module('@/lib/logger', () => ({
   createLogger: () => ({ debug() {}, info() {}, warn() {}, error() {} }),
@@ -49,6 +66,7 @@ mock.module('@/lib/sandbox', () => ({
 mock.module('@/services/projects', () => ({
   getEnvVarsByProjectId: mock(async () => []),
   getProjectById: mock(async () => ({ metadata: {} })),
+  updateDeployment: mock(async () => {}),
   upsertSandbox,
 }))
 mock.module('@/lib/convex-env', () => ({
@@ -70,7 +88,13 @@ mock.module('@/apis/deployer/deployer', () => ({
 mock.module('@/apis/deployer/utils/index', () => ({ calculateFileHash: mock(() => 'hash') }))
 mock.module('@/services/analytics', () => ({ ensureAnalytics: mock(async () => ({ id: 'site' })) }))
 
-const { ensurePm2Process, resumeProject } = await import('../projects')
+const {
+  ensurePm2Process,
+  markDeploymentCancelled,
+  markDeploymentComplete,
+  persistDeploymentFailure,
+  resumeProject,
+} = await import('../projects')
 
 afterEach(() => {
   getProvider.mockClear()
@@ -82,6 +106,72 @@ afterEach(() => {
   sandboxExec.mockClear()
   sandboxStat.mockClear()
   sandboxHost.mockClear()
+  updateTable.mockClear()
+  selectFrom.mockClear()
+  updateQuery.set.mockClear()
+  updateQuery.where.mockClear()
+  updateQuery.returning.mockClear()
+  selectQuery.select.mockClear()
+  selectQuery.where.mockClear()
+  executeUpdate.mockClear()
+  executeSelect.mockClear()
+  nextUpdateResult = { id: 'deployment-id' }
+  nextSelectResult = undefined
+})
+
+describe('deployment persistence', () => {
+  test('persists the actionable provider error with secrets redacted', async () => {
+    const error = new Error(
+      JSON.stringify({
+        code: 'DeploymentQuotaReached',
+        message: "Your team's deployment quota of 300 has been reached. token=convex-secret",
+      }),
+    )
+
+    await persistDeploymentFailure('deployment-id', 'deploying_convex', error)
+
+    expect(updateQuery.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'deploy_failed',
+        error:
+          "DeploymentQuotaReached: Your team's deployment quota of 300 has been reached. token=[redacted]",
+      }),
+    )
+    expect(updateQuery.where).toHaveBeenCalledWith('status', 'not in', [
+      'deployed',
+      'deploy_failed',
+      'build_failed',
+      'cancelled',
+    ])
+  })
+
+  test('does not complete a deployment after cancellation wins', async () => {
+    expect(await markDeploymentCancelled('project-id', 'deployment-id')).toBe('cancelled')
+
+    nextUpdateResult = undefined
+    expect(
+      await markDeploymentComplete('deployment-id', {
+        finishedAt: new Date('2026-07-15T20:08:26.435Z'),
+        cloudflareDeploymentId: null,
+        cloudflareVersionId: null,
+      }),
+    ).toBe(false)
+
+    expect(updateQuery.where).toHaveBeenCalledWith('status', 'not in', [
+      'deployed',
+      'deploy_failed',
+      'build_failed',
+      'cancelled',
+    ])
+    expect(updateQuery.where).toHaveBeenCalledWith('status', '=', 'uploading')
+  })
+
+  test('reports an existing terminal deployment as not cancellable', async () => {
+    nextUpdateResult = undefined
+    nextSelectResult = { id: 'deployment-id' }
+
+    expect(await markDeploymentCancelled('project-id', 'deployment-id')).toBe('terminal')
+  })
 })
 
 describe('ensurePm2Process', () => {

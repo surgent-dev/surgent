@@ -54,6 +54,8 @@ const tar: {
 
 const PREVIEW_PORT = 3000
 const MAX_CLOUDFLARE_ASSET_SIZE = 25 * 1024 * 1024
+const MAX_DEPLOYMENT_ERROR_LENGTH = 1000
+const TERMINAL_DEPLOYMENT_STATUSES = ['deployed', 'deploy_failed', 'build_failed', 'cancelled']
 
 const DEFAULT_WORKER = `export default {
   async fetch(request, env) {
@@ -92,6 +94,8 @@ export interface DeployProjectArgs {
   deployName?: string
   deploymentId: string
 }
+
+type DeploymentStage = 'starting' | 'deploying_convex' | 'building' | 'uploading'
 
 export interface UndeployProjectArgs {
   projectId: string
@@ -210,7 +214,7 @@ async function deployConvexFunctions(
     env,
   })
   if (result.code === 0) return
-  throw new Error(`Convex deploy failed (exit ${result.code})`)
+  throw new Error(result.output?.toString().trim() || `Convex deploy failed (exit ${result.code})`)
 }
 
 async function directoryExists(sandbox: Sandbox, dir: string): Promise<boolean> {
@@ -395,6 +399,93 @@ export async function createDeploymentRecord(projectId: string, scriptName: stri
   })
 }
 
+export function sanitizeDeploymentError(error: unknown, fallback: string): string {
+  let message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+
+  try {
+    const providerError = JSON.parse(message)
+    if (providerError && typeof providerError === 'object') {
+      const code = typeof providerError.code === 'string' ? providerError.code.trim() : ''
+      const detail = typeof providerError.message === 'string' ? providerError.message.trim() : ''
+      message = [code, detail].filter(Boolean).join(': ') || message
+    }
+  } catch {}
+
+  message = message
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [redacted]')
+    .replace(/([?&](?:api[_-]?key|token|secret|password|signature)=)[^&#\s]+/gi, '$1[redacted]')
+    .replace(
+      /\b(authorization|api[_-]?key|token|secret|password)\b(\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi,
+      '$1$2[redacted]',
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return message.slice(0, MAX_DEPLOYMENT_ERROR_LENGTH) || fallback
+}
+
+export async function persistDeploymentFailure(
+  deploymentId: string,
+  stage: DeploymentStage,
+  error: unknown,
+): Promise<boolean> {
+  const status = stage === 'building' ? 'build_failed' : 'deploy_failed'
+  const fallback = status === 'build_failed' ? 'Build failed' : 'Deployment failed'
+  const failed = await db
+    .updateTable('deployment')
+    .set({ status, error: sanitizeDeploymentError(error, fallback), finishedAt: new Date() })
+    .where('id', '=', deploymentId)
+    .where('status', 'not in', TERMINAL_DEPLOYMENT_STATUSES)
+    .returning('id')
+    .executeTakeFirst()
+
+  return Boolean(failed)
+}
+
+export async function markDeploymentComplete(
+  deploymentId: string,
+  details: {
+    finishedAt: Date
+    cloudflareDeploymentId: string | null
+    cloudflareVersionId: string | null
+  },
+): Promise<boolean> {
+  const completed = await db
+    .updateTable('deployment')
+    .set({ status: 'deployed', error: null, ...details })
+    .where('id', '=', deploymentId)
+    .where('status', '=', 'uploading')
+    .returning('id')
+    .executeTakeFirst()
+
+  return Boolean(completed)
+}
+
+export async function markDeploymentCancelled(
+  projectId: string,
+  deploymentId: string,
+): Promise<'cancelled' | 'not_found' | 'terminal'> {
+  const cancelled = await db
+    .updateTable('deployment')
+    .set({ status: 'cancelled', error: 'Cancelled by user', finishedAt: new Date() })
+    .where('id', '=', deploymentId)
+    .where('projectId', '=', projectId)
+    .where('status', 'not in', TERMINAL_DEPLOYMENT_STATUSES)
+    .returning('id')
+    .executeTakeFirst()
+
+  if (cancelled) return 'cancelled'
+
+  const existing = await db
+    .selectFrom('deployment')
+    .select('id')
+    .where('id', '=', deploymentId)
+    .where('projectId', '=', projectId)
+    .executeTakeFirst()
+
+  return existing ? 'terminal' : 'not_found'
+}
+
 export async function deployProject(args: DeployProjectArgs): Promise<void> {
   const { projectId, deployName: rawName, deploymentId } = args
   log.info({ projectId, deploymentId }, 'project deploy started')
@@ -421,7 +512,7 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     }
   }
 
-  let stage: 'starting' | 'deploying_convex' | 'building' | 'uploading' = 'starting'
+  let stage: DeploymentStage = 'starting'
   await updateStatus(stage)
 
   try {
@@ -542,12 +633,15 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     const cfDeployment = await fetchLatestCloudflareDeployment(accountId, scriptName)
     const finishedAt = new Date()
 
-    await ProjectService.updateDeployment(deploymentId, {
-      status: 'deployed',
+    const completed = await markDeploymentComplete(deploymentId, {
       finishedAt,
       cloudflareDeploymentId: cfDeployment?.id ?? null,
       cloudflareVersionId: cfDeployment?.versionId ?? null,
     })
+    if (!completed) {
+      log.info({ projectId, deploymentId }, 'deploy completion ignored (state changed)')
+      return
+    }
 
     await ProjectService.upsertWorker({
       projectId,
@@ -577,12 +671,13 @@ export async function deployProject(args: DeployProjectArgs): Promise<void> {
     }
 
     log.error({ projectId, err }, 'deploy failed')
-    const failStatus = stage === 'building' ? 'build_failed' : 'deploy_failed'
-    await ProjectService.updateDeployment(deploymentId, {
-      status: failStatus,
-      error: failStatus === 'build_failed' ? 'Build failed' : 'Deployment failed',
-      finishedAt: new Date(),
-    }).catch(() => {})
+    const failurePersisted = await persistDeploymentFailure(deploymentId, stage, err).catch(
+      () => null,
+    )
+    if (failurePersisted === false) {
+      log.info({ projectId, deploymentId }, 'deploy failure ignored (state changed)')
+      return
+    }
     // Don't update worker status on deploy failure - previous version may still be running
     throw err
   }
