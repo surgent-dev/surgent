@@ -264,6 +264,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           : "${CLOUDFLARE_API_TOKEN:?Set CLOUDFLARE_API_TOKEN production secret}"
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify \
+            | jq -e '.success == true and .result.status == "active"' >/dev/null
           aws ssm put-parameter \
             --name /surgent/prod/CLOUDFLARE_API_TOKEN \
             --type SecureString \
@@ -356,7 +360,8 @@ jobs:
 
           aws ecs describe-task-definition \
             --task-definition "$CURRENT_TASK_DEF" \
-            --query taskDefinition > /tmp/task-definition.json
+            --query taskDefinition \
+            --output json > /tmp/task-definition.json
 
           jq \
             --arg container "${{ matrix.container }}" \
