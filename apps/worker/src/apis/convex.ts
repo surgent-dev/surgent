@@ -3,6 +3,7 @@ import { generateKeyPair, exportPKCS8, exportJWK } from 'jose'
 
 async function safeJsonParse<T>(res: Response): Promise<T> {
   const text = await res.text()
+  if (!text) return undefined as T
   try {
     return JSON.parse(text) as T
   } catch {
@@ -27,7 +28,9 @@ async function convexApi<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(text || `Convex API ${res.status}`)
+    const error = new Error(text || `Convex API ${res.status}`) as Error & { status: number }
+    error.status = res.status
+    throw error
   }
 
   return safeJsonParse<T>(res)
@@ -227,9 +230,15 @@ export function buildDashboardCredentials(args: {
  * Delete a Convex project
  */
 export async function deleteProject(projectId: string): Promise<void> {
-  await convexApi(`/projects/${encodeURIComponent(projectId)}`, {
-    method: 'DELETE',
-  })
+  try {
+    await convexApi(`/projects/${encodeURIComponent(projectId)}/delete`, {
+      method: 'POST',
+      body: '{}',
+    })
+  } catch (error) {
+    if ((error as { status?: number }).status === 404) return
+    throw error
+  }
 }
 
 // Types for Convex function calls
