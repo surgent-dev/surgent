@@ -33,6 +33,7 @@ import {
   buildDashboardCredentials,
   fetchInsights,
   fetchFunctionSpec,
+  deleteProject as deleteConvexProject,
 } from '@/apis/convex'
 import { createGitHubApp, GitHubService, getValidUserToken } from '@/apis/github'
 import {
@@ -46,11 +47,13 @@ import {
   upsertEnvVar,
   getEnvVarsByProjectId,
   deleteEnvVar,
+  getWorkerByProjectId,
 } from '@/services/projects'
 import {
   getConvexCredentials,
   resolveConvexIntegrationConfig,
   syncEnvVarsToConvexForEnv,
+  type ConvexIntegrationConfig,
 } from '@/lib/convex-env'
 import {
   cancelProjectDeployJob,
@@ -160,6 +163,26 @@ async function supersedeOlderDeployments(projectId: string, deploymentId: string
 
   await Promise.allSettled(ids.map((id) => cancelProjectDeployJob(id)))
   log.info({ projectId, deploymentId, supersededDeployments: ids }, 'superseded older deployments')
+}
+
+async function cancelActiveProjectDeployments(projectId: string) {
+  const rows = await db
+    .selectFrom('deployment')
+    .select('id')
+    .where('projectId', '=', projectId)
+    .where('status', 'not in', TERMINAL_DEPLOYMENT_STATUSES)
+    .execute()
+
+  const ids = rows.map((row) => row.id).filter((id): id is string => Boolean(id))
+  if (!ids.length) return
+
+  await db
+    .updateTable('deployment')
+    .set({ status: 'cancelled', error: 'Project deleted', finishedAt: new Date() })
+    .where('id', 'in', ids)
+    .execute()
+
+  await Promise.allSettled(ids.map((deploymentId) => cancelProjectDeployJob(deploymentId)))
 }
 
 // ── Public routes (no auth required) ──
@@ -913,6 +936,17 @@ projects.delete('/:id', zValidator('param', idParam), async (c) => {
   const { id } = c.req.valid('param')
 
   await getProjectWithAuth(id, c.get('user')!)
+
+  await cancelActiveProjectDeployments(id)
+
+  const [worker, convex] = await Promise.all([
+    getWorkerByProjectId(id),
+    getIntegrationByProvider(id, 'convex'),
+  ])
+  if (worker?.scriptName) await undeployProject({ projectId: id })
+
+  const convexProjectId = (convex?.config as ConvexIntegrationConfig | null)?.convexProjectId
+  if (convexProjectId) await deleteConvexProject(convexProjectId)
 
   await removeAnalytics(id)
 
