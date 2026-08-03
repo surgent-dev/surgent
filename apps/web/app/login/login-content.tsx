@@ -7,6 +7,7 @@ import { authClient } from '@/lib/auth-client'
 
 type LoginContentProps = {
   next?: string
+  authError?: string
 }
 
 const GoogleIcon = () => (
@@ -30,21 +31,31 @@ const GoogleIcon = () => (
   </svg>
 )
 
-export default function LoginContent({ next }: LoginContentProps) {
+export default function LoginContent({ next, authError }: LoginContentProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(
+    authError
+      ? authError === 'signup disabled'
+        ? 'New account creation is closed. Sign in with an existing Surgent account.'
+        : 'Google sign-in failed. Try again.'
+      : '',
+  )
 
   const redirectPath = next || '/'
   const callbackURL =
     typeof window !== 'undefined' ? `${window.location.origin}${redirectPath}` : redirectPath
+  const errorCallbackURL =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/login${next ? `?next=${encodeURIComponent(next)}` : ''}`
+      : '/login'
 
   const handleGoogle = async () => {
     setIsLoading(true)
     setError('')
     try {
-      await authClient.signIn.social({ provider: 'google', callbackURL })
+      await authClient.signIn.social({ provider: 'google', callbackURL, errorCallbackURL })
     } catch {
       setError('Failed to continue with Google')
       setIsLoading(false)
@@ -137,16 +148,6 @@ export default function LoginContent({ next }: LoginContentProps) {
               className="text-xs text-muted-foreground/40 hover:text-muted-foreground/60 transition-colors"
             >
               Forgot password?
-            </Link>
-          </div>
-
-          <div className="mt-4 text-xs text-muted-foreground/40">
-            Don&apos;t have an account?{' '}
-            <Link
-              href={`/signup${next ? `?next=${encodeURIComponent(next)}` : ''}`}
-              className="text-brand hover:text-brand/80 transition-colors"
-            >
-              Sign up
             </Link>
           </div>
 

@@ -35,10 +35,7 @@ const FOOTER_COLS = [
   },
   {
     title: 'Account',
-    links: [
-      { href: '/signup', label: 'Get Started' },
-      { href: '/login', label: 'Log In' },
-    ],
+    links: [{ href: '/login', label: 'Sign In' }],
   },
   {
     title: 'Connect',
@@ -202,20 +199,12 @@ export default function MarketplaceContent({
                 Dashboard
               </Link>
             ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="btn-brand-secondary inline-flex items-center h-9 px-4 rounded-full font-display text-[0.9rem] font-medium"
-                >
-                  Login
-                </Link>
-                <Link
-                  href="/signup"
-                  className="btn-brand inline-flex items-center h-9 px-5 rounded-full font-display text-[0.9rem] font-medium cursor-pointer"
-                >
-                  Sign up
-                </Link>
-              </>
+              <Link
+                href="/login"
+                className="btn-brand inline-flex items-center h-9 px-5 rounded-full font-display text-[0.9rem] font-medium"
+              >
+                Sign in
+              </Link>
             )}
           </div>
         </div>
@@ -270,15 +259,14 @@ export default function MarketplaceContent({
               Marketplace is warming up
             </h2>
             <p className="text-[14px] text-[#475467] dark:text-muted-foreground max-w-sm mb-8 leading-relaxed">
-              Listings from the community will show up here. Build something with Surgent and be the
-              first to list.
+              Listings from existing Surgent creators will show up here.
             </p>
             <div className="flex items-center gap-3">
               <Link
-                href="/signup"
+                href="/login"
                 className="btn-brand inline-flex items-center h-10 px-6 rounded-full font-display text-[0.9rem] font-medium cursor-pointer"
               >
-                Start building
+                Sign in
               </Link>
               <Link
                 href="/inspirations"
