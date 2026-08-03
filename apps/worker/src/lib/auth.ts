@@ -85,6 +85,7 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
+    disableSignUp: true,
     autoSignIn: false,
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
@@ -110,6 +111,7 @@ export const auth = betterAuth({
       clientId: config.auth.googleClientId!,
       clientSecret: config.auth.googleClientSecret!,
       enabled: true,
+      disableSignUp: true,
     },
   },
 
