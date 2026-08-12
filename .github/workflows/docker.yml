@@ -222,6 +222,7 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION }}
       ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      GEO_DATABASE_S3_URI: ${{ vars.GEO_DATABASE_S3_URI }}
     concurrency:
       group: production-deploy-${{ matrix.name }}
       cancel-in-progress: false
@@ -244,11 +245,10 @@ jobs:
           : "${ECS_CLUSTER:?Set ECS_CLUSTER environment variable}"
           : "${AWS_GITHUB_ACTIONS_ROLE_ARN:?Set AWS_GITHUB_ACTIONS_ROLE_ARN environment secret}"
           if [ "${{ matrix.name }}" = "analytics" ]; then
-            : "${MAXMIND_LICENSE_KEY:?Set MAXMIND_LICENSE_KEY environment secret}"
+            : "${GEO_DATABASE_S3_URI:?Set GEO_DATABASE_S3_URI environment variable}"
           fi
         env:
           AWS_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
-          MAXMIND_LICENSE_KEY: ${{ secrets.MAXMIND_LICENSE_KEY }}
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -256,6 +256,10 @@ jobs:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           role-session-name: github-actions-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download analytics GeoLite2 database
+        if: matrix.name == 'analytics'
+        run: aws s3 cp "$GEO_DATABASE_S3_URI" "$RUNNER_TEMP/GeoLite2-City.mmdb" --only-show-errors
 
       - name: Sync Cloudflare app-deploy credential
         if: matrix.name == 'worker'
@@ -323,8 +327,8 @@ jobs:
             REQUIRE_GEO_DATABASE=1
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          secrets: |
-            maxmind_license_key=${{ secrets.MAXMIND_LICENSE_KEY }}
+          secret-files: |
+            geo_database=${{ runner.temp }}/GeoLite2-City.mmdb
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
