@@ -79,19 +79,6 @@ const WORKER_SECRET_NAMES = [
 
 const ANALYTICS_SECRET_NAMES = ['DATABASE_URL', 'ANALYTICS_INTERNAL_TOKEN'] as const
 
-function createRepository(scope: Construct, id: string, repositoryName: string) {
-  return new ecr.Repository(scope, id, {
-    repositoryName,
-    removalPolicy: cdk.RemovalPolicy.RETAIN,
-    lifecycleRules: [
-      {
-        maxImageCount: 10,
-        description: 'Keep last 10 images',
-      },
-    ],
-  })
-}
-
 function loadSecrets(scope: Construct, prefix: string, names: readonly string[]) {
   const secrets: Record<string, ecs.Secret> = {}
   const key = prefix.replace(/[\/-]/g, '')
@@ -159,12 +146,12 @@ export class SurgentStack extends cdk.Stack {
     super(scope, id, props)
 
     const appName = requiredContext(this, 'appName')
-    const publicDomain = requiredContext(this, 'publicDomain')
     const apiHostname = requiredContext(this, 'apiHostname')
     const analyticsHostname = requiredContext(this, 'analyticsHostname')
     const internalNamespace = requiredContext(this, 'internalNamespace')
     const workerSsmPrefix = requiredContext(this, 'workerSsmPrefix')
     const analyticsSsmPrefix = requiredContext(this, 'analyticsSsmPrefix')
+    const certificateArn = requiredContext(this, 'certificateArn')
 
     // VPC with 2 public subnets, no NAT gateway
     const vpc = new ec2.Vpc(this, 'SurgentVpc', {
@@ -179,8 +166,12 @@ export class SurgentStack extends cdk.Stack {
       ],
     })
 
-    const workerRepository = createRepository(this, 'SurgentWorkerRepo', `${appName}/worker`)
-    const analyticsRepository = createRepository(
+    const workerRepository = ecr.Repository.fromRepositoryName(
+      this,
+      'SurgentWorkerRepo',
+      `${appName}/worker`,
+    )
+    const analyticsRepository = ecr.Repository.fromRepositoryName(
       this,
       'SurgentAnalyticsRepo',
       `${appName}/analytics`,
@@ -196,10 +187,11 @@ export class SurgentStack extends cdk.Stack {
       },
     })
 
-    const certificate = new acm.Certificate(this, 'SurgentWildcardCert', {
-      domainName: `*.${publicDomain}`,
-      validation: acm.CertificateValidation.fromDns(),
-    })
+    const certificate = acm.Certificate.fromCertificateArn(
+      this,
+      'SurgentWildcardCert',
+      certificateArn,
+    )
 
     const workerSecrets = loadSecrets(this, workerSsmPrefix, WORKER_SECRET_NAMES)
     const analyticsSecrets = loadSecrets(this, analyticsSsmPrefix, ANALYTICS_SECRET_NAMES)
@@ -210,6 +202,7 @@ export class SurgentStack extends cdk.Stack {
       vpc,
       internetFacing: true,
       loadBalancerName: `${appName}-alb`,
+      deletionProtection: true,
     })
 
     alb.addListener('HttpListener', {
@@ -439,7 +432,7 @@ export class SurgentStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'CertificateArn', {
       value: certificate.certificateArn,
-      description: 'Wildcard ACM certificate ARN - add DNS validation CNAME in Cloudflare',
+      description: 'Imported ACM certificate ARN',
     })
   }
 }

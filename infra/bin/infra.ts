@@ -12,6 +12,7 @@ function requiredEnv(...names: string[]) {
 }
 
 new SurgentStack(app, 'SurgentStack', {
+  terminationProtection: true,
   env: {
     account: requiredEnv('AWS_ACCOUNT_ID', 'CDK_DEFAULT_ACCOUNT'),
     region: requiredEnv('AWS_REGION', 'CDK_DEFAULT_REGION'),

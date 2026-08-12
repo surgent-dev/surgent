@@ -8,7 +8,7 @@ Infrastructure for Surgent, managed via AWS CDK.
 | :--------------- | :------------------------------------------------------------------------- |
 | **ECS Fargate**  | Runs the worker and analytics services.                                    |
 | **ALB**          | Shared HTTPS load balancer for the API and public analytics ingest routes. |
-| **ECR**          | Container registries for worker and analytics images.                      |
+| **ECR**          | Pre-created container registries for worker and analytics images.          |
 | **SSM**          | Parameter Store for production secrets and connection strings.             |
 | **Auto-scaling** | Request-count-based scaling for both services.                             |
 
@@ -58,13 +58,20 @@ To deploy changes manually from the `infra` directory:
 bun install
 AWS_ACCOUNT_ID=<account-id> AWS_REGION=<region> bun cdk deploy \
   -c appName=<app-name> \
-  -c publicDomain=<domain> \
   -c apiHostname=<api-hostname> \
   -c analyticsHostname=<analytics-hostname> \
   -c internalNamespace=<service-discovery-namespace> \
   -c workerSsmPrefix=<worker-ssm-prefix> \
-  -c analyticsSsmPrefix=<analytics-ssm-prefix>
+  -c analyticsSsmPrefix=<analytics-ssm-prefix> \
+  -c certificateArn=<issued-acm-certificate-arn>
 ```
+
+The `${appName}/worker` and `${appName}/analytics` ECR repositories must exist and each must contain a `latest` image
+before the first stack deploy. The ACM certificate must already be issued in the target account and region. Keeping
+these bootstrap resources outside the application stack prevents an empty repository or pending external DNS
+validation from making the first ECS service deployment impossible.
+
+The application stack has CloudFormation termination protection, and its ALB has deletion protection.
 
 ## Managing Environment Variables
 

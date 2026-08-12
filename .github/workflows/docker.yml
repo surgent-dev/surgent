@@ -202,7 +202,6 @@ jobs:
           push: false
           build-args: |
             REQUIRE_GEO_DATABASE=0
-            REQUIRE_ANALYTICS_INTERNAL_TOKEN=0
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
@@ -322,7 +321,6 @@ jobs:
           push: true
           build-args: |
             REQUIRE_GEO_DATABASE=1
-            REQUIRE_ANALYTICS_INTERNAL_TOKEN=1
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           secrets: |
@@ -694,9 +692,9 @@ jobs:
           EOF
           bun cdk synth --no-lookups \
             -c appName=surgent-ci \
-            -c publicDomain=example.com \
             -c apiHostname=api.example.com \
             -c analyticsHostname=analytics.example.com \
             -c internalNamespace=surgent.local \
             -c workerSsmPrefix=/surgent-ci/worker \
-            -c analyticsSsmPrefix=/surgent-ci/analytics
+            -c analyticsSsmPrefix=/surgent-ci/analytics \
+            -c certificateArn=arn:aws:acm:us-east-1:111111111111:certificate/00000000-0000-0000-0000-000000000000
