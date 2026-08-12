@@ -259,7 +259,11 @@ jobs:
 
       - name: Download analytics GeoLite2 database
         if: matrix.name == 'analytics'
-        run: aws s3 cp "$GEO_DATABASE_S3_URI" "$RUNNER_TEMP/GeoLite2-City.mmdb" --only-show-errors
+        run: |
+          mkdir -p apps/analytics/geo
+          aws s3 cp "$GEO_DATABASE_S3_URI" apps/analytics/geo/GeoLite2-City.mmdb --only-show-errors
+          echo "45180f1fa29dd85ce23a4b92a6f5d379f2c7f4bf2cc58ffdc94add856c7854e5  apps/analytics/geo/GeoLite2-City.mmdb" \
+            | sha256sum --check --strict
 
       - name: Sync Cloudflare app-deploy credential
         if: matrix.name == 'worker'
@@ -327,8 +331,6 @@ jobs:
             REQUIRE_GEO_DATABASE=1
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          secret-files: |
-            geo_database=${{ runner.temp }}/GeoLite2-City.mmdb
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 

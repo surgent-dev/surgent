@@ -17,8 +17,7 @@ COPY --from=deps /app /app
 COPY apps/analytics ./apps/analytics
 WORKDIR /app/apps/analytics
 ARG REQUIRE_GEO_DATABASE=0
-RUN --mount=type=secret,id=maxmind_license_key --mount=type=secret,id=geo_database \
-  if [ -f /run/secrets/geo_database ]; then mkdir -p geo && cp /run/secrets/geo_database geo/GeoLite2-City.mmdb; fi; \
+RUN --mount=type=secret,id=maxmind_license_key \
   if [ -f /run/secrets/maxmind_license_key ]; then export MAXMIND_LICENSE_KEY="$(cat /run/secrets/maxmind_license_key)"; fi; \
   REQUIRE_GEO_DATABASE="$REQUIRE_GEO_DATABASE" \
   bun run build-docker
