@@ -17,10 +17,8 @@ COPY --from=deps /app /app
 COPY apps/analytics ./apps/analytics
 WORKDIR /app/apps/analytics
 ARG REQUIRE_GEO_DATABASE=0
-ARG REQUIRE_ANALYTICS_INTERNAL_TOKEN=0
 RUN --mount=type=secret,id=maxmind_license_key \
   if [ -f /run/secrets/maxmind_license_key ]; then export MAXMIND_LICENSE_KEY="$(cat /run/secrets/maxmind_license_key)"; fi; \
-  REQUIRE_ANALYTICS_INTERNAL_TOKEN="$REQUIRE_ANALYTICS_INTERNAL_TOKEN" \
   REQUIRE_GEO_DATABASE="$REQUIRE_GEO_DATABASE" \
   bun run build-docker
 

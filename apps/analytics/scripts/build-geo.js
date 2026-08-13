@@ -13,6 +13,13 @@ if (process.env.VERCEL && !process.env.BUILD_GEO) {
 }
 
 const db = 'GeoLite2-City'
+const dest = path.resolve(process.cwd(), 'geo')
+const existingDatabase = path.join(dest, `${db}.mmdb`)
+
+if (fs.existsSync(existingDatabase)) {
+  console.log('Using preloaded geo database:', existingDatabase)
+  process.exit(0)
+}
 
 let url = process.env.GEO_DATABASE_URL
 
@@ -31,8 +38,6 @@ if (!url) {
   console.log('No GeoLite2 source configured. Skipping geo setup.')
   process.exit(0)
 }
-
-const dest = path.resolve(process.cwd(), 'geo')
 
 if (!fs.existsSync(dest)) {
   fs.mkdirSync(dest)

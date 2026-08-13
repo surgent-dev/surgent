@@ -202,7 +202,6 @@ jobs:
           push: false
           build-args: |
             REQUIRE_GEO_DATABASE=0
-            REQUIRE_ANALYTICS_INTERNAL_TOKEN=0
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
@@ -223,6 +222,7 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION }}
       ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      GEO_DATABASE_S3_URI: ${{ vars.GEO_DATABASE_S3_URI }}
     concurrency:
       group: production-deploy-${{ matrix.name }}
       cancel-in-progress: false
@@ -245,11 +245,10 @@ jobs:
           : "${ECS_CLUSTER:?Set ECS_CLUSTER environment variable}"
           : "${AWS_GITHUB_ACTIONS_ROLE_ARN:?Set AWS_GITHUB_ACTIONS_ROLE_ARN environment secret}"
           if [ "${{ matrix.name }}" = "analytics" ]; then
-            : "${MAXMIND_LICENSE_KEY:?Set MAXMIND_LICENSE_KEY environment secret}"
+            : "${GEO_DATABASE_S3_URI:?Set GEO_DATABASE_S3_URI environment variable}"
           fi
         env:
           AWS_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
-          MAXMIND_LICENSE_KEY: ${{ secrets.MAXMIND_LICENSE_KEY }}
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -257,6 +256,14 @@ jobs:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           role-session-name: github-actions-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download analytics GeoLite2 database
+        if: matrix.name == 'analytics'
+        run: |
+          mkdir -p apps/analytics/geo
+          aws s3 cp "$GEO_DATABASE_S3_URI" apps/analytics/geo/GeoLite2-City.mmdb --only-show-errors
+          echo "45180f1fa29dd85ce23a4b92a6f5d379f2c7f4bf2cc58ffdc94add856c7854e5  apps/analytics/geo/GeoLite2-City.mmdb" \
+            | sha256sum --check --strict
 
       - name: Sync Cloudflare app-deploy credential
         if: matrix.name == 'worker'
@@ -322,11 +329,8 @@ jobs:
           push: true
           build-args: |
             REQUIRE_GEO_DATABASE=1
-            REQUIRE_ANALYTICS_INTERNAL_TOKEN=1
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          secrets: |
-            maxmind_license_key=${{ secrets.MAXMIND_LICENSE_KEY }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
@@ -694,9 +698,9 @@ jobs:
           EOF
           bun cdk synth --no-lookups \
             -c appName=surgent-ci \
-            -c publicDomain=example.com \
             -c apiHostname=api.example.com \
             -c analyticsHostname=analytics.example.com \
             -c internalNamespace=surgent.local \
             -c workerSsmPrefix=/surgent-ci/worker \
-            -c analyticsSsmPrefix=/surgent-ci/analytics
+            -c analyticsSsmPrefix=/surgent-ci/analytics \
+            -c certificateArn=arn:aws:acm:us-east-1:111111111111:certificate/00000000-0000-0000-0000-000000000000

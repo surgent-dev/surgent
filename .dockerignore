@@ -27,5 +27,6 @@ docs/plans
 apps/worker/existing_customers.json
 scripts/paid-customers-projects.ts
 apps/analytics/generated
-apps/analytics/geo
+apps/analytics/geo/*
+!apps/analytics/geo/GeoLite2-City.mmdb
 apps/analytics/public/script.js

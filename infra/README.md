@@ -8,7 +8,7 @@ Infrastructure for Surgent, managed via AWS CDK.
 | :--------------- | :------------------------------------------------------------------------- |
 | **ECS Fargate**  | Runs the worker and analytics services.                                    |
 | **ALB**          | Shared HTTPS load balancer for the API and public analytics ingest routes. |
-| **ECR**          | Container registries for worker and analytics images.                      |
+| **ECR**          | Pre-created container registries for worker and analytics images.          |
 | **SSM**          | Parameter Store for production secrets and connection strings.             |
 | **Auto-scaling** | Request-count-based scaling for both services.                             |
 
@@ -43,10 +43,14 @@ If you want to hide concrete account IDs, route patterns, cluster names, and reg
 
 Account IDs, Cloudflare resource IDs, and production routes are intentionally not committed. GitHub Actions reads them from the `production` environment instead:
 
-- Variables: `AWS_REGION`, `ECR_REGISTRY`, `ECS_CLUSTER`, `GATEWAY_ROUTE_PATTERN`, `GATEWAY_ZONE_NAME`, `GATEWAY_KV_NAMESPACE_ID`, `GATEWAY_KV_PREVIEW_NAMESPACE_ID`, `GATEWAY_HYPERDRIVE_ID`, `GATEWAY_R2_BUCKET`, `GATEWAY_R2_PREVIEW_BUCKET`, `GATEWAY_ZEN_MODELS`, `DISPATCH_ROUTE_PATTERN`, `DISPATCH_ZONE_NAME`, `DISPATCH_NAMESPACE`, `DISPATCH_ANALYTICS_UPSTREAM`
-- Secrets: `AWS_GITHUB_ACTIONS_ROLE_ARN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`
+- Variables: `AWS_REGION`, `ECR_REGISTRY`, `ECS_CLUSTER`, `GEO_DATABASE_S3_URI`, `GATEWAY_ROUTE_PATTERN`, `GATEWAY_ZONE_NAME`, `GATEWAY_KV_NAMESPACE_ID`, `GATEWAY_KV_PREVIEW_NAMESPACE_ID`, `GATEWAY_HYPERDRIVE_ID`, `GATEWAY_R2_BUCKET`, `GATEWAY_R2_PREVIEW_BUCKET`, `GATEWAY_ZEN_MODELS`, `DISPATCH_ROUTE_PATTERN`, `DISPATCH_ZONE_NAME`, `DISPATCH_NAMESPACE`, `DISPATCH_ANALYTICS_UPSTREAM`
+- Secrets: `AWS_GITHUB_ACTIONS_ROLE_ARN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 
 `GATEWAY_ZEN_MODELS` must contain model and provider routing metadata only. Provider API keys live in Cloudflare Worker secrets such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `GOOGLE_API_KEY`.
+
+`GEO_DATABASE_S3_URI` points to an immutable GeoLite2 City database object in the target AWS account. The GitHub deploy
+role needs `s3:GetObject` for that exact object. CI downloads it after OIDC authentication and passes it to Docker as a
+BuildKit secret file, so neither the database nor a MaxMind credential is stored in Git.
 
 For local production deploys, keep ignored private files such as `packages/gateway/wrangler.private.jsonc`, `apps/dispatch/wrangler.private.jsonc`, and `infra/deploy-prod-private.sh`.
 
@@ -58,13 +62,20 @@ To deploy changes manually from the `infra` directory:
 bun install
 AWS_ACCOUNT_ID=<account-id> AWS_REGION=<region> bun cdk deploy \
   -c appName=<app-name> \
-  -c publicDomain=<domain> \
   -c apiHostname=<api-hostname> \
   -c analyticsHostname=<analytics-hostname> \
   -c internalNamespace=<service-discovery-namespace> \
   -c workerSsmPrefix=<worker-ssm-prefix> \
-  -c analyticsSsmPrefix=<analytics-ssm-prefix>
+  -c analyticsSsmPrefix=<analytics-ssm-prefix> \
+  -c certificateArn=<issued-acm-certificate-arn>
 ```
+
+The `${appName}/worker` and `${appName}/analytics` ECR repositories must exist and each must contain a `latest` image
+before the first stack deploy. The ACM certificate must already be issued in the target account and region. Keeping
+these bootstrap resources outside the application stack prevents an empty repository or pending external DNS
+validation from making the first ECS service deployment impossible.
+
+The application stack has CloudFormation termination protection, and its ALB has deletion protection.
 
 ## Managing Environment Variables
 
