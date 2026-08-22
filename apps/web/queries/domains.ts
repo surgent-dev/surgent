@@ -29,6 +29,7 @@ export interface DomainAvailability {
 interface EntriPurchaseConfig {
   token: string
   applicationId: string
+  applicationUrl: string
   dnsRecords: Array<{
     type: string
     host: string
@@ -45,6 +46,7 @@ interface EntriPurchaseConfig {
 interface EntriConnectConfig {
   token: string
   applicationId: string
+  applicationUrl: string
   dnsRecords: Array<{
     type: string
     host: string

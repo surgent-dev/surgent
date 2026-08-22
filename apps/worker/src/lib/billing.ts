@@ -75,11 +75,7 @@ type BillingSnapshot = {
   monthlySpendLimitMicros: number
   paymentMethodBrand: string | null
   paymentMethodLast4: string | null
-  stripeCouponId: string | null
-  stripeDiscountId: string | null
-  stripePromotionCodeId: string | null
   hasMigrationCredit: boolean
-  founderCouponCode: string | null
   topupMinUsd: number
   features: {
     projectsLimit: number | null
@@ -122,9 +118,6 @@ type BillingStateRow = {
     cancelAtPeriodEnd: boolean
     canceledAt: Date | null
     monthlyAllowanceMicros: string | number
-    stripeCouponId: string | null
-    stripeDiscountId: string | null
-    stripePromotionCodeId: string | null
   }
 }
 
@@ -243,106 +236,16 @@ function requireStripe() {
   return stripe
 }
 
-const FOUNDER_COUPON_ID = 'founder_50_off'
-
-function generateCouponCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let code = 'SRGNT-'
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return code
-}
-
-/** Read-only: returns founder coupon from DB metadata if already generated */
-async function getFounderCouponData(organizationId: string) {
+async function hasMigrationCredit(organizationId: string) {
   const grant = await db
     .selectFrom('billing_payment')
-    .select(['id', 'metadata'])
+    .select('id')
     .where('organizationId', '=', organizationId)
     .where('idempotencyKey', 'like', 'old-stripe-grant:%')
     .limit(1)
     .executeTakeFirst()
 
-  if (!grant) return { hasMigrationCredit: false, founderCouponCode: null as string | null }
-
-  const metadata = (grant.metadata ?? {}) as Record<string, unknown>
-  return {
-    hasMigrationCredit: true,
-    founderCouponCode: (metadata.founderCouponCode as string) ?? null,
-  }
-}
-
-/** Creates a unique Stripe promotion code for a founding member. Only call on user action. */
-export async function generateFounderCoupon(
-  organizationId: string,
-): Promise<{ code: string; promotionCodeId: string }> {
-  return db.transaction().execute(async (tx) => {
-    // Lock the grant row to prevent concurrent promo code creation
-    const grant = await tx
-      .selectFrom('billing_payment')
-      .select(['id', 'metadata'])
-      .where('organizationId', '=', organizationId)
-      .where('idempotencyKey', 'like', 'old-stripe-grant:%')
-      .forUpdate()
-      .limit(1)
-      .executeTakeFirst()
-
-    if (!grant) throw new Error('No migration credit found')
-
-    const metadata = (grant.metadata ?? {}) as Record<string, unknown>
-    if (metadata.founderCouponCode && metadata.founderPromotionCodeId) {
-      return {
-        code: metadata.founderCouponCode as string,
-        promotionCodeId: metadata.founderPromotionCodeId as string,
-      }
-    }
-
-    const client = requireStripe()
-
-    // Get or create the shared coupon — only catch 404, re-throw everything else
-    let coupon: import('stripe').Stripe.Coupon
-    try {
-      coupon = await client.coupons.retrieve(FOUNDER_COUPON_ID)
-    } catch (err: unknown) {
-      const stripeErr = err as { statusCode?: number }
-      if (stripeErr.statusCode !== 404) throw err
-      coupon = await client.coupons.create({
-        id: FOUNDER_COUPON_ID,
-        percent_off: 50,
-        duration: 'once',
-        name: 'Founding Member - 50% Off',
-      })
-    }
-
-    const account = await tx
-      .selectFrom('billing_account')
-      .select('stripeCustomerId')
-      .where('organizationId', '=', organizationId)
-      .executeTakeFirst()
-
-    const code = generateCouponCode()
-
-    const promoCode = await client.promotionCodes.create({
-      promotion: { type: 'coupon', coupon: coupon.id },
-      code,
-      max_redemptions: 1,
-      ...(account?.stripeCustomerId ? { customer: account.stripeCustomerId } : {}),
-    })
-
-    await tx
-      .updateTable('billing_payment')
-      .set({
-        metadata: sql`coalesce(metadata, '{}'::jsonb) || ${JSON.stringify({
-          founderCouponCode: promoCode.code,
-          founderPromotionCodeId: promoCode.id,
-        })}::jsonb`,
-      })
-      .where('id', '=', grant.id)
-      .execute()
-
-    return { code: promoCode.code, promotionCodeId: promoCode.id }
-  })
+  return Boolean(grant)
 }
 
 function getPlanConfig(tier: string, interval: string | null = null): PlanConfig {
@@ -361,35 +264,6 @@ function getPlanFromPriceId(priceId: string | null | undefined): PlanConfig {
 
 function centsToMicros(value: number) {
   return Math.round(value * 1_000_000)
-}
-
-function getDiscountIds(discounts: Array<string | Stripe.Discount | Stripe.DeletedDiscount> = []) {
-  const discount = discounts[0]
-  if (!discount) {
-    return {
-      stripeDiscountId: null,
-      stripeCouponId: null,
-      stripePromotionCodeId: null,
-    }
-  }
-
-  if (typeof discount === 'string') {
-    return {
-      stripeDiscountId: discount,
-      stripeCouponId: null,
-      stripePromotionCodeId: null,
-    }
-  }
-
-  const coupon = discount.source?.coupon
-  const promotionCode = discount.promotion_code
-
-  return {
-    stripeDiscountId: discount.id,
-    stripeCouponId: typeof coupon === 'string' ? coupon : (coupon?.id ?? null),
-    stripePromotionCodeId:
-      typeof promotionCode === 'string' ? promotionCode : (promotionCode?.id ?? null),
-  }
 }
 
 function allowanceEligible(row: BillingStateRow['subscription']) {
@@ -444,9 +318,6 @@ async function insertBillingPaymentEntry(
     stripeInvoiceId?: string | null
     stripeCheckoutSessionId?: string | null
     stripePaymentIntentId?: string | null
-    stripeCouponId?: string | null
-    stripeDiscountId?: string | null
-    stripePromotionCodeId?: string | null
     currency?: string | null
     metadata?: Record<string, unknown>
     createdAt?: Date
@@ -463,9 +334,6 @@ async function insertBillingPaymentEntry(
       stripeInvoiceId: args.stripeInvoiceId ?? null,
       stripeCheckoutSessionId: args.stripeCheckoutSessionId ?? null,
       stripePaymentIntentId: args.stripePaymentIntentId ?? null,
-      stripeCouponId: args.stripeCouponId ?? null,
-      stripeDiscountId: args.stripeDiscountId ?? null,
-      stripePromotionCodeId: args.stripePromotionCodeId ?? null,
       refundedAmountMicros: '0',
       refundedAt: null,
       currency: args.currency ?? 'usd',
@@ -549,9 +417,6 @@ async function ensureBillingStateTx(tx: typeof db, organizationId: string) {
       cancelAtPeriodEnd: false,
       canceledAt: null,
       monthlyAllowanceMicros: '0',
-      stripeCouponId: null,
-      stripeDiscountId: null,
-      stripePromotionCodeId: null,
       createdAt: now,
       updatedAt: now,
     })
@@ -689,9 +554,6 @@ async function normalizeState(row: BillingStateRow, now = new Date()) {
     monthlySpendLimitMicros,
     paymentMethodBrand: row.account.paymentMethodBrand,
     paymentMethodLast4: row.account.paymentMethodLast4,
-    stripeCouponId: row.subscription.stripeCouponId,
-    stripeDiscountId: row.subscription.stripeDiscountId,
-    stripePromotionCodeId: row.subscription.stripePromotionCodeId,
     topupMinUsd: config.stripe.topup.minUsd,
     features: {
       projectsLimit: plan.projectsLimit,
@@ -707,7 +569,7 @@ async function getBillingBaseSnapshot(organizationId: string) {
   const now = new Date()
   const state = await getBillingState(organizationId)
   const base = await normalizeState(state, now)
-  const founder = await getFounderCouponData(organizationId)
+  const migrationCredit = await hasMigrationCredit(organizationId)
   const allowanceWindow = getAllowanceWindow(
     {
       tier: state.subscription.tier,
@@ -726,8 +588,7 @@ async function getBillingBaseSnapshot(organizationId: string) {
   return {
     ...base,
     byokProviderCostMicros,
-    hasMigrationCredit: founder.hasMigrationCredit,
-    founderCouponCode: founder.founderCouponCode,
+    hasMigrationCredit: migrationCredit,
   }
 }
 
@@ -1014,11 +875,7 @@ export async function syncStripeCustomerToBillingState(args: {
     limit: 10,
   })
   const primary = subscriptions.data.length ? pickSubscription(subscriptions.data) : null
-  const subscriptionDetails =
-    primary &&
-    (await client.subscriptions.retrieve(primary.id, {
-      expand: ['discounts', 'discounts.coupon', 'discounts.promotion_code'],
-    }))
+  const subscriptionDetails = primary && (await client.subscriptions.retrieve(primary.id))
   const activeSubscription =
     subscriptionDetails &&
     ['active', 'trialing', 'past_due', 'unpaid'].includes(subscriptionDetails.status)
@@ -1027,7 +884,6 @@ export async function syncStripeCustomerToBillingState(args: {
   const plan = activeSubscription
     ? getPlanFromPriceId(activeSubscription.items.data[0]?.price.id)
     : unpaidPlan
-  const discount = getDiscountIds(activeSubscription?.discounts)
 
   // PM is managed exclusively by persistBillingPaymentMethod (called after
   // each successful payment) and syncBillingPaymentMethodFromCustomer (called
@@ -1106,9 +962,6 @@ export async function syncStripeCustomerToBillingState(args: {
           ? new Date(activeSubscription.canceled_at * 1000)
           : null,
         monthlyAllowanceMicros: String(plan.monthlyAllowanceMicros),
-        stripeCouponId: discount.stripeCouponId,
-        stripeDiscountId: discount.stripeDiscountId,
-        stripePromotionCodeId: discount.stripePromotionCodeId,
         updatedAt: now,
       })
       .where('organizationId', '=', args.organizationId)
@@ -1156,27 +1009,12 @@ export async function createBillingCheckout(args: {
   const successUrl = billingSuccessUrl(args.returnPath)
   const cancelUrl = resolveBillingReturnUrl(args.returnPath)
 
-  // Auto-apply founder coupon if user already generated one
-  const founderGrant = await db
-    .selectFrom('billing_payment')
-    .select('metadata')
-    .where('organizationId', '=', args.organizationId)
-    .where('idempotencyKey', 'like', 'old-stripe-grant:%')
-    .limit(1)
-    .executeTakeFirst()
-  const founderPromoId = (founderGrant?.metadata as Record<string, unknown>)
-    ?.founderPromotionCodeId as string | undefined
-  const discountConfig = founderPromoId
-    ? { discounts: [{ promotion_code: founderPromoId }] }
-    : { allow_promotion_codes: true as const }
-
   const session = await client.checkout.sessions.create(
     {
       customer,
       client_reference_id: args.organizationId,
       mode: 'subscription',
       payment_method_types: ['card', 'link'],
-      ...discountConfig,
       line_items: [{ price: plan.priceId, quantity: 1 }],
       subscription_data: {
         metadata: {
@@ -1482,7 +1320,7 @@ export async function syncBillingPaymentFromInvoice(args: {
 }) {
   const client = requireStripe()
   const invoice = await client.invoices.retrieve(args.invoiceId, {
-    expand: ['discounts', 'discounts.coupon', 'discounts.promotion_code', 'payments'],
+    expand: ['payments'],
   })
   const subscriptionId =
     typeof invoice.parent?.subscription_details?.subscription === 'string'
@@ -1496,7 +1334,6 @@ export async function syncBillingPaymentFromInvoice(args: {
   const amountMicros = centsToMicros(
     args.status === 'paid' ? invoice.amount_paid : invoice.amount_due,
   )
-  const discount = getDiscountIds(invoice.discounts)
   const dubCustomerExternalId = await resolveDubCustomerExternalIdForInvoice(invoice)
 
   await db
@@ -1508,9 +1345,6 @@ export async function syncBillingPaymentFromInvoice(args: {
       stripeInvoiceId: invoice.id,
       stripePaymentIntentId: paymentIntentId,
       stripeCheckoutSessionId: null,
-      stripeCouponId: discount.stripeCouponId,
-      stripeDiscountId: discount.stripeDiscountId,
-      stripePromotionCodeId: discount.stripePromotionCodeId,
       amountMicros: String(amountMicros),
       refundedAmountMicros: '0',
       refundedAt: null,
@@ -1523,9 +1357,6 @@ export async function syncBillingPaymentFromInvoice(args: {
     .onConflict((oc) =>
       oc.column('stripeInvoiceId').doUpdateSet({
         stripePaymentIntentId: paymentIntentId,
-        stripeCouponId: discount.stripeCouponId,
-        stripeDiscountId: discount.stripeDiscountId,
-        stripePromotionCodeId: discount.stripePromotionCodeId,
         amountMicros: String(amountMicros),
         currency: invoice.currency ?? 'usd',
         status: args.status,

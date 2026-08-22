@@ -234,9 +234,6 @@ export interface BillingSubscriptionTable {
   cancelAtPeriodEnd: boolean
   canceledAt: Date | null
   monthlyAllowanceMicros: string
-  stripeCouponId: string | null
-  stripeDiscountId: string | null
-  stripePromotionCodeId: string | null
   createdAt?: Date
   updatedAt?: Date
 }
@@ -258,9 +255,6 @@ export interface BillingPaymentTable {
   stripeInvoiceId: string | null
   stripePaymentIntentId: string | null
   stripeCheckoutSessionId: string | null
-  stripeCouponId: string | null
-  stripeDiscountId: string | null
-  stripePromotionCodeId: string | null
   amountMicros: string
   refundedAmountMicros: string
   refundedAt: Date | null

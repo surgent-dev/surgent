@@ -307,6 +307,7 @@ export function DomainSearchPanel({
         const sellConfig: EntriConfig = {
           applicationId: config.applicationId,
           token: config.token,
+          applicationUrl: config.applicationUrl,
           dnsRecords: config.dnsRecords,
           userId: JSON.stringify({ projectId, email: config.contact.email }),
           whiteLabel: { sell: { contact: config.contact } },
@@ -337,6 +338,7 @@ export function DomainSearchPanel({
         await showEntri({
           applicationId: config.applicationId,
           token: config.token,
+          applicationUrl: config.applicationUrl,
           prefilledDomain: config.prefilledDomain,
           dnsRecords: config.dnsRecords,
           userId: config.userId,
@@ -361,6 +363,7 @@ export function DomainSearchPanel({
           await showEntri({
             applicationId: result.applicationId,
             token: result.token,
+            applicationUrl: result.applicationUrl,
             prefilledDomain: result.prefilledDomain,
             dnsRecords: result.dnsRecords,
             userId: result.userId,

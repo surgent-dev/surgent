@@ -1,6 +1,7 @@
 import { config } from '../config'
 import { HttpError } from '../errors'
 import { createLogger } from '../logger'
+import { generateEntriToken } from './jwt'
 
 const log = createLogger('entri')
 const ENTRI_BASE = 'https://api.goentri.com'
@@ -128,4 +129,35 @@ export async function checkAvailability(input: string): Promise<DomainAvailabili
   const result = await fetchAvailability(domain)
   setCachedAvailability(domain, result, now)
   return result
+}
+
+export async function updatePoweredDomain(args: {
+  domain: string
+  applicationUrl: string
+}): Promise<void> {
+  if (config.entri.devMode) return
+  if (!config.entri.applicationId) throw new HttpError(503, 'Entri API not configured')
+
+  const domain = normalizeDomain(args.domain)
+  const applicationUrl = args.applicationUrl.trim()
+  const token = await generateEntriToken('power')
+
+  const res = await fetch(`${ENTRI_BASE}/power`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      applicationId: config.entri.applicationId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ domain, applicationUrl }),
+    signal: AbortSignal.timeout(15_000),
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    log.error({ status: res.status, domain, applicationUrl, body }, 'Power domain update failed')
+    throw new HttpError(res.status, `Power domain update failed: ${res.status}`)
+  }
+
+  log.info({ domain, applicationUrl }, 'Power domain upstream updated')
 }
