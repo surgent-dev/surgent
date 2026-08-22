@@ -28,10 +28,7 @@ export type BillingSnapshot = {
   monthlySpendLimitMicros: number
   paymentMethodBrand: string | null
   paymentMethodLast4: string | null
-  stripeCouponId: string | null
-  stripePromotionCodeId: string | null
   hasMigrationCredit: boolean
-  founderCouponCode: string | null
   topupMinUsd: number
   features: {
     projectsLimit: number | null
@@ -155,21 +152,6 @@ export function useTopupPaymentIntent() {
     onSuccess: (data) => {
       if (data.mode !== 'charged') return
       queryClient.setQueryData(billingSubscriptionQueryKey, data.snapshot)
-    },
-  })
-}
-
-export function useGenerateFounderCoupon() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async () => {
-      return http.post('api/billing/founder-coupon').json<{ code: string }>()
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(billingSubscriptionQueryKey, (prev: BillingSnapshot | undefined) =>
-        prev ? { ...prev, founderCouponCode: data.code } : prev,
-      )
     },
   })
 }

@@ -1,14 +1,11 @@
 'use client'
 
-import { CopySimple, Ticket } from '@phosphor-icons/react'
-import { ArrowRight, Gift, X } from 'lucide-react'
+import { Gift, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useSubscription } from '@/hooks/use-subscription'
 
-const COUPON_CODE = 'POIUYTR50'
 const DISMISS_KEY = 'migration-banner-dismissed'
 const DIALOG_SHOWN_KEY = 'migration-dialog-shown'
 
@@ -50,11 +47,6 @@ export default function MigrationCreditBanner({
 
   if (!visible) return null
 
-  const copyCoupon = () => {
-    navigator.clipboard.writeText(COUPON_CODE)
-    toast.success('Coupon code copied!')
-  }
-
   return (
     <>
       {/* Banner */}
@@ -67,13 +59,12 @@ export default function MigrationCreditBanner({
                 Your previous subscription has been canceled &mdash; we&apos;ve upgraded our
                 billing.
               </span>{' '}
-              You&apos;ve been rewarded <span className="font-semibold">$25 in credits</span> + an
-              exclusive 50% off coupon.
+              You have <span className="font-semibold">$25 in AI credits</span> waiting.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button size="sm" onClick={openOffer}>
-              Claim Offer
+              View Credits
             </Button>
             <button
               onClick={handleDismiss}
@@ -97,13 +88,12 @@ export default function MigrationCreditBanner({
             </h2>
             <p className="mt-1 text-[13px] text-muted-foreground">
               Your old subscription was canceled. As one of our first 30 customers, here&apos;s what
-              we set aside just for you.
+              we moved into your new account.
             </p>
           </div>
 
-          {/* Rewards */}
+          {/* Credit */}
           <div className="mx-5 rounded-lg border border-border/60 overflow-hidden">
-            {/* $25 credit */}
             <div className="flex items-center gap-3 px-4 py-3">
               <Gift className="h-4 w-4 text-violet-500 shrink-0" />
               <div className="flex-1 min-w-0">
@@ -114,36 +104,6 @@ export default function MigrationCreditBanner({
               </div>
               <span className="text-base font-bold shrink-0">$25</span>
             </div>
-
-            <div className="border-t border-dashed border-border/60" />
-
-            {/* Coupon */}
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Ticket className="h-4 w-4 text-violet-500 shrink-0" weight="fill" />
-                  <div>
-                    <p className="text-[13px] font-medium">50% off first month</p>
-                    <div className="mt-1 flex items-center gap-2">
-                      <button
-                        onClick={copyCoupon}
-                        className="inline-flex items-center gap-1.5 rounded bg-muted hover:bg-muted/70 transition-colors px-2 py-0.5 group"
-                      >
-                        <span className="font-mono text-[12px] font-semibold tracking-wide">
-                          {COUPON_CODE}
-                        </span>
-                        <CopySimple
-                          className="h-3 w-3 text-muted-foreground group-hover:text-foreground"
-                          weight="bold"
-                        />
-                      </button>
-                      <span className="text-[10px] text-muted-foreground/50">Use at checkout</span>
-                    </div>
-                  </div>
-                </div>
-                <span className="text-base font-bold text-violet-500 shrink-0">&minus;50%</span>
-              </div>
-            </div>
           </div>
 
           {/* Actions */}
@@ -151,17 +111,12 @@ export default function MigrationCreditBanner({
             <Button
               className="w-full h-10 text-sm font-medium"
               onClick={() => {
-                copyCoupon()
                 setDialogOpen(false)
                 onUpgrade()
               }}
             >
-              Copy Code & Upgrade
-              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              Upgrade plan
             </Button>
-            <p className="text-[11px] text-center text-muted-foreground/50">
-              Paste the promo code at checkout to get 50% off
-            </p>
             <button
               onClick={() => setDialogOpen(false)}
               className="text-[12px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
