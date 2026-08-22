@@ -1,11 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SurgentLogo } from '@/components/surgent-logo'
 import { authClient } from '@/lib/auth-client'
 
-type LoginContentProps = {
+type SignupContentProps = {
   next?: string
 }
 
@@ -30,11 +30,14 @@ const GoogleIcon = () => (
   </svg>
 )
 
-export default function LoginContent({ next }: LoginContentProps) {
+export default function SignupContent({ next }: SignupContentProps) {
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [verifyEmail, setVerifyEmail] = useState(false)
+  const [cooldown, setCooldown] = useState(0)
 
   const redirectPath = next || '/'
   const callbackURL =
@@ -52,27 +55,84 @@ export default function LoginContent({ next }: LoginContentProps) {
   }
 
   const handleEmail = async () => {
-    if (!email.trim() || !password) return
+    if (!email.trim() || !password || !name.trim()) return
     setIsLoading(true)
     setError('')
     try {
-      const { error: authError } = await authClient.signIn.email({
+      const { error: authError } = await authClient.signUp.email({
+        name: name.trim(),
         email: email.trim(),
         password,
         callbackURL,
       })
-      if (authError) {
-        if (authError.status === 403) {
-          setError('Please verify your email address. Check your inbox for a verification link.')
-        } else {
-          setError(authError.message || 'Invalid email or password')
-        }
-        setIsLoading(false)
+      if (authError && authError.status !== 403) {
+        setError(authError.message || 'Something went wrong')
+      } else {
+        setVerifyEmail(true)
+        setCooldown(60)
       }
     } catch {
       setError('Something went wrong')
-      setIsLoading(false)
     }
+    setIsLoading(false)
+  }
+
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = setTimeout(() => setCooldown(cooldown - 1), 1000)
+    return () => clearTimeout(t)
+  }, [cooldown])
+
+  const handleResend = async () => {
+    if (cooldown > 0) return
+    setIsLoading(true)
+    try {
+      await authClient.sendVerificationEmail({ email: email.trim(), callbackURL })
+      setCooldown(60)
+    } catch {
+      setError('Failed to resend verification email')
+    }
+    setIsLoading(false)
+  }
+
+  if (verifyEmail) {
+    return (
+      <div className="min-h-dvh flex flex-col bg-white dark:bg-background text-foreground">
+        <main className="flex-1 flex flex-col items-center px-6 pt-[22vh]">
+          <div className="w-full max-w-xs">
+            <div className="mb-10">
+              <SurgentLogo className="text-lg" />
+            </div>
+            <h1 className="font-display text-xl text-foreground mb-1.5">Check your email</h1>
+            <p className="text-xs text-muted-foreground/50 mb-6">
+              We sent a verification link to <span className="text-foreground">{email}</span>. Click
+              the link to verify your account.
+            </p>
+            {error && <p className="text-xs text-destructive mb-4">{error}</p>}
+            <button
+              onClick={handleResend}
+              disabled={isLoading || cooldown > 0}
+              className="btn-brand-secondary w-full h-10 rounded-[0.5rem] text-sm font-medium cursor-pointer disabled:opacity-50"
+            >
+              {isLoading
+                ? 'Sending...'
+                : cooldown > 0
+                  ? `Resend in ${cooldown}s`
+                  : 'Resend verification email'}
+            </button>
+            <button
+              onClick={() => {
+                setVerifyEmail(false)
+                setError('')
+              }}
+              className="mt-3 text-xs text-muted-foreground/40 hover:text-muted-foreground/60 transition-colors"
+            >
+              Use a different email
+            </button>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -83,20 +143,27 @@ export default function LoginContent({ next }: LoginContentProps) {
             <SurgentLogo className="text-lg" />
           </div>
 
-          <h1 className="font-display text-xl text-foreground mb-1.5">Welcome back</h1>
+          <h1 className="font-display text-xl text-foreground mb-1.5">Create your account</h1>
           <p className="text-xs text-muted-foreground/50 mb-6">
-            Log in to manage your projects and grow your business.
+            Start building your website, sales agent, and more — in seconds.
           </p>
 
           {error && <p className="text-xs text-destructive mb-4">{error}</p>}
 
           <div className="space-y-3">
             <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Name"
+              autoFocus
+              className="w-full h-10 px-3.5 rounded-lg border border-border bg-muted/70 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors"
+            />
+            <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
-              autoFocus
               className="w-full h-10 px-3.5 rounded-lg border border-border bg-muted/70 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/20 transition-colors"
             />
             <input
@@ -109,10 +176,10 @@ export default function LoginContent({ next }: LoginContentProps) {
             />
             <button
               onClick={handleEmail}
-              disabled={isLoading || !email.trim() || !password}
+              disabled={isLoading || !email.trim() || !password || !name.trim()}
               className="btn-brand w-full h-10 rounded-[0.5rem] text-sm font-medium cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Logging in...' : 'Log in'}
+              {isLoading ? 'Creating account...' : 'Create account'}
             </button>
 
             <div className="flex items-center gap-3 py-1">
@@ -131,22 +198,13 @@ export default function LoginContent({ next }: LoginContentProps) {
             </button>
           </div>
 
-          <div className="mt-6 text-right">
+          <div className="mt-8 text-xs text-muted-foreground/40">
+            Already have an account?{' '}
             <Link
-              href="/forgot-password"
-              className="text-xs text-muted-foreground/40 hover:text-muted-foreground/60 transition-colors"
-            >
-              Forgot password?
-            </Link>
-          </div>
-
-          <div className="mt-4 text-xs text-muted-foreground/40">
-            Don&apos;t have an account?{' '}
-            <Link
-              href={`/signup${next ? `?next=${encodeURIComponent(next)}` : ''}`}
+              href={`/login${next ? `?next=${encodeURIComponent(next)}` : ''}`}
               className="text-brand hover:text-brand/80 transition-colors"
             >
-              Sign up
+              Log in
             </Link>
           </div>
 

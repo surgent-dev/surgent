@@ -184,7 +184,10 @@ const FOOTER_COLS = [
   },
   {
     title: 'Account',
-    links: [{ href: '/login', label: 'Sign In' }],
+    links: [
+      { href: '/signup', label: 'Get Started' },
+      { href: '/login', label: 'Log In' },
+    ],
   },
   {
     title: 'Connect',
@@ -300,12 +303,20 @@ function IndexContent() {
                   Dashboard
                 </Link>
               ) : (
-                <Link
-                  href="/login"
-                  className="btn-brand inline-flex items-center h-9 px-5 rounded-full font-display text-[0.9rem] font-medium"
-                >
-                  Sign in
-                </Link>
+                <>
+                  <Link
+                    href="/login"
+                    className="btn-brand-secondary inline-flex items-center h-9 px-4 rounded-full font-display text-[0.9rem] font-medium"
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    href="/signup"
+                    className="btn-brand inline-flex items-center h-9 px-5 rounded-full font-display text-[0.9rem] font-medium cursor-pointer"
+                  >
+                    Sign up
+                  </Link>
+                </>
               )}
             </div>
           </div>
@@ -521,17 +532,17 @@ function IndexContent() {
       <section className="px-6 sm:px-10 py-24 sm:py-32 border-t border-[#1d1c220d] dark:border-border/10">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="font-display text-3xl md:text-4xl font-medium tracking-[-0.04em] text-[#1d1c22] dark:text-foreground leading-[1.1] mb-4">
-            Already building with Surgent?
+            Ready to build?
           </h2>
           <p className="text-[15px] text-[#475467] dark:text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
-            New account creation is closed. Existing customers can still access their projects.
+            Join thousands of founders who launched their business with a single prompt.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
-              href="/login"
+              href="/signup"
               className="btn-brand inline-flex items-center justify-center gap-2 h-11 w-full sm:w-auto px-7 rounded-full font-display text-[0.95rem] font-medium cursor-pointer whitespace-nowrap"
             >
-              Sign in <ArrowRight className="h-4 w-4 shrink-0" />
+              Start building <ArrowRight className="h-4 w-4 shrink-0" />
             </Link>
             <Link
               href="/inspirations"

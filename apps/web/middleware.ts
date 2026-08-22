@@ -57,7 +57,6 @@ export async function middleware(request: NextRequest) {
   const isProtectedRoute =
     path.startsWith('/admin') ||
     path.startsWith('/dashboard') ||
-    path.startsWith('/get-started') ||
     path.startsWith('/project') ||
     path.startsWith('/company')
 
