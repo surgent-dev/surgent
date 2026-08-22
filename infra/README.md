@@ -46,7 +46,7 @@ Account IDs, Cloudflare resource IDs, and production routes are intentionally no
 - Variables: `AWS_REGION`, `ECR_REGISTRY`, `ECS_CLUSTER`, `GEO_DATABASE_S3_URI`, `GATEWAY_ROUTE_PATTERN`, `GATEWAY_ZONE_NAME`, `GATEWAY_KV_NAMESPACE_ID`, `GATEWAY_KV_PREVIEW_NAMESPACE_ID`, `GATEWAY_HYPERDRIVE_ID`, `GATEWAY_R2_BUCKET`, `GATEWAY_R2_PREVIEW_BUCKET`, `GATEWAY_ZEN_MODELS`, `DISPATCH_ROUTE_PATTERN`, `DISPATCH_ZONE_NAME`, `DISPATCH_NAMESPACE`, `DISPATCH_ANALYTICS_UPSTREAM`
 - Secrets: `AWS_GITHUB_ACTIONS_ROLE_ARN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 
-`GATEWAY_ZEN_MODELS` must contain model and provider routing metadata only. Provider API keys live in Cloudflare Worker secrets such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `GOOGLE_API_KEY`.
+`GATEWAY_ZEN_MODELS` must contain model and provider routing metadata only. A model's `cost` is the upstream provider rate; optional `price` is the customer rate. Without `price`, Surgent applies the standard markup to `cost`. Provider API keys live in Cloudflare Worker secrets such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, and `PARTICLE_API_KEY`.
 
 `GEO_DATABASE_S3_URI` points to an immutable GeoLite2 City database object in the target AWS account. The GitHub deploy
 role needs `s3:GetObject` for that exact object. CI downloads it after OIDC authentication and passes it to Docker as a

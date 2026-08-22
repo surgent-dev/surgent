@@ -217,12 +217,20 @@ export default function StartupDetailPage({ slug, initialStartup }: StartupDetai
                 Dashboard
               </Link>
             ) : loggedIn === false ? (
-              <Link
-                href="/login"
-                className="btn-brand inline-flex items-center h-9 px-5 rounded-full font-display text-[0.9rem] font-medium"
-              >
-                Sign in
-              </Link>
+              <>
+                <Link
+                  href="/login"
+                  className="btn-brand-secondary inline-flex items-center h-9 px-4 rounded-full font-display text-[0.9rem] font-medium"
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/signup"
+                  className="btn-brand inline-flex items-center h-9 px-5 rounded-full font-display text-[0.9rem] font-medium cursor-pointer"
+                >
+                  Sign up
+                </Link>
+              </>
             ) : null}
           </div>
         </div>

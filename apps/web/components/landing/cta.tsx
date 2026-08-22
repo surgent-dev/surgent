@@ -20,18 +20,18 @@ export function LandingCta() {
         className="relative z-10 mx-auto max-w-2xl text-center"
       >
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-white tracking-[-0.025em] leading-tight mb-4">
-          Welcome{' '}
-          <span className="font-[var(--font-display)] italic font-normal text-brand">back</span>
+          Start building{' '}
+          <span className="font-[var(--font-display)] italic font-normal text-brand">today</span>
         </h2>
         <p className="text-slate-400 text-base sm:text-lg mb-8 max-w-md mx-auto">
-          Sign in to continue working on your Surgent projects.
+          Go from idea to deployed app in minutes. No setup, no boilerplate, no waiting.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
-            href="/login"
+            href="/signup"
             className="inline-flex items-center gap-2 btn-brand px-6 py-3 rounded-xl text-sm font-medium"
           >
-            Sign in
+            Get started
             <ArrowRight className="h-4 w-4" />
           </Link>
           <a

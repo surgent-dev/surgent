@@ -14,6 +14,7 @@ export interface Bindings {
   OPENAI_API_KEY?: string
   ANTHROPIC_API_KEY?: string
   GOOGLE_API_KEY?: string
+  PARTICLE_API_KEY?: string
   GATEWAY_KV: KVNamespace
   POSTGRES_TYPE?: string
   GATEWAY_DATA?: R2Bucket

@@ -28,6 +28,7 @@ export namespace ZenData {
   const ModelSchema = z.object({
     name: z.string(),
     cost: ModelCostSchema,
+    price: ModelCostSchema.optional(),
     cost200K: ModelCostSchema.optional(),
     costThresholdTokens: z.number().int().positive().optional(),
     allowAnonymous: z.boolean().optional(),

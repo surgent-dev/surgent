@@ -15,6 +15,16 @@ export type ProviderModel = {
 
 export const MODELS: ProviderModel[] = [
   {
+    id: 'deepseek-v4-flash-0731',
+    name: 'DeepSeek V4 Flash',
+    providerId: 'opencode',
+    providerName: 'OpenCode',
+    limit: { context: 1048576 },
+    icon: '/surgent-logo.svg',
+    badge: 'Best value',
+    badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  },
+  {
     id: 'gpt-5.5',
     name: 'GPT-5.5 Fast',
     providerId: 'opencode',

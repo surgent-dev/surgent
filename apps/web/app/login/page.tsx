@@ -11,11 +11,10 @@ export const metadata: Metadata = createPageMetadata({
 
 type SearchParams = {
   next?: string
-  error?: string
 }
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const { next, error } = await searchParams
+  const { next } = await searchParams
 
-  return <LoginContent next={next} authError={error} />
+  return <LoginContent next={next} />
 }

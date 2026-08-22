@@ -11,6 +11,7 @@
     "deploy:private": "if [ \"$CONFIRM_PROD\" != \"1\" ]; then echo \"Set CONFIRM_PROD=1 to deploy private prod config\"; exit 1; fi; wrangler deploy --config wrangler.private.jsonc",
     "deploy:dev:private": "wrangler deploy --config wrangler.private.jsonc --env dev",
     "generate-types": "wrangler types",
+    "test": "bun test",
     "typecheck": "tsc --noEmit",
     "check-types": "bun run typecheck"
   },
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20251008.0",
+    "@types/bun": "^1.2.19",
     "typescript": "^5.9.2",
     "wrangler": "4.95.0"
   }

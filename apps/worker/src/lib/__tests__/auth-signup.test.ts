@@ -8,34 +8,12 @@ process.env.GOOGLE_CLIENT_SECRET = 'test-google-secret'
 
 const { auth } = await import('../auth')
 
-describe('sign-in-only auth', () => {
-  test('keeps sign-in enabled while disabling account creation for email and Google', () => {
+describe('public signup', () => {
+  test('enables account creation with email and Google', () => {
     expect(auth.options.emailAndPassword?.enabled).toBe(true)
-    expect(auth.options.emailAndPassword?.disableSignUp).toBe(true)
+    expect(auth.options.emailAndPassword?.disableSignUp).toBe(false)
+    expect(auth.options.emailVerification?.sendOnSignUp).toBe(true)
     expect(auth.options.socialProviders?.google?.enabled).toBe(true)
-    expect(auth.options.socialProviders?.google?.disableSignUp).toBe(true)
-  })
-
-  test('rejects direct email signup requests before touching the database', async () => {
-    const response = await auth.handler(
-      new Request('http://localhost:4000/api/auth/sign-up/email', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          origin: 'http://localhost:3000',
-        },
-        body: JSON.stringify({
-          name: 'New User',
-          email: 'new@example.com',
-          password: 'password123',
-        }),
-      }),
-    )
-
-    expect(response.status).toBe(400)
-    expect(await response.json()).toEqual({
-      code: 'EMAIL_PASSWORD_SIGN_UP_DISABLED',
-      message: 'Email and password sign up is not enabled',
-    })
+    expect(auth.options.socialProviders?.google?.disableSignUp).toBe(false)
   })
 })
