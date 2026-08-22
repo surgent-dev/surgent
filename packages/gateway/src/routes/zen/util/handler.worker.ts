@@ -37,6 +37,7 @@ import { createRateLimiter } from './rateLimiter'
 import { createDataDumper } from './dataDumper'
 import { createTrialLimiter } from './trialLimiter'
 import { createStickyTracker } from './stickyProviderTracker'
+import { calculateUsageCosts } from './pricing'
 
 type ZenConfig = ReturnType<typeof loadZenData>
 
@@ -81,8 +82,6 @@ function centsToMicroCents(amount: number) {
   return Math.round(amount * 1_000_000)
 }
 
-const SURGENT_MARKUP_MULTIPLIER = 1.3
-const SURGENT_MARKUP_BPS = 3000
 const DEFAULT_LONG_CONTEXT_COST_THRESHOLD_TOKENS = 200_000
 
 function isAllowanceEligible(status: string) {
@@ -801,11 +800,6 @@ export async function handleZenRequest(
       cacheWrite5mTokens,
       cacheWrite1hTokens,
     } = usageInfo
-    const calcCost = (rate: number | undefined, tokens: number | undefined) => {
-      if (!rate || !tokens) return undefined
-      return rate * tokens * 100
-    }
-
     const billableInputTokens =
       inputTokens + (cacheReadTokens ?? 0) + (cacheWrite5mTokens ?? 0) + (cacheWrite1hTokens ?? 0)
     const longContextThreshold =
@@ -814,22 +808,12 @@ export async function handleZenRequest(
       modelInfo.cost200K && billableInputTokens > longContextThreshold
         ? modelInfo.cost200K
         : modelInfo.cost
-
-    const inputCost = modelCost.input * inputTokens * 100
-    const outputCost = modelCost.output * outputTokens * 100
-    const reasoningCost = calcCost(modelCost.output, reasoningTokens)
-    const cacheReadCost = calcCost(modelCost.cacheRead, cacheReadTokens)
-    const cacheWrite5mCost = calcCost(modelCost.cacheWrite5m, cacheWrite5mTokens)
-    const cacheWrite1hCost = calcCost(modelCost.cacheWrite1h, cacheWrite1hTokens)
-    const baseCostInCent =
-      inputCost +
-      outputCost +
-      (reasoningCost ?? 0) +
-      (cacheReadCost ?? 0) +
-      (cacheWrite5mCost ?? 0) +
-      (cacheWrite1hCost ?? 0)
-    const totalCostInCent =
-      billing.mode === 'surgent' ? baseCostInCent * SURGENT_MARKUP_MULTIPLIER : baseCostInCent
+    const costs = calculateUsageCosts(
+      modelCost,
+      modelInfo.price,
+      usageInfo,
+      billing.mode === 'surgent',
+    )
 
     logger.metric({
       'tokens.input': inputTokens,
@@ -838,20 +822,22 @@ export async function handleZenRequest(
       'tokens.cache_read': cacheReadTokens,
       'tokens.cache_write_5m': cacheWrite5mTokens,
       'tokens.cache_write_1h': cacheWrite1hTokens,
-      'cost.input': Math.round(inputCost),
-      'cost.output': Math.round(outputCost),
-      'cost.reasoning': reasoningCost ? Math.round(reasoningCost) : undefined,
-      'cost.cache_read': cacheReadCost ? Math.round(cacheReadCost) : undefined,
-      'cost.cache_write_5m': cacheWrite5mCost ? Math.round(cacheWrite5mCost) : undefined,
-      'cost.cache_write_1h': cacheWrite1hCost ? Math.round(cacheWrite1hCost) : undefined,
-      'cost.base_total': Math.round(baseCostInCent),
-      'cost.total': Math.round(totalCostInCent),
+      'cost.input': Math.round(costs.provider.input),
+      'cost.output': Math.round(costs.provider.output),
+      'cost.reasoning': Math.round(costs.provider.reasoning),
+      'cost.cache_read': Math.round(costs.provider.cacheRead),
+      'cost.cache_write_5m': Math.round(costs.provider.cacheWrite5m),
+      'cost.cache_write_1h': Math.round(costs.provider.cacheWrite1h),
+      'cost.base_total': Math.round(costs.provider.total),
+      'cost.total': Math.round(costs.billedTotal),
     })
 
     if (!authInfo) return
 
-    const providerCostMicro = centsToMicroCents(baseCostInCent)
-    const billedCostMicro = authInfo.provider?.credentials ? 0 : centsToMicroCents(totalCostInCent)
+    const providerCostMicro = centsToMicroCents(costs.provider.total)
+    const billedCostMicro = authInfo.provider?.credentials
+      ? 0
+      : centsToMicroCents(costs.billedTotal)
     let uncoveredMicros = 0
 
     await db.transaction().execute(async (tx) => {
@@ -955,7 +941,7 @@ export async function handleZenRequest(
           cacheWrite1hTokens,
           providerCostMicros: String(providerCostMicro),
           billedCostMicros: String(billedCostMicro),
-          markupBps: billing.mode === 'surgent' ? SURGENT_MARKUP_BPS : 0,
+          markupBps: costs.markupBps,
           billingMode: billing.mode,
           keyId: authInfo.apiKeyId,
           enrichment: {

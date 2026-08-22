@@ -21,19 +21,28 @@ type Usage = {
   }
 }
 
-export const oaCompatHelper: ProviderHelper = () => ({
+export const oaCompatHelper: ProviderHelper = ({ providerModel }) => ({
   format: 'oa-compat',
   modifyUrl: (providerApi: string) => providerApi + '/chat/completions',
   modifyHeaders: (headers: Headers, body: Record<string, any>, apiKey: string) => {
     headers.set('authorization', `Bearer ${apiKey}`)
   },
   modifyBody: (body: Record<string, any>) => {
+    const isParticleDeepSeek = providerModel === 'deepseek-v4-flash-0731'
+    const messages = isParticleDeepSeek
+      ? body.messages.map((message: Record<string, unknown>) =>
+          message.role === 'assistant' && message.tool_calls
+            ? { ...message, reasoning_content: message.reasoning_content ?? '' }
+            : message,
+        )
+      : body.messages
+
     return {
       model: body.model,
-      messages: body.messages,
+      messages,
       max_tokens: body.max_tokens,
-      temperature: body.temperature,
-      top_p: body.top_p,
+      temperature: body.temperature ?? (isParticleDeepSeek ? 1 : undefined),
+      top_p: body.top_p ?? (isParticleDeepSeek ? 0.95 : undefined),
       stop: body.stop,
       tools: body.tools,
       tool_choice: body.tool_choice,

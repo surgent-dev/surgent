@@ -468,9 +468,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Typecheck gateway
+      - name: Check gateway
         working-directory: packages/gateway
-        run: bun run typecheck
+        run: bun run typecheck && bun test
 
   deploy-gateway:
     needs: changes
