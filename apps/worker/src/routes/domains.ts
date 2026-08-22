@@ -6,7 +6,7 @@ import { requireAuth } from '@/middleware/auth'
 import { db } from '@/lib/db'
 import { generateEntriToken } from '@/lib/entri/jwt'
 import { expandDomainQuery } from '@/lib/domains'
-import { checkAvailability } from '@/lib/entri/client'
+import { checkAvailability, updatePoweredDomain } from '@/lib/entri/client'
 import { config } from '@/lib/config'
 import { HttpError } from '@/lib/errors'
 import { rateLimit } from '@/middleware/rate-limit'
@@ -38,6 +38,34 @@ async function appendDomainLog(
     })
     .where('id', '=', domainId)
     .execute()
+}
+
+function getApplicationUrl(scriptName: string): string {
+  return `https://${scriptName}.${config.cloudflare.deployDomain}`
+}
+
+async function syncPoweredDomainUpstream(domainId: string, projectId: string, domainName: string) {
+  const worker = await db
+    .selectFrom('worker')
+    .select(['scriptName'])
+    .where('projectId', '=', projectId)
+    .executeTakeFirst()
+
+  if (!worker?.scriptName) {
+    await appendDomainLog(domainId, 'power_sync_skipped', 'Project has no deployed worker', false)
+    return
+  }
+
+  const applicationUrl = getApplicationUrl(worker.scriptName)
+
+  try {
+    await updatePoweredDomain({ domain: domainName, applicationUrl })
+    await appendDomainLog(domainId, 'power_upstream_synced', `Upstream → ${applicationUrl}`, true)
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : 'Power upstream sync failed'
+    await appendDomainLog(domainId, 'power_upstream_sync_failed', detail, false)
+    log.error({ err, domainId, projectId, domainName }, 'failed to sync Power upstream')
+  }
 }
 
 interface EntriWebhookPayload {
@@ -289,10 +317,8 @@ domains.post(
       throw new HttpError(400, 'Deploy your app before adding a custom domain')
     }
 
-    const deployDomain = config.cloudflare.deployDomain
-
     // Entri Power: apex A record proxied by Entri
-    const applicationUrl = `https://${worker.scriptName}.${deployDomain}`
+    const applicationUrl = getApplicationUrl(worker.scriptName)
 
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
@@ -313,6 +339,7 @@ domains.post(
       token,
       applicationId: config.entri.applicationId,
       dnsRecords,
+      applicationUrl,
       prefilledDomain: suggestedDomain,
       devMode: config.entri.devMode,
       contact: {
@@ -529,10 +556,8 @@ domains.post(
       throw new HttpError(400, 'Deploy your app before adding a custom domain')
     }
 
-    const deployDomain = config.cloudflare.deployDomain
-
     // Entri Power: apex A record proxied by Entri
-    const applicationUrl = `https://${worker.scriptName}.${deployDomain}`
+    const applicationUrl = getApplicationUrl(worker.scriptName)
 
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
@@ -565,6 +590,7 @@ domains.post(
       token,
       applicationId: config.entri.applicationId,
       dnsRecords,
+      applicationUrl,
       domainId: domainRecord!.id,
       prefilledDomain: domain,
       userId: user.email,
@@ -662,9 +688,7 @@ domains.post(
       throw new HttpError(400, 'Deploy your app before adding a custom domain')
     }
 
-    const deployDomain = config.cloudflare.deployDomain
-
-    const applicationUrl = `https://${worker.scriptName}.${deployDomain}`
+    const applicationUrl = getApplicationUrl(worker.scriptName)
 
     const dnsRecords = [
       { type: 'A', host: '@', value: '{ENTRI_SERVERS}', ttl: 300, applicationUrl },
@@ -697,6 +721,7 @@ domains.post(
       token,
       applicationId: config.entri.applicationId,
       dnsRecords,
+      applicationUrl,
       domainId,
       prefilledDomain: domainRecord.domainName,
       userId: user.email,
@@ -1356,8 +1381,9 @@ async function processDomainWebhook(payload: EntriWebhookPayload) {
       `Status → ${status}`,
       status !== 'error',
     )
-    if (status === 'active' && domainRecord.isPrimary && domainRecord.projectId) {
-      await syncProjectAnalyticsDomain(domainRecord.projectId)
+    if (status === 'active' && domainRecord.projectId) {
+      await syncPoweredDomainUpstream(domainRecord.id, domainRecord.projectId, finalDomainName)
+      if (domainRecord.isPrimary) await syncProjectAnalyticsDomain(domainRecord.projectId)
     }
     return
   }
@@ -1401,8 +1427,9 @@ async function processDomainWebhook(payload: EntriWebhookPayload) {
     .where('id', '=', domainRecord.id)
     .execute()
 
-  if (status === 'active' && domainRecord.isPrimary && domainRecord.projectId) {
-    await syncProjectAnalyticsDomain(domainRecord.projectId)
+  if (status === 'active' && domainRecord.projectId) {
+    await syncPoweredDomainUpstream(domainRecord.id, domainRecord.projectId, finalDomainName)
+    if (domainRecord.isPrimary) await syncProjectAnalyticsDomain(domainRecord.projectId)
   }
 
   if (statusChanged) {
