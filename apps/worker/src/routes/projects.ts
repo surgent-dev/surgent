@@ -17,7 +17,6 @@ import {
   markDeploymentCancelled,
   resolveDeployScriptName,
   undeployProject,
-  resumeProject,
   deployConvexProd,
   deleteSandbox,
   downloadProject,
@@ -57,6 +56,7 @@ import {
 } from '@/lib/convex-env'
 import {
   cancelProjectDeployJob,
+  enqueueProjectActivationJob,
   enqueueProjectCreateJob,
   enqueueProjectDeployJob,
 } from '@/lib/projects/queue'
@@ -1440,9 +1440,13 @@ projects.post('/:id/activate', zValidator('param', idParam), requireAuth, async 
   const sandboxId = sandboxRow?.id
   if (!sandboxId) return c.json({ error: 'Sandbox not found' }, 400)
 
-  await resumeProject({ projectId: id, sandboxId, provider: sandboxRow.provider })
+  const jobId = await enqueueProjectActivationJob({
+    projectId: id,
+    sandboxId,
+    provider: sandboxRow.provider,
+  })
 
-  return c.json({ scheduled: true })
+  return c.json({ scheduled: jobId !== null })
 })
 
 // GET /projects/:id/logs - Get PM2 logs from sandbox
