@@ -1,7 +1,7 @@
 import type { Job } from 'pg-boss'
 import { captureScreenshot, ScreenshotError } from '@/apis/browser-rendering'
 import { runProjectCreationJob, type CreateProjectJobData } from '@/controllers/project-create'
-import { deployProject } from '@/controllers/projects'
+import { deployProject, resumeProject } from '@/controllers/projects'
 import { getBoss } from '@/lib/boss'
 import { config } from '@/lib/config'
 import { createLogger } from '@/lib/logger'
@@ -11,6 +11,7 @@ const log = createLogger('project-queue')
 
 const CREATE_QUEUE = 'project.create'
 const CREATE_DLQ = 'project.create.dead'
+const ACTIVATE_QUEUE = 'project.activate'
 const DEPLOY_QUEUE = 'project.deploy'
 const DEPLOY_DLQ = 'project.deploy.dead'
 const SCREENSHOT_QUEUE = 'project.deploy.screenshot'
@@ -21,6 +22,12 @@ export interface DeployProjectJobData {
   projectId: string
   deployName?: string
   deploymentId: string
+}
+
+interface ActivateProjectJobData {
+  projectId: string
+  sandboxId: string
+  provider: string
 }
 
 interface ScreenshotJobData {
@@ -63,6 +70,14 @@ export async function registerProjectWorkers(): Promise<void> {
     deadLetter: CREATE_DLQ,
   })
 
+  await boss.createQueue(ACTIVATE_QUEUE, {
+    policy: 'exclusive',
+    retryLimit: 3,
+    retryBackoff: true,
+    expireInSeconds: 900,
+    retentionSeconds: 604_800,
+  })
+
   await boss.createQueue(DEPLOY_DLQ, {
     retentionSeconds: 2_592_000,
   })
@@ -96,6 +111,17 @@ export async function registerProjectWorkers(): Promise<void> {
           }).catch(() => {})
           throw err
         }
+      }
+    },
+  )
+
+  await boss.work<ActivateProjectJobData>(
+    ACTIVATE_QUEUE,
+    { pollingIntervalSeconds: 2 },
+    async (jobs: Job<ActivateProjectJobData>[]) => {
+      for (const job of jobs) {
+        log.info({ jobId: job.id, projectId: job.data.projectId }, 'project activation claimed')
+        await resumeProject(job.data)
       }
     },
   )
@@ -201,7 +227,16 @@ export async function registerProjectWorkers(): Promise<void> {
 
   registered = true
   log.info(
-    { queues: [CREATE_QUEUE, CREATE_DLQ, DEPLOY_QUEUE, DEPLOY_DLQ, SCREENSHOT_QUEUE] },
+    {
+      queues: [
+        CREATE_QUEUE,
+        CREATE_DLQ,
+        ACTIVATE_QUEUE,
+        DEPLOY_QUEUE,
+        DEPLOY_DLQ,
+        SCREENSHOT_QUEUE,
+      ],
+    },
     'project workers registered',
   )
 }
@@ -209,6 +244,14 @@ export async function registerProjectWorkers(): Promise<void> {
 export async function enqueueProjectCreateJob(data: CreateProjectJobData): Promise<string | null> {
   return getBoss().send(CREATE_QUEUE, data, {
     id: data.projectId,
+    singletonKey: data.projectId,
+  })
+}
+
+export async function enqueueProjectActivationJob(
+  data: ActivateProjectJobData,
+): Promise<string | null> {
+  return getBoss().send(ACTIVATE_QUEUE, data, {
     singletonKey: data.projectId,
   })
 }
