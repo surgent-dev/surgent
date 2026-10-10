@@ -12,6 +12,18 @@ Infrastructure for Surgent, managed via AWS CDK.
 | **SSM**          | Parameter Store for production secrets and connection strings.             |
 | **Auto-scaling** | Request-count-based scaling for both services.                             |
 
+Both services start with one small Fargate task and scale to at most two:
+
+| Service | vCPU per task | Memory per task | Tasks |
+| :--- | ---: | ---: | :--- |
+| Worker API | 0.25 | 1 GiB | 1–2 |
+| Analytics | 0.25 | 512 MiB | 1–2 |
+
+The VPC has no NAT gateways. Logs expire after seven days. Rolling deployments start a healthy
+replacement before draining the current task; a single replica still has no spare capacity during
+an unexpected task failure. Each service scales independently, with a combined steady-state limit
+of 1 vCPU and 3 GiB. Rolling deployments may temporarily double those limits.
+
 ## Deployment
 
 ### CI/CD
@@ -24,6 +36,8 @@ PRs build changed Docker images without production secrets. Pushes to `main` run
 
 Production uses **ECR + ECS only**. `docker-compose.dev.yml` is for local development and is not part of the production path.
 The analytics deploy now runs a one-off ECS task to apply Postgres migrations before forcing a new service deployment.
+Manual workflow runs default to the `ecs` target. Select `all` to also republish the Cloudflare
+gateway and dispatch workers. Workflow-only changes do not republish the gateway.
 
 ### Deployment Targets
 

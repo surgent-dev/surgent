@@ -2,6 +2,12 @@ name: Docker
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Services to deploy
+        type: choice
+        default: ecs
+        options: [ecs, all]
   pull_request:
     paths:
       - apps/worker/**
@@ -86,7 +92,6 @@ jobs:
               - bun.lock
               - bunfig.toml
               - .dockerignore
-              - .github/workflows/docker.yml
             infra:
               - infra/**
               - .github/workflows/docker.yml
@@ -96,13 +101,17 @@ jobs:
         run: |
           SERVICES='[]'
 
-          # On tag push, build everything; otherwise only changed services
+          # Manual runs can move ECS without republishing Cloudflare services.
           if [ "${{ github.ref_type }}" = "tag" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             WORKER=true
             ANALYTICS=true
             GATEWAY=true
             DISPATCH=true
             INFRA=true
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.target }}" = "ecs" ]; then
+              GATEWAY=false
+              DISPATCH=false
+            fi
           else
             WORKER=${{ steps.filter.outputs.worker }}
             ANALYTICS=${{ steps.filter.outputs.analytics }}
@@ -449,6 +458,15 @@ jobs:
               --cluster "${{ env.ECS_CLUSTER }}" \
               --services ${{ matrix.ecs_service }} \
               --query 'services[*].events[0:10]'
+            exit 1
+          fi
+
+          ACTIVE_TASK_DEF=$(aws ecs describe-services \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services ${{ matrix.ecs_service }} \
+            --query 'services[0].taskDefinition' --output text)
+          if [ "$ACTIVE_TASK_DEF" != "${{ steps.task-def.outputs.arn }}" ]; then
+            echo "ECS rolled back instead of deploying the requested task definition"
             exit 1
           fi
 
