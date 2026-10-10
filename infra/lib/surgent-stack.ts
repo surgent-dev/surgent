@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib'
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
+import * as logs from 'aws-cdk-lib/aws-logs'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import * as ecs from 'aws-cdk-lib/aws-ecs'
 import * as ecr from 'aws-cdk-lib/aws-ecr'
@@ -226,35 +227,36 @@ export class SurgentStack extends cdk.Stack {
     // ==================== WORKER SERVICE ====================
 
     const workerTaskDef = new ecs.FargateTaskDefinition(this, 'WorkerTaskDef', {
-      cpu: 512,
-      memoryLimitMiB: 2048,
+      cpu: 256,
+      memoryLimitMiB: 1024,
     })
 
     workerTaskDef.addContainer('worker', {
       image: ecs.ContainerImage.fromEcrRepository(workerRepository, 'latest'),
       containerName: 'worker',
       portMappings: [{ containerPort: 4000 }],
-      secrets: {
-        ...workerSecrets,
-      },
+      secrets: workerSecrets,
       environment: {
         NODE_ENV: 'production',
         PORT: '4000',
         HOST: '0.0.0.0',
         ANALYTICS_URL: `http://analytics.${internalNamespace}:3007`,
       },
-      logging: ecs.LogDrivers.awsLogs({ streamPrefix: `${appName}-worker` }),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: `${appName}-worker`,
+        logRetention: logs.RetentionDays.ONE_WEEK,
+      }),
     })
 
     const workerService = new ecs.FargateService(this, 'SurgentWorkerService', {
       cluster,
       serviceName: `${appName}-worker`,
       taskDefinition: workerTaskDef,
-      desiredCount: 2,
+      desiredCount: 1,
       assignPublicIp: true,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       healthCheckGracePeriod: cdk.Duration.seconds(60),
-      minHealthyPercent: 50,
+      minHealthyPercent: 100,
       maxHealthyPercent: 200,
       circuitBreaker: { enable: true, rollback: true },
     })
@@ -284,8 +286,8 @@ export class SurgentStack extends cdk.Stack {
     })
 
     const workerScaling = workerService.autoScaleTaskCount({
-      minCapacity: 2,
-      maxCapacity: 8,
+      minCapacity: 1,
+      maxCapacity: 2,
     })
 
     workerScaling.scaleOnRequestCount('RequestCountScaling', {
@@ -300,23 +302,24 @@ export class SurgentStack extends cdk.Stack {
     // ==================== ANALYTICS SERVICE ====================
 
     const analyticsTaskDef = new ecs.FargateTaskDefinition(this, 'AnalyticsTaskDef', {
-      cpu: 512,
-      memoryLimitMiB: 1024,
+      cpu: 256,
+      memoryLimitMiB: 512,
     })
 
     analyticsTaskDef.addContainer('analytics', {
       image: ecs.ContainerImage.fromEcrRepository(analyticsRepository, 'latest'),
       containerName: 'analytics',
       portMappings: [{ containerPort: 3007 }],
-      secrets: {
-        ...analyticsSecrets,
-      },
+      secrets: analyticsSecrets,
       environment: {
         NODE_ENV: 'production',
         PORT: '3007',
         HOSTNAME: '0.0.0.0',
       },
-      logging: ecs.LogDrivers.awsLogs({ streamPrefix: `${appName}-analytics` }),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: `${appName}-analytics`,
+        logRetention: logs.RetentionDays.ONE_WEEK,
+      }),
     })
 
     const analyticsService = new ecs.FargateService(this, 'SurgentAnalyticsService', {
@@ -327,7 +330,7 @@ export class SurgentStack extends cdk.Stack {
       assignPublicIp: true,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       healthCheckGracePeriod: cdk.Duration.seconds(60),
-      minHealthyPercent: 50,
+      minHealthyPercent: 100,
       maxHealthyPercent: 200,
       circuitBreaker: { enable: true, rollback: true },
       cloudMapOptions: {
@@ -378,7 +381,7 @@ export class SurgentStack extends cdk.Stack {
 
     const analyticsScaling = analyticsService.autoScaleTaskCount({
       minCapacity: 1,
-      maxCapacity: 6,
+      maxCapacity: 2,
     })
 
     analyticsScaling.scaleOnRequestCount('AnalyticsRequestCountScaling', {
@@ -397,7 +400,7 @@ export class SurgentStack extends cdk.Stack {
 
     // ==================== ALARMS ====================
 
-    addServiceHealthAlarms(this, workerService, workerTargetGroup, 2)
+    addServiceHealthAlarms(this, workerService, workerTargetGroup, 1)
     addServiceHealthAlarms(this, analyticsService, analyticsTargetGroup, 1)
 
     new cloudwatch.Alarm(this, 'Alb5xxAlarm', {
