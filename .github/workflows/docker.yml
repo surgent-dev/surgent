@@ -7,7 +7,7 @@ on:
         description: Services to deploy
         type: choice
         default: ecs
-        options: [ecs, all]
+        options: [images, ecs, all]
   pull_request:
     paths:
       - apps/worker/**
@@ -108,7 +108,7 @@ jobs:
             GATEWAY=true
             DISPATCH=true
             INFRA=true
-            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.target }}" = "ecs" ]; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.target }}" != "all" ]; then
               GATEWAY=false
               DISPATCH=false
             fi
@@ -345,7 +345,7 @@ jobs:
 
       - name: Check ECS service exists
         id: ecs-check
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && inputs.target != 'images'
         run: |
           ACTIVE=$(aws ecs describe-services \
             --cluster "${{ env.ECS_CLUSTER }}" \

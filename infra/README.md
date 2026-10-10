@@ -37,7 +37,9 @@ PRs build changed Docker images without production secrets. Pushes to `main` run
 Production uses **ECR + ECS only**. `docker-compose.dev.yml` is for local development and is not part of the production path.
 The analytics deploy now runs a one-off ECS task to apply Postgres migrations before forcing a new service deployment.
 Manual workflow runs default to the `ecs` target. Select `all` to also republish the Cloudflare
-gateway and dispatch workers. Workflow-only changes do not republish the gateway.
+gateway and dispatch workers. Select `images` to publish the two container images before creating
+a new ECS stack; that target does not run migrations or update services. Workflow-only changes do
+not republish the gateway.
 
 ### Deployment Targets
 
